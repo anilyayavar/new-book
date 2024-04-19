@@ -1,0 +1,243 @@
+# Subsetting R objects or accesing specific elements {#subset}
+
+There are multiple methods for sub-setting R objects (vectors, matrices, data frames, lists, etc.) and each have its own uses and benefits.  We will discuss each one of them.  Three operators `[`, `[[` & `$` will be used.
+
+## Subsetting vectors
+Let us first start sub-setting vectors, which is as we have learned, atomic object in R.  To subset the vectors we will use `[`.
+For this we will use following `x` vector, which has 6 elements (names) each starting with alphabets A to F.
+```{r}
+x <- c('Andrew', 'Bob', 'Chris', 'Danny', 'Edmund', 'Freddie')
+```
+
+![](images/subset_vec.png)
+
+### Subsetting through a vector of positive integers
+Sub-setting through positive integers will give us elements at those given position (indices). See this
+```{r}
+# fourth element
+x[4]
+# third to fifth element
+x[3:5]
+# first and fifth element
+x[c(1,3)]
+```
+_Note: Check what happens when the integer vector has repeated integers._
+
+### Subsetting through a vector of negative integers 
+Sub-setting through negative integers will give us all elements __except__ those at given indices.  See
+```{r}
+# all elements except that at fourth
+x[-4]
+# all elements except third to fifth
+x[-(3:5)]
+# all elements except first and fifth
+x[-c(1,5)]
+```
+
+_Note:  Try mixing sub-setting with a vector having both positive and negative integers in your console and check what happens._
+
+### Subsetting through a logical vector
+We can also subset a given vector through another vector having `logical` values i.e. `TRUE` and `FALSE`.  As you can understand output/result will have elements at places having `TRUE` only.
+```{r}
+# First, third and fifth element only
+x[c(TRUE, FALSE, TRUE, TRUE, FALSE, FALSE)]
+```
+__Recycling__ is an important concept while sub-setting though a logical vector.  It recycles the given logical vector up to the length of vector to be subset. Thus, `x[TRUE]` will give us original `x` only.
+```{r}
+x[TRUE]
+x[c(TRUE, FALSE)] # will give elements at odd indices
+```
+_Note: Try to subset a vector through a logical vector having missing values i.e. `NA` along with `TRUE` and/or `FALSE` in your console and check what happens._
+
+__Sub-setting through logical vector is most important and used sub-setting method as we will see it subsequent chapter/sections when we will filter a vector on the basis of some conditions.__
+
+### Subsetting through a character vector
+This method is used when the given vector is named.  We can pass desired names inside `[]` to get/filter those desired elements.  See this example.
+```{r}
+# let us create a named vector `y`
+y <- setNames(1:6, LETTERS[1:6])
+# display `y`
+y
+# subset elements named `A` and `C`
+y[c('A', 'C')]
+```
+_Note that we have used quotes in above method of sub-setting._ We can use this method when we have names saved in another variable.  See this
+```{r}
+var <- c('A', 'C', 'E')
+# subset those elements from `y` which are named as per `var`
+y[var] # notice that since `var` is a variable, we have not used quotes.
+```
+_Note: Similar to positive integer indexing we will get repeated values if character vector has repeated names._
+```{r}
+y[c("A", "A", "C", "A")]
+```
+
+__Other two methods of indexing will not be used frequently but are important to know for debugging the code as sometimes your subset vector may be `NULL` or `zero`__
+
+### Subsetting through nothing
+Indexing through nothing i.e. simply with `[]` will give us original vector.
+```{r}
+x[]
+```
+
+### Subsetting through Zero
+Sub-setting through `NULL` or `0` will give us a zero length vector.
+```{r}
+x[NULL]
+y[0]
+is.null(x[NULL])
+```
+It is important and interesting to note here that subsetting through NULL is not NULL and is a zero length vector instead.
+
+## Subsetting Matrices and arrays
+
+We can subset higher dimensional structures (Matrix - 2 dimensional and arrays - dimension greater than 2) using (i) multiple vectors, (ii) single vector and (iii) matrix.
+
+Let us first create a 5x5 matrix say `mat` with elements named $A_{mn}$ where `m` will denote row number and `n` will denote column number.
+```{r echo=FALSE}
+mat <- outer(1:5, 1:5, FUN = function(x, y) paste0('A', x, y))
+mat
+```
+
+### Indexing through Multiple vectors
+This is extension of all sub-setting methods explained for a vector.  In objects with higher dimensionality we will have to provide one vector for each dimension.  Blank values, as you may understood (ref - sub-setting through nothing explained above) will do nothing and return that dimension complete.
+```{r}
+# first and second row with third and fifth column
+mat[1:2, c(3,5)]
+# third to fifth column, all rows
+mat[,3:5]
+# all columns except third
+mat[, -3]
+# Odd rows, all columns
+mat[c(TRUE, FALSE),]
+```
+
+The idea can be extended to a named matrix also.
+```{r}
+# First create a named matrix
+rownames(mat) <- paste0("Row", 1:5)
+colnames(mat) <- paste0("Col", 1:5)
+mat
+# filter desired rows/columns
+mat[c("Row1"), c("Col2", "Col3")]
+```
+In the above example you must have noticed that indexing objects with higher dimensionality may return the objects with lower dimensionality.  E.g. sub-setting a matrix may return a vector.  __We can control the dimensionality reduction through the argument `drop=FALSE` which is by default TRUE and may thus introduce bugs in the code.__
+```{r}
+mat[c("Row1"), c("Col2", "Col3"), drop=FALSE]
+#check this
+dim(mat[c("Row1"), c("Col2", "Col3"), drop=FALSE])
+#versus this
+dim(mat[c("Row1"), c("Col2", "Col3")])
+```
+
+### Subsetting through one vector
+By now it should be clear that objects with higher dimensionality like matrices, array are actually vectors at the core of r, displayed and acting like objects having more than one dimension.  So sub-setting with single vector on these objects coerce the behavior of these objects as vectors only and give output exactly as shown in previous section.
+```{r}
+mat[c(1, 10, 15, 25)]
+# OR
+mat[c(TRUE, FALSE)]
+```
+
+
+### Subsetting through a matrix
+We can also subset objects with higher dimensionality with integer matrix (having number of columns equal to dimensions).  In other words, to subset a matrix (2D) with the help of other matrix we will need a 2 column matrix where first column will indicate row number and second column will indicate column number.  See
+```{r}
+selection_matrix <- matrix(c(1,1, # Element at Row 1 Col 1
+                             2,2, # Element at Row 2 Col 2
+                             3,3), # Element at Row 3 Col 3
+                           ncol = 2, 
+                           byrow = TRUE)
+mat[selection_matrix]
+```
+
+
+## Subsetting lists
+List sub-setting can be done using either `[]`, `[[]]` or `$`.  To understand the difference between these, let us consider these one by one.  As done earlier let us consider a list of 4 elements - one vector, one matrix, one list and one data frame.  For now let us consider that list is unnamed.
+```{r}
+my_list <- list(
+  11:20,                                                       # first element
+  outer(1:4, 1:4, FUN = function(x, y) paste0('B', x, y)),     # second element
+  list(LETTERS[1:8], TRUE),                                    # third element  
+  data.frame(col1 = letters[1:4], col2 = 5:8)                  # fourth element
+)
+# display the list
+my_list
+```
+
+
+### Subsetting lists with `[]`
+Sub-setting lists with `[]` will always result a list containing desired element(s).
+```{r}
+my_list[2]
+class(my_list[1])
+```
+We can apply other ideas of vector sub-setting as explained earlier with this list sub-setting.  The output will also be list containing one or more items.
+
+### Subsetting lists with `[[]]`
+Sub-setting list with `[[]]` will return that specific item (as per index given) but the output will be of type of that specific item.
+```{r}
+my_list[[2]]
+class(my_list[[4]])
+```
+_Notice the difference in outputs created with `my_list[2]` and `my_list[[2]]` in above 2 code blocks._
+
+_Needless to say, one cannot index/subset lists using multiple indices._  Check `my_list[[1:2]]` in your console as the results may not be as what you think.
+
+### Chaining or multiple subsetting
+We can further subset/index a vector/variable in R using __chaining__ i.e. by combining one or methods as we have discussed here.
+```{r}
+# third element of second element
+my_list[[2]][3] # recall that by default matrix is by column
+# or
+my_list[[2]][1:3,2:4]
+```
+
+
+### Subsetting with `$`
+`$` is a shorthand operator: `x$y` is roughly equivalent to `x[["y"]]`. To check this let us assign our list some names.
+
+```{r}
+names(my_list) <- c("first", "second", "third", "fourth")
+# Now see
+my_list$first
+my_list$fourth$col2
+```
+_Notice that rules for dimensionality reduction also applies with `$`_.
+
+Another difference between `[[` sub-setting versus `$` sub-setting is partial matching (_left to right only_), which is possible with `$` only and not with `[[`.  See
+```{r}
+my_list$fir
+my_list[['fir']]
+```
+
+## Data frames
+As already explained data frames are basically lists with each element having equal length, rules for sub-setting lists all apply with data frames.  One addition is that data frames can also be subset using rules for matrix sub-setting.
+
+```{r}
+mtcars # it is a default data frame in r
+# list type sub-setting
+mtcars[[2]]  # second column 
+# matrix type
+mtcars[1:4, 2:3] # first four rows with second & third columns
+```
+
+**Remember** 
+
+1. If sub-setting data frames with single vector, data frame behave like lists, by default.  If we have to get output as data.frame we will have use `drop= FALSE` argument.
+2. If however, sub-setting data frame through two vectors, these behave like matrices.
+
+Examples
+```{r}
+#Default
+mtcars[1:5, 2]
+# using drop argument
+mtcars[1:5, 2, drop = FALSE]
+```
+
+## Subsetting and assignment
+All the sub-setting that we have seen can be used for assignment as well.
+```{r}
+my_list$first <- mtcars[1:4, 2:3]
+my_list
+```
+
