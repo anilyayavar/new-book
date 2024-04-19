@@ -1,0 +1,211 @@
+# Part-II: Dealing with tabular data {-}
+
+# Getting data in and out of R {#read}
+
+Till now, we have created our own datasets or we have used sample datasets available in R.  In practical usage, there will hardly be any case when we get the data imported in R.  So we have to import and load our data sets in R, for our analytics tasks.  Even after completing the analytics, the need for summarised data, other reports, charts, etc. need to be exported. This chapter is intended to do all these tasks.  
+
+First section deals about functions related to reading external data i.e. importing objects into R.  This is followed by another section dealing with writing data to external files i.e. exporting data out of R. 
+
+## Importing external data in R - Base R methods
+
+Base R has many functions which can fulfill nearly any of our jobs to import external data into R.  However, there are packages which are customised to do certain tasks in easier way and thus, we will also learn two of the packages from `tidyverse` also.
+
+There are some important functions in base R, which are used frequently to import external data into R environment.  Let us discuss these one by one.
+
+### Reading tables through `read.table()` and/or `read.csv()` {-}
+
+Basically these two functions are most commonly used functions in R, to get tabular data out of flat files.  The two functions namely `read.table()` and `read.csv()` are used respectively to read tabular data out of flat files having simple text format (.txt) and comma separated values (.csv) formats respectively.  There are three more cousins to these functions.
+
+- `read.csv2()` to read csv files where `;` is used as delimiter and `,` is used for decimals instead.
+- `read.delim()` to read delimited files where `tab character` has been used as delimiter and `.` as decimal.
+- `read.delim2()`, similarly to read delimited files where `tab character` has been used as delimiter and `,` as decimal.
+
+Most important arguments to these functions are -
+
+- `file` the name of the file along with complete path as string^[If backward slash `\` is used in file paths, these must be `escaped` as R recognises `\` as escape character itself.  So, `"my/location/here/file.txt"` and `"my\\file\\here\\file.txt"` are the correct way of giving file name].
+- `header` a logical value indicating if first line of the file has to be read as header or not.
+- `sep` a string indicating a separator value to separate columns.
+- `colClasses` a character vector indicating type of the columns if these are to be read explicitly in these types/formats only.
+- `skip` an integer, indicating how many rows (from beginning) are to be skipped.
+
+Readers may check results of `?read.table()` to get a complete list of arguments of these functions.
+
+Example:  Let us try to download data related to _World Happiness Report 201=21_ which is available on data.world portal.
+
+```
+wh2021 <- read.csv("https://query.data.world/s/qbsbmxlfj54sl4mq3y6uxsr3pkhhmo")
+# Check dimensions
+dim(wh2021)
+# Check column names
+colnames(wh2021)
+```
+We can see that dataset named `wh2021` having `20` columns and `149` rows is now available in our environment.
+
+> __Tip: Use `"clipboard"` in file argument for pasting copied data into R. E.g. Copy a few rows and cells from excel spreadsheet and run this command `read.delim("clipboard", header = FALSE)`.__
+
+### Read data into a vector through `scan()` or `readline()` {-}
+
+As afore-mentioned functions `read.table()` _et al_ are used in reading data into tables, we may also require reading data into a vector or simple list.  The two functions `scan()` and `readline()` are used for these purposes.
+
+The basic syntax of `scan()` is -
+```
+scan(file = "",
+     what = double(),
+     nmax = -1,
+     ...
+)
+```
+
+Where -
+
+- `file` is name of the file, or link
+- `what` is format/data type to be read.  Default type is double
+- `nmax` is mux number of data values to be read, default is `-1` which means all.
+
+There are many other usefule arguments, for which please check results of `?scan` in your console.
+
+Example -
+```
+scan("http://mattmahoney.net/iq/digits.txt", nmax = 10)
+```
+
+This function is sometimes useful to read data from keyboard into a vector.  Just use a blank string `""` in file name.  See this example
+
+![](images/scan.png)
+
+Function `readline()` on the other hand does similar job, but with a prompt.  See this example
+
+![](images/readline.png) 
+
+### Reading text files through `readLines()` {-}
+
+Function `readLines()` is used to read text lines from a file (or connection).  To see this in action, prepare a text file (say `"txt.txt"`) and try reading it using `readLines("txt.txt")`.
+
+
+## Exporting data out of R - Base R methods
+
+Since the nature of most of the data anaytic jobs carried out in R, will be followed after reading the external data which will be followed by wrangling, transformation, modelling, etc., all in R.  Exporting files will not be used as much as reading external data.  Still, there will be times, when wrangled data tables need to be exported out of R.  For each of the different use cases, the following functions will almost complete our export requirements.
+
+Let's learn these.
+
+### Writing tabular data through `write.table()` and/or `write.csv()` {-}
+
+Exporting data frames, whether after cleaning, wrangling, or transformation, etc., can be exported using these functions.  Latter will be used to write data frames in csv formats specifically.  The syntax is -
+
+```
+write.table(x, file = "", sep = " ", ...)
+write.csv(x, file = "", ...)
+write.csv2(x, file = "", ...)
+```
+where -
+
+- `x` is the data frame object to be exported
+- `file` is used to give file name (along with path)
+- `sep` is separator
+- `...` - there are many more arguments which are used to cutomised export needs.  See `?write.table()` for full details.
+
+E.g. - The following command will export `iris` data frame as `iris.csv` file in the current working directory.
+```{r eval=FALSE}
+write.csv(iris, 'iris.csv')
+```
+
+### Writing character data line by line to a file through `writeLines()` {-}
+
+Similar to `readLines`, function `writeLines()` will write the text data into a file with given file name.  Type the following code in your console and check that a new file with name `my_new_file.txt` has been created with the given contents in your current working directory.
+
+```{r eval=FALSE}
+writeLines("Andrew 25
+           Bob 45
+           Charles 56", "my_new_file.txt")
+```
+
+
+### Using `dput()` to get a code representation of R object {-}
+
+This function will output the code representation of the given R object.  This function is particularly useful, when you are searching for help online and you need to give some sample data to reproduce the problem.  E.g. on [_Stack Overflow_](https://stackoverflow.com/) when asking for a solution to a specific problem, [reproducible data](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example) needs to be furnished.  Please also refer to section \@ref(reprex) for more.
+
+Example-1:
+```{r}
+my_data <- data.frame(Name = c("Andrew", "Bob", "Charles"),
+                      Age = c(25, 45, 56))
+dput(my_data)
+```
+And while reproducing someone else's dput-
+```{r}
+now_mydata <- structure(list(Name = c("Andrew", "Bob", "Charles"), Age = c(25, 
+45, 56)), class = "data.frame", row.names = c(NA, -3L))
+
+now_mydata
+```
+
+## Using external packages for reading/writing data
+
+### Package `readr`
+
+The `readr` package [@R-readr] is part of core `tidyverse` and is loaded directly when we load it through `library(tidyverse)`.  It provides a range of analogous functions for each of the reading functions in base R.
+
+| Base R     | readr        | Uses                                    |
+| :---------:| :----------: | :-------------------------------------- |
+| read.table | read\_table  | Reading table                           |
+| read.csv   | read\_csv    | Reading CSV file with comma as sep      |
+| read.csv2  | read\_csv2   | Reading CSV file with semi-colon as sep |
+| read.delim | read\_delim  | Reading files with any delimiter        |
+| read.fwf   | read\_fwf    | Reading fixed width files               |
+| read.tsv   | read\_tsv    | Reading tab delimited file              |
+| \--        | write\_delim | Writing files with any delimiter        |
+| write.csv  | write\_csv   | Writing files with comma delimiter      |
+| write.csv2 | write\_csv2  | Writing files with semi-colon delimiter |
+| \--        | write\_tsv   | writing a tab delimited file            |
+
+So a question may be asked here that what's the difference between these two sets of functions. Firstly, `readr` alternatives are much faster than their base R counterparts.  Secondly, it provides an informative problem report when parsing leads to unexpected results.  
+
+For these, check results of these examples-
+```{r echo=FALSE, message=FALSE}
+library(tidyverse)
+```
+
+```{r}
+read_csv(readr_example("chickens.csv"))
+```
+
+Note that the column types, while parsing the data frame, have now been printed.  These column types have been guessed by `readr` actually.  If the column types are not what were actually required to be parsed, then argument `col_types` may be used.  We can also use `spec()` function to retrieve the data types guessed by `readr` later-on, so these can be modified and used again in `col_types` argument.  See this example
+
+```{r}
+write.csv(iris, "iris.csv") #write a dummy data
+spec(read_csv("iris.csv"))
+read_csv("iris.csv",
+         col_select = 2:6,
+         col_types = cols(
+           Sepal.Length = col_double(),
+           Sepal.Width = col_double(),
+           Petal.Length = col_double(),
+           Petal.Width = col_double(),
+           Species = col_factor(levels = c('setosa', 'versicolor', 'virginica'))
+         )
+) %>% head(2)
+```
+
+### Package `readxl`
+
+This package is also part of `tidyverse` but this one has to be loaded specifically using `library(readxl)`.  As the name suggests, it has functions which are useful to read/write data to/from excel files.  Excel files (having extension .xls or .xlsx) are slightly different in a way that these may contain several _sheets_ of data at once.  The function `read_excel()` has been designed for reading sheets from excel files.  The syntax is
+```
+read_excel(path, sheet = NULL, range = NULL)
+```
+
+### Package `reprex` {#reprex}
+
+This is again part of tidyverse, but has to be loaded specifically by calling `library(reprex)`. The name `reprex` is actually short for reproducible example.  This is useful particularly when we are stuck in some problem and seek for online help on some forum such as [Stack Overflow](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example), [R Studio Community](https://community.rstudio.com), etc.  
+
+As an example do this in your console 
+
+```
+library(reprex)
+
+x <- dput(head(iris))
+x
+```
+Thereafter run `reprex()`, a small window in the `Viewer` tab will be opened like this.  Moreover, the code has been copied on the clipboard.
+
+![](images/reprex.png)
+
+For more reading please refer [this page.](https://www.tidyverse.org/help/)^[https://www.tidyverse.org/help/]

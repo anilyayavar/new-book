@@ -1,0 +1,483 @@
+# Visualisation with `ggplot2`
+
+## Core concepts of **grammar of graphics**
+__ggplot2__^[[https://ggplot2.tidyverse.org/](https://ggplot2.tidyverse.org/)] [@R-ggplot2] is the package developed by Hadley Wickham, which is based on concepts laid (2005) down by Leland Wilkinson in his _The Grammar of Graphics_.^[[https://link.springer.com/book/10.1007/0-387-28695-0](https://link.springer.com/book/10.1007/0-387-28695-0)]  Basically, a grammar of graphics is a framework which follows a layered approach to describe and construct visualizations or graphics in a structured manner. Even the letters `gg` in ggplot2 stand for `g`rammar of `g`raphics.
+
+Hadley Wilkinson, in his paper titled __A Layered Grammar of Graphics__^[[http://vita.had.co.nz/papers/layered-grammar.pdf](http://vita.had.co.nz/papers/layered-grammar.pdf)](2010) [@layered-grammar] proposed his idea of layered grammar of graphics in detail and simultaneously put forward his idea of _ggplot2_ as an open source implementation framework for building graphics.  Readers/Users are advised to check the paper as it describes the concept of grammar of graphics in detail.  By the end of the decade the package progressed^[Version 3.3.0 was released in March 2020] to one of the most used and popular packages in R.
+
+The relationship between the components explained in both the grammars can be illustrated with the following figure^[Source: Hadley Wickham's paper on _the layered grammar of graphics_].  The components on the left have been put forward by Wilkinson whereas those on right were proposed by Wickham.  It may be seen that `TRANS` has no relation in `ggplot2` as its role is played by in-built features of R.
+
+```{r echo=FALSE, fig.cap="Layers in Grammar of Graphics mapped in GGPLOT2", fig.align='center', fig.show='hold', out.height="75%"}
+knitr::include_graphics("images/layers_gg.png")
+```
+
+Thus, to build a graphic having one or more dimensions, from a given data, we use _seven_ major components -
+
+1. **Data:** Unarguably, a graphic/visualisation should start with a data.  It is also the first argument in most important function in the package i.e. `ggplot(data =)`.
+2. **Aesthetics:** or `aes()` in short, provide a mapping of various data dimensions to axes so as to provide positions to various data points in the output plot/graphic. 
+3. **Geometries:** or `geoms` for short, are used to provide the _geometries_ so that data points may take a concrete shape on the visualisation.  For e.g. the data points should be depicted as bars or scatter points or else are decided by the provided `geoms.`
+4. **Statistics:** or `stat` for short, provides the statistics to show in the visualisation like measures of central tendency, etc.
+5. **Scale:** This component is used to decide whether any dimension needs some scaling like logrithmic transformation, etc.
+6. **Coordinate System:**  Though most of the time _cartesian coordinate system_ is used, yet there are times when _polar coordinate system_ (e.g. pie chart) or _spherical coordinate system_ (e.g. geographical maps) are used.
+7. **Facets:** Used when based on certain dimension, the plot is divided into further sub-plots.
+
+## Prerequisites:
+
+```{r}
+library(ggplot2)
+```
+
+## GGPLOT2 in action
+
+> Out of the afore-mentioned components, three are to be explicitly provided and thus can be understood as mandatoty components.  These three componenets are `data`, `aesthetics` and `geometries`.  Whilst these three compoenents are mandatorily provided, it is not that others are not mandatory.  basically other componenets have their defaults (e.g. default coordinate system is cartesian coordinate system).  Let us dive into these three essential components and build a plot using these.
+
+### Building a basic plot
+We will use `mtcars` datasets, a default dataset to learn the concepts.
+
+See what happens when `data` is provided to `ggplot` function-
+```{r fig_blank, fig.height=2, fig.align='center'}
+ggplot(data=mtcars)
+```
+
+We can see that a blank chart/plot space has been created as our data `mtcars` has now mapped with ggplot2. Now let us provide aesthetic mappings to this using function `aes()`
+
+```{r fig_gg_2, fig.height=2, fig.align='center'}
+ggplot(data = mtcars, mapping = aes(x=wt, y=mpg))
+```
+You may now notice, apart from creating a blank space for plot, the two dimensions provided, i.e. `wt` and `mpg` have been _mapped_ with `x` and `y` axes respectively.  Since no geometry has been provided, the plot area is still blank.  Now we will provide geometry to our dimension say _point_.  To do this we will use another layer of function `geom_*` (`geom_point()` in this case specifically).  
+
+```{r fig_3, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point()
+```
+Notice that another layer has been added to function `ggplot()` using a `+` sign here.  
+
+We could have used another geometry say boxplot here.
+```{r fig_4, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(y = wt)) +
+  geom_boxplot()
+```
+
+That's basic architecture of this package. Now lets discuss more on `aesthetics` and `geometries` before moving on to another compoenents.
+
+### More on Aesthetics
+Now what if color is provided inside `geom_*` function. 
+```{r fig_5, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point(color='red')
+```
+As the argument `color='red'` was mentioned inside the `geom_point()` function, it turned every point to red.  But if we have to pass a vector/column based on which the points should be colored, it should be wrapped within aesthetics function `aes()` -
+```{r fig_6, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point(aes(color=cyl))
+```
+Since the `cyl` column was a numeric column, ggplot2 thought it to be a `continuos` column and thus produced a color scale instead of a legend.  We however, know that this is a categorical column here, and thus if we want to produce a color legend we will have to convert it to a factor first.  See now the changes-
+```{r fig_7, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point(aes(color=as.factor(cyl)))
+```
+One more thing - `aes()` function wrapped in `geom_point()` function could have been wrapped in `ggplot()` also.  So basically the following code will also produce exactly the same chart-
+
+```
+ggplot(mtcars, aes(wt, mpg, color = as.factor(cyl))) +
+  geom_point()
+```
+Two questions arise here - 
+
+1. Is there any difference between the two?
+
+**Ans:** Yes, basically aesthetics if provided under the `geoms`, will override those aesthetics which are already provided under `ggplot` function.  See the result of following command in your console-
+```{r fig_8, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg, color = as.factor(cyl))) +
+  geom_point(color='red')
+```
+
+2. What if `color='red'` (or blue) is passed inside `aes()`?
+
+**Ans:** In this case ggplot will try to map it some aesthetics called 'blue'.  Let's see
+
+```{r fig_9, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg)) +
+  geom_point(aes(color='blue'))
+```
+Interesting!  GGPLOT2 has not only mapped a dummy variable called `'blue'` with color of points, but also created a legend.  More interestingly the color is not what we wanted.
+
+Different types of aesthetic attributes work better with different types of variables. For example, `color` and `shape` work well with discreet variables, while `size` or `alpha` (transparency) works well for continuous variables. In your console run the following command and check results
+
+```
+ggplot(mtcars, aes(wt, mpg, shape=as.factor(cyl))) +
+  geom_point()
+# OR
+ggplot(mtcars, aes(wt, mpg, size=cyl)) +
+  geom_point()
+# OR
+ggplot(mtcars, aes(wt, mpg, alpha=cyl)) +
+  geom_point()
+```
+Multiple aesthetics can be mapped simultaneously, as per requirement.  See this example-
+```{r fig_10, fig.height=3, fig.align='center'}
+ggplot(mtcars, aes(wt, mpg, shape=as.factor(cyl), color=as.factor(gear), alpha=wt)) +
+  geom_point()
+```
+
+Some commonly used aesthetics are -
+
+- `shape` = Display a point with `geom_point()` as a dot, star, triangle, or square
+- `fill` = The interior color (e.g. of a bar or boxplot)
+- `color` = The exterior line of a `bar`, `boxplot`, etc., or the point color if using `geom_point()`
+- `size` = Size (e.g. line thickness, point size)
+- `alpha` = Transparency (`1 = opaque`, `0 = invisible`)
+- `binwidth` = Width of histogram bins
+- `width` = Width of “bar plot” columns
+- `linetype` = Line type (e.g. solid, dashed, dotted)
+
+**A few shapes available in `shape` aesthetics**
+
+```{r echo=FALSE, fig.show='hide', message=FALSE, warning=FALSE}
+library(tidyverse)
+df <- data.frame(
+           x = c(0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,
+                 0.5,0.5,0.5,0.25,0.25,0.25,0.25,0.25,0.25,0.25,0.25,
+                 0.25,0.25,0.25,0.25),
+           y = c(1L,2L,3L,4L,5L,6L,7L,8L,9L,10L,
+                 11L,12L,1L,2L,3L,4L,5L,6L,7L,8L,9L,10L,11L,12L),
+           z = c(0L,1L,2L,3L,4L,5L,6L,7L,8L,9L,10L,
+                 11L,12L,13L,14L,15L,16L,17L,18L,19L,20L,21L,22L,
+                 23L)
+)
+
+df %>% 
+  ggplot(aes(x=y, y=x, label=z))+
+  geom_point(aes(shape=z), size=7)+
+  scale_shape_identity() +
+  labs(x="", y="") +
+  geom_text(nudge_y = 0.08) +
+  ylim(c(0.2,0.6)) +
+  theme_void()
+
+ggsave('shapes.png', width = 12, height = 2)
+```
+
+
+```{r shapes, echo=FALSE, fig.cap="Some Shapes available in GGplot",fig.show='hold', out.width="99%", fig.align='center'}
+knitr::include_graphics('shapes.png')
+```
+
+
+### More on Geoms {#geoms}
+In previous section we have seen that as soon as we passed a `geom_*` function/layer to `data` & `aesthetics` layers, the chart/graph was constructed.  Actually, `geom_point()` function, in the background added three more layers i.e. `stat`, `geom` and `position`.  Why?  The answer is simple, `geom_*` are generally shortcuts, which add these three layers.  So in our example, `ggplot(mtcars, aes(wt, mpg)) + geom_point()` is actually equivalent to -
+```
+ggplot(mpg, aes(displ, hwy)) +
+  layer(
+  mapping = NULL, 
+  data = NULL,
+  geom = "point", 
+  stat = "identity",
+  position = "identity"
+)
+```
+A complete list of `geoms` available in ggplot2 is given in Annex-.  Some common geoms are listed below:
+
+- Histograms - `geom_histogram()`
+- Bar charts - `geom_bar()` or `geom_col()`
+- Box plots - `geom_boxplot()`
+- Points (e.g. scatter plots) - `geom_point()`
+- Line graphs - `geom_line()` or `geom_path()`
+- Trend lines - `geom_smooth()`
+
+**Note that in ggplot2 `color` aesthetic represent border color of geometry and `fill` aesthetic represent color used to be fill that geometry.**
+
+#### List of geoms available in `ggplot2`
+Table: List of GEOMS available in `ggplot2` package
+```{r geoms, echo=FALSE}
+geoms <- help.search("geom_", package = 'ggplot2')
+geoms <- unique(geoms$matches[, 1:2])
+row.names(geoms) <- NULL
+knitr::kable(geoms)
+```
+
+### Faceting
+The amount of data also makes a difference: if there is a lot of data it can be hard to distinguish different groups. An alternative solution is to use faceting, as described next.  Facets, or “small-multiples”, are used to split one plot into a multi-panel figure, with one panel (“facet”) per group of data. The same type of plot is created multiple times, each one using a sub-group of the same dataset.
+
+In `ggplot2` faceting can be acheived using either of the functions -
+
+- `facet_grid()` creates a grid of plots, with each plot showing a subset of the data.  We may also specify the number of columns to use in the grid using the `ncol` argument.
+- `facet_wrap()` creates a grid of plots with different variables on each axis. We may also specify the scales to use for each axis using the `scales` argument. 
+
+Let us understand this, with these examples. 
+
+Example-1
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy)) + 
+  geom_point() + 
+  facet_wrap(~ class, ncol = 2)
+```
+
+Example-2
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy)) + 
+  geom_point() + 
+  facet_grid(year ~ class)
+```
+
+Notice that `facet_grid()` arranges the plots in a grid with different variables on each axis. We specify the variables to use for faceting using the `~` operator. For example, `facet_grid(variable1 ~ variable2)` will create a grid of plots with `variable1` on the y-axis and `variable2` on the x-axis. This is useful when we want to compare the relationship between two variables across different levels of a third variable.
+
+On the other hand, `facet_wrap()` creates a grid of plots, each showing a subset of your data based on a single variable. We specify the variable to use for faceting using the same `~` operator here too. For example, `facet_wrap(~ variable)` will create a grid of plots, each showing a different level of the variable. This is useful when you have a single categorical variable that you want to use for faceting.
+
+### Labels
+Labeling is an essential aspect of data visualization because it provides context and information about the data being presented. Labels can include titles, axis labels, legends, and annotations that describe the data and provide important information that helps the viewer understand what they are looking at.  Proper labeling can help to make the data more understandable, clear, and accessible, which enhances its overall value and impact.
+
+#### Labeling Data points
+To label data points in ggplot2, we can use the `geom_text()` function. This function adds text to the plot at the specified x and y coordinates.  Moreover, we can customize the appearance of the labels by adding additional arguments to `geom_text()` -
+
+- `size` to set font size
+- `color` to color the fonts
+- `hjust` or `vjust` to adjust the labels vertically or horizontally, respectively.
+
+Example-
+```{r}
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point() +
+  geom_text(aes(label = rownames(mtcars)),
+            size = 3,
+            color = "red",
+            vjust = -1)
+
+```
+
+**TIP: Use package `ggrepel` to show all labels, when needed, without overlapping and in a better way.** E.g.
+```{r}
+library(ggrepel)
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point() +
+  geom_text_repel(aes(label = rownames(mtcars)),
+            size = 3,
+            color = "red",
+            vjust = -1)
+```
+
+#### Labeling Charts
+There are several ways to add labels to ggplot2 charts, but we will focus on using the `labs()` function, which allows us to add `titles`, `subtitles`, `axis labels`, and other annotations like `caption`, etc. to the plot.  Example -
+```{r}
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point() +
+  labs(title = "Scatter plot of mpg vs. hp",
+       subtitle = "Data from mtcars dataset",
+       x = "Horsepower",
+       y = "Miles per gallon",
+       caption = "Source: R datasets")
+```
+
+We can also customize the appearance of the labels by using the `theme()` function, which allows us to modify the font size, font family, and other visual properties of the labels. Example-
+```{r}
+ggplot(mtcars, aes(x = hp, y = mpg)) +
+  geom_point() +
+  labs(title = "Scatter plot of mpg vs. hp",
+       x = "Horsepower",
+       y = "Miles per gallon") +
+  theme(plot.title = element_text(size = 20, color = 'seagreen'),
+        axis.title = element_text(size = 16, color = "blue"))
+
+```
+
+### Modifying scales
+Several times the requirement is to modify x or/and y axis minimum and/or maximum values i.e. axis limits; or otherwise the axis itself is to be transformed.  For these requirements, we have `sacle_*_*()` group of functions in `ggplot2`.
+
+For example we have these two functions for continuos axis/variables.
+```
+scale_x_continuous(name, breaks, labels, limits, trans)
+scale_y_continuous(name, breaks, labels, limits, trans)
+```
+In arguments to above functions, we can see that axis title (name), axis breaks, axis labels, axis limits, and transformations can be dealt with.
+
+Example-
+```{r scale1, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%", fig.cap="Modifying Scales in GGplot2"}
+# Basic Scatter Plot
+ggplot(cars, aes(x = speed, y = dist)) + 
+  geom_point()
+# Modifying scales both axis title and axis limits
+ggplot(cars, aes(x = speed, y = dist)) + 
+  geom_point() + 
+  scale_x_continuous(name="Speed of cars", limits=c(0, 30)) +
+  scale_y_continuous(name="Stopping distance", limits=c(0, 150))
+```
+
+As for transformation we can use `trans` argument
+
+```{r scale2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%", fig.cap="Transforming Axes in GGplot2"}
+ggplot(cars, aes(x = speed, y = dist)) + 
+  geom_point()+
+  scale_x_continuous(trans='log10') +
+  scale_y_continuous(trans='log10')
+
+state.x77 %>% 
+  as.data.frame() %>% 
+  ggplot(aes(Area, Illiteracy/100)) +
+  geom_point() +
+  scale_x_continuous(name = "Area in Square Miles", labels = scales::comma) +
+  scale_y_continuous(name = "Illiteracy as % of Population", labels = scales::percent)
+```
+
+
+### Themes
+We can customize the appearance of plots, such as the axis labels, titles, background colors, and font sizes by applying themes to the plot.  In the above, notice that we have used `theme()` function to modify font etc. of labels in the plot.  Now see the following example-
+```{r theme1, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%", fig.cap="Modifying Themes in GGplot2 theme_bw (left) and theme_void (right)"}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(title = "MPG vs. Weight",
+       x = "Weight (1000 lbs)",
+       y = "Miles per Gallon") +
+  theme_bw()
+
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(title = "MPG vs. Weight",
+       x = "Weight (1000 lbs)",
+       y = "Miles per Gallon") +
+  theme_void()
+```
+
+In this example, we've used the `theme_bw()` and `theme_void()` functions to apply a black-and-white theme to the plot.  Some theme functions that can be used to modify plot themes are -
+
+- `theme_bw()`: A black and white theme that is useful when you want a simple, clean plot.
+- `theme_classic()`: A classic theme that adds gray borders and gridlines to the plot.
+- `theme_void()`: A theme with a transparent background and no gridlines or borders.
+- `theme_minimal()`: A minimalistic theme that removes the gridlines and reduces the size of the axis labels.
+- `theme(axis.title = element_text(size = 16), plot.title = element_text(size = 20))`: This code sets the font size of the axis and plot titles to 16 and 20, respectively.
+- `theme(panel.background = element_rect(fill = "gray90"))`: This code sets the background color of the plot to a light gray color.
+
+We can also customize specific elements of the plot using `element_*()` functions. For example:
+```{r theme2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%", fig.cap="Customising Themes in GGplot2"}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  labs(title = "MPG vs. Weight",
+       x = "Weight (1000 lbs)",
+       y = "Miles per Gallon") +
+  theme_bw() +
+  theme(plot.title = element_text(color = "blue", size = 20, face = "bold"))
+
+```
+
+We can combine multiple customization options together to create a customized theme that fits our specific needs. The possibilities for customization are endless, so feel free to experiment and create your own unique theme!
+
+### Saving/exporting plots
+Of course, after creating charts/plots we would like to save them for further usage in our reports/documents, etc.  Though there may be many options to save a plot to disk, we will be focussing on three different methods.
+
+#### Saving through Rstudio menu {-}
+To save a graph using the RStudio menus, go to the Plots tab and choose Export.
+
+```{r export1, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Exporting Charts", out.width="95%"}
+knitr::include_graphics('images/export.png')
+```
+
+
+Three options are available here.
+
+- Save as Image
+- Save as PDF
+- Copy to clipboard.
+
+#### Saving through code {-}
+We may also save our plots using function `ggsave()` here.  Its syntax is simple
+```
+ggsave(
+  filename,
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = NA,
+  height = NA,
+  units = c("in", "cm", "mm", "px"),
+  dpi = 300,
+  limitsize = TRUE,
+  bg = NULL,
+  ...
+)
+```
+All arguments are simple to understand.  Thus for example if we need to save the following violin plot, 
+
+```{r export2, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Violin Plot", out.width="95%"}
+# Create sample data
+set.seed(123)
+df <- data.frame(group = rep(c("A", "B"), each = 100), 
+                 value = c(rnorm(100, 0, 1), rnorm(100, 1, 1)))
+
+# Create base plot with violin plots and data labels
+base_plot <- ggplot(df, aes(x = group, y = value, fill = group)) +
+  geom_violin(trim = FALSE, alpha = 0.7) +
+  geom_boxplot(width = 0.1, alpha = 0.8) +
+  ggrepel::geom_text_repel(
+    aes(label = round(value, 2)),
+    size = 3,
+    box.padding = 0.5,
+    nudge_y = 0.2
+  ) +
+  labs(x = "Group", y = "Value") +
+  scale_fill_manual(values = c("#CC6666", "#9999CC"))
+base_plot
+```
+
+we can use this code
+
+```
+ggsave('violin.png', base_plot, height = 10, width = 8)
+```
+#### Graphics Devices (Base R Plots) {-}
+If we create plots outside of ggplot (with `plot()`, `hist()`, `boxplot()`, etc.), we cannot use `ggsave()` to save our plots since it only supports plots made with ggplot.
+
+Base R provides a way to save these plots with its graphic device functions.  There are three steps involved in this process-
+
+- Specify the file extension and properties (size, resolution, etc.) along with units
+- create the plot, in base R or/and ggplot2
+- Signal that the plot is finished and save it by running `dev.off()`.  Thus, using this way we can insert as many charts in a single pdf without turning off the device till our pdf is ready.
+
+Example-
+```{r}
+# Creates a png file
+png(
+  filename = "scatter.png",
+  width = 5,
+  height = 3,
+  units = "in",
+  res = 300
+)
+# Prints a ggplot2 in it
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  geom_abline(intercept = 5,
+              slope = 3,
+              color = "seagreen")
+# Device is off
+dev.off()
+
+# Creates a new PDF file
+pdf(file = "two_page.pdf",
+    width = 6,
+    height = 4)
+#first plot
+plot(mtcars$wt, mtcars$mpg)
+abline(a = 5, b = 3, col = "red")
+# Second Plot
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  geom_abline(intercept = 5,
+              slope = 3,
+              color = "seagreen")
+# Device Off
+dev.off()
+```
+
+### GGPLOT2 Tips and other extensions/supporting libraries
+
+- [Extensions](https://exts.ggplot2.tidyverse.org/gallery/)
+- [R graph Gallery](https://r-graph-gallery.com/ggplot2-package.html)
+
+### More to read
+
+- Book [@ggplot22016]
+- [ggplot2 cheatsheet](https://posit.co/wp-content/uploads/2022/10/data-visualization-1.pdf) 
+- [Another Cheatsheet](http://r-statistics.co/ggplot2-cheatsheet.html)
+
+
+
