@@ -1,0 +1,2410 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+<head>
+
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Chapter 18 Benford Tests/Analysis | Data Analytics in Audit, using R</title>
+  <meta name="description" content="This book is intended for auditors performing exploratory data analytics using R programming language, mainly baseR and Tidyverse." />
+  <meta name="generator" content="bookdown 0.38 and GitBook 2.6.7" />
+
+  <meta property="og:title" content="Chapter 18 Benford Tests/Analysis | Data Analytics in Audit, using R" />
+  <meta property="og:type" content="book" />
+  
+  <meta property="og:description" content="This book is intended for auditors performing exploratory data analytics using R programming language, mainly baseR and Tidyverse." />
+  
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Chapter 18 Benford Tests/Analysis | Data Analytics in Audit, using R" />
+  
+  <meta name="twitter:description" content="This book is intended for auditors performing exploratory data analytics using R programming language, mainly baseR and Tidyverse." />
+  
+
+<meta name="author" content="Anil Goyal" />
+
+
+<meta name="date" content="2024-04-19" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  
+  
+<link rel="prev" href="random-sampling-in-r.html"/>
+<link rel="next" href="finding-duplicates.html"/>
+<script src="libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.4.6/dist/fuse.min.js"></script>
+<link href="libs/gitbook-2.6.7/css/style.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-table.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-bookdown.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-highlight.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-search.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-fontsettings.css" rel="stylesheet" />
+<link href="libs/gitbook-2.6.7/css/plugin-clipboard.css" rel="stylesheet" />
+
+
+
+
+
+
+
+
+<link href="libs/anchor-sections-1.1.0/anchor-sections.css" rel="stylesheet" />
+<link href="libs/anchor-sections-1.1.0/anchor-sections-hash.css" rel="stylesheet" />
+<script src="libs/anchor-sections-1.1.0/anchor-sections.js"></script>
+<script src="libs/kePrint-0.0.1/kePrint.js"></script>
+<link href="libs/lightable-0.0.1/lightable.css" rel="stylesheet" />
+
+
+<style type="text/css">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+    color: #aaaaaa;
+  }
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code span.at { color: #7d9029; } /* Attribute */
+code span.bn { color: #40a070; } /* BaseN */
+code span.bu { color: #008000; } /* BuiltIn */
+code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code span.ch { color: #4070a0; } /* Char */
+code span.cn { color: #880000; } /* Constant */
+code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code span.dt { color: #902000; } /* DataType */
+code span.dv { color: #40a070; } /* DecVal */
+code span.er { color: #ff0000; font-weight: bold; } /* Error */
+code span.ex { } /* Extension */
+code span.fl { color: #40a070; } /* Float */
+code span.fu { color: #06287e; } /* Function */
+code span.im { color: #008000; font-weight: bold; } /* Import */
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code span.op { color: #666666; } /* Operator */
+code span.ot { color: #007020; } /* Other */
+code span.pp { color: #bc7a00; } /* Preprocessor */
+code span.sc { color: #4070a0; } /* SpecialChar */
+code span.ss { color: #bb6688; } /* SpecialString */
+code span.st { color: #4070a0; } /* String */
+code span.va { color: #19177c; } /* Variable */
+code span.vs { color: #4070a0; } /* VerbatimString */
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+</style>
+
+<style type="text/css">
+  
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+</style>
+<style type="text/css">
+/* Used with Pandoc 2.11+ new --citeproc when CSL is used */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}
+</style>
+
+<link rel="stylesheet" href="style.css" type="text/css" />
+</head>
+
+<body>
+
+
+
+  <div class="book without-animation with-summary font-size-2 font-family-1" data-basepath=".">
+
+    <div class="book-summary">
+      <nav role="navigation">
+
+<ul class="summary">
+<li><a href="./">Data Analytics in Audit using R</a></li>
+
+<li class="divider"></li>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html"><i class="fa fa-check"></i>Preface</a>
+<ul>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html#acknowledgments"><i class="fa fa-check"></i>Acknowledgments</a></li>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html#overview"><i class="fa fa-check"></i>Overview</a></li>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html#advantages-of-r"><i class="fa fa-check"></i>Advantages of R</a></li>
+</ul></li>
+<li class="chapter" data-level="" data-path="about-author.html"><a href="about-author.html"><i class="fa fa-check"></i>About author</a></li>
+<li class="chapter" data-level="" data-path="gearing-up.html"><a href="gearing-up.html"><i class="fa fa-check"></i>Gearing up</a>
+<ul>
+<li class="chapter" data-level="0.1" data-path="gearing-up.html"><a href="gearing-up.html#download-and-installation"><i class="fa fa-check"></i><b>0.1</b> Download and installation</a></li>
+<li class="chapter" data-level="0.2" data-path="gearing-up.html"><a href="gearing-up.html#writing-your-first-code"><i class="fa fa-check"></i><b>0.2</b> Writing your first code</a></li>
+<li class="chapter" data-level="0.3" data-path="gearing-up.html"><a href="gearing-up.html#remember"><i class="fa fa-check"></i><b>0.3</b> Remember</a></li>
+<li class="chapter" data-level="0.4" data-path="gearing-up.html"><a href="gearing-up.html#r-studio-ide"><i class="fa fa-check"></i><b>0.4</b> R studio IDE</a></li>
+<li class="chapter" data-level="0.5" data-path="gearing-up.html"><a href="gearing-up.html#packages-and-libraries"><i class="fa fa-check"></i><b>0.5</b> Packages and libraries</a>
+<ul>
+<li class="chapter" data-level="0.5.1" data-path="gearing-up.html"><a href="gearing-up.html#double-colon-operator"><i class="fa fa-check"></i><b>0.5.1</b> Double Colon operator <code>::</code></a></li>
+</ul></li>
+<li class="chapter" data-level="0.6" data-path="gearing-up.html"><a href="gearing-up.html#help"><i class="fa fa-check"></i><b>0.6</b> Getting Help within R</a></li>
+<li class="chapter" data-level="0.7" data-path="gearing-up.html"><a href="gearing-up.html#tidyverse"><i class="fa fa-check"></i><b>0.7</b> tidyverse</a></li>
+</ul></li>
+<li class="chapter" data-level="" data-path="part-i-basic-r-programming-concepts.html"><a href="part-i-basic-r-programming-concepts.html"><i class="fa fa-check"></i>Part-I: Basic R Programming Concepts</a></li>
+<li class="chapter" data-level="1" data-path="r-programming-language.html"><a href="r-programming-language.html"><i class="fa fa-check"></i><b>1</b> R Programming Language</a>
+<ul>
+<li class="chapter" data-level="1.1" data-path="r-programming-language.html"><a href="r-programming-language.html#calculator"><i class="fa fa-check"></i><b>1.1</b> Use R as a calculator</a></li>
+<li class="chapter" data-level="1.2" data-path="r-programming-language.html"><a href="r-programming-language.html#basic-concepts"><i class="fa fa-check"></i><b>1.2</b> Basic Concepts</a>
+<ul>
+<li class="chapter" data-level="1.2.1" data-path="r-programming-language.html"><a href="r-programming-language.html#object-assignment"><i class="fa fa-check"></i><b>1.2.1</b> Object Assignment</a></li>
+</ul></li>
+<li class="chapter" data-level="1.3" data-path="r-programming-language.html"><a href="r-programming-language.html#atomic-data-types-in-r"><i class="fa fa-check"></i><b>1.3</b> Atomic data types in R</a>
+<ul>
+<li class="chapter" data-level="1.3.1" data-path="r-programming-language.html"><a href="r-programming-language.html#logical"><i class="fa fa-check"></i><b>1.3.1</b> Logical</a></li>
+<li class="chapter" data-level="1.3.2" data-path="r-programming-language.html"><a href="r-programming-language.html#integer"><i class="fa fa-check"></i><b>1.3.2</b> Integer</a></li>
+<li class="chapter" data-level="1.3.3" data-path="r-programming-language.html"><a href="r-programming-language.html#double"><i class="fa fa-check"></i><b>1.3.3</b> Double</a></li>
+<li class="chapter" data-level="1.3.4" data-path="r-programming-language.html"><a href="r-programming-language.html#string"><i class="fa fa-check"></i><b>1.3.4</b> Character</a></li>
+<li class="chapter" data-level="1.3.5" data-path="r-programming-language.html"><a href="r-programming-language.html#null"><i class="fa fa-check"></i><b>1.3.5</b> NULL</a></li>
+<li class="chapter" data-level="1.3.6" data-path="r-programming-language.html"><a href="r-programming-language.html#complex"><i class="fa fa-check"></i><b>1.3.6</b> Complex</a></li>
+</ul></li>
+<li class="chapter" data-level="1.4" data-path="r-programming-language.html"><a href="r-programming-language.html#data-structuresobject-types-in-r"><i class="fa fa-check"></i><b>1.4</b> Data structures/Object Types in R</a>
+<ul>
+<li class="chapter" data-level="" data-path="r-programming-language.html"><a href="r-programming-language.html#homogeneous-objects"><i class="fa fa-check"></i>Homogeneous objects</a></li>
+<li class="chapter" data-level="1.4.1" data-path="r-programming-language.html"><a href="r-programming-language.html#vectors"><i class="fa fa-check"></i><b>1.4.1</b> Vectors</a></li>
+<li class="chapter" data-level="1.4.2" data-path="r-programming-language.html"><a href="r-programming-language.html#matrix-matrices"><i class="fa fa-check"></i><b>1.4.2</b> Matrix (Matrices)</a></li>
+<li class="chapter" data-level="1.4.3" data-path="r-programming-language.html"><a href="r-programming-language.html#arrays"><i class="fa fa-check"></i><b>1.4.3</b> Arrays</a></li>
+<li class="chapter" data-level="" data-path="r-programming-language.html"><a href="r-programming-language.html#heterogeneous-objects"><i class="fa fa-check"></i>Heterogeneous objects</a></li>
+<li class="chapter" data-level="1.4.4" data-path="r-programming-language.html"><a href="r-programming-language.html#lists"><i class="fa fa-check"></i><b>1.4.4</b> Lists</a></li>
+<li class="chapter" data-level="1.4.5" data-path="r-programming-language.html"><a href="r-programming-language.html#data-frame"><i class="fa fa-check"></i><b>1.4.5</b> Data Frame</a></li>
+</ul></li>
+<li class="chapter" data-level="1.5" data-path="r-programming-language.html"><a href="r-programming-language.html#other-data-types"><i class="fa fa-check"></i><b>1.5</b> Other Data types</a>
+<ul>
+<li class="chapter" data-level="1.5.1" data-path="r-programming-language.html"><a href="r-programming-language.html#factors"><i class="fa fa-check"></i><b>1.5.1</b> Factors</a></li>
+<li class="chapter" data-level="1.5.2" data-path="r-programming-language.html"><a href="r-programming-language.html#date"><i class="fa fa-check"></i><b>1.5.2</b> Date</a></li>
+<li class="chapter" data-level="1.5.3" data-path="r-programming-language.html"><a href="r-programming-language.html#date-time-posixct"><i class="fa fa-check"></i><b>1.5.3</b> Date-time (<code>POSIXct</code>)</a></li>
+<li class="chapter" data-level="1.5.4" data-path="r-programming-language.html"><a href="r-programming-language.html#duration-difftime"><i class="fa fa-check"></i><b>1.5.4</b> Duration (<code>difftime</code>)</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="2" data-path="subset.html"><a href="subset.html"><i class="fa fa-check"></i><b>2</b> Subsetting R objects or accesing specific elements</a>
+<ul>
+<li class="chapter" data-level="2.1" data-path="subset.html"><a href="subset.html#subsetting-vectors"><i class="fa fa-check"></i><b>2.1</b> Subsetting vectors</a>
+<ul>
+<li class="chapter" data-level="2.1.1" data-path="subset.html"><a href="subset.html#subsetting-through-a-vector-of-positive-integers"><i class="fa fa-check"></i><b>2.1.1</b> Subsetting through a vector of positive integers</a></li>
+<li class="chapter" data-level="2.1.2" data-path="subset.html"><a href="subset.html#subsetting-through-a-vector-of-negative-integers"><i class="fa fa-check"></i><b>2.1.2</b> Subsetting through a vector of negative integers</a></li>
+<li class="chapter" data-level="2.1.3" data-path="subset.html"><a href="subset.html#subsetting-through-a-logical-vector"><i class="fa fa-check"></i><b>2.1.3</b> Subsetting through a logical vector</a></li>
+<li class="chapter" data-level="2.1.4" data-path="subset.html"><a href="subset.html#subsetting-through-a-character-vector"><i class="fa fa-check"></i><b>2.1.4</b> Subsetting through a character vector</a></li>
+<li class="chapter" data-level="2.1.5" data-path="subset.html"><a href="subset.html#subsetting-through-nothing"><i class="fa fa-check"></i><b>2.1.5</b> Subsetting through nothing</a></li>
+<li class="chapter" data-level="2.1.6" data-path="subset.html"><a href="subset.html#subsetting-through-zero"><i class="fa fa-check"></i><b>2.1.6</b> Subsetting through Zero</a></li>
+</ul></li>
+<li class="chapter" data-level="2.2" data-path="subset.html"><a href="subset.html#subsetting-matrices-and-arrays"><i class="fa fa-check"></i><b>2.2</b> Subsetting Matrices and arrays</a>
+<ul>
+<li class="chapter" data-level="2.2.1" data-path="subset.html"><a href="subset.html#indexing-through-multiple-vectors"><i class="fa fa-check"></i><b>2.2.1</b> Indexing through Multiple vectors</a></li>
+<li class="chapter" data-level="2.2.2" data-path="subset.html"><a href="subset.html#subsetting-through-one-vector"><i class="fa fa-check"></i><b>2.2.2</b> Subsetting through one vector</a></li>
+<li class="chapter" data-level="2.2.3" data-path="subset.html"><a href="subset.html#subsetting-through-a-matrix"><i class="fa fa-check"></i><b>2.2.3</b> Subsetting through a matrix</a></li>
+</ul></li>
+<li class="chapter" data-level="2.3" data-path="subset.html"><a href="subset.html#subsetting-lists"><i class="fa fa-check"></i><b>2.3</b> Subsetting lists</a>
+<ul>
+<li class="chapter" data-level="2.3.1" data-path="subset.html"><a href="subset.html#subsetting-lists-with"><i class="fa fa-check"></i><b>2.3.1</b> Subsetting lists with <code>[]</code></a></li>
+<li class="chapter" data-level="2.3.2" data-path="subset.html"><a href="subset.html#subsetting-lists-with-1"><i class="fa fa-check"></i><b>2.3.2</b> Subsetting lists with <code>[[]]</code></a></li>
+<li class="chapter" data-level="2.3.3" data-path="subset.html"><a href="subset.html#chaining-or-multiple-subsetting"><i class="fa fa-check"></i><b>2.3.3</b> Chaining or multiple subsetting</a></li>
+<li class="chapter" data-level="2.3.4" data-path="subset.html"><a href="subset.html#subsetting-with"><i class="fa fa-check"></i><b>2.3.4</b> Subsetting with <code>$</code></a></li>
+</ul></li>
+<li class="chapter" data-level="2.4" data-path="subset.html"><a href="subset.html#data-frames"><i class="fa fa-check"></i><b>2.4</b> Data frames</a></li>
+<li class="chapter" data-level="2.5" data-path="subset.html"><a href="subset.html#subsetting-and-assignment"><i class="fa fa-check"></i><b>2.5</b> Subsetting and assignment</a></li>
+</ul></li>
+<li class="chapter" data-level="3" data-path="func.html"><a href="func.html"><i class="fa fa-check"></i><b>3</b> Functions and operations in R</a>
+<ul>
+<li class="chapter" data-level="3.1" data-path="func.html"><a href="func.html#cust"><i class="fa fa-check"></i><b>3.1</b> Custom Functions</a>
+<ul>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#special-argument-ellipsis-..."><i class="fa fa-check"></i>Special argument ellipsis <code>...</code></a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#environment-issues"><i class="fa fa-check"></i>Environment issues</a></li>
+</ul></li>
+<li class="chapter" data-level="3.2" data-path="func.html"><a href="func.html#existing-and-useful-functions-in-base-r"><i class="fa fa-check"></i><b>3.2</b> Existing and useful functions in base R</a>
+<ul>
+<li class="chapter" data-level="3.2.1" data-path="func.html"><a href="func.html#conditions-and-logical-operatorsoperands"><i class="fa fa-check"></i><b>3.2.1</b> Conditions and logical operators/operands</a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#vectorisation-of-operations-and-functions"><i class="fa fa-check"></i>Vectorisation of operations and functions</a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#recycling"><i class="fa fa-check"></i>Recycling</a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#handling-missing-values-na-in-these-operations"><i class="fa fa-check"></i>Handling Missing values <code>NA</code> in these operations</a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#use-of-above-logical-operators-for-subsetting"><i class="fa fa-check"></i>Use of above logical operators for subsetting</a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#conditions-with-ifelse"><i class="fa fa-check"></i>Conditions with <code>ifelse</code></a></li>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#functions-all-and-any"><i class="fa fa-check"></i>Functions <code>all()</code> and <code>any()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="3.3" data-path="func.html"><a href="func.html#common-arithmetical-functions"><i class="fa fa-check"></i><b>3.3</b> Common arithmetical Functions</a>
+<ul>
+<li class="chapter" data-level="" data-path="func.html"><a href="func.html#missing-values"><i class="fa fa-check"></i>Missing values</a></li>
+</ul></li>
+<li class="chapter" data-level="3.4" data-path="func.html"><a href="func.html#some-statistical-functions"><i class="fa fa-check"></i><b>3.4</b> Some Statistical functions</a></li>
+<li class="chapter" data-level="3.5" data-path="func.html"><a href="func.html#prob"><i class="fa fa-check"></i><b>3.5</b> Functions related to sampling and probability distributions</a></li>
+<li class="chapter" data-level="3.6" data-path="func.html"><a href="func.html#other-mathematical-functions"><i class="fa fa-check"></i><b>3.6</b> Other Mathematical functions</a></li>
+<li class="chapter" data-level="3.7" data-path="func.html"><a href="func.html#string-manipulation-functions"><i class="fa fa-check"></i><b>3.7</b> String Manipulation functions</a></li>
+<li class="chapter" data-level="3.8" data-path="func.html"><a href="func.html#other-functions"><i class="fa fa-check"></i><b>3.8</b> Other functions</a></li>
+<li class="chapter" data-level="3.9" data-path="func.html"><a href="func.html#pipes"><i class="fa fa-check"></i><b>3.9</b> Pipes</a>
+<ul>
+<li class="chapter" data-level="3.9.1" data-path="func.html"><a href="func.html#magrittrdplyr-pipe"><i class="fa fa-check"></i><b>3.9.1</b> Magrittr/Dplyr pipe <code>%&gt;%</code></a></li>
+<li class="chapter" data-level="3.9.2" data-path="func.html"><a href="func.html#base-r-pipe-version-4.2.0"><i class="fa fa-check"></i><b>3.9.2</b> Base R pipe <code>|&gt;</code> (Version 4.2.0 +)</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="4" data-path="control-statements.html"><a href="control-statements.html"><i class="fa fa-check"></i><b>4</b> Control statements</a>
+<ul>
+<li class="chapter" data-level="4.1" data-path="control-statements.html"><a href="control-statements.html#control-flowloops"><i class="fa fa-check"></i><b>4.1</b> Control flow/Loops</a>
+<ul>
+<li class="chapter" data-level="" data-path="control-statements.html"><a href="control-statements.html#if-else"><i class="fa fa-check"></i><code>if else</code></a></li>
+<li class="chapter" data-level="" data-path="control-statements.html"><a href="control-statements.html#for-loop"><i class="fa fa-check"></i><code>for</code> loop</a></li>
+<li class="chapter" data-level="" data-path="control-statements.html"><a href="control-statements.html#while-loop"><i class="fa fa-check"></i><code>while</code> loop</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="5" data-path="functional-programming.html"><a href="functional-programming.html"><i class="fa fa-check"></i><b>5</b> Functional Programming</a>
+<ul>
+<li class="chapter" data-level="5.1" data-path="functional-programming.html"><a href="functional-programming.html#what-is-functional-programming"><i class="fa fa-check"></i><b>5.1</b> What is functional programming?</a>
+<ul>
+<li class="chapter" data-level="5.1.1" data-path="functional-programming.html"><a href="functional-programming.html#usage-of-functional-programming-in-r"><i class="fa fa-check"></i><b>5.1.1</b> Usage of functional programming in R</a></li>
+</ul></li>
+<li class="chapter" data-level="5.2" data-path="functional-programming.html"><a href="functional-programming.html#apply-family-of-functions"><i class="fa fa-check"></i><b>5.2</b> <code>apply</code> family of functions</a>
+<ul>
+<li class="chapter" data-level="5.2.1" data-path="functional-programming.html"><a href="functional-programming.html#function-apply"><i class="fa fa-check"></i><b>5.2.1</b> Function <code>apply()</code></a></li>
+<li class="chapter" data-level="5.2.2" data-path="functional-programming.html"><a href="functional-programming.html#function-lapply"><i class="fa fa-check"></i><b>5.2.2</b> Function <code>lapply()</code></a></li>
+<li class="chapter" data-level="5.2.3" data-path="functional-programming.html"><a href="functional-programming.html#function-sapply"><i class="fa fa-check"></i><b>5.2.3</b> Function <code>sapply()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="5.3" data-path="functional-programming.html"><a href="functional-programming.html#other-loop-functions"><i class="fa fa-check"></i><b>5.3</b> Other loop functions</a>
+<ul>
+<li class="chapter" data-level="5.3.1" data-path="functional-programming.html"><a href="functional-programming.html#function-replicate"><i class="fa fa-check"></i><b>5.3.1</b> Function <code>replicate()</code></a></li>
+<li class="chapter" data-level="5.3.2" data-path="functional-programming.html"><a href="functional-programming.html#function-split"><i class="fa fa-check"></i><b>5.3.2</b> Function <code>split()</code></a></li>
+<li class="chapter" data-level="5.3.3" data-path="functional-programming.html"><a href="functional-programming.html#tapply"><i class="fa fa-check"></i><b>5.3.3</b> <code>tapply()</code></a></li>
+<li class="chapter" data-level="5.3.4" data-path="functional-programming.html"><a href="functional-programming.html#by-function"><i class="fa fa-check"></i><b>5.3.4</b> <code>by()</code> function</a></li>
+<li class="chapter" data-level="5.3.5" data-path="functional-programming.html"><a href="functional-programming.html#specifying-the-output-type-with-vapply"><i class="fa fa-check"></i><b>5.3.5</b> Specifying the output type with <code>vapply()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="5.4" data-path="functional-programming.html"><a href="functional-programming.html#purrr"><i class="fa fa-check"></i><b>5.4</b> Functional Programming in <code>purrr</code></a>
+<ul>
+<li class="chapter" data-level="5.4.1" data-path="functional-programming.html"><a href="functional-programming.html#iterate-over-single-listvector-with-map_-family-of-functions"><i class="fa fa-check"></i><b>5.4.1</b> Iterate over single list/vector with <code>map_*()</code> family of functions</a></li>
+<li class="chapter" data-level="5.4.2" data-path="functional-programming.html"><a href="functional-programming.html#iterate-over-two-or-more-listsvectors-using-map2_-pmap_-family"><i class="fa fa-check"></i><b>5.4.2</b> Iterate over two or more lists/vectors using <code>map2_*()</code>/ <code>pmap_*()</code> family</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="6" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html"><i class="fa fa-check"></i><b>6</b> Visualisations in Base R</a>
+<ul>
+<li class="chapter" data-level="6.1" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#using-plot"><i class="fa fa-check"></i><b>6.1</b> Using <code>plot()</code></a></li>
+<li class="chapter" data-level="6.2" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#bar-plots-using-barplot"><i class="fa fa-check"></i><b>6.2</b> Bar plots using <code>barplot()</code></a></li>
+<li class="chapter" data-level="6.3" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#histograms-using-hist"><i class="fa fa-check"></i><b>6.3</b> Histograms using <code>hist()</code></a></li>
+<li class="chapter" data-level="6.4" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#boxplots-and-variants-using-boxplot"><i class="fa fa-check"></i><b>6.4</b> Boxplot(s) and variants using <code>boxplot()</code></a></li>
+<li class="chapter" data-level="6.5" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#saving-and-exporting-charts"><i class="fa fa-check"></i><b>6.5</b> Saving and exporting charts</a></li>
+<li class="chapter" data-level="6.6" data-path="visualisations-in-base-r.html"><a href="visualisations-in-base-r.html#use-of-par"><i class="fa fa-check"></i><b>6.6</b> Use of <code>par()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="7" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html"><i class="fa fa-check"></i><b>7</b> Visualisation with <code>ggplot2</code></a>
+<ul>
+<li class="chapter" data-level="7.1" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#core-concepts-of-grammar-of-graphics"><i class="fa fa-check"></i><b>7.1</b> Core concepts of <strong>grammar of graphics</strong></a></li>
+<li class="chapter" data-level="7.2" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#prerequisites"><i class="fa fa-check"></i><b>7.2</b> Prerequisites:</a></li>
+<li class="chapter" data-level="7.3" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#ggplot2-in-action"><i class="fa fa-check"></i><b>7.3</b> GGPLOT2 in action</a>
+<ul>
+<li class="chapter" data-level="7.3.1" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#building-a-basic-plot"><i class="fa fa-check"></i><b>7.3.1</b> Building a basic plot</a></li>
+<li class="chapter" data-level="7.3.2" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#more-on-aesthetics"><i class="fa fa-check"></i><b>7.3.2</b> More on Aesthetics</a></li>
+<li class="chapter" data-level="7.3.3" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#geoms"><i class="fa fa-check"></i><b>7.3.3</b> More on Geoms</a></li>
+<li class="chapter" data-level="7.3.4" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#faceting"><i class="fa fa-check"></i><b>7.3.4</b> Faceting</a></li>
+<li class="chapter" data-level="7.3.5" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#labels"><i class="fa fa-check"></i><b>7.3.5</b> Labels</a></li>
+<li class="chapter" data-level="7.3.6" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#modifying-scales"><i class="fa fa-check"></i><b>7.3.6</b> Modifying scales</a></li>
+<li class="chapter" data-level="7.3.7" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#themes"><i class="fa fa-check"></i><b>7.3.7</b> Themes</a></li>
+<li class="chapter" data-level="7.3.8" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#savingexporting-plots"><i class="fa fa-check"></i><b>7.3.8</b> Saving/exporting plots</a></li>
+<li class="chapter" data-level="7.3.9" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#ggplot2-tips-and-other-extensionssupporting-libraries"><i class="fa fa-check"></i><b>7.3.9</b> GGPLOT2 Tips and other extensions/supporting libraries</a></li>
+<li class="chapter" data-level="7.3.10" data-path="visualisation-with-ggplot2.html"><a href="visualisation-with-ggplot2.html#more-to-read"><i class="fa fa-check"></i><b>7.3.10</b> More to read</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="" data-path="part-ii-dealing-with-tabular-data.html"><a href="part-ii-dealing-with-tabular-data.html"><i class="fa fa-check"></i>Part-II: Dealing with tabular data</a></li>
+<li class="chapter" data-level="8" data-path="read.html"><a href="read.html"><i class="fa fa-check"></i><b>8</b> Getting data in and out of R</a>
+<ul>
+<li class="chapter" data-level="8.1" data-path="read.html"><a href="read.html#importing-external-data-in-r---base-r-methods"><i class="fa fa-check"></i><b>8.1</b> Importing external data in R - Base R methods</a>
+<ul>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#reading-tables-through-read.table-andor-read.csv"><i class="fa fa-check"></i>Reading tables through <code>read.table()</code> and/or <code>read.csv()</code></a></li>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#read-data-into-a-vector-through-scan-or-readline"><i class="fa fa-check"></i>Read data into a vector through <code>scan()</code> or <code>readline()</code></a></li>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#reading-text-files-through-readlines"><i class="fa fa-check"></i>Reading text files through <code>readLines()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="8.2" data-path="read.html"><a href="read.html#exporting-data-out-of-r---base-r-methods"><i class="fa fa-check"></i><b>8.2</b> Exporting data out of R - Base R methods</a>
+<ul>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#writing-tabular-data-through-write.table-andor-write.csv"><i class="fa fa-check"></i>Writing tabular data through <code>write.table()</code> and/or <code>write.csv()</code></a></li>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#writing-character-data-line-by-line-to-a-file-through-writelines"><i class="fa fa-check"></i>Writing character data line by line to a file through <code>writeLines()</code></a></li>
+<li class="chapter" data-level="" data-path="read.html"><a href="read.html#using-dput-to-get-a-code-representation-of-r-object"><i class="fa fa-check"></i>Using <code>dput()</code> to get a code representation of R object</a></li>
+</ul></li>
+<li class="chapter" data-level="8.3" data-path="read.html"><a href="read.html#using-external-packages-for-readingwriting-data"><i class="fa fa-check"></i><b>8.3</b> Using external packages for reading/writing data</a>
+<ul>
+<li class="chapter" data-level="8.3.1" data-path="read.html"><a href="read.html#package-readr"><i class="fa fa-check"></i><b>8.3.1</b> Package <code>readr</code></a></li>
+<li class="chapter" data-level="8.3.2" data-path="read.html"><a href="read.html#package-readxl"><i class="fa fa-check"></i><b>8.3.2</b> Package <code>readxl</code></a></li>
+<li class="chapter" data-level="8.3.3" data-path="read.html"><a href="read.html#reprex"><i class="fa fa-check"></i><b>8.3.3</b> Package <code>reprex</code></a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="9" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html"><i class="fa fa-check"></i><b>9</b> Data Transformation in <code>dplyr</code></a>
+<ul>
+<li class="chapter" data-level="9.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#prerequisites-1"><i class="fa fa-check"></i><b>9.1</b> Prerequisites</a></li>
+<li class="chapter" data-level="9.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#column-verbs"><i class="fa fa-check"></i><b>9.2</b> Column verbs</a>
+<ul>
+<li class="chapter" data-level="9.2.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#select"><i class="fa fa-check"></i><b>9.2.1</b> <code>select()</code></a></li>
+<li class="chapter" data-level="9.2.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#mutate"><i class="fa fa-check"></i><b>9.2.2</b> <code>mutate()</code></a></li>
+<li class="chapter" data-level="9.2.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#rename"><i class="fa fa-check"></i><b>9.2.3</b> <code>rename()</code></a></li>
+<li class="chapter" data-level="9.2.4" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#relocate"><i class="fa fa-check"></i><b>9.2.4</b> <code>relocate()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="9.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#row-verbs"><i class="fa fa-check"></i><b>9.3</b> Row verbs</a>
+<ul>
+<li class="chapter" data-level="9.3.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#filter"><i class="fa fa-check"></i><b>9.3.1</b> <code>filter</code></a></li>
+<li class="chapter" data-level="9.3.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#slice_func"><i class="fa fa-check"></i><b>9.3.2</b> <code>slice()</code> / <code>slice_*()</code></a></li>
+<li class="chapter" data-level="9.3.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#arrange"><i class="fa fa-check"></i><b>9.3.3</b> <code>arrange()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="9.4" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#group-verbs"><i class="fa fa-check"></i><b>9.4</b> Group verbs</a>
+<ul>
+<li class="chapter" data-level="9.4.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#group_by"><i class="fa fa-check"></i><b>9.4.1</b> <code>group_by()</code></a></li>
+<li class="chapter" data-level="9.4.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#summarise"><i class="fa fa-check"></i><b>9.4.2</b> <code>summarise()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="9.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#other-useful-functions-in-dplyr"><i class="fa fa-check"></i><b>9.5</b> Other Useful functions in <code>dplyr</code></a>
+<ul>
+<li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#if_else"><i class="fa fa-check"></i><code>if_else()</code></a></li>
+<li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_when"><i class="fa fa-check"></i><code>case_when()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="9.6" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#window-functionsoperations"><i class="fa fa-check"></i><b>9.6</b> Window functions/operations</a></li>
+</ul></li>
+<li class="chapter" data-level="10" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html"><i class="fa fa-check"></i><b>10</b> Combining Tables/tabular data</a>
+<ul>
+<li class="chapter" data-level="10.1" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#simple-joinsconcatenation"><i class="fa fa-check"></i><b>10.1</b> Simple joins/concatenation</a>
+<ul>
+<li class="chapter" data-level="10.1.1" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#column-binding"><i class="fa fa-check"></i><b>10.1.1</b> Column binding</a></li>
+<li class="chapter" data-level="10.1.2" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#row-binding"><i class="fa fa-check"></i><b>10.1.2</b> Row binding</a></li>
+</ul></li>
+<li class="chapter" data-level="10.2" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#relational-joins"><i class="fa fa-check"></i><b>10.2</b> Relational joins</a>
+<ul>
+<li class="chapter" data-level="10.2.1" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#inner-joins"><i class="fa fa-check"></i><b>10.2.1</b> Inner Joins</a></li>
+<li class="chapter" data-level="10.2.2" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#left-joins"><i class="fa fa-check"></i><b>10.2.2</b> Left Joins</a></li>
+<li class="chapter" data-level="10.2.3" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#right-joins"><i class="fa fa-check"></i><b>10.2.3</b> Right Joins</a></li>
+<li class="chapter" data-level="10.2.4" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#full-joins"><i class="fa fa-check"></i><b>10.2.4</b> Full Joins</a></li>
+<li class="chapter" data-level="" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#many-to-many-joins"><i class="fa fa-check"></i>Many-to-many Joins</a></li>
+</ul></li>
+<li class="chapter" data-level="10.3" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#filtering-joins"><i class="fa fa-check"></i><b>10.3</b> Filtering Joins</a>
+<ul>
+<li class="chapter" data-level="10.3.1" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#semi-joins"><i class="fa fa-check"></i><b>10.3.1</b> Semi Joins</a></li>
+<li class="chapter" data-level="10.3.2" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#anti-joins"><i class="fa fa-check"></i><b>10.3.2</b> Anti Joins</a></li>
+</ul></li>
+<li class="chapter" data-level="10.4" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#relational-but-non-equi-joins"><i class="fa fa-check"></i><b>10.4</b> Relational, but non-equi joins</a>
+<ul>
+<li class="chapter" data-level="10.4.1" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#inequality-joins"><i class="fa fa-check"></i><b>10.4.1</b> Inequality Joins</a></li>
+<li class="chapter" data-level="10.4.2" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#rolling-joins"><i class="fa fa-check"></i><b>10.4.2</b> Rolling Joins</a></li>
+<li class="chapter" data-level="10.4.3" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#overlap-joins"><i class="fa fa-check"></i><b>10.4.3</b> Overlap Joins</a></li>
+<li class="chapter" data-level="10.4.4" data-path="combining-tablestabular-data.html"><a href="combining-tablestabular-data.html#cross-joins"><i class="fa fa-check"></i><b>10.4.4</b> Cross Joins</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="11" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html"><i class="fa fa-check"></i><b>11</b> Data Wrangling in <code>tidyr</code></a>
+<ul>
+<li class="chapter" data-level="11.1" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#prerequisites-2"><i class="fa fa-check"></i><b>11.1</b> Prerequisites</a></li>
+<li class="chapter" data-level="11.2" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#concepts-of-tidy-data"><i class="fa fa-check"></i><b>11.2</b> Concepts of tidy data</a></li>
+<li class="chapter" data-level="11.3" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#reshaping-data"><i class="fa fa-check"></i><b>11.3</b> Reshaping data</a>
+<ul>
+<li class="chapter" data-level="11.3.1" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#longer-format-through-function-pivot_longer"><i class="fa fa-check"></i><b>11.3.1</b> LONGER format through function <code>pivot_longer()</code></a></li>
+<li class="chapter" data-level="11.3.2" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#wider-format-through-pivot_wider"><i class="fa fa-check"></i><b>11.3.2</b> WIDER format through <code>pivot_wider()</code></a></li>
+<li class="chapter" data-level="11.3.3" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#separate-columns-into-multiple-columns-join-columns-into-one-column"><i class="fa fa-check"></i><b>11.3.3</b> Separate Column(s) into multiple columns/ Join columns into one column</a></li>
+<li class="chapter" data-level="11.3.4" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#separate-rows-into-multiple-rows"><i class="fa fa-check"></i><b>11.3.4</b> Separate row(s) into multiple rows</a></li>
+<li class="chapter" data-level="11.3.5" data-path="data-wrangling-in-tidyr.html"><a href="data-wrangling-in-tidyr.html#expand-table-to-handle-missing-rowsvalues"><i class="fa fa-check"></i><b>11.3.5</b> Expand table to handle missing rows/values</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="" data-path="part-iii-statistics-with-r.html"><a href="part-iii-statistics-with-r.html"><i class="fa fa-check"></i>Part-III: Statistics with R</a></li>
+<li class="chapter" data-level="12" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html"><i class="fa fa-check"></i><b>12</b> Descriptive statistics</a>
+<ul>
+<li class="chapter" data-level="12.1" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html#using-base-r"><i class="fa fa-check"></i><b>12.1</b> Using base R</a></li>
+<li class="chapter" data-level="12.2" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html#dplyr-functions"><i class="fa fa-check"></i><b>12.2</b> Dplyr functions</a></li>
+<li class="chapter" data-level="12.3" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html#using-another-package-psych"><i class="fa fa-check"></i><b>12.3</b> Using another package <code>psych</code></a></li>
+<li class="chapter" data-level="12.4" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html#using-skimr"><i class="fa fa-check"></i><b>12.4</b> Using <code>skimr</code></a></li>
+<li class="chapter" data-level="12.5" data-path="descriptive-statistics.html"><a href="descriptive-statistics.html#viewing-relationships-between-different-variables"><i class="fa fa-check"></i><b>12.5</b> Viewing relationships between different variables</a></li>
+</ul></li>
+<li class="chapter" data-level="13" data-path="probability-in-r.html"><a href="probability-in-r.html"><i class="fa fa-check"></i><b>13</b> Probability in R</a>
+<ul>
+<li class="chapter" data-level="13.1" data-path="probability-in-r.html"><a href="probability-in-r.html#p-set-of-functions"><i class="fa fa-check"></i><b>13.1</b> <code>p*()</code> set of functions</a></li>
+<li class="chapter" data-level="13.2" data-path="probability-in-r.html"><a href="probability-in-r.html#q-set-of-functions"><i class="fa fa-check"></i><b>13.2</b> <code>q*()</code> set of functions</a></li>
+<li class="chapter" data-level="13.3" data-path="probability-in-r.html"><a href="probability-in-r.html#d-set-of-functions"><i class="fa fa-check"></i><b>13.3</b> <code>d*()</code> set of functions</a></li>
+<li class="chapter" data-level="13.4" data-path="probability-in-r.html"><a href="probability-in-r.html#r-set-of-functions"><i class="fa fa-check"></i><b>13.4</b> <code>r*()</code> set of functions</a></li>
+</ul></li>
+<li class="chapter" data-level="14" data-path="linear-regression.html"><a href="linear-regression.html"><i class="fa fa-check"></i><b>14</b> Linear Regression</a>
+<ul>
+<li class="chapter" data-level="14.1" data-path="linear-regression.html"><a href="linear-regression.html#basic-concepts-1"><i class="fa fa-check"></i><b>14.1</b> Basic concepts</a></li>
+<li class="chapter" data-level="14.2" data-path="linear-regression.html"><a href="linear-regression.html#simple-linear-regression-in-r"><i class="fa fa-check"></i><b>14.2</b> Simple Linear Regression in R</a></li>
+<li class="chapter" data-level="14.3" data-path="linear-regression.html"><a href="linear-regression.html#assumptions-of-linear-regression"><i class="fa fa-check"></i><b>14.3</b> Assumptions of Linear Regression</a></li>
+<li class="chapter" data-level="14.4" data-path="linear-regression.html"><a href="linear-regression.html#interpreting-the-output-of-lm"><i class="fa fa-check"></i><b>14.4</b> Interpreting the output of <code>lm</code></a>
+<ul>
+<li class="chapter" data-level="14.4.1" data-path="linear-regression.html"><a href="linear-regression.html#call"><i class="fa fa-check"></i><b>14.4.1</b> <code>call</code></a></li>
+<li class="chapter" data-level="14.4.2" data-path="linear-regression.html"><a href="linear-regression.html#residuals"><i class="fa fa-check"></i><b>14.4.2</b> <code>Residuals</code></a></li>
+<li class="chapter" data-level="14.4.3" data-path="linear-regression.html"><a href="linear-regression.html#coefficients"><i class="fa fa-check"></i><b>14.4.3</b> <code>Coefficients</code></a></li>
+<li class="chapter" data-level="14.4.4" data-path="linear-regression.html"><a href="linear-regression.html#signif.-codes"><i class="fa fa-check"></i><b>14.4.4</b> <code>Signif. codes</code></a></li>
+<li class="chapter" data-level="14.4.5" data-path="linear-regression.html"><a href="linear-regression.html#residual-standard-error"><i class="fa fa-check"></i><b>14.4.5</b> <code>Residual standard error</code></a></li>
+<li class="chapter" data-level="14.4.6" data-path="linear-regression.html"><a href="linear-regression.html#r-squared-both-multiple-and-adjusted"><i class="fa fa-check"></i><b>14.4.6</b> <code>R-Squared</code> both Multiple and Adjusted</a></li>
+<li class="chapter" data-level="14.4.7" data-path="linear-regression.html"><a href="linear-regression.html#f-statistic-and-p-value"><i class="fa fa-check"></i><b>14.4.7</b> <code>F-Statistic</code> and <code>p-value</code></a></li>
+</ul></li>
+<li class="chapter" data-level="14.5" data-path="linear-regression.html"><a href="linear-regression.html#model-evaluation-metrics"><i class="fa fa-check"></i><b>14.5</b> Model Evaluation Metrics</a>
+<ul>
+<li class="chapter" data-level="14.5.1" data-path="linear-regression.html"><a href="linear-regression.html#mae---mean-absolute-error"><i class="fa fa-check"></i><b>14.5.1</b> MAE - Mean Absolute Error</a></li>
+<li class="chapter" data-level="14.5.2" data-path="linear-regression.html"><a href="linear-regression.html#mse---mean-square-error-and-rmse---root-mean-square-error"><i class="fa fa-check"></i><b>14.5.2</b> MSE - Mean Square Error and RMSE - Root Mean Square Error</a></li>
+<li class="chapter" data-level="14.5.3" data-path="linear-regression.html"><a href="linear-regression.html#mape---mean-absolute-percentage-error"><i class="fa fa-check"></i><b>14.5.3</b> MAPE - Mean Absolute Percentage Error</a></li>
+<li class="chapter" data-level="14.5.4" data-path="linear-regression.html"><a href="linear-regression.html#r---squared-and-adjusted-r-squared"><i class="fa fa-check"></i><b>14.5.4</b> R - Squared and adjusted R-squared</a></li>
+</ul></li>
+<li class="chapter" data-level="14.6" data-path="linear-regression.html"><a href="linear-regression.html#plotting-the-results-and-their-interpretion"><i class="fa fa-check"></i><b>14.6</b> Plotting the results and their interpretion</a></li>
+<li class="chapter" data-level="14.7" data-path="linear-regression.html"><a href="linear-regression.html#using-lm-for-predictions"><i class="fa fa-check"></i><b>14.7</b> Using <code>lm</code> for predictions</a></li>
+<li class="chapter" data-level="14.8" data-path="linear-regression.html"><a href="linear-regression.html#multiple-linear-regression"><i class="fa fa-check"></i><b>14.8</b> Multiple Linear Regression</a></li>
+<li class="chapter" data-level="14.9" data-path="linear-regression.html"><a href="linear-regression.html#including-categorical-or-factor-variables-in-lm"><i class="fa fa-check"></i><b>14.9</b> Including categorical or factor variables in <code>lm</code></a>
+<ul>
+<li class="chapter" data-level="14.9.1" data-path="linear-regression.html"><a href="linear-regression.html#parallel-slopes-regression"><i class="fa fa-check"></i><b>14.9.1</b> Parallel slopes regression</a></li>
+<li class="chapter" data-level="14.9.2" data-path="linear-regression.html"><a href="linear-regression.html#extending-multiple-linear-regression-by-including-interactions"><i class="fa fa-check"></i><b>14.9.2</b> Extending multiple linear regression by including <code>interactions</code></a></li>
+</ul></li>
+<li class="chapter" data-level="14.10" data-path="linear-regression.html"><a href="linear-regression.html#multi-collinearity-and-variance-inflation-factor-vif"><i class="fa fa-check"></i><b>14.10</b> Multi-collinearity and Variance Inflation Factor (VIF)</a></li>
+<li class="chapter" data-level="14.11" data-path="linear-regression.html"><a href="linear-regression.html#one-complete-example"><i class="fa fa-check"></i><b>14.11</b> One Complete Example</a></li>
+<li class="chapter" data-level="14.12" data-path="linear-regression.html"><a href="linear-regression.html#simpsons-paradox"><i class="fa fa-check"></i><b>14.12</b> Simpson’s paradox</a></li>
+<li class="chapter" data-level="14.13" data-path="linear-regression.html"><a href="linear-regression.html#conclusion-and-final-thoughts"><i class="fa fa-check"></i><b>14.13</b> Conclusion and Final thoughts</a></li>
+</ul></li>
+<li class="chapter" data-level="15" data-path="time-series-analysis.html"><a href="time-series-analysis.html"><i class="fa fa-check"></i><b>15</b> Time Series Analysis</a>
+<ul>
+<li class="chapter" data-level="15.1" data-path="time-series-analysis.html"><a href="time-series-analysis.html#components-of-time-series"><i class="fa fa-check"></i><b>15.1</b> Components of Time series</a></li>
+<li class="chapter" data-level="15.2" data-path="time-series-analysis.html"><a href="time-series-analysis.html#additive-or-multiplicative-components"><i class="fa fa-check"></i><b>15.2</b> Additive or multiplicative components</a></li>
+<li class="chapter" data-level="15.3" data-path="time-series-analysis.html"><a href="time-series-analysis.html#practical-examples-in-r"><i class="fa fa-check"></i><b>15.3</b> Practical examples in R</a>
+<ul>
+<li class="chapter" data-level="" data-path="time-series-analysis.html"><a href="time-series-analysis.html#pre-requisites"><i class="fa fa-check"></i>Pre-requisites</a></li>
+<li class="chapter" data-level="15.3.1" data-path="time-series-analysis.html"><a href="time-series-analysis.html#creating-a-time-series-object-in-r"><i class="fa fa-check"></i><b>15.3.1</b> Creating a time series object in R</a></li>
+<li class="chapter" data-level="15.3.2" data-path="time-series-analysis.html"><a href="time-series-analysis.html#plotting-time-series-objects"><i class="fa fa-check"></i><b>15.3.2</b> Plotting Time Series Objects</a></li>
+</ul></li>
+<li class="chapter" data-level="15.4" data-path="time-series-analysis.html"><a href="time-series-analysis.html#time-series-modelling-and-forecasting"><i class="fa fa-check"></i><b>15.4</b> Time series modelling and forecasting</a>
+<ul>
+<li class="chapter" data-level="" data-path="time-series-analysis.html"><a href="time-series-analysis.html#data-based-techniques"><i class="fa fa-check"></i>Data-based techniques</a></li>
+<li class="chapter" data-level="15.4.1" data-path="time-series-analysis.html"><a href="time-series-analysis.html#naive-method"><i class="fa fa-check"></i><b>15.4.1</b> Naive method</a></li>
+<li class="chapter" data-level="15.4.2" data-path="time-series-analysis.html"><a href="time-series-analysis.html#moving-averages"><i class="fa fa-check"></i><b>15.4.2</b> Moving averages</a></li>
+<li class="chapter" data-level="15.4.3" data-path="time-series-analysis.html"><a href="time-series-analysis.html#exponential-smoothing"><i class="fa fa-check"></i><b>15.4.3</b> Exponential smoothing</a></li>
+<li class="chapter" data-level="" data-path="time-series-analysis.html"><a href="time-series-analysis.html#seasonal-decomposition-methods"><i class="fa fa-check"></i>Seasonal decomposition methods</a></li>
+<li class="chapter" data-level="15.4.4" data-path="time-series-analysis.html"><a href="time-series-analysis.html#classical-seasonal-decomposition"><i class="fa fa-check"></i><b>15.4.4</b> Classical seasonal decomposition</a></li>
+<li class="chapter" data-level="15.4.5" data-path="time-series-analysis.html"><a href="time-series-analysis.html#seasonal-and-trend-decomposition-using-loess."><i class="fa fa-check"></i><b>15.4.5</b> Seasonal and Trend decomposition using Loess.</a></li>
+<li class="chapter" data-level="" data-path="time-series-analysis.html"><a href="time-series-analysis.html#model-based-techniques"><i class="fa fa-check"></i>Model-based techniques</a></li>
+</ul></li>
+<li class="chapter" data-level="15.5" data-path="time-series-analysis.html"><a href="time-series-analysis.html#plotting-different-elements-of-time-series"><i class="fa fa-check"></i><b>15.5</b> Plotting different elements of time series</a></li>
+</ul></li>
+<li class="chapter" data-level="" data-path="part-iv-techniques-for-auditfraud-detection.html"><a href="part-iv-techniques-for-auditfraud-detection.html"><i class="fa fa-check"></i>Part IV: Techniques for Audit/Fraud detection</a></li>
+<li class="chapter" data-level="16" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html"><i class="fa fa-check"></i><b>16</b> Data Cleaning in R</a>
+<ul>
+<li class="chapter" data-level="16.1" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#cleaning-column-names."><i class="fa fa-check"></i><b>16.1</b> Cleaning Column names.</a></li>
+<li class="chapter" data-level="16.2" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#handling-duplicate-records"><i class="fa fa-check"></i><b>16.2</b> Handling duplicate records</a></li>
+<li class="chapter" data-level="16.3" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#remove-constant-redundant-columns"><i class="fa fa-check"></i><b>16.3</b> Remove Constant (Redundant) columns</a></li>
+<li class="chapter" data-level="16.4" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#remove-empty-rows-andor-columns"><i class="fa fa-check"></i><b>16.4</b> Remove empty rows and/or columns</a></li>
+<li class="chapter" data-level="16.5" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#fix-excel-dates-stored-as-serial-numbers"><i class="fa fa-check"></i><b>16.5</b> Fix excel dates stored as serial numbers</a></li>
+<li class="chapter" data-level="16.6" data-path="data-cleaning-in-r.html"><a href="data-cleaning-in-r.html#convert-a-mix-of-date-and-datetime-formats-to-date"><i class="fa fa-check"></i><b>16.6</b> Convert a mix of date and datetime formats to date</a></li>
+</ul></li>
+<li class="chapter" data-level="17" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html"><i class="fa fa-check"></i><b>17</b> Random sampling in R</a>
+<ul>
+<li class="chapter" data-level="" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#prerequisites-3"><i class="fa fa-check"></i>Prerequisites</a></li>
+<li class="chapter" data-level="17.1" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#simple-random-sampling-with-and-without-replacement"><i class="fa fa-check"></i><b>17.1</b> Simple Random Sampling (With and without replacement)</a></li>
+<li class="chapter" data-level="17.2" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#srs"><i class="fa fa-check"></i><b>17.2</b> Systematic random sampling</a></li>
+<li class="chapter" data-level="17.3" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#probability-proportionate-to-size-with-or-without-replacement-a.k.a-monetary-unit-sampling"><i class="fa fa-check"></i><b>17.3</b> Probability Proportionate to size (with or without replacement) a.k.a monetary unit sampling</a></li>
+<li class="chapter" data-level="17.4" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#stratified-random-sampling"><i class="fa fa-check"></i><b>17.4</b> Stratified random sampling</a></li>
+<li class="chapter" data-level="17.5" data-path="random-sampling-in-r.html"><a href="random-sampling-in-r.html#cluster-sampling"><i class="fa fa-check"></i><b>17.5</b> Cluster sampling</a></li>
+</ul></li>
+<li class="chapter" data-level="18" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html"><i class="fa fa-check"></i><b>18</b> Benford Tests/Analysis</a>
+<ul>
+<li class="chapter" data-level="18.1" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#introduction-and-historical-context"><i class="fa fa-check"></i><b>18.1</b> Introduction and Historical context</a></li>
+<li class="chapter" data-level="18.2" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#benfords-law-properties-and-extensions"><i class="fa fa-check"></i><b>18.2</b> Benford’s Law, properties and extensions</a>
+<ul>
+<li class="chapter" data-level="18.2.1" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#law-of-first-digit"><i class="fa fa-check"></i><b>18.2.1</b> Law of first digit</a></li>
+<li class="chapter" data-level="18.2.2" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#scale-invariance"><i class="fa fa-check"></i><b>18.2.2</b> Scale Invariance</a></li>
+<li class="chapter" data-level="18.2.3" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#first-two-digits"><i class="fa fa-check"></i><b>18.2.3</b> First two digits</a></li>
+<li class="chapter" data-level="18.2.4" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#second-order-test"><i class="fa fa-check"></i><b>18.2.4</b> Second order test</a></li>
+<li class="chapter" data-level="18.2.5" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#summation-test"><i class="fa fa-check"></i><b>18.2.5</b> Summation Test</a></li>
+<li class="chapter" data-level="18.2.6" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#limitations-of-benford-tests"><i class="fa fa-check"></i><b>18.2.6</b> Limitations of Benford Tests</a></li>
+</ul></li>
+<li class="chapter" data-level="18.3" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#goodness-of-fit-metrics"><i class="fa fa-check"></i><b>18.3</b> Goodness of fit metrics</a>
+<ul>
+<li class="chapter" data-level="18.3.1" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#chis"><i class="fa fa-check"></i><b>18.3.1</b> Chi-square statistic</a></li>
+<li class="chapter" data-level="18.3.2" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#z-score"><i class="fa fa-check"></i><b>18.3.2</b> Z-score</a></li>
+<li class="chapter" data-level="18.3.3" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#mean-absolute-deviation"><i class="fa fa-check"></i><b>18.3.3</b> Mean absolute deviation</a></li>
+<li class="chapter" data-level="18.3.4" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#other-descriptive-statistics"><i class="fa fa-check"></i><b>18.3.4</b> Other descriptive Statistics</a></li>
+</ul></li>
+<li class="chapter" data-level="18.4" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#important"><i class="fa fa-check"></i><b>18.4</b> Important</a></li>
+<li class="chapter" data-level="18.5" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#pracben"><i class="fa fa-check"></i><b>18.5</b> Practical approach in R</a>
+<ul>
+<li class="chapter" data-level="18.5.1" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#other-useful-functions-in-package"><i class="fa fa-check"></i><b>18.5.1</b> Other Useful functions in package</a></li>
+<li class="chapter" data-level="18.5.2" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#example-2-corporate-payments-data"><i class="fa fa-check"></i><b>18.5.2</b> Example-2: Corporate payments data</a></li>
+<li class="chapter" data-level="18.5.3" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#example-3-lakes-perimeter"><i class="fa fa-check"></i><b>18.5.3</b> Example-3: Lakes Perimeter</a></li>
+</ul></li>
+<li class="chapter" data-level="18.6" data-path="benford-testsanalysis.html"><a href="benford-testsanalysis.html#conclusion-2"><i class="fa fa-check"></i><b>18.6</b> Conclusion</a></li>
+</ul></li>
+<li class="chapter" data-level="19" data-path="finding-duplicates.html"><a href="finding-duplicates.html"><i class="fa fa-check"></i><b>19</b> Finding duplicates</a>
+<ul>
+<li class="chapter" data-level="" data-path="finding-duplicates.html"><a href="finding-duplicates.html#prerequisites-4"><i class="fa fa-check"></i>Prerequisites</a></li>
+</ul></li>
+<li class="chapter" data-level="20" data-path="dup_net.html"><a href="dup_net.html"><i class="fa fa-check"></i><b>20</b> Network analysis</a>
+<ul>
+<li class="chapter" data-level="20.1" data-path="dup_net.html"><a href="dup_net.html#relatedconnected-entities---case--ii"><i class="fa fa-check"></i><b>20.1</b> Related/Connected Entities - case -II</a></li>
+</ul></li>
+<li class="chapter" data-level="21" data-path="detecting-gaps-in-sequences.html"><a href="detecting-gaps-in-sequences.html"><i class="fa fa-check"></i><b>21</b> Detecting gaps in sequences</a>
+<ul>
+<li class="chapter" data-level="21.1" data-path="detecting-gaps-in-sequences.html"><a href="detecting-gaps-in-sequences.html#when-sequence-numbers-are-available-as-numeric-column"><i class="fa fa-check"></i><b>21.1</b> When sequence numbers are available as <code>numeric</code> column</a></li>
+<li class="chapter" data-level="21.2" data-path="detecting-gaps-in-sequences.html"><a href="detecting-gaps-in-sequences.html#when-sequence-numbers-are-available-as-character-column"><i class="fa fa-check"></i><b>21.2</b> When sequence numbers are available as <code>character()</code> column</a></li>
+</ul></li>
+<li class="chapter" data-level="22" data-path="merging-large-number-of-similar-datasets-into-one.html"><a href="merging-large-number-of-similar-datasets-into-one.html"><i class="fa fa-check"></i><b>22</b> Merging large number of similar datasets into one</a>
+<ul>
+<li class="chapter" data-level="22.1" data-path="merging-large-number-of-similar-datasets-into-one.html"><a href="merging-large-number-of-similar-datasets-into-one.html#case-1-merging-multiple-excel-sheets-into-one-data-frame"><i class="fa fa-check"></i><b>22.1</b> <strong>Case-1</strong>: Merging multiple excel sheets into one data frame</a></li>
+<li class="chapter" data-level="22.2" data-path="merging-large-number-of-similar-datasets-into-one.html"><a href="merging-large-number-of-similar-datasets-into-one.html#case-2-merging-multiple-files-into-one-data-frame"><i class="fa fa-check"></i><b>22.2</b> <strong>Case-2</strong>: Merging multiple files into one data frame</a></li>
+<li class="chapter" data-level="22.3" data-path="merging-large-number-of-similar-datasets-into-one.html"><a href="merging-large-number-of-similar-datasets-into-one.html#case-3-split-and-save-one-data-frame-into-multiple-excelcsv-files-simultaneously."><i class="fa fa-check"></i><b>22.3</b> <strong>Case-3</strong>: Split and save one data frame into multiple excel/csv files simultaneously.</a></li>
+<li class="chapter" data-level="22.4" data-path="merging-large-number-of-similar-datasets-into-one.html"><a href="merging-large-number-of-similar-datasets-into-one.html#case-4-splitting-one-data-into-muliple-files-having-multiple-sheets"><i class="fa fa-check"></i><b>22.4</b> <strong>Case-4</strong>: Splitting one data into muliple files having multiple sheets</a></li>
+</ul></li>
+<li class="chapter" data-level="23" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html"><i class="fa fa-check"></i><b>23</b> Sentiment Analysis through Word-Cloud</a>
+<ul>
+<li class="chapter" data-level="23.1" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html#step-1prepare-data-and-load-libraries"><i class="fa fa-check"></i><b>23.1</b> Step-1:Prepare data and load libraries</a></li>
+<li class="chapter" data-level="23.2" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html#step-2-reshape-the-.txt-data-frame-into-one-column"><i class="fa fa-check"></i><b>23.2</b> Step-2: Reshape the .txt data frame into one column</a></li>
+<li class="chapter" data-level="23.3" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html#step-3-tokenize-the-datawords"><i class="fa fa-check"></i><b>23.3</b> Step-3: Tokenize the data/words</a></li>
+<li class="chapter" data-level="23.4" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html#step-4-clean-stop-words"><i class="fa fa-check"></i><b>23.4</b> Step-4: Clean stop words</a></li>
+<li class="chapter" data-level="23.5" data-path="sentiment-analysis-through-word-cloud.html"><a href="sentiment-analysis-through-word-cloud.html#step-5-plotgenerate-word-cloud"><i class="fa fa-check"></i><b>23.5</b> Step-5: Plot/generate word cloud</a></li>
+</ul></li>
+<li class="chapter" data-level="24" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html"><i class="fa fa-check"></i><b>24</b> Finding string similarity</a>
+<ul>
+<li class="chapter" data-level="24.1" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#lexical-matching"><i class="fa fa-check"></i><b>24.1</b> Lexical matching</a>
+<ul>
+<li class="chapter" data-level="24.1.1" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#levenshtein-algorithm"><i class="fa fa-check"></i><b>24.1.1</b> Levenshtein algorithm</a></li>
+<li class="chapter" data-level="24.1.2" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#hamming-distance"><i class="fa fa-check"></i><b>24.1.2</b> Hamming distance</a></li>
+<li class="chapter" data-level="24.1.3" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#jaro-winkler"><i class="fa fa-check"></i><b>24.1.3</b> Jaro-Winkler</a></li>
+<li class="chapter" data-level="24.1.4" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#q-gram"><i class="fa fa-check"></i><b>24.1.4</b> Q-Gram</a></li>
+</ul></li>
+<li class="chapter" data-level="24.2" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#phonetic-matching"><i class="fa fa-check"></i><b>24.2</b> Phonetic matching</a>
+<ul>
+<li class="chapter" data-level="24.2.1" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#soundex"><i class="fa fa-check"></i><b>24.2.1</b> Soundex</a></li>
+<li class="chapter" data-level="24.2.2" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#metaphone"><i class="fa fa-check"></i><b>24.2.2</b> Metaphone</a></li>
+<li class="chapter" data-level="24.2.3" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#double-metaphone"><i class="fa fa-check"></i><b>24.2.3</b> Double Metaphone</a></li>
+<li class="chapter" data-level="24.2.4" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#metaphone-3"><i class="fa fa-check"></i><b>24.2.4</b> Metaphone 3</a></li>
+</ul></li>
+<li class="chapter" data-level="24.3" data-path="finding-string-similarity.html"><a href="finding-string-similarity.html#examples"><i class="fa fa-check"></i><b>24.3</b> Examples</a></li>
+</ul></li>
+<li class="chapter" data-level="25" data-path="anomaly-detection.html"><a href="anomaly-detection.html"><i class="fa fa-check"></i><b>25</b> Anomaly Detection</a>
+<ul>
+<li class="chapter" data-level="25.1" data-path="anomaly-detection.html"><a href="anomaly-detection.html#definition-and-types-of-anomalies"><i class="fa fa-check"></i><b>25.1</b> Definition and types of anomalies</a></li>
+<li class="chapter" data-level="" data-path="anomaly-detection.html"><a href="anomaly-detection.html#anomaly-detection-in-r"><i class="fa fa-check"></i>Anomaly detection, in R</a></li>
+<li class="chapter" data-level="25.2" data-path="anomaly-detection.html"><a href="anomaly-detection.html#by-inspection"><i class="fa fa-check"></i><b>25.2</b> By inspection</a></li>
+<li class="chapter" data-level="25.3" data-path="anomaly-detection.html"><a href="anomaly-detection.html#grubbs-test"><i class="fa fa-check"></i><b>25.3</b> Grubb’s Test</a></li>
+<li class="chapter" data-level="25.4" data-path="anomaly-detection.html"><a href="anomaly-detection.html#seasonal-hybrid-esd-algorithm"><i class="fa fa-check"></i><b>25.4</b> Seasonal Hybrid ESD Algorithm</a></li>
+<li class="chapter" data-level="25.5" data-path="anomaly-detection.html"><a href="anomaly-detection.html#k-nearest-neighbour-distance-score"><i class="fa fa-check"></i><b>25.5</b> k-Nearest Neighbour Distance Score</a></li>
+<li class="chapter" data-level="25.6" data-path="anomaly-detection.html"><a href="anomaly-detection.html#local-outlier-factor"><i class="fa fa-check"></i><b>25.6</b> Local Outlier Factor</a></li>
+<li class="chapter" data-level="25.7" data-path="anomaly-detection.html"><a href="anomaly-detection.html#isolation-treesforest"><i class="fa fa-check"></i><b>25.7</b> Isolation Trees/Forest</a></li>
+<li class="chapter" data-level="25.8" data-path="anomaly-detection.html"><a href="anomaly-detection.html#including-categorical-variables-in-lof"><i class="fa fa-check"></i><b>25.8</b> Including categorical variables in LOF</a></li>
+<li class="chapter" data-level="25.9" data-path="anomaly-detection.html"><a href="anomaly-detection.html#time-series-anomalies"><i class="fa fa-check"></i><b>25.9</b> Time Series Anomalies</a></li>
+</ul></li>
+<li class="chapter" data-level="26" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html"><i class="fa fa-check"></i><b>26</b> Data Envelopment Analysis</a>
+<ul>
+<li class="chapter" data-level="26.1" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#how-it-works"><i class="fa fa-check"></i><b>26.1</b> How it works?</a></li>
+<li class="chapter" data-level="26.2" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#use-cases"><i class="fa fa-check"></i><b>26.2</b> Use-cases</a></li>
+<li class="chapter" data-level="26.3" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#possible-uses-in-audit"><i class="fa fa-check"></i><b>26.3</b> Possible uses in Audit</a></li>
+<li class="chapter" data-level="26.4" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#a-practical-example-in-r"><i class="fa fa-check"></i><b>26.4</b> A practical example in R</a>
+<ul>
+<li class="chapter" data-level="26.4.1" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#pre-requisites-1"><i class="fa fa-check"></i><b>26.4.1</b> Pre-requisites</a></li>
+<li class="chapter" data-level="26.4.2" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#sample-data-set"><i class="fa fa-check"></i><b>26.4.2</b> Sample data-set</a></li>
+<li class="chapter" data-level="26.4.3" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#performing-dea-in-r"><i class="fa fa-check"></i><b>26.4.3</b> Performing DEA in R</a></li>
+<li class="chapter" data-level="26.4.4" data-path="data-envelopment-analysis.html"><a href="data-envelopment-analysis.html#interpreting-above-results"><i class="fa fa-check"></i><b>26.4.4</b> Interpreting above results</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="27" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html"><i class="fa fa-check"></i><b>27</b> Reverse geo-coding</a>
+<ul>
+<li class="chapter" data-level="27.1" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#introduction"><i class="fa fa-check"></i><b>27.1</b> Introduction</a></li>
+<li class="chapter" data-level="27.2" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#widely-used-databases"><i class="fa fa-check"></i><b>27.2</b> Widely used databases</a></li>
+<li class="chapter" data-level="27.3" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#example-in-r"><i class="fa fa-check"></i><b>27.3</b> Example in R</a>
+<ul>
+<li class="chapter" data-level="27.3.1" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#prerequisites-5"><i class="fa fa-check"></i><b>27.3.1</b> Prerequisites</a></li>
+<li class="chapter" data-level="27.3.2" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#function-to-be-used"><i class="fa fa-check"></i><b>27.3.2</b> Function to be used</a></li>
+<li class="chapter" data-level="27.3.3" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#practical-data-set"><i class="fa fa-check"></i><b>27.3.3</b> Practical data-set</a></li>
+<li class="chapter" data-level="27.3.4" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#using-it-in-a-dataset"><i class="fa fa-check"></i><b>27.3.4</b> Using it in a dataset</a></li>
+<li class="chapter" data-level="27.3.5" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#view-above-results"><i class="fa fa-check"></i><b>27.3.5</b> View above results</a></li>
+<li class="chapter" data-level="27.3.6" data-path="reverse-geo-coding.html"><a href="reverse-geo-coding.html#alternate-syntax-for-those-who-do-not-want-to-use-purrrpmap_dfr"><i class="fa fa-check"></i><b>27.3.6</b> Alternate syntax (for those who do not want to use <code>purrr::pmap_dfr</code>)</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="28" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html"><i class="fa fa-check"></i><b>28</b> Regex - A quick introduction</a>
+<ul>
+<li class="chapter" data-level="28.1" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#basic-regex---literal-characters"><i class="fa fa-check"></i><b>28.1</b> Basic Regex - Literal Characters</a></li>
+<li class="chapter" data-level="28.2" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#metacharacters"><i class="fa fa-check"></i><b>28.2</b> Metacharacters</a>
+<ul>
+<li class="chapter" data-level="28.2.1" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#character-sets"><i class="fa fa-check"></i><b>28.2.1</b> Character sets</a></li>
+<li class="chapter" data-level="28.2.2" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#non-printable-characters-meta-characters-short-hand-character-classes"><i class="fa fa-check"></i><b>28.2.2</b> Non-printable characters/ Meta characters (short-hand character classes)</a></li>
+</ul></li>
+<li class="chapter" data-level="28.3" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#quantifiers"><i class="fa fa-check"></i><b>28.3</b> Quantifiers</a></li>
+<li class="chapter" data-level="28.4" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#alternation"><i class="fa fa-check"></i><b>28.4</b> Alternation</a></li>
+<li class="chapter" data-level="28.5" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#anchors"><i class="fa fa-check"></i><b>28.5</b> Anchors</a>
+<ul>
+<li class="chapter" data-level="28.5.1" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#beginning-and-end-anchors"><i class="fa fa-check"></i><b>28.5.1</b> Beginning and End Anchors</a></li>
+<li class="chapter" data-level="28.5.2" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#word-boundary-anchors"><i class="fa fa-check"></i><b>28.5.2</b> Word Boundary Anchors</a></li>
+</ul></li>
+<li class="chapter" data-level="28.6" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#capture-groups"><i class="fa fa-check"></i><b>28.6</b> Capture Groups</a></li>
+<li class="chapter" data-level="28.7" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#lookarounds"><i class="fa fa-check"></i><b>28.7</b> Lookarounds</a>
+<ul>
+<li class="chapter" data-level="28.7.1" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#lookahead"><i class="fa fa-check"></i><b>28.7.1</b> Lookahead</a></li>
+<li class="chapter" data-level="28.7.2" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#lookbehind"><i class="fa fa-check"></i><b>28.7.2</b> Lookbehind</a></li>
+<li class="chapter" data-level="28.7.3" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#negative-lookahead-and-lookbehinds"><i class="fa fa-check"></i><b>28.7.3</b> Negative Lookahead and Lookbehinds</a></li>
+</ul></li>
+<li class="chapter" data-level="28.8" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#comments"><i class="fa fa-check"></i><b>28.8</b> Comments</a>
+<ul>
+<li class="chapter" data-level="28.8.1" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#comments-within-regex"><i class="fa fa-check"></i><b>28.8.1</b> Comments within regex</a></li>
+<li class="chapter" data-level="28.8.2" data-path="regex---a-quick-introduction.html"><a href="regex---a-quick-introduction.html#verbose-mode-multi-line-comments"><i class="fa fa-check"></i><b>28.8.2</b> Verbose Mode (multi-line comments)</a></li>
+</ul></li>
+</ul></li>
+<li class="chapter" data-level="29" data-path="file.html"><a href="file.html"><i class="fa fa-check"></i><b>29</b> File handling operations in R</a>
+<ul>
+<li class="chapter" data-level="29.1" data-path="file.html"><a href="file.html#handling-files"><i class="fa fa-check"></i><b>29.1</b> Handling files</a>
+<ul>
+<li class="chapter" data-level="29.1.1" data-path="file.html"><a href="file.html#creating-a-file-within-r-using-file.create"><i class="fa fa-check"></i><b>29.1.1</b> Creating a file within R, using <code>file.create()</code></a></li>
+<li class="chapter" data-level="29.1.2" data-path="file.html"><a href="file.html#checking-whether-a-file-exists-using-file.exists"><i class="fa fa-check"></i><b>29.1.2</b> Checking whether a file exists, using <code>file.exists()</code></a></li>
+<li class="chapter" data-level="29.1.3" data-path="file.html"><a href="file.html#renaming-file-with-file.rename"><i class="fa fa-check"></i><b>29.1.3</b> Renaming file with <code>file.rename()</code></a></li>
+<li class="chapter" data-level="29.1.4" data-path="file.html"><a href="file.html#copying-file-with-file.copy-function"><i class="fa fa-check"></i><b>29.1.4</b> Copying file with <code>file.copy()</code> function</a></li>
+<li class="chapter" data-level="29.1.5" data-path="file.html"><a href="file.html#deleting-file-with-file.remove"><i class="fa fa-check"></i><b>29.1.5</b> Deleting file with <code>file.remove()</code></a></li>
+</ul></li>
+<li class="chapter" data-level="29.2" data-path="file.html"><a href="file.html#handling-directories"><i class="fa fa-check"></i><b>29.2</b> Handling directories</a>
+<ul>
+<li class="chapter" data-level="29.2.1" data-path="file.html"><a href="file.html#getset-path-of-current-working-directory-using-getwd-setwd"><i class="fa fa-check"></i><b>29.2.1</b> Get/Set path of current working directory using <code>getwd()</code>/ <code>setwd()</code></a></li>
+<li class="chapter" data-level="29.2.2" data-path="file.html"><a href="file.html#create-new-directory-using-dir.create-and-other-operations"><i class="fa fa-check"></i><b>29.2.2</b> Create new directory using <code>dir.create()</code> and other operations</a></li>
+</ul></li>
+<li class="chapter" data-level="29.3" data-path="file.html"><a href="file.html#an-important-function-for-opening-a-dialog-box-for-selecting-files-and-folder"><i class="fa fa-check"></i><b>29.3</b> An important function for opening a dialog box for selecting files and folder</a></li>
+<li class="chapter" data-level="29.4" data-path="file.html"><a href="file.html#other-useful-functions-for-listingremoving-variables"><i class="fa fa-check"></i><b>29.4</b> Other useful functions for listing/removing variables</a></li>
+<li class="chapter" data-level="29.5" data-path="file.html"><a href="file.html#using-save-to-save-objectscollection-of-objects"><i class="fa fa-check"></i><b>29.5</b> Using <code>save()</code> to save objects/collection of objects</a></li>
+<li class="chapter" data-level="29.6" data-path="file.html"><a href="file.html#projects"><i class="fa fa-check"></i><b>29.6</b> Projects</a></li>
+</ul></li>
+<li class="chapter" data-level="30" data-path="various-datasets-in-base-r-used-in-this-book.html"><a href="various-datasets-in-base-r-used-in-this-book.html"><i class="fa fa-check"></i><b>30</b> Various Datasets, in base R, used in this book</a></li>
+<li class="chapter" data-level="" data-path="references.html"><a href="references.html"><i class="fa fa-check"></i>References</a></li>
+<li class="divider"></li>
+<li><a href="https://github.com/rstudio/bookdown" target="blank">Published with bookdown</a></li>
+
+</ul>
+
+      </nav>
+    </div>
+
+    <div class="book-body">
+      <div class="body-inner">
+        <div class="book-header" role="navigation">
+          <h1>
+            <i class="fa fa-circle-o-notch fa-spin"></i><a href="./">Data Analytics in Audit, using R</a>
+          </h1>
+        </div>
+
+        <div class="page-wrapper" tabindex="-1" role="main">
+          <div class="page-inner">
+
+            <section class="normal" id="section-">
+<div id="benford-testsanalysis" class="section level1 hasAnchor" number="18">
+<h1><span class="header-section-number">Chapter 18</span> Benford Tests/Analysis<a href="benford-testsanalysis.html#benford-testsanalysis" class="anchor-section" aria-label="Anchor link to header"></a></h1>
+<div id="introduction-and-historical-context" class="section level2 hasAnchor" number="18.1">
+<h2><span class="header-section-number">18.1</span> Introduction and Historical context<a href="benford-testsanalysis.html#introduction-and-historical-context" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>Benford’s Law stands out as an analysis method for both visualizing and evaluating numerical data, especially when focused on detecting fraud. It’s really handy for catching potential trickery, especially in spotting fraud. This rule tells us how often different digits (like 1, 2, 3, etc.) should show up as the first number in lots of real-world data. This law describes the frequency distribution of the first digit, from left hand side, in many real-life data sets which counter-intuitively is not uniform, and is shown in Figure <a href="benford-testsanalysis.html#fig:benlaw">18.2</a>. Significant differences from the anticipated occurrence rates could signal that the data is questionable and might have been altered. For instance, eligibility for government assistance often hinges on meeting specific criteria, like having an income below a certain level. As a result, data might be manipulated to meet these criteria. This kind of manipulation is precisely what Benford’s Law can detect since fabricated numbers won’t align with the expected frequency pattern outlined by the law.</p>
+<p>The Law is named after physicist <strong>Frank Benford</strong>, who worked on the theory in 1938 and as a result a paper titled <strong>The Law of Anomalous Numbers</strong> was published.<span class="citation"><a href="#fn34" class="footnote-ref" id="fnref34"><sup>34</sup></a></span>. However, its discovery is associated more than five decades earlier when astronomer <strong>Simon Newcomb</strong> observed that initial pages of log tables booklet were more worn out than later pages and published a two page article titled <strong>Note on the Frequency of Use of the Different Digits in Natural Numbers</strong> in 1881.<span class="citation"><a href="#fn35" class="footnote-ref" id="fnref35"><sup>35</sup></a></span></p>
+<p>More researchers continued to work on Benford’s law and its extensions. However, it took several decades to find a truly practical application. It was in last decade of twentieth Century, when Dr. Mark J. Nigrini, an accounting Professor, used the law for fraud detection/anaytics and came up with a practical fraud application. He reviewed multiple data sources like sales figures, insurance claim costs, and expense reimbursement claims and did studies on detecting overstatements and understatement of financial figures. His research confirmed the law’s proven usefulness to fraud examiners and auditors in accounting engagements.</p>
+<p>His theory is that - <em>If somebody tries to falsify, say, their tax return then invariably they will have to invent some data. When trying to do this, the tendency is for people to use too many numbers starting with digits in the mid range, 5,6,7 and thus not enough numbers starting with 1.</em></p>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:benpics"></span>
+<img src="images/frank_benford.jpg" alt="(L to R) Frank Benford, Simon Newcomb, and Mark Nigrini (Source: Wiki)" width="32%" height="32%" /><img src="images/Simon.jpg" alt="(L to R) Frank Benford, Simon Newcomb, and Mark Nigrini (Source: Wiki)" width="32%" height="32%" /><img src="images/nigrini.jpg" alt="(L to R) Frank Benford, Simon Newcomb, and Mark Nigrini (Source: Wiki)" width="32%" height="32%" />
+<p class="caption">
+Figure 18.1: (L to R) Frank Benford, Simon Newcomb, and Mark Nigrini (Source: Wiki)
+</p>
+</div>
+</div>
+<div id="benfords-law-properties-and-extensions" class="section level2 hasAnchor" number="18.2">
+<h2><span class="header-section-number">18.2</span> Benford’s Law, properties and extensions<a href="benford-testsanalysis.html#benfords-law-properties-and-extensions" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<div id="law-of-first-digit" class="section level3 hasAnchor" number="18.2.1">
+<h3><span class="header-section-number">18.2.1</span> Law of first digit<a href="benford-testsanalysis.html#law-of-first-digit" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>When considering the likelihood of any digit being in the first position (from the left), our initial assumption might be a simple <em>one out of nine</em> scenario, following a uniform distribution. However, this notion was challenged by Canadian-American astronomer <strong>Simon Newcomb</strong> in 1881, who noticed unusual wear patterns in logarithmic tables. While casually flipping through a logarithmic tables booklet, he discerned a curious pattern— the initial pages exhibited more wear and tear than their later counterparts.</p>
+<p>Subsequently, <strong>Frank Benford</strong> conducted a comprehensive analysis of 20 diverse datasets encompassing river sizes, chemical compound weights, population data, and more. His findings revealed a successive diminishment in probability from digit 1 to 9. In essence, the probability of digit 1 occurring in the initial position is the highest, while that of digit 9 is the lowest.</p>
+<p>Mathematically, <em>Benford’s Law</em> or <em>Law of first digits</em> states that the probability of any digit in first place should follow the equation <a href="benford-testsanalysis.html#eq:ben1">(18.1)</a>.</p>
+<span class="math display" id="eq:ben1">\[\begin{equation}
+P(d_i) = \log_{10}\left(1 + \frac{1}{d}\right)
+\tag{18.1}
+\end{equation}\]</span>
+<ul>
+<li>Where <span class="math inline">\(d_i\)</span> ranges from <span class="math inline">\(1\)</span> to <span class="math inline">\(9\)</span>.</li>
+</ul>
+<p>The probabilities when plotted will generate plot as depicted in Figure <a href="benford-testsanalysis.html#fig:benlaw">18.2</a>.</p>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:benlaw"></span>
+<img src="DauR_files/figure-html/benlaw-1.png" alt="Diminishing Probabilities of First Digits - Benford Law" width="672" height="32%" />
+<p class="caption">
+Figure 18.2: Diminishing Probabilities of First Digits - Benford Law
+</p>
+</div>
+<p>To test the proposed law, Benford analysed 20 different data-sets and he observed that nearly all follow the distribution mentioned in equation <a href="benford-testsanalysis.html#eq:ben1">(18.1)</a>.</p>
+<p>Let us also try to see whether the law holds by anlaysing six different datasets, which are included in R’s package called <code>benford.analysis</code>. Though we will discuss about the package in detail later in section <a href="benford-testsanalysis.html#pracben">18.5</a>. The six datasets are mentioned in Table <a href="benford-testsanalysis.html#tab:sixben">18.1</a>.</p>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>
+<span id="tab:sixben">Table 18.1: </span><span id="tab:sixben">Table 18.2: </span>List of six datasets for testing Benford Analysis
+</caption>
+<thead>
+<tr>
+<th style="text-align:center;">
+Item
+</th>
+<th style="text-align:center;">
+Title
+</th>
+<th style="text-align:center;">
+Column
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center;">
+census.2000_2010
+</td>
+<td style="text-align:center;">
+Population data - US - 2000 and 2010
+</td>
+<td style="text-align:center;">
+pop.2000
+</td>
+</tr>
+<tr>
+<td style="text-align:center;">
+census.2009
+</td>
+<td style="text-align:center;">
+Population data of Towns and Cities of the US - 2009
+</td>
+<td style="text-align:center;">
+pop.2009
+</td>
+</tr>
+<tr>
+<td style="text-align:center;">
+corporate.payment
+</td>
+<td style="text-align:center;">
+Corporate payments of a West Coast utility company - 2010
+</td>
+<td style="text-align:center;">
+Amount
+</td>
+</tr>
+<tr>
+<td style="text-align:center;">
+lakes.perimeter
+</td>
+<td style="text-align:center;">
+Perimeter of lakes arround the world
+</td>
+<td style="text-align:center;">
+perimeter.km
+</td>
+</tr>
+<tr>
+<td style="text-align:center;">
+sino.forest
+</td>
+<td style="text-align:center;">
+Financial Statemens of Sino Forest Corporation’s 2010 Report
+</td>
+<td style="text-align:center;">
+value
+</td>
+</tr>
+<tr>
+<td style="text-align:center;">
+taxable.incomes.1978
+</td>
+<td style="text-align:center;">
+Taxable Income 1978
+</td>
+<td style="text-align:center;">
+taxIncomes
+</td>
+</tr>
+</tbody>
+</table>
+<p>The results of Benford’s law of first digit on these six datasets are calculated and have been mentioned in Table <a href="benford-testsanalysis.html#tab:tab1">18.3</a>. It can be seen that actual frequencies of first digits, in these six datasets follow Benford’s Law. We can even plot the actual frequencies to inspect results visually. Actual Frequencies in these six datasets are plotted in <a href="benford-testsanalysis.html#fig:benplots">18.3</a> and it may be seen that these follow Benford’s Law largely.</p>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>
+<span id="tab:tab1">Table 18.3: </span><span id="tab:tab1">Table 18.4: </span>Results of First order tests on six datasets
+</caption>
+<thead>
+<tr>
+<th style="text-align:right;">
+digits
+</th>
+<th style="text-align:right;">
+Benford
+</th>
+<th style="text-align:right;">
+Census 2000_2010
+</th>
+<th style="text-align:right;">
+Census 2009
+</th>
+<th style="text-align:right;">
+Corporate Payment
+</th>
+<th style="text-align:right;">
+Lakes Perimeter
+</th>
+<th style="text-align:right;">
+Sino Forest
+</th>
+<th style="text-align:right;">
+Taxable Incomes 1978
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+0.3010300
+</td>
+<td style="text-align:right;">
+0.3092126
+</td>
+<td style="text-align:right;">
+0.2941207
+</td>
+<td style="text-align:right;">
+0.3175548
+</td>
+<td style="text-align:right;">
+0.1508888
+</td>
+<td style="text-align:right;">
+0.2992228
+</td>
+<td style="text-align:right;">
+0.3278721
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+0.1760913
+</td>
+<td style="text-align:right;">
+0.1797896
+</td>
+<td style="text-align:right;">
+0.1814547
+</td>
+<td style="text-align:right;">
+0.1611007
+</td>
+<td style="text-align:right;">
+0.0687752
+</td>
+<td style="text-align:right;">
+0.1606218
+</td>
+<td style="text-align:right;">
+0.2140886
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+0.1249387
+</td>
+<td style="text-align:right;">
+0.1271916
+</td>
+<td style="text-align:right;">
+0.1200472
+</td>
+<td style="text-align:right;">
+0.1101452
+</td>
+<td style="text-align:right;">
+0.2170936
+</td>
+<td style="text-align:right;">
+0.1256477
+</td>
+<td style="text-align:right;">
+0.1235673
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+4
+</td>
+<td style="text-align:right;">
+0.0969100
+</td>
+<td style="text-align:right;">
+0.0975454
+</td>
+<td style="text-align:right;">
+0.0946743
+</td>
+<td style="text-align:right;">
+0.0828655
+</td>
+<td style="text-align:right;">
+0.1818372
+</td>
+<td style="text-align:right;">
+0.0906736
+</td>
+<td style="text-align:right;">
+0.0895397
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+0.0791812
+</td>
+<td style="text-align:right;">
+0.0656678
+</td>
+<td style="text-align:right;">
+0.0799118
+</td>
+<td style="text-align:right;">
+0.1016301
+</td>
+<td style="text-align:right;">
+0.1309577
+</td>
+<td style="text-align:right;">
+0.0829016
+</td>
+<td style="text-align:right;">
+0.0722473
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+6
+</td>
+<td style="text-align:right;">
+0.0669468
+</td>
+<td style="text-align:right;">
+0.0656678
+</td>
+<td style="text-align:right;">
+0.0702240
+</td>
+<td style="text-align:right;">
+0.0602811
+</td>
+<td style="text-align:right;">
+0.0930143
+</td>
+<td style="text-align:right;">
+0.0699482
+</td>
+<td style="text-align:right;">
+0.0521491
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7
+</td>
+<td style="text-align:right;">
+0.0579919
+</td>
+<td style="text-align:right;">
+0.0541919
+</td>
+<td style="text-align:right;">
+0.0597673
+</td>
+<td style="text-align:right;">
+0.0498209
+</td>
+<td style="text-align:right;">
+0.0682885
+</td>
+<td style="text-align:right;">
+0.0518135
+</td>
+<td style="text-align:right;">
+0.0411117
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+0.0511525
+</td>
+<td style="text-align:right;">
+0.0548295
+</td>
+<td style="text-align:right;">
+0.0534625
+</td>
+<td style="text-align:right;">
+0.0503666
+</td>
+<td style="text-align:right;">
+0.0502118
+</td>
+<td style="text-align:right;">
+0.0699482
+</td>
+<td style="text-align:right;">
+0.0393606
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+9
+</td>
+<td style="text-align:right;">
+0.0457575
+</td>
+<td style="text-align:right;">
+0.0459037
+</td>
+<td style="text-align:right;">
+0.0463376
+</td>
+<td style="text-align:right;">
+0.0662351
+</td>
+<td style="text-align:right;">
+0.0389329
+</td>
+<td style="text-align:right;">
+0.0492228
+</td>
+<td style="text-align:right;">
+0.0400637
+</td>
+</tr>
+</tbody>
+</table>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:benplots"></span>
+<img src="DauR_files/figure-html/benplots-1.png" alt="Distribution of first digit frequencies in six datasets" width="672" />
+<p class="caption">
+Figure 18.3: Distribution of first digit frequencies in six datasets
+</p>
+</div>
+</div>
+<div id="scale-invariance" class="section level3 hasAnchor" number="18.2.2">
+<h3><span class="header-section-number">18.2.2</span> Scale Invariance<a href="benford-testsanalysis.html#scale-invariance" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Later in 1961, <strong>Roger Pinkham</strong> showed that law is invariant to scaling.<span class="citation"><a href="#fn36" class="footnote-ref" id="fnref36"><sup>36</sup></a></span> By <em>Scale Invariance</em>, he actually showed that the law is invariant to measurements units. In other words, the law still holds if we convert units from one unit to another. For example, if price or amount figures are measured either in USD or in INR, length is measured either in KMs or Miles, the digit frequencies still follow the Benford’s Law.</p>
+<p>Let us check this on one of the six datasets mentioned above, namely <code>census.2009</code>. This data-set contains the figures of population of towns and cities of the United States, as of July of 2009. We can see that first digit frequencies follow Benford’s Law/Pinkham’s Corollary in Figure <a href="benford-testsanalysis.html#fig:census">18.4</a>. Left plot shows frequencies on original data whereas right plot shows these on randonly scaled data.</p>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:census"></span>
+<img src="DauR_files/figure-html/census-1.png" alt="First Digit Analysis on US Census 2009 data (Left) and Scaled Data (Right)" width="45%" /><img src="DauR_files/figure-html/census-2.png" alt="First Digit Analysis on US Census 2009 data (Left) and Scaled Data (Right)" width="45%" />
+<p class="caption">
+Figure 18.4: First Digit Analysis on US Census 2009 data (Left) and Scaled Data (Right)
+</p>
+</div>
+<p>Figure <a href="benford-testsanalysis.html#fig:census">18.4</a> (Left) shows that the law holds for the data. Let us also test the Pinkham’s corollary on the aforesaid data. For this let’s multiply all the figures of population by a random positive number. Through figure <a href="benford-testsanalysis.html#fig:census">18.4</a> (Right) it is clear that law still holds after scaling.</p>
+</div>
+<div id="first-two-digits" class="section level3 hasAnchor" number="18.2.3">
+<h3><span class="header-section-number">18.2.3</span> First two digits<a href="benford-testsanalysis.html#first-two-digits" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Nigrini’s contributions gained widespread recognition among scholars and practitioners, highlighting the applicability of Benford’s Law as a valuable forensic accounting and auditing tool across various datasets, particularly in the financial domain. <strong>Theodore P. Hill</strong> further<span class="citation"><a href="#fn37" class="footnote-ref" id="fnref37"><sup>37</sup></a></span> extended the scope of the law, demonstrating its validity beyond just the first digit to encompass other digits as well. Hill’s work expanded the utility of Benford’s Law, affirming its effectiveness in detecting irregularities and patterns not only in leading digits but throughout numerical sequences.</p>
+<p>The formula for second significant digit can be written down in equation <a href="benford-testsanalysis.html#eq:ben2">(18.2)</a>.</p>
+<span class="math display" id="eq:ben2">\[\begin{equation}
+P(d_i) = \sum_{k = 1}^{9}\log_{10}\left(1 + \frac{1}{10k + d_i}\right)\;;\; d = 0,1,..9
+\tag{18.2}
+\end{equation}\]</span>
+<ul>
+<li>where <span class="math inline">\(k\)</span> represents first digit,</li>
+<li><span class="math inline">\(d_i\)</span> represents second digit.</li>
+</ul>
+<p>The probabilities have been calculated, as depicted in Table <a href="benford-testsanalysis.html#tab:tab3">18.5</a>. Each cell depicts the probability of occurrence of any two digit, in left side, by first digit in rows and second digit in columns. We may also verify that, row totals thereby depicting probability of occurrence of first digit corresponds Benford’s Law of First Digit. For example, the probability of having first two digits as 10 will be highest at 4.14%.</p>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<caption>
+<span id="tab:tab3">Table 18.5: </span><span id="tab:tab3">Table 18.6: </span>First and Second Digit distributions
+</caption>
+<thead>
+<tr>
+<th style="empty-cells: hide;border-bottom:hidden;" colspan="1">
+</th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="10">
+<div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">
+Second Significant Digit
+</div>
+</th>
+<th style="empty-cells: hide;border-bottom:hidden;" colspan="1">
+</th>
+</tr>
+<tr>
+<th style="text-align:right;">
+First Digit
+</th>
+<th style="text-align:right;">
+0
+</th>
+<th style="text-align:right;">
+1
+</th>
+<th style="text-align:right;">
+2
+</th>
+<th style="text-align:right;">
+3
+</th>
+<th style="text-align:right;">
+4
+</th>
+<th style="text-align:right;">
+5
+</th>
+<th style="text-align:right;">
+6
+</th>
+<th style="text-align:right;">
+7
+</th>
+<th style="text-align:right;">
+8
+</th>
+<th style="text-align:right;">
+9
+</th>
+<th style="text-align:right;">
+First Digit Freq
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+1
+</td>
+<td style="text-align:right;">
+4.14%
+</td>
+<td style="text-align:right;">
+3.78%
+</td>
+<td style="text-align:right;">
+3.48%
+</td>
+<td style="text-align:right;">
+3.22%
+</td>
+<td style="text-align:right;">
+3.00%
+</td>
+<td style="text-align:right;">
+2.80%
+</td>
+<td style="text-align:right;">
+2.63%
+</td>
+<td style="text-align:right;">
+2.48%
+</td>
+<td style="text-align:right;">
+2.35%
+</td>
+<td style="text-align:right;">
+2.23%
+</td>
+<td style="text-align:right;">
+30.10%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+2.12%
+</td>
+<td style="text-align:right;">
+2.02%
+</td>
+<td style="text-align:right;">
+1.93%
+</td>
+<td style="text-align:right;">
+1.85%
+</td>
+<td style="text-align:right;">
+1.77%
+</td>
+<td style="text-align:right;">
+1.70%
+</td>
+<td style="text-align:right;">
+1.64%
+</td>
+<td style="text-align:right;">
+1.58%
+</td>
+<td style="text-align:right;">
+1.52%
+</td>
+<td style="text-align:right;">
+1.47%
+</td>
+<td style="text-align:right;">
+17.61%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+3
+</td>
+<td style="text-align:right;">
+1.42%
+</td>
+<td style="text-align:right;">
+1.38%
+</td>
+<td style="text-align:right;">
+1.34%
+</td>
+<td style="text-align:right;">
+1.30%
+</td>
+<td style="text-align:right;">
+1.26%
+</td>
+<td style="text-align:right;">
+1.22%
+</td>
+<td style="text-align:right;">
+1.19%
+</td>
+<td style="text-align:right;">
+1.16%
+</td>
+<td style="text-align:right;">
+1.13%
+</td>
+<td style="text-align:right;">
+1.10%
+</td>
+<td style="text-align:right;">
+12.49%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+4
+</td>
+<td style="text-align:right;">
+1.07%
+</td>
+<td style="text-align:right;">
+1.05%
+</td>
+<td style="text-align:right;">
+1.02%
+</td>
+<td style="text-align:right;">
+1.00%
+</td>
+<td style="text-align:right;">
+0.98%
+</td>
+<td style="text-align:right;">
+0.95%
+</td>
+<td style="text-align:right;">
+0.93%
+</td>
+<td style="text-align:right;">
+0.91%
+</td>
+<td style="text-align:right;">
+0.90%
+</td>
+<td style="text-align:right;">
+0.88%
+</td>
+<td style="text-align:right;">
+9.69%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+0.86%
+</td>
+<td style="text-align:right;">
+0.84%
+</td>
+<td style="text-align:right;">
+0.83%
+</td>
+<td style="text-align:right;">
+0.81%
+</td>
+<td style="text-align:right;">
+0.80%
+</td>
+<td style="text-align:right;">
+0.78%
+</td>
+<td style="text-align:right;">
+0.77%
+</td>
+<td style="text-align:right;">
+0.76%
+</td>
+<td style="text-align:right;">
+0.74%
+</td>
+<td style="text-align:right;">
+0.73%
+</td>
+<td style="text-align:right;">
+7.92%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+6
+</td>
+<td style="text-align:right;">
+0.72%
+</td>
+<td style="text-align:right;">
+0.71%
+</td>
+<td style="text-align:right;">
+0.69%
+</td>
+<td style="text-align:right;">
+0.68%
+</td>
+<td style="text-align:right;">
+0.67%
+</td>
+<td style="text-align:right;">
+0.66%
+</td>
+<td style="text-align:right;">
+0.65%
+</td>
+<td style="text-align:right;">
+0.64%
+</td>
+<td style="text-align:right;">
+0.63%
+</td>
+<td style="text-align:right;">
+0.62%
+</td>
+<td style="text-align:right;">
+6.69%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7
+</td>
+<td style="text-align:right;">
+0.62%
+</td>
+<td style="text-align:right;">
+0.61%
+</td>
+<td style="text-align:right;">
+0.60%
+</td>
+<td style="text-align:right;">
+0.59%
+</td>
+<td style="text-align:right;">
+0.58%
+</td>
+<td style="text-align:right;">
+0.58%
+</td>
+<td style="text-align:right;">
+0.57%
+</td>
+<td style="text-align:right;">
+0.56%
+</td>
+<td style="text-align:right;">
+0.55%
+</td>
+<td style="text-align:right;">
+0.55%
+</td>
+<td style="text-align:right;">
+5.80%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+8
+</td>
+<td style="text-align:right;">
+0.54%
+</td>
+<td style="text-align:right;">
+0.53%
+</td>
+<td style="text-align:right;">
+0.53%
+</td>
+<td style="text-align:right;">
+0.52%
+</td>
+<td style="text-align:right;">
+0.51%
+</td>
+<td style="text-align:right;">
+0.51%
+</td>
+<td style="text-align:right;">
+0.50%
+</td>
+<td style="text-align:right;">
+0.50%
+</td>
+<td style="text-align:right;">
+0.49%
+</td>
+<td style="text-align:right;">
+0.49%
+</td>
+<td style="text-align:right;">
+5.12%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+9
+</td>
+<td style="text-align:right;">
+0.48%
+</td>
+<td style="text-align:right;">
+0.47%
+</td>
+<td style="text-align:right;">
+0.47%
+</td>
+<td style="text-align:right;">
+0.46%
+</td>
+<td style="text-align:right;">
+0.46%
+</td>
+<td style="text-align:right;">
+0.45%
+</td>
+<td style="text-align:right;">
+0.45%
+</td>
+<td style="text-align:right;">
+0.45%
+</td>
+<td style="text-align:right;">
+0.44%
+</td>
+<td style="text-align:right;">
+0.44%
+</td>
+<td style="text-align:right;">
+4.58%
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+Second Digit Freq
+</td>
+<td style="text-align:right;">
+11.97%
+</td>
+<td style="text-align:right;">
+11.39%
+</td>
+<td style="text-align:right;">
+10.88%
+</td>
+<td style="text-align:right;">
+10.43%
+</td>
+<td style="text-align:right;">
+10.03%
+</td>
+<td style="text-align:right;">
+9.67%
+</td>
+<td style="text-align:right;">
+9.34%
+</td>
+<td style="text-align:right;">
+9.04%
+</td>
+<td style="text-align:right;">
+8.76%
+</td>
+<td style="text-align:right;">
+8.50%
+</td>
+<td style="text-align:right;">
+100.00%
+</td>
+</tr>
+</tbody>
+</table>
+<p>The law of second digit combined with original Benford’s Law of first digit thus, gives us Law of first two digits. We can verify it in the example on <code>census.2009</code> data. The resultant plot as depicted in figure <a href="benford-testsanalysis.html#fig:ben2">18.5</a> shows us that the law of first two digits also holds.</p>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:ben2"></span>
+<img src="DauR_files/figure-html/ben2-1.png" alt="Law holds for first two digits as well" width="672" />
+<p class="caption">
+Figure 18.5: Law holds for first two digits as well
+</p>
+</div>
+</div>
+<div id="second-order-test" class="section level3 hasAnchor" number="18.2.4">
+<h3><span class="header-section-number">18.2.4</span> Second order test<a href="benford-testsanalysis.html#second-order-test" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p><strong>Nigrini</strong> and <strong>Miller</strong>, in 2009,<span class="citation"><a href="#fn38" class="footnote-ref" id="fnref38"><sup>38</sup></a></span> introduced another advanced test based on Benford’s Law. The test states that:</p>
+<blockquote>
+<p>Let <span class="math inline">\(x_1\)</span>, …, <span class="math inline">\(x_N\)</span> be a data set comprising <span class="math inline">\(N\)</span> observations, and let <span class="math inline">\(y_1\)</span>, …, <span class="math inline">\(y_N\)</span> be the observations <span class="math inline">\(x_i\)</span>’s in ascending order. Then, for many natural data sets, and for large <span class="math inline">\(N\)</span>, the digits of the differences between adjacent observations <span class="math inline">\(y_{i+1} – y_i\)</span> is close to Benford’s Law. Large deviations from Benford’s Law indicate an anomaly that should be investigated.</p>
+</blockquote>
+<p>So, the steps may be listed as</p>
+<ul>
+<li>Sort data from smallest to largest</li>
+<li>calculate <span class="math inline">\(N-1\)</span> differences of <span class="math inline">\(N\)</span> consecutive observations</li>
+<li>Apply Benford’s law on these calculated new data.</li>
+</ul>
+<p>Nigrini showed that these digits are expected to closely follow the frequencies of Benford law. Using four different datasets he showed that this test can detect (i) anomalies occurring in data, (ii) whether the data has been rounded and (iii) use of fake data OR ‘statistically generated data’ in place of actual (transactional) data.</p>
+</div>
+<div id="summation-test" class="section level3 hasAnchor" number="18.2.5">
+<h3><span class="header-section-number">18.2.5</span> Summation Test<a href="benford-testsanalysis.html#summation-test" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>The <strong>summation test</strong>, another second order test, looks for excessively large numbers in a dataset. It identifies numbers that are large compared to the norm for that data. The test was also proposed by <strong>Nigrini</strong><span class="citation"><a href="#fn39" class="footnote-ref" id="fnref39"><sup>39</sup></a></span> and it is based on the fact that the sums of all numbers in a Benford distribution with first-two digits (10, 11, 12, …99) should be the same. Therefore, for each of the 90 first-two digits groups sum proportions should be equal, i.e. 1/90 or 0.011. The spikes, if any indicate that there are some large single numbers or set of numbers.</p>
+<p>In the next section, we will see how to implement all these tests through R.</p>
+</div>
+<div id="limitations-of-benford-tests" class="section level3 hasAnchor" number="18.2.6">
+<h3><span class="header-section-number">18.2.6</span> Limitations of Benford Tests<a href="benford-testsanalysis.html#limitations-of-benford-tests" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Benford’s Law may not hold in the following circumstances-</p>
+<ol style="list-style-type: decimal">
+<li>When the data-set is comprised of assigned numbers. Like cheque numbers, invoices numbers, telephone numbers, pincodes, etc.</li>
+<li>Numbers that may be influenced viz. ATM withdrawals, etc.</li>
+<li>Where amounts have either lower bound, or upper bounds or both. E.g. passengers onboard airplane, hourly wage rate, etc.</li>
+<li>Count of transactions less than 500.</li>
+</ol>
+<p>Before carrying out analyics let us also see the evaluation metrics which will help us to evaluate the goodness of fit of data to Benford’s law. Three statistics are commonly used.</p>
+</div>
+</div>
+<div id="goodness-of-fit-metrics" class="section level2 hasAnchor" number="18.3">
+<h2><span class="header-section-number">18.3</span> Goodness of fit metrics<a href="benford-testsanalysis.html#goodness-of-fit-metrics" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>In table <a href="benford-testsanalysis.html#tab:tab1">18.3</a> we saw that digit frequencies largely followed Benford’s Law in six different datasets. However, as to evaluate how close is the actual distribution with theoretical distribution, we need to evaluate the fit on some metrics. Here we will use three different metrics as follows.</p>
+<div id="chis" class="section level3 hasAnchor" number="18.3.1">
+<h3><span class="header-section-number">18.3.1</span> Chi-square statistic<a href="benford-testsanalysis.html#chis" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>In first of these test, we will use Chi Square Statistic. This statistic is used to test the statistical significance to the whole distribution in observed frequency of first digit and first two digits against their expected frequency under Benford’s Law (BL). The <strong>Null hypothesis states that digits follow Benford’s Law.</strong> Mathematical formula is,</p>
+<span class="math display" id="eq:ben3">\[\begin{equation}
+\chi^2 = \sum_{i=1}^{9} \frac{(O_i - E_i)^2}{E_i}
+\tag{18.3}
+\end{equation}\]</span>
+<p>where -</p>
+<ul>
+<li><span class="math inline">\(O_i\)</span> is the observed frequency of the i-th digit.</li>
+<li><span class="math inline">\(E_i\)</span> is the expected frequency of the i-th digit predicted by Benford’s Law.</li>
+</ul>
+<p>This calculated chi-square statistic is compared to a critical value. The critical value for Chi-Square Test, comes from a chi-square distribution available easily in any Statistical textbook<a href="#fn40" class="footnote-ref" id="fnref40"><sup>40</sup></a>. However, for first digit test and first two digits test, the critical values are reproduced in Table <a href="benford-testsanalysis.html#tab:tab6">18.7</a>.</p>
+<table>
+<caption>
+<span id="tab:tab6">Table 18.7: </span><span id="tab:tab6">Table 18.8: </span>Critical values for Chi-Square Test
+</caption>
+<thead>
+<tr>
+<th style="empty-cells: hide;border-bottom:hidden;" colspan="1">
+</th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1">
+<div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">
+First Digit Test
+</div>
+</th>
+<th style="border-bottom:hidden;padding-bottom:0; padding-left:3px;padding-right:3px;text-align: center; " colspan="1">
+<div style="border-bottom: 1px solid #ddd; padding-bottom: 5px; ">
+Two Digit Test
+</div>
+</th>
+</tr>
+<tr>
+<th style="text-align:left;">
+Degrees of Freedom
+</th>
+<th style="text-align:right;">
+8
+</th>
+<th style="text-align:right;">
+89
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+10%
+</td>
+<td style="text-align:right;">
+13.362
+</td>
+<td style="text-align:right;">
+106.469
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+5%
+</td>
+<td style="text-align:right;">
+15.507
+</td>
+<td style="text-align:right;">
+112.022
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+2.5%
+</td>
+<td style="text-align:right;">
+17.535
+</td>
+<td style="text-align:right;">
+116.989
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+1%
+</td>
+<td style="text-align:right;">
+20.090
+</td>
+<td style="text-align:right;">
+122.942
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+0.1%
+</td>
+<td style="text-align:right;">
+26.125
+</td>
+<td style="text-align:right;">
+135.978
+</td>
+</tr>
+</tbody>
+</table>
+<p>To check goodness of fit, we have to compare calculated <span class="math inline">\(χ^2\)</span> statistic with these critical values. If the observed value is above these critical values we may conclude that our initial hypothesis that data follows BL, should be rejected. Or simply that data does not conforms Benford law/Distribution.</p>
+<p>For example, in <code>census.2009</code> data the chi-square statistic calculates to <code>17.524</code> which is less than 2.5% critical value 17.535. Thus, we can say with 5% confidence that <code>census.2009</code> data follows BL (first digit law).</p>
+</div>
+<div id="z-score" class="section level3 hasAnchor" number="18.3.2">
+<h3><span class="header-section-number">18.3.2</span> Z-score<a href="benford-testsanalysis.html#z-score" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Z-statistic checks whether the individual distribution significantly differs from Benford’s Law distribution. Mathematically, Z-Statistics considers the absolute magnitude of the difference from actual to the expected, size of the data and expected proportion.</p>
+<span class="math display" id="eq:ben4">\[\begin{equation}
+Z = \frac{(\lvert p - p_0\rvert) - (\frac{1}{2n})}{\sqrt{\frac{p_0(1-p_0)}{n}}}
+\tag{18.4}
+\end{equation} \]</span>
+<p>where -</p>
+<ul>
+<li><span class="math inline">\(p\)</span> is the observed frequency of the leading digits in the dataset.</li>
+<li><span class="math inline">\(p_0\)</span> is the expected frequency under Benford’s Law.</li>
+<li><span class="math inline">\(n\)</span> is the number of records</li>
+</ul>
+<p>In equation <a href="benford-testsanalysis.html#eq:ben4">(18.4)</a>, the last term in the numerator <span class="math inline">\(\frac{1}{2N}\)</span> is a continuity correction term and is used only when it is smaller than the first term in the numerator. Mark Nigrini has proposed that if the values of Z-statistic exceed the critical value 1.96, the null hypothesis <span class="math inline">\(H_{0A}\)</span> is rejected at 5% of significance level. Also note that <strong>Null hypothesis is same, which states that digits follow Benford’s Law.</strong></p>
+<p>If the significant levels are 1% or 10%, the corresponding critical values are 2.57 and 1.64 respectively.</p>
+</div>
+<div id="mean-absolute-deviation" class="section level3 hasAnchor" number="18.3.3">
+<h3><span class="header-section-number">18.3.3</span> Mean absolute deviation<a href="benford-testsanalysis.html#mean-absolute-deviation" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Another Statistic, Mean Absolute Deviation also sometimes referred to as <strong>M.A.D.</strong>, measures absolute deviations of observed frequencies from theoritical ones. The mathematical formula is written in equation <a href="benford-testsanalysis.html#eq:ben5">(18.5)</a>.</p>
+<p><span class="math display" id="eq:ben5">\[\begin{equation}
+MAD = \frac{1}{9} \sum_{i=1}^{9} |O_i - E_i|
+\tag{18.5}
+\end{equation}\]</span></p>
+<p>As there are no objective critical scores for the absolute deviations, the critical values prescribed by Mark J Nigrini are -</p>
+<table>
+<caption><span id="tab:tab7">Table 18.9: </span> Critical Scores for MAD test</caption>
+<colgroup>
+<col width="26%" />
+<col width="24%" />
+<col width="24%" />
+<col width="24%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>First Digits</th>
+<th></th>
+<th>First-Two Digits</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0.000 to 0.006</td>
+<td>Close conformity</td>
+<td>0.000 to 0.012</td>
+<td>Close conformity</td>
+</tr>
+<tr class="even">
+<td>0.006 to 0.012</td>
+<td>Acceptable conformity</td>
+<td>0.012 to 0.018</td>
+<td>Acceptable conformity</td>
+</tr>
+<tr class="odd">
+<td>0.012 to 0.015</td>
+<td>Marginally acceptable conformity</td>
+<td>0.018 to 0.022</td>
+<td>Marginally acceptable conformity</td>
+</tr>
+<tr class="even">
+<td>above 0.015</td>
+<td>Nonconformity</td>
+<td>above 0.022</td>
+<td>Nonconformity</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="other-descriptive-statistics" class="section level3 hasAnchor" number="18.3.4">
+<h3><span class="header-section-number">18.3.4</span> Other descriptive Statistics<a href="benford-testsanalysis.html#other-descriptive-statistics" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>If the data follows Benford’s Law, the numbers should be close to those shown in table following, as suggested by Mark Nigrini.</p>
+<table>
+<caption><span id="tab:benford">Table 18.10: </span> Ideal Statistics for data that follows Benford’s Law</caption>
+<thead>
+<tr class="header">
+<th align="center">Statistic</th>
+<th align="center">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">Mean</td>
+<td align="center">0.5</td>
+</tr>
+<tr class="even">
+<td align="center">Variance</td>
+<td align="center">1/12 (0.08333…)</td>
+</tr>
+<tr class="odd">
+<td align="center">Ex. Kurtosis</td>
+<td align="center">-1.2</td>
+</tr>
+<tr class="even">
+<td align="center">Skewness</td>
+<td align="center">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div id="important" class="section level2 hasAnchor" number="18.4">
+<h2><span class="header-section-number">18.4</span> Important<a href="benford-testsanalysis.html#important" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>Benford’s Law analysis serves as a powerful tool in uncovering potential irregularities in datasets, but it’s crucial to note that deviations from this statistical phenomenon don’t always signify fraudulent activities. While it highlights notable discrepancies between expected and observed frequencies of digits in naturally occurring datasets, these variations might stem from various legitimate factors such as data entry errors, fluctuations in processes, or different sources of data. Understanding that Benford’s Law offers a signal rather than a definitive confirmation of fraud allows for a more nuanced interpretation, encouraging further investigation to discern the true nature behind these deviations.</p>
+<p>Conversely, just because a dataset adheres to Benford’s Law, it doesn’t guarantee the absence of fraud. While conformity to this statistical principle generally suggests consistency within the data, sophisticated fraudsters might deliberately manipulate information to mimic expected distributions, masking their illicit activities. Therefore, while adherence to Benford’s Law might lessen suspicion, it doesn’t serve as an absolute assurance against fraudulent behavior.</p>
+<p>Benford’s Law acting as a warning signal indicates potential irregularities in the numbers. It’s vital to dive deeper and investigate why these figures seem odd. Further scrutiny helps differentiate between a minor data hiccup and a potentially significant issue. This additional examination might mean cross-checking other data, validating records, or engaging with those connected to the information. This thorough approach is crucial for unraveling the story behind these uncommon figures.</p>
+</div>
+<div id="pracben" class="section level2 hasAnchor" number="18.5">
+<h2><span class="header-section-number">18.5</span> Practical approach in R<a href="benford-testsanalysis.html#pracben" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>As already stated we will use package <code>benford.analysis</code> for carrying out analytics on Benford’s Law, in R. Let us load it.</p>
+<div class="sourceCode" id="cb1133"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1133-1"><a href="benford-testsanalysis.html#cb1133-1" tabindex="-1"></a><span class="fu">library</span>(benford.analysis)</span></code></pre></div>
+<p>This package provides tools that make it easier to validate data using Benford’s Law. This package has been developed by <strong>Carlos Cinelli</strong>. As the package author himself states that the main purpose of the package is to identify suspicious data that need further verification, it should always be kept in mind that these analytics only provide us red-flagged transactions that should be validated further.</p>
+<p>Apart from useful functions in the package, this also loads some default datasets specially those which were used by Frank Benford while proposing his law. Let us load the census 2009 data containing the population of towns and cities of the United States, as of July of 2009.</p>
+<div class="sourceCode" id="cb1134"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1134-1"><a href="benford-testsanalysis.html#cb1134-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;census.2009&quot;</span>)</span></code></pre></div>
+<p>Let us view the top 6 rows of the data.</p>
+<div class="sourceCode" id="cb1135"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1135-1"><a href="benford-testsanalysis.html#cb1135-1" tabindex="-1"></a><span class="fu">head</span>(census<span class="fl">.2009</span>)</span></code></pre></div>
+<pre><code>##     state             town pop.2009
+## 1 Alabama   Abbeville city     2930
+## 2 Alabama  Adamsville city     4782
+## 3 Alabama     Addison town      709
+## 4 Alabama       Akron town      433
+## 5 Alabama   Alabaster city    29861
+## 6 Alabama Albertville city    20115</code></pre>
+<p>In fact, this contains 19509 records.</p>
+<p><strong>Problem Statement:</strong> Let us test Benford’s law on 2009 population data. Let us see whether the data conforms Benford’s law.</p>
+<p>The main function <code>benford()</code> takes a vector of values to be tested as input, and creates an output of special class <code>benford</code> The syntax is</p>
+<pre><code>benford(data, number.of.digits=2)</code></pre>
+<p>where-</p>
+<ul>
+<li><code>data</code> is numeric vector on which analysis has to be performed.</li>
+<li><code>number.of.digits</code> is number of digits on which analysis has to be performed. Default value is <code>2</code>.</li>
+</ul>
+<div class="sourceCode" id="cb1138"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1138-1"><a href="benford-testsanalysis.html#cb1138-1" tabindex="-1"></a>census_first_digit <span class="ot">&lt;-</span> <span class="fu">benford</span>(census<span class="fl">.2009</span><span class="sc">$</span>pop<span class="fl">.2009</span>, <span class="at">number.of.digits =</span> <span class="dv">1</span>)</span></code></pre></div>
+<p>Above syntax will create <code>census_first_digit</code> object which store various useful information for Benford Analytics. We may view its summary -</p>
+<div class="sourceCode" id="cb1139"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1139-1"><a href="benford-testsanalysis.html#cb1139-1" tabindex="-1"></a><span class="fu">summary</span>(census_first_digit)</span></code></pre></div>
+<pre><code>##                   Length Class      Mode     
+## info               4     -none-     list     
+## data               4     data.table list     
+## s.o.data           2     data.table list     
+## bfd               13     data.table list     
+## mantissa           2     data.table list     
+## MAD                1     -none-     numeric  
+## MAD.conformity     1     -none-     character
+## distortion.factor  1     -none-     numeric  
+## stats              2     -none-     list</code></pre>
+<p>Let us also print the object to see what all is stored therein.</p>
+<div class="sourceCode" id="cb1141"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1141-1"><a href="benford-testsanalysis.html#cb1141-1" tabindex="-1"></a><span class="fu">print</span>(census_first_digit)</span></code></pre></div>
+<pre><code>## 
+## Benford object:
+##  
+## Data: census.2009$pop.2009 
+## Number of observations used = 19509 
+## Number of obs. for second order = 7950 
+## First digits analysed = 1
+## 
+## Mantissa: 
+## 
+##    Statistic  Value
+##         Mean  0.503
+##          Var  0.084
+##  Ex.Kurtosis -1.207
+##     Skewness -0.013
+## 
+## 
+## The 5 largest deviations: 
+## 
+##   digits absolute.diff
+## 1      1        134.79
+## 2      2        104.64
+## 3      3         95.43
+## 4      6         63.94
+## 5      8         45.07
+## 
+## Stats:
+## 
+##  Pearson&#39;s Chi-squared test
+## 
+## data:  census.2009$pop.2009
+## X-squared = 17.524, df = 8, p-value = 0.0251
+## 
+## 
+##  Mantissa Arc Test
+## 
+## data:  census.2009$pop.2009
+## L2 = 4.198e-05, df = 2, p-value = 0.4409
+## 
+## Mean Absolute Deviation (MAD): 0.003119261
+## MAD Conformity - Nigrini (2012): Close conformity
+## Distortion Factor: 0.7404623
+## 
+## Remember: Real data will never conform perfectly to Benford&#39;s Law. You should not focus on p-values!</code></pre>
+<p>Results of Chi-Square distribution test, MAD etc. are printed apart from top deviations. The MAD value of <code>0.003</code> shows <code>close conformity</code> with Benford’s law. Chi Square statistic at 17.524 is slightly greater than 5% critical value of 15.507. In second example we will see that results of <code>print</code> command on benford object can be further customised, using its other arguments.</p>
+<p>Let us also visualise the plots. We will use <code>plot</code> command to generate the plots.</p>
+<div class="sourceCode" id="cb1143"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1143-1"><a href="benford-testsanalysis.html#cb1143-1" tabindex="-1"></a><span class="fu">plot</span>(census_first_digit)</span></code></pre></div>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:cenbenplot"></span>
+<img src="DauR_files/figure-html/cenbenplot-1.png" alt="Benford Analysis Results of Census 2009 Data" width="672" />
+<p class="caption">
+Figure 18.6: Benford Analysis Results of Census 2009 Data
+</p>
+</div>
+<p>We can see that by default five charts are printed.</p>
+<ol style="list-style-type: decimal">
+<li>Digits distribution</li>
+<li>Second Order Test digit distribution</li>
+<li>Summation test - digit distribution</li>
+<li>Chi-Square differences</li>
+<li>Summation differences</li>
+</ol>
+<p><em>Similarly, in second example we will see how to customise plot outputs.</em></p>
+<p>We can see that first digits in census 2009 data, follows Benford’s Law closely.</p>
+<div id="other-useful-functions-in-package" class="section level3 hasAnchor" number="18.5.1">
+<h3><span class="header-section-number">18.5.1</span> Other Useful functions in package<a href="benford-testsanalysis.html#other-useful-functions-in-package" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>You may be wondering whether we have to depend upon print function every time to get analytics insights out the object created. In fact there are several other functions in this package which are very useful while carrying out risk analysis through Benford’s Law.</p>
+<ul>
+<li><code>chisq</code>: Gets the Chi-squared test of a Benford object. Takes a benford object as input.</li>
+<li><code>duplicatesTable</code> Shows the duplicates of the data. Similarly, takes a benford object as input.</li>
+<li><code>extract.digits</code> Extracts the leading digits from the data. Takes data as input. This is useful, while carrying out analysis manually.</li>
+<li><code>getBfd</code> Gets the the statistics of the first Digits of a benford object. E.g.</li>
+</ul>
+<div class="sourceCode" id="cb1144"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1144-1"><a href="benford-testsanalysis.html#cb1144-1" tabindex="-1"></a><span class="fu">getBfd</span>(census_first_digit)</span></code></pre></div>
+<pre><code>##    digits  data.dist data.second.order.dist benford.dist
+##     &lt;int&gt;      &lt;num&gt;                  &lt;num&gt;        &lt;num&gt;
+## 1:      1 0.29412066             0.55811321   0.30103000
+## 2:      2 0.18145471             0.15471698   0.17609126
+## 3:      3 0.12004716             0.08968553   0.12493874
+## 4:      4 0.09467425             0.05761006   0.09691001
+## 5:      5 0.07991184             0.04364780   0.07918125
+## 6:      6 0.07022400             0.03308176   0.06694679
+## 7:      7 0.05976729             0.02553459   0.05799195
+## 8:      8 0.05346250             0.01987421   0.05115252
+## 9:      9 0.04633759             0.01773585   0.04575749
+##    data.second.order.dist.freq data.dist.freq benford.dist.freq
+##                          &lt;num&gt;          &lt;num&gt;             &lt;num&gt;
+## 1:                        4437           5738         5872.7942
+## 2:                        1230           3540         3435.3644
+## 3:                         713           2342         2437.4298
+## 4:                         458           1847         1890.6174
+## 5:                         347           1559         1544.7469
+## 6:                         263           1370         1306.0649
+## 7:                         203           1166         1131.3649
+## 8:                         158           1043          997.9346
+## 9:                         141            904          892.6829
+##    benford.so.dist.freq data.summation abs.excess.summation difference
+##                   &lt;num&gt;          &lt;num&gt;                &lt;num&gt;      &lt;num&gt;
+## 1:            2393.1885       51237849             29880783 -134.79419
+## 2:            1399.9255       33272136             11915070  104.63563
+## 3:             993.2630       22810354              1453288  -95.42981
+## 4:             770.4346       15763499              5593567  -43.61744
+## 5:             629.4909       15799838              5557228   14.25307
+## 6:             532.2270       14527377              6829689   63.93508
+## 7:             461.0360       11371006              9986060   34.63511
+## 8:             406.6626       18814056              2543010   45.06544
+## 9:             363.7720        8617475             12739591   11.31712
+##    squared.diff absolute.diff
+##           &lt;num&gt;         &lt;num&gt;
+## 1:    3.0938378     134.79419
+## 2:    3.1870315     104.63563
+## 3:    3.7362508      95.42981
+## 4:    1.0062752      43.61744
+## 5:    0.1315102      14.25307
+## 6:    3.1297790      63.93508
+## 7:    1.0603039      34.63511
+## 8:    2.0350972      45.06544
+## 9:    0.1434744      11.31712</code></pre>
+<ul>
+<li><code>getSuspects</code> Gets the ‘suspicious’ observations according to Benford’s Law. Takes both data as well as benford object, as inputs. Example in second case study.</li>
+<li><code>MAD</code> Gets the MAD of a Benford object.</li>
+<li><code>suspectsTable</code> Shows the first digits ordered by the mains discrepancies from Benford’s Law. Notice the difference from <code>getSuspects</code></li>
+</ul>
+</div>
+<div id="example-2-corporate-payments-data" class="section level3 hasAnchor" number="18.5.2">
+<h3><span class="header-section-number">18.5.2</span> Example-2: Corporate payments data<a href="benford-testsanalysis.html#example-2-corporate-payments-data" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p><strong>Problem Statement-2:</strong> Let us analyse red-flags, on dataset of the 2010’s payments data (189470 records) of a division of a West Coast utility company. This data, <code>corporate.payments</code> is also available with the package. This time we will use first two digits in our analysis.</p>
+<p><strong>Step-1:</strong> Load the dataset and view its top rows. Let’s also see its summary.</p>
+<div class="sourceCode" id="cb1146"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1146-1"><a href="benford-testsanalysis.html#cb1146-1" tabindex="-1"></a><span class="fu">data</span>(<span class="st">&quot;corporate.payment&quot;</span>)</span>
+<span id="cb1146-2"><a href="benford-testsanalysis.html#cb1146-2" tabindex="-1"></a><span class="fu">head</span>(corporate.payment)</span></code></pre></div>
+<pre><code>##   VendorNum       Date  InvNum Amount
+## 1      2001 2010-01-02 0496J10  36.08
+## 2      2001 2010-01-02 1726J10  77.80
+## 3      2001 2010-01-02 2104J10  34.97
+## 4      2001 2010-01-02 2445J10  59.00
+## 5      2001 2010-01-02 3281J10  59.56
+## 6      2001 2010-01-02 3822J10  50.38</code></pre>
+<div class="sourceCode" id="cb1148"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1148-1"><a href="benford-testsanalysis.html#cb1148-1" tabindex="-1"></a><span class="fu">summary</span>(corporate.payment)</span></code></pre></div>
+<pre><code>##   VendorNum              Date               InvNum              Amount        
+##  Length:189470      Min.   :2010-01-02   Length:189470      Min.   :  -71388  
+##  Class :character   1st Qu.:2010-02-28   Class :character   1st Qu.:      50  
+##  Mode  :character   Median :2010-06-04   Mode  :character   Median :     200  
+##                     Mean   :2010-06-16                      Mean   :    2588  
+##                     3rd Qu.:2010-09-30                      3rd Qu.:     835  
+##                     Max.   :2010-12-31                      Max.   :26763476</code></pre>
+<p>We can see it has 189470 records having</p>
+<pre><code>+   Vendor Numbers
++   Date of Transaction
++   Invoice Number
++   Amount of invoice/transaction</code></pre>
+<p><strong>Step-2:</strong> Create benford object</p>
+<div class="sourceCode" id="cb1151"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1151-1"><a href="benford-testsanalysis.html#cb1151-1" tabindex="-1"></a>corp_bfd <span class="ot">&lt;-</span> <span class="fu">benford</span>(corporate.payment<span class="sc">$</span>Amount, <span class="at">number.of.digits =</span> <span class="dv">2</span>)</span></code></pre></div>
+<p><strong>Step-3:</strong> Let us first visually inspect the results. This time we will use another argument of <code>plot</code> function in <code>benford.analysis</code> library which is <code>except</code>. Actually this can create seven different plots and by default it creates five plots as stated earlier. Thus, by writing <code>except = "none"</code> we can include all seven plots if we want. Otherwise we will have to mention exclusions from <code>c("digits", "second order", "summation", "mantissa", "chi squared", "abs diff", "ex summation")</code>. There is one more argument namely <code>multiple</code> which is TRUE by default and plots multiple charts in same window.</p>
+<p>So let us build (i) Digit distribution and (ii) Second order digit distribution plots.</p>
+<div class="sourceCode" id="cb1152"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1152-1"><a href="benford-testsanalysis.html#cb1152-1" tabindex="-1"></a><span class="fu">plot</span>(</span>
+<span id="cb1152-2"><a href="benford-testsanalysis.html#cb1152-2" tabindex="-1"></a>  corp_bfd,</span>
+<span id="cb1152-3"><a href="benford-testsanalysis.html#cb1152-3" tabindex="-1"></a>  <span class="at">except =</span> <span class="fu">c</span>(</span>
+<span id="cb1152-4"><a href="benford-testsanalysis.html#cb1152-4" tabindex="-1"></a>    <span class="st">&quot;summation&quot;</span>,</span>
+<span id="cb1152-5"><a href="benford-testsanalysis.html#cb1152-5" tabindex="-1"></a>    <span class="st">&quot;mantissa&quot;</span>,</span>
+<span id="cb1152-6"><a href="benford-testsanalysis.html#cb1152-6" tabindex="-1"></a>    <span class="st">&quot;chi squared&quot;</span>,</span>
+<span id="cb1152-7"><a href="benford-testsanalysis.html#cb1152-7" tabindex="-1"></a>    <span class="st">&quot;abs diff&quot;</span>,</span>
+<span id="cb1152-8"><a href="benford-testsanalysis.html#cb1152-8" tabindex="-1"></a>    <span class="st">&quot;ex summation&quot;</span>,</span>
+<span id="cb1152-9"><a href="benford-testsanalysis.html#cb1152-9" tabindex="-1"></a>    <span class="st">&quot;chisq diff&quot;</span>,</span>
+<span id="cb1152-10"><a href="benford-testsanalysis.html#cb1152-10" tabindex="-1"></a>    <span class="st">&quot;legend&quot;</span></span>
+<span id="cb1152-11"><a href="benford-testsanalysis.html#cb1152-11" tabindex="-1"></a>  ),</span>
+<span id="cb1152-12"><a href="benford-testsanalysis.html#cb1152-12" tabindex="-1"></a>  <span class="at">multiple =</span> <span class="cn">TRUE</span></span>
+<span id="cb1152-13"><a href="benford-testsanalysis.html#cb1152-13" tabindex="-1"></a>)</span></code></pre></div>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:corpben"></span>
+<img src="DauR_files/figure-html/corpben-1.png" alt="Benford Analysis results on Corporate payments Data" width="47%" height="30%" /><img src="DauR_files/figure-html/corpben-2.png" alt="Benford Analysis results on Corporate payments Data" width="47%" height="30%" />
+<p class="caption">
+Figure 18.7: Benford Analysis results on Corporate payments Data
+</p>
+</div>
+<p>We can see that largely the data follows Benford’s Law except an abnormal peak at 50.</p>
+<p><strong>Step-4:</strong> Let us now see what is inside of this object. Function <code>print</code> in <code>benford.analysis</code> package has another argument <code>how.many</code> which simply tells us to print how many of the absolute differences.</p>
+<div class="sourceCode" id="cb1153"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1153-1"><a href="benford-testsanalysis.html#cb1153-1" tabindex="-1"></a><span class="fu">print</span>(corp_bfd, <span class="at">how.many =</span> <span class="dv">7</span>)</span></code></pre></div>
+<pre><code>## 
+## Benford object:
+##  
+## Data: corporate.payment$Amount 
+## Number of observations used = 185083 
+## Number of obs. for second order = 65504 
+## First digits analysed = 2
+## 
+## Mantissa: 
+## 
+##    Statistic  Value
+##         Mean  0.496
+##          Var  0.092
+##  Ex.Kurtosis -1.257
+##     Skewness -0.002
+## 
+## 
+## The 7 largest deviations: 
+## 
+##   digits absolute.diff
+## 1     50       5938.25
+## 2     11       3331.98
+## 3     10       2811.92
+## 4     14       1043.68
+## 5     98        889.95
+## 6     90        736.81
+## 7     92        709.01
+## 
+## Stats:
+## 
+##  Pearson&#39;s Chi-squared test
+## 
+## data:  corporate.payment$Amount
+## X-squared = 32094, df = 89, p-value &lt; 2.2e-16
+## 
+## 
+##  Mantissa Arc Test
+## 
+## data:  corporate.payment$Amount
+## L2 = 0.0039958, df = 2, p-value &lt; 2.2e-16
+## 
+## Mean Absolute Deviation (MAD): 0.002336614
+## MAD Conformity - Nigrini (2012): Nonconformity
+## Distortion Factor: -1.065467
+## 
+## Remember: Real data will never conform perfectly to Benford&#39;s Law. You should not focus on p-values!</code></pre>
+<p>We can see that digit 50 has indeed the largest abolute difference. One of the reasons for availability of invoices in this digit group may be due to some tax capping or some other reason, which an auditor may need to investigate further.</p>
+<p>Using <code>suspectsTable()</code> we can also get similar information.</p>
+<div class="sourceCode" id="cb1155"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1155-1"><a href="benford-testsanalysis.html#cb1155-1" tabindex="-1"></a><span class="fu">suspectsTable</span>(corp_bfd) <span class="sc">|&gt;</span> </span>
+<span id="cb1155-2"><a href="benford-testsanalysis.html#cb1155-2" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">7</span>)</span></code></pre></div>
+<pre><code>##    digits absolute.diff
+##     &lt;int&gt;         &lt;num&gt;
+## 1:     50     5938.2544
+## 2:     11     3331.9798
+## 3:     10     2811.9177
+## 4:     14     1043.6833
+## 5:     98      889.9470
+## 6:     90      736.8084
+## 7:     92      709.0129</code></pre>
+<p><strong>Step-5:</strong> Let us also get the Chi Square and other metrics</p>
+<div class="sourceCode" id="cb1157"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1157-1"><a href="benford-testsanalysis.html#cb1157-1" tabindex="-1"></a><span class="fu">chisq</span>(corp_bfd)</span></code></pre></div>
+<pre><code>## 
+##  Pearson&#39;s Chi-squared test
+## 
+## data:  corporate.payment$Amount
+## X-squared = 32094, df = 89, p-value &lt; 2.2e-16</code></pre>
+<p>Going strictly by numbers and p-value, which we should not depend upon in Benford Analytics, we see that Null hypothesis (Ref: section <a href="benford-testsanalysis.html#chis">18.3.1</a>) has been rejected. In other words, chi-square statistic tells us that data does not follow Benford Law.</p>
+<p>To get Mean Absolute Deviation</p>
+<div class="sourceCode" id="cb1159"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1159-1"><a href="benford-testsanalysis.html#cb1159-1" tabindex="-1"></a><span class="fu">MAD</span>(corp_bfd)</span></code></pre></div>
+<pre><code>## [1] 0.002336614</code></pre>
+<p>Whether the value conforms to values suggested by Mark Nigrini, we can do</p>
+<div class="sourceCode" id="cb1161"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1161-1"><a href="benford-testsanalysis.html#cb1161-1" tabindex="-1"></a>corp_bfd<span class="sc">$</span>MAD.conformity</span></code></pre></div>
+<pre><code>## [1] &quot;Nonconformity&quot;</code></pre>
+<p><strong>Step-6:</strong> Let us generate duplicate values avilable if any, in the data. For sake of brevity here, we will print top-5 results.</p>
+<div class="sourceCode" id="cb1163"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1163-1"><a href="benford-testsanalysis.html#cb1163-1" tabindex="-1"></a><span class="fu">duplicatesTable</span>(corp_bfd) <span class="sc">|&gt;</span> </span>
+<span id="cb1163-2"><a href="benford-testsanalysis.html#cb1163-2" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">5</span>)</span></code></pre></div>
+<pre><code>##     number duplicates
+##      &lt;num&gt;      &lt;int&gt;
+## 1:   50.00       6022
+## 2: 1153.35       2264
+## 3: 1083.45       1185
+## 4:  150.00       1056
+## 5:  988.35       1018</code></pre>
+<p>Examining output above, we can see that there are 6022 invoices having all amount of USD50 each. Probably this could be the reason for failing of null hypothesis in the data.</p>
+<p><strong>Step-7:</strong> We can extract all distribution data using <code>getBFD</code> function.</p>
+<div class="sourceCode" id="cb1165"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1165-1"><a href="benford-testsanalysis.html#cb1165-1" tabindex="-1"></a><span class="fu">getBfd</span>(corp_bfd) <span class="sc">|&gt;</span> </span>
+<span id="cb1165-2"><a href="benford-testsanalysis.html#cb1165-2" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+<pre><code>##     digits  data.dist data.second.order.dist benford.dist
+##      &lt;int&gt;      &lt;num&gt;                  &lt;num&gt;        &lt;num&gt;
+##  1:     10 0.05658542            0.374786273   0.04139269
+##  2:     11 0.05579119            0.015922692   0.03778856
+##  3:     12 0.03236926            0.014609795   0.03476211
+##  4:     13 0.03116440            0.013266365   0.03218468
+##  5:     14 0.02432422            0.011113825   0.02996322
+##  6:     15 0.03038637            0.011510747   0.02802872
+##  7:     16 0.02385416            0.010365779   0.02632894
+##  8:     17 0.02179563            0.009129213   0.02482358
+##  9:     18 0.02085011            0.009358207   0.02348110
+## 10:     19 0.02043408            0.008106375   0.02227639
+##     data.second.order.dist.freq data.dist.freq benford.dist.freq
+##                           &lt;num&gt;          &lt;num&gt;             &lt;num&gt;
+##  1:                       24550          10473          7661.082
+##  2:                        1043          10326          6994.020
+##  3:                         957           5991          6433.875
+##  4:                         869           5768          5956.838
+##  5:                         728           4502          5545.683
+##  6:                         754           5624          5187.640
+##  7:                         679           4415          4873.039
+##  8:                         598           4034          4594.423
+##  9:                         613           3859          4345.952
+## 10:                         531           3782          4122.982
+##     benford.so.dist.freq data.summation abs.excess.summation difference
+##                    &lt;num&gt;          &lt;num&gt;                &lt;num&gt;      &lt;num&gt;
+##  1:             2711.386       28701407             23224143  2811.9177
+##  2:             2475.302       22324748             16847484  3331.9798
+##  3:             2277.057       16258127             10780863  -442.8749
+##  4:             2108.225       15520165             10042901  -188.8378
+##  5:             1962.711       27393259             21915996 -1043.6833
+##  6:             1835.994       49191988             43714724   436.3597
+##  7:             1724.651       12523174              7045911  -458.0390
+##  8:             1626.044       11994778              6517515  -560.4233
+##  9:             1538.106        7545939              2068675  -486.9517
+## 10:             1459.193        6987397              1510133  -340.9820
+##     squared.diff absolute.diff
+##            &lt;num&gt;         &lt;num&gt;
+##  1:  1032.084049     2811.9177
+##  2:  1587.368773     3331.9798
+##  3:    30.485235      442.8749
+##  4:     5.986347      188.8378
+##  5:   196.418497     1043.6833
+##  6:    36.704517      436.3597
+##  7:    43.053153      458.0390
+##  8:    68.359901      560.4233
+##  9:    54.561565      486.9517
+## 10:    28.200147      340.9820</code></pre>
+<p><strong>Step-8:</strong> To get suspected/high risk records, we may make use of <code>getSuspects</code> function. As already stated it requires both benford object and data as inputs.</p>
+<div class="sourceCode" id="cb1167"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1167-1"><a href="benford-testsanalysis.html#cb1167-1" tabindex="-1"></a><span class="co"># We are printing 10 records only</span></span>
+<span id="cb1167-2"><a href="benford-testsanalysis.html#cb1167-2" tabindex="-1"></a><span class="fu">getSuspects</span>(corp_bfd, corporate.payment) <span class="sc">|&gt;</span> </span>
+<span id="cb1167-3"><a href="benford-testsanalysis.html#cb1167-3" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+<pre><code>##     VendorNum       Date      InvNum  Amount
+##        &lt;char&gt;     &lt;Date&gt;      &lt;char&gt;   &lt;num&gt;
+##  1:      2001 2010-01-02     3822J10   50.38
+##  2:      2001 2010-01-07    100107-2 1166.29
+##  3:      2001 2010-01-08 11210084007 1171.45
+##  4:      2001 2010-01-08     1585J10   50.42
+##  5:      2001 2010-01-08     4733J10  113.34
+##  6:      2001 2010-01-08     6263J10  117.22
+##  7:      2001 2010-01-08     6673J10   50.80
+##  8:      2001 2010-01-08     9181J10  114.78
+##  9:      2001 2010-01-09     1510J10   50.49
+## 10:      2001 2010-01-09     1532J10   50.45</code></pre>
+<p>Moreover, by using <code>slice_max</code> function from <code>dplyr</code> we can also get <code>n</code> high-valued ‘suspects’.</p>
+<div class="sourceCode" id="cb1169"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1169-1"><a href="benford-testsanalysis.html#cb1169-1" tabindex="-1"></a><span class="fu">getSuspects</span>(corp_bfd, corporate.payment) <span class="sc">|&gt;</span></span>
+<span id="cb1169-2"><a href="benford-testsanalysis.html#cb1169-2" tabindex="-1"></a>  <span class="fu">slice_max</span>(<span class="at">order_by =</span> Amount, <span class="at">n =</span> <span class="dv">10</span>, <span class="at">with_ties =</span> <span class="cn">FALSE</span>)</span></code></pre></div>
+<pre><code>##     VendorNum       Date                InvNum    Amount
+##        &lt;char&gt;     &lt;Date&gt;                &lt;char&gt;     &lt;num&gt;
+##  1:      2817 2010-10-27                10-10A 1156428.2
+##  2:     17141 2010-04-05                040510 1135003.6
+##  3:      2817 2010-11-30            1033500002 1112304.3
+##  4:     16721 2010-09-16 SEE ATTACHED BALSHEET 1100000.0
+##  5:      6118 2010-12-17             103511001  509093.7
+##  6:      2817 2010-05-28                 40821  506971.5
+##  7:     17284 2010-03-24                032400  504580.6
+##  8:      6118 2010-08-26             102381001  504334.6
+##  9:     17284 2010-03-10                 31000  502132.2
+## 10:      2088 2010-03-24            1008300003  500000.0</code></pre>
+<div id="conclusion" class="section level4 unnumbered hasAnchor">
+<h4>Conclusion<a href="benford-testsanalysis.html#conclusion" class="anchor-section" aria-label="Anchor link to header"></a></h4>
+<p>Though by statistics (goodness of fit metrics), the data did not conform to BL, yet we observed that there were abnormally high records starting with digits <code>50</code>. The reasons can be further investigated. By charts we also observed that, otherwise the data conform to BL. We also extracted suspected records for further investigation on other parameters/tests/verification. To sum up, we can say that, Benford Analysis can be a good starting point for fraud/forensic analytics while auditing. Before closing, let us also delve in one other example.</p>
+</div>
+</div>
+<div id="example-3-lakes-perimeter" class="section level3 hasAnchor" number="18.5.3">
+<h3><span class="header-section-number">18.5.3</span> Example-3: Lakes Perimeter<a href="benford-testsanalysis.html#example-3-lakes-perimeter" class="anchor-section" aria-label="Anchor link to header"></a></h3>
+<p>Let us apply this on <code>lakes.perimeter</code><a href="#fn41" class="footnote-ref" id="fnref41"><sup>41</sup></a> data which is available with the package.</p>
+<div class="sourceCode" id="cb1171"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1171-1"><a href="benford-testsanalysis.html#cb1171-1" tabindex="-1"></a><span class="co"># load sample data</span></span>
+<span id="cb1171-2"><a href="benford-testsanalysis.html#cb1171-2" tabindex="-1"></a><span class="fu">data</span>(lakes.perimeter) </span>
+<span id="cb1171-3"><a href="benford-testsanalysis.html#cb1171-3" tabindex="-1"></a><span class="co"># Number of rows</span></span>
+<span id="cb1171-4"><a href="benford-testsanalysis.html#cb1171-4" tabindex="-1"></a><span class="fu">nrow</span>(lakes.perimeter)</span></code></pre></div>
+<pre><code>## [1] 248607</code></pre>
+<div class="sourceCode" id="cb1173"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1173-1"><a href="benford-testsanalysis.html#cb1173-1" tabindex="-1"></a><span class="co"># View top rows</span></span>
+<span id="cb1173-2"><a href="benford-testsanalysis.html#cb1173-2" tabindex="-1"></a><span class="fu">head</span>(lakes.perimeter)</span></code></pre></div>
+<pre><code>##   perimeter.km
+## 1          1.0
+## 2          1.0
+## 3          1.1
+## 4          1.1
+## 5          1.1
+## 6          1.1</code></pre>
+<div class="sourceCode" id="cb1175"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1175-1"><a href="benford-testsanalysis.html#cb1175-1" tabindex="-1"></a><span class="co"># Generate Benford Object</span></span>
+<span id="cb1175-2"><a href="benford-testsanalysis.html#cb1175-2" tabindex="-1"></a>lake_ben <span class="ot">&lt;-</span> <span class="fu">benford</span>(lakes.perimeter<span class="sc">$</span>perimeter.km, <span class="at">number.of.digits =</span> <span class="dv">2</span>)</span></code></pre></div>
+<p>Let us see the plots, metrics and top outliers</p>
+<div class="sourceCode" id="cb1176"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1176-1"><a href="benford-testsanalysis.html#cb1176-1" tabindex="-1"></a><span class="fu">plot</span>(lake_ben)</span></code></pre></div>
+<div class="figure" style="text-align: center"><span style="display:block;" id="fig:unnamed-chunk-386"></span>
+<img src="DauR_files/figure-html/unnamed-chunk-386-1.png" alt="Benford Analysis - lake Perimeter Data" width="672" />
+<p class="caption">
+Figure 18.8: Benford Analysis - lake Perimeter Data
+</p>
+</div>
+<div class="sourceCode" id="cb1177"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1177-1"><a href="benford-testsanalysis.html#cb1177-1" tabindex="-1"></a><span class="co"># Chisq test</span></span>
+<span id="cb1177-2"><a href="benford-testsanalysis.html#cb1177-2" tabindex="-1"></a><span class="fu">chisq</span>(lake_ben)</span></code></pre></div>
+<pre><code>## 
+##  Pearson&#39;s Chi-squared test
+## 
+## data:  lakes.perimeter$perimeter.km
+## X-squared = 88111, df = 89, p-value &lt; 2.2e-16</code></pre>
+<div class="sourceCode" id="cb1179"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1179-1"><a href="benford-testsanalysis.html#cb1179-1" tabindex="-1"></a><span class="co"># MAD</span></span>
+<span id="cb1179-2"><a href="benford-testsanalysis.html#cb1179-2" tabindex="-1"></a><span class="fu">MAD</span>(lake_ben)</span></code></pre></div>
+<pre><code>## [1] 0.006012766</code></pre>
+<div class="sourceCode" id="cb1181"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1181-1"><a href="benford-testsanalysis.html#cb1181-1" tabindex="-1"></a><span class="co"># Whether it conforms?</span></span>
+<span id="cb1181-2"><a href="benford-testsanalysis.html#cb1181-2" tabindex="-1"></a>lake_ben<span class="sc">$</span>MAD.conformity</span></code></pre></div>
+<pre><code>## [1] &quot;Nonconformity&quot;</code></pre>
+<div class="sourceCode" id="cb1183"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1183-1"><a href="benford-testsanalysis.html#cb1183-1" tabindex="-1"></a><span class="co"># Get top-10 suspects</span></span>
+<span id="cb1183-2"><a href="benford-testsanalysis.html#cb1183-2" tabindex="-1"></a><span class="fu">getSuspects</span>(lake_ben, lakes.perimeter) <span class="sc">|&gt;</span></span>
+<span id="cb1183-3"><a href="benford-testsanalysis.html#cb1183-3" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+<pre><code>##     perimeter.km
+##            &lt;num&gt;
+##  1:          1.5
+##  2:          1.5
+##  3:          1.5
+##  4:          1.5
+##  5:          1.5
+##  6:          1.5
+##  7:          1.5
+##  8:          1.5
+##  9:          1.5
+## 10:          1.5</code></pre>
+<div class="sourceCode" id="cb1185"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1185-1"><a href="benford-testsanalysis.html#cb1185-1" tabindex="-1"></a><span class="co"># Get top-10 suspects on Squared Differences</span></span>
+<span id="cb1185-2"><a href="benford-testsanalysis.html#cb1185-2" tabindex="-1"></a><span class="fu">getSuspects</span>(lake_ben, lakes.perimeter, </span>
+<span id="cb1185-3"><a href="benford-testsanalysis.html#cb1185-3" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">&quot;squared.diff&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1185-4"><a href="benford-testsanalysis.html#cb1185-4" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+<pre><code>##     perimeter.km
+##            &lt;num&gt;
+##  1:          3.6
+##  2:          3.6
+##  3:          3.6
+##  4:          3.6
+##  5:          3.6
+##  6:          3.6
+##  7:          3.6
+##  8:          3.6
+##  9:          3.6
+## 10:          3.6</code></pre>
+<div class="sourceCode" id="cb1187"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1187-1"><a href="benford-testsanalysis.html#cb1187-1" tabindex="-1"></a><span class="co"># Get top-10 suspects on Absolute Excess Summation</span></span>
+<span id="cb1187-2"><a href="benford-testsanalysis.html#cb1187-2" tabindex="-1"></a><span class="fu">getSuspects</span>(lake_ben, lakes.perimeter, </span>
+<span id="cb1187-3"><a href="benford-testsanalysis.html#cb1187-3" tabindex="-1"></a>            <span class="at">by =</span> <span class="st">&quot;abs.excess.summation&quot;</span>) <span class="sc">|&gt;</span></span>
+<span id="cb1187-4"><a href="benford-testsanalysis.html#cb1187-4" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div>
+<pre><code>##     perimeter.km
+##            &lt;num&gt;
+##  1:          1.0
+##  2:          1.0
+##  3:          1.3
+##  4:          1.3
+##  5:          1.3
+##  6:          1.3
+##  7:          1.3
+##  8:          1.3
+##  9:          1.3
+## 10:          1.3</code></pre>
+<div id="conclusion-1" class="section level4 unnumbered hasAnchor">
+<h4>Conclusion<a href="benford-testsanalysis.html#conclusion-1" class="anchor-section" aria-label="Anchor link to header"></a></h4>
+<p>We observed that data does not conform Benford’s law which is evident from plot as well as MAD value. Chi-Squared Value of <code>88111</code> also exceeds critical value very significantly. Nigrini and Miller gave some plausible explanations in their Research paper<span class="citation"><a href="#fn42" class="footnote-ref" id="fnref42"><sup>42</sup></a></span> for this non-conformity. One of the possible reasons, they propose, was that <em>perimeter is not a correct measurement for the size of a lake.</em></p>
+</div>
+</div>
+</div>
+<div id="conclusion-2" class="section level2 hasAnchor" number="18.6">
+<h2><span class="header-section-number">18.6</span> Conclusion<a href="benford-testsanalysis.html#conclusion-2" class="anchor-section" aria-label="Anchor link to header"></a></h2>
+<p>As we conclude this chapter on Benford Analytics, it’s clear that this statistical phenomenon holds remarkable potential across diverse fields. The inherent simplicity of Benford’s Law belies its complexity and applicability. Its ability to unveil anomalies, authenticate data integrity, and aid in forensic investigations underscores its significance in modern data analysis. As we delve deeper into its intricacies and practical applications, we unravel a tool that not only scrutinizes numbers but also illuminates new avenues for precision, authenticity, and trust in our data-driven world.</p>
+<hr />
+<p>Further Reading-</p>
+<ol style="list-style-type: decimal">
+<li><p>ISACA JOURNAL ARCHIVES - <a href="https://www.isaca.org/resources/isaca-journal/past-issues/2011/understanding-and-applying-benfords-law">Understanding and Applying Benford’s Law - 1 May 2011</a></p></li>
+<li><p>Newcomb, Simon. “Note on the Frequency of Use of the Different Digits in Natural Numbers.” American Journal of Mathematics, vol. 4, no. 1, 1881, pp. 39–40. JSTOR, <a href="https://doi.org/10.2307/2369148" class="uri">https://doi.org/10.2307/2369148</a>. Accessed 15 Jun. 2022.</p></li>
+<li><p>Durtschi, Cindy &amp; Hillison, William &amp; Pacini, Carl. (2004). The Effective Use of Benford’s Law to Assist in Detecting Fraud in Accounting Data. J. Forensic Account.</p></li>
+</ol>
+
+</div>
+</div>
+<div class="footnotes">
+<hr />
+<ol start="34">
+<li id="fn34"><p>Frank Benford, <span>“The Law of Anomalous Numbers,”</span> <em>Proceedings of the American Philosophical Society</em> 78, no. 4 (1938): 551–72, <a href="http://www.jstor.org/stable/984802">http://www.jstor.org/stable/984802</a>.<a href="benford-testsanalysis.html#fnref34" class="footnote-back">↩︎</a></p></li>
+<li id="fn35"><p>Simon Newcomb, <span>“Note on the Frequency of Use of the Different Digits in Natural Numbers,”</span> <em>American Journal of Mathematics</em> 4, no. 1 (1881): 39–40, <a href="http://www.jstor.org/stable/2369148">http://www.jstor.org/stable/2369148</a>.<a href="benford-testsanalysis.html#fnref35" class="footnote-back">↩︎</a></p></li>
+<li id="fn36"><p>Roger S. Pinkham, <span>“<span class="nocase">On the Distribution of First Significant Digits</span>,”</span> <em>The Annals of Mathematical Statistics</em> 32, no. 4 (1961): 1223–30, <a href="https://doi.org/10.1214/aoms/1177704862">https://doi.org/10.1214/aoms/1177704862</a>.<a href="benford-testsanalysis.html#fnref36" class="footnote-back">↩︎</a></p></li>
+<li id="fn37"><p>Theodore P. Hill, <span>“The Significant-Digit Phenomenon,”</span> <em>The American Mathematical Monthly</em> 102, no. 4 (1995): 322–27, <a href="http://www.jstor.org/stable/2974952">http://www.jstor.org/stable/2974952</a>.<a href="benford-testsanalysis.html#fnref37" class="footnote-back">↩︎</a></p></li>
+<li id="fn38"><p>Mark Nigrini and Steven Miller, <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law,”</span> <em>Auditing-a Journal of Practice and Theory - AUDITING-J PRACT THEOR</em> 28 (November 2009), <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.<a href="benford-testsanalysis.html#fnref38" class="footnote-back">↩︎</a></p></li>
+<li id="fn39"><p>Mark J Nigrini, <em>Benford’s Law Applications for Forensic Accounting, Auditing and Fraud Detection</em>, 1st ed. (John Wiley; Sons, Ltd, 2012), <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5">https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5</a>.<a href="benford-testsanalysis.html#fnref39" class="footnote-back">↩︎</a></p></li>
+<li id="fn40"><p><a href="https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm">https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm</a><a href="benford-testsanalysis.html#fnref40" class="footnote-back">↩︎</a></p></li>
+<li id="fn41"><p>A dataset of the perimeter of the lakes arround the water from the global lakes and wetlands database (GLWD) <a href="http://www.worldwildlife.org/pages/global-lakes-and-wetlands-database" class="uri">http://www.worldwildlife.org/pages/global-lakes-and-wetlands-database</a><a href="benford-testsanalysis.html#fnref41" class="footnote-back">↩︎</a></p></li>
+<li id="fn42"><p>Mark Nigrini and Steven Miller, <span>“Benford’s Law Applied to Hydrology Data—Results and Relevance to Other Geophysical Data,”</span> <em>Mathematical Geology</em> 39 (September 2007): 469–90, <a href="https://doi.org/10.1007/s11004-007-9109-5">https://doi.org/10.1007/s11004-007-9109-5</a>.<a href="benford-testsanalysis.html#fnref42" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div>
+            </section>
+
+          </div>
+        </div>
+      </div>
+<a href="random-sampling-in-r.html" class="navigation navigation-prev " aria-label="Previous page"><i class="fa fa-angle-left"></i></a>
+<a href="finding-duplicates.html" class="navigation navigation-next " aria-label="Next page"><i class="fa fa-angle-right"></i></a>
+    </div>
+  </div>
+<script src="libs/gitbook-2.6.7/js/app.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/clipboard.min.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-search.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-sharing.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-fontsettings.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-bookdown.js"></script>
+<script src="libs/gitbook-2.6.7/js/jquery.highlight.js"></script>
+<script src="libs/gitbook-2.6.7/js/plugin-clipboard.js"></script>
+<script>
+gitbook.require(["gitbook"], function(gitbook) {
+gitbook.start({
+"sharing": {
+"github": false,
+"facebook": true,
+"twitter": true,
+"linkedin": false,
+"weibo": false,
+"instapaper": false,
+"vk": false,
+"whatsapp": false,
+"all": ["facebook", "twitter", "linkedin", "weibo", "instapaper"]
+},
+"fontsettings": {
+"theme": "white",
+"family": "sans",
+"size": 2
+},
+"edit": {
+"link": "https://github.com/USERNAME/REPO/edit/BRANCH/14-Benford.Rmd",
+"text": "Edit"
+},
+"history": {
+"link": null,
+"text": null
+},
+"view": {
+"link": null,
+"text": null
+},
+"download": ["DauR.pdf", "DauR.epub"],
+"search": {
+"engine": "fuse",
+"options": null
+},
+"toc": {
+"collapse": "subsection"
+}
+});
+});
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    var src = "true";
+    if (src === "" || src === "true") src = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/latest.js?config=TeX-MML-AM_CHTML";
+    if (location.protocol !== "file:")
+      if (/^https?:/.test(src))
+        src = src.replace(/^https?:/, '');
+    script.src = src;
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+</body>
+
+</html>
