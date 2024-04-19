@@ -1,0 +1,312 @@
+# Part IV: Techniques for Audit/Fraud detection {-}
+
+# Data Cleaning in R
+Data cleansing is one of the important steps in data analysis. Multiple packages are available in r to clean the data sets.  One of such packages is `janitor` which we will be using in this chapter along with few other packages.  
+
+Let's load it
+```{r}
+library(janitor)
+```
+
+## Cleaning Column names.
+We know that names of objects in R follow certain conventions like we may not have certain special characters in names.  If a space has been used that is to be quoted under a pair of backticks \`.  But generally when we read data from files in excel, we can have some 'dirty' names, which we should clean before proceeding.  In such `clean_names()` come handy.  E.g.
+```{r}
+# Create a data.frame with dirty names
+test_df <- as.data.frame(matrix(ncol = 6))
+
+names(test_df) <- c("firstName", "ábc@!*", "% successful (2009)",
+                    "REPEAT VALUE", "REPEAT VALUE", "")
+# View this data
+test_df
+```
+
+Using `clean_names()` which is also pipe friendly, we can clean names in one step.  (Results will be in snake case)
+```{r}
+test_df %>% 
+  clean_names()
+```
+
+It -
+
++ Parses letter cases and separators to a consistent format.
++ Default is to `snake_case`, but other cases like `camelCase` are available
++ Handles special characters and spaces, including transliterating characters like `œ` to `oe`.
++ Appends numbers to duplicated names
++ Converts `“%”` to “percent” and `“#”` to `“number”` to retain meaning
++ Spacing (or lack thereof) around numbers is preserved
+
+## Handling duplicate records
+In `janitor` package, we have a ready to use function `get_dupes()`. It allows us to find “similar” observations in a data set based on certain characteristics.  Syntax is pretty simple, and function is pipe friendly too.  Suppose we have to find out duplicate in `mtcars` dataset on each combination of `wt` and `cyl`.  
+```{r}
+mtcars %>% 
+  get_dupes(wt, cyl)
+```
+We can see that it returns all duplicate records with an additional column `dupe_count` so that these duplicates can be analysed separately.
+
+## Remove Constant (Redundant) columns
+Dropping columns from a `data.frame` that contain only a single constant value throughout is again easy through `janitor::remove_constant()`.
+
+## Remove empty rows and/or columns
+While importing messy data from excel files, we may get some empty rows and/or columns.  Sorting out this issue, is easy using `janitor::remove_empty()`.
+
+## Fix excel dates stored as serial numbers
+While loading excel files in R, we may have sometimes noticed `41590` instead of having a `date format`.  Sorting out this issue is again easy in `janitor` as we have a function `excel_numeric_to_date()` for this. Example
+```{r}
+janitor::excel_numeric_to_date(41590)
+```
+
+## Convert a mix of date and datetime formats to date
+Similar to above, we can also sort out, if we have a column mix of different date formats, using `janitor::convert_to_date()` or `janitor::convert_to_datetime()`.  See Examples-
+```{r}
+unsorted_dates <- c('2018-05-31', '41590', 41590)
+janitor::convert_to_date(unsorted_dates)
+```
+**Note in above example, we have created a heterogeneous vector, but implicit coercion rules of R have converted all forms to character only.**
+
+In real world examples, where data is entered through multiple machines/data points simultaneously, we may a column mix of date formats.  In that case, we may use `parse_date_time()` function in `lubridate` package.  To allow different formats we have use `order` agument in this function.  Example
+
+```{r}
+mixed_dates <- c("13-11-1991", "13-Sep-22", 
+                 "20 August 2000", "15 August 87", 
+                 "03/31/23", "12-31-2022")
+
+lubridate::parse_date_time(mixed_dates,
+                           orders = c("d m y", "d B Y", "m/d/y", "d B y"),
+                           locale = "eng")
+```
+
+
+
+# Random sampling in R
+International Standard On Auditing - 530 defines^[[https://www.ifac.org/system/files/downloads/a027-2010-iaasb-handbook-isa-530.pdf](https://www.ifac.org/system/files/downloads/a027-2010-iaasb-handbook-isa-530.pdf)] audit sampling as _the application of audit procedures to less than 100% of items within a population of audit relevance such that all sampling units have a chance of selection in order to provide the auditor with a reasonable basis on which to draw conclusions about the entire population._  Statistical sampling is further defines as _an approach to sampling having two characteristics - random selection of samples, and the use of probability theory to evaluate sample results, including measurement of sampling risk._
+
+Appendix 4 of ISA 53 further prescribes different statistical methods of sample selection.  We will discuss here each type of sampling methodology used to sample records for audit.
+
+### Prerequisites {-}
+
+Load `tidyverse`
+```{r message=FALSE}
+library(tidyverse)
+```
+
+## Simple Random Sampling (With and without replacement)
+In this method, records are selected completely at random, by generating random numbers e.g. using random number tables, etc. Refer figure \@ref(fig:simple) for illustration. We can replicate the method of random number generation in R.  Even the method of random number generation can be reproducible, by fixing the random number seed.  Mainly two functions will be used here `sample()`\index{sample() function} and `set.seed()`\index{set.seed() function} already discussed in section \@ref(prob). Since `sample()` function takes a vector as input and gives vector as output again, we can make use of `dplyr::slice_sample()` function, discussed in section \@ref(prob), which operates on data frames instead.
+
+
+```{r simple, echo=FALSE, fig.cap="Illustration of Simple Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
+knitr::include_graphics("images/simple.png")
+```
+
+Let's see this sampling on `iris` data.  Suppose we have to select a sample of `n=12` records, without replacement-
+```
+dat <- iris # input data
+# set the seed
+set.seed(123)
+# sample n records
+dat %>% 
+  slice_sample(n = 12, replace = FALSE)
+```
+```{r echo=FALSE}
+dat <- iris
+set.seed(123)
+knitr::kable(
+  slice_sample(dat, n=12, replace = FALSE)
+)
+```
+
+The syntax is simple.  In the first step we have fixed the random number seed for reproducibility. Using `slice_sample()` we have selected `n=12` records without replacement (`replace = FALSE`).  
+
+> If sample size is based on some proportion, we have to use `prop = .10` (say 10%) instead of `n` argument. Moreover, if sampling is with replacement, we have to use `replace = TRUE`.
+
+## Systematic random sampling {#srs}
+ISA 530 defines this sampling approach as _'Systematic selection, in which the number of sampling units in the population is divided by the sample size to give a sampling interval, for example 50, and having determined a starting point within the first 50, each 50th sampling unit thereafter is selected. Although the starting point may be determined haphazardly, the sample is more likely to be truly random if it is determined by use of a computerized random number generator or random number tables. When using systematic selection, the auditor would need to determine that sampling units within the population are not structured in such a way that the sampling interval corresponds with a particular pattern in the population.'_ Refer figure \@ref(fig:systematic) for illustration.
+
+```{r systematic, echo=FALSE, fig.cap="Illustration of Systematic Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
+knitr::include_graphics("images/systematic.png")
+```
+We can replicate this approach again following two steps-
+
+__Step-1:__ Select `n` as the sample size.  Then generate a maximum starting point say `s` by dividing number of rows in the data by `n`. Thereafter we have to choose a starting point from `1:s`.  We can use sample function here.  Let's say this starting number is `s1`.  Then we have to generate an arithmetic sequence, say `rand_seq` starting from `s1` and increasing every `s` steps thereafter with total `n` terms.
+
+__Step-2:__ In the next step we will shuffle the data by using `slice_sample` and select a sample using function `filter`.
+
+The methodology is replicated as 
+```
+set.seed(123)
+n <- 15 # sample size
+s <- floor(nrow(dat)/n)
+s1 <- sample(1:s, 1, replace = FALSE)
+rand_seq <- seq(s1, by = s, length.out = n)
+dat %>% 
+  slice_sample(prop = 1) %>% 
+  filter(row_number() %in% rand_seq)
+  
+```
+```{r echo=FALSE}
+set.seed(123)
+n <- 15 # sample size
+s <- floor(nrow(dat)/n)
+s1 <- sample(1:s, 1, replace = FALSE)
+rand_seq <- seq(s1, by = s, length.out = n)
+knitr::kable(
+  dat %>% 
+  slice_sample(prop = 1) %>% 
+  filter(row_number() %in% rand_seq)
+)
+```
+
+
+## Probability Proportionate to size (with or without replacement) a.k.a monetary unit sampling
+
+This sampling approach is defined in ISA-530 as _"a type of value-weighted selection in which sample size, selection and evaluation results in a conclusion in monetary amounts."_ 
+
+Our methodology is not much difference from methodology adopted in section \@ref(srs) except that we will make use of `weight_by = ` argument now.
+
+Let's use `state.x77` data that comes with base R.  Since the data is in matrix format, let's first convert it data frame using `as.data.frame()` first.  
+```{r}
+dat <- as.data.frame(state.x77)
+```
+Other steps are simple.  
+```
+set.seed(123)
+dat %>% 
+  slice_sample(n=12, weight_by = Population)
+```
+```{r echo=FALSE}
+set.seed(123)
+knitr::kable(
+  dat %>% 
+    slice_sample(n=12, weight_by = Population)
+)
+```
+
+## Stratified random sampling 
+Stratification is defined in ISA-530 as _the process of dividing a population into sub-populations, each of which is a group of sampling units which have similar characteristics (often monetary value)._ Thus, stratified random sampling may imply any of the afore-mentioned sampling techniques applied to individual strata instead of whole population.  Refer figure \@ref(fig:strata) for illustration.
+
+```{r strata, echo=FALSE, fig.cap="Illustration of Stratified Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
+knitr::include_graphics("images/stratified.png")
+```
+
+The function `dplyr::group_by()` will be used here for stratification.  Thereafter we can proceed for sampling described as above.
+
+Example Data: - Let's include region in `state.x77` data using `dplyr::bind_cols`.
+```{r}
+dat <- bind_cols(
+  as.data.frame(state.x77),
+  as.data.frame(state.region)
+)
+```
+Let's see first 6 rows of this data
+```{r echo=FALSE}
+knitr::kable(
+  dat %>% head()
+)
+```
+We can check a summary of number of States per region
+```{r}
+dat %>% 
+  tibble::rownames_to_column('State') %>% # this step will not be 
+                                  # used in databases without row names
+  group_by(state.region) %>% 
+  summarise(states = n())
+```
+
+__Case-1:__ When the sample size is constant for all strata. Say `2` records per region.
+```
+set.seed(123)
+n <- 2
+dat %>% 
+  tibble::rownames_to_column('State') %>% # this step will not be used in databases without row names
+  group_by(state.region) %>% 
+  slice_sample(n=n) %>% 
+  ungroup()
+```
+```{r echo=FALSE}
+set.seed(123)
+n <- 2
+knitr::kable(
+  dat %>% 
+  tibble::rownames_to_column('State') %>% 
+  group_by(state.region) %>% 
+  slice_sample(n=n) %>% 
+    ungroup()
+)
+```
+
+__Case-2:__ When the sample size or proportion is different among strata.
+This time let us assume that column for _stratum_ is not directly available in the data.  
+- Say, 20% of States having Population upto `1000`; 
+- 30% of States having population greater than `1000` but upto `5000` and finally; 
+- 50% of states having population more than `5000` have to be sampled.
+
+In this scenario, our strategy would be use `purrr::map2_dfr()` function after splitting the data with `group_split()` function.  
+
+Syntax would be
+```
+# define proportions
+props <- c(0.2, 0.3, 0.5)
+
+# set seed
+set.seed(123)
+
+# take data
+dat %>% 
+  # reduntant step where data has no column names
+  tibble::rownames_to_column('State') %>%
+  # create column according to stratums
+  mutate(stratum = cut(Population, c(0, 1000, 5000, max(Population)),
+                      labels = c("Low", "Mid", "High"))) %>% 
+  # split data into groups
+  group_split(stratum) %>% 
+  # sample in each group
+  map2_dfr(props,
+           .f = function(d, w) slice_sample(d, prop = w))
+```
+We may check the sample selected across each stratum
+```{r echo=FALSE}
+props <- c(0.2, 0.3, 0.5)
+set.seed(123)
+dat %>% 
+  # reduntant step where data has no column names
+  tibble::rownames_to_column('State') %>%
+  # create column according to stratums
+  mutate(stratum = cut(Population, c(0, 1000, 5000, max(Population)),
+                       labels = c("Low", "Mid", "High"))) %>% 
+  group_by(stratum) %>% 
+  mutate(count = n()) %>% 
+  ungroup() %>% 
+  # split data into groups
+  group_split(stratum) %>% 
+  # sample in each group
+  map2_dfr(props,
+           .f = function(d, w) slice_sample(d, prop = w)) -> dat2
+dat2 %>% 
+  group_by(stratum) %>% 
+  summarise(Total = mean(count),
+            Selected = n()) -> dat2
+
+knitr::kable(dat2)
+```
+
+## Cluster sampling
+ISA 530 does not explicitly define cluster sampling.  Actually this sampling is sampling of strata and we can apply above mentioned techniques easily to sample clusters.  E.g. in the sample data above, we can sample say, 2 clusters (or regions).  
+
+Thus, our strategy would be first to sample groups from unique available values and thereafter filter all the records.
+```{r}
+# set the seed
+set.seed(123)
+# sample clusters
+clusters <- sample(
+  unique(dat$state.region),
+  size = 2
+)
+# filter all records in above clusters
+clust_samp <- dat %>% 
+  filter(state.region %in% clusters)
+# check number of records
+clust_samp$state.region %>% table()
+```
+
+
+
+
