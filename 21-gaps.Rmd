@@ -1,0 +1,37 @@
+# Detecting gaps in sequences
+
+Audit analytics often requires us to check for gaps in sequences of numbers. Gaps in Sequentially numbered objects such as purchase orders, invoice numbers, cheque numbers, etc should be accounted for. Thus, auditors may require to exercise this audit check as a part of audit analytics.
+
+## When sequence numbers are available as `numeric` column
+We will have starting and ending numbers in such sequence. Let us allocate these in two variables.
+```{r}
+start_num <- 500301 # say
+end_num <- 503500 # say
+```
+
+It means we have `r end_num - start_num + 1` terms (say cheques) issued in the series.  Further suppose, the cheque numbers issued are stored in some column say `cheque_no` in a given data frame, have a total count say `r end_num - start_num + 1 -23`. To simulate
+```{r}
+set.seed(123)
+cheque_no <- sample(start_num:end_num, 3177, replace = FALSE)
+```
+To find out the gaps we may simply use function `setdiff` on these two.
+```{r}
+setdiff(start_num:end_num, cheque_no)
+```
+
+## When sequence numbers are available as `character()` column
+
+We may easily replicate above procedure for gap detection, even if the sequence column is of character type.  E.g. If the cheque numbers have a prefix say, 'A', then the cheque numbers may look like-
+```{r echo=FALSE}
+cheque_no <- paste0("A", cheque_no)
+head(cheque_no, 10)
+```
+
+In these case, we may first substitute prefix with nothing and then proceed as above.  
+
+```{r}
+modified_cheques <- sub("A", "", cheque_no) |> as.integer()
+missing_cheques <- setdiff(start_num:end_num, modified_cheques)
+missing_cheques
+```
+

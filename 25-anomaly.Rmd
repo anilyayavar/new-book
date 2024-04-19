@@ -1,0 +1,446 @@
+# Anomaly Detection
+```{r an100, echo=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(magrittr)
+```
+
+Anomalies play a significant role in the field of audit. As auditors start examining data whether it be financial statements, or transactions, or other relevant data, the detection of anomalies can provide valuable insights and help identify potential issues or irregularities. Anomalies often indicate the presence of fraudulent activities.   Unusual or unexpected patterns in financial transactions or account balances may suggest potential fraud or misappropriation of assets. Auditors actively search for anomalies that may indicate fraudulent behavior, such as fictitious transactions, unauthorized access, or unusual changes in financial data.  
+
+Anomalies in the audit context serve as indicators of potential issues, including fraud, material misstatements, control weaknesses, compliance violations, and process inefficiencies. Detecting and investigating anomalies is crucial for auditors to provide accurate and reliable financial information, enhance internal controls, and support informed decision-making by stakeholders.
+
+## Definition and types of anomalies
+Anomalies are patterns or data points that deviate significantly from the expected or normal behavior within a dataset. These are also known as outliers, novelties, or deviations and can provide valuable insights into unusual events or behavior in various domains.
+
+Types of anomalies:
+
+- **Point Anomalies:** Individual data points that are considered anomalous when compared to the rest of the dataset. For example, a temperature sensor reading that is significantly different from the expected range.
+
+- **Contextual Anomalies:** Data points that are considered anomalous within a specific context or subset of the dataset. For instance, a sudden increase in obsolete website traffic.
+
+- **Collective Anomalies:** Groups of data points that exhibit anomalous behavior when analyzed together but might appear normal when considered individually. An example is a sudden drop in sales for multiple related products.
+
+## Anomaly detection, in R {-}
+## By inspection
+Several times, anomalies or outliers are detectable by observation.  The `summary()` function prints the *maximum*, *minimum*, *upper* and *lower quartiles*, and the *mean* and *median*, and can give a sense for how far an extreme point lies from the rest of the data. E.g. Let's visualise the mean annual temperatures in degrees Fahrenheit in New Haven, Connecticut, from 1912 to 1971, through a boxplot (Refer Figure \@ref(fig:an1).  This data is available in base R, as `nhtemp`.
+
+```{r an101}
+summary(nhtemp)
+```
+
+The easiest way to get a sense for how unusual a particular value is is by using a graphical summary like a boxplot. In R, this is created using the `boxplot` function. The `boxplot` function takes a column of values as an input argument, here illustrated with the temperature data, and produces a box and whiskers representation of the distribution of the values. The extreme values are represented as distinct points, making them easier to spot.  We can also make use of ggplot2.  Examples from both base R and ggplot2 are shown in Figure \@ref(fig:an1).
+
+```{r an1, fig.show='hold', fig.align='center', fig.cap="Outliers through Boxplot", out.width="45%"}
+boxplot(nhtemp, main = "Box plot of nhtemp data")
+ggplot(iris, aes(Species, Petal.Length, color = Species )) +
+  geom_boxplot(outlier.colour = "red", outlier.size = 2) +
+  theme_bw() +
+  labs(title = "Petal Lengths in Iris Data")
+```
+
+It's important to note that a **point anomaly** is not necessarily always extreme. A point anomaly can also arise as an unusual combination of values across several attributes.  
+
+A **collective anomaly**, on the other hand, is a collection of similar data instances that can be considered anomalous together when compared to the rest of the data. For example, a consecutive 5 day period of high temperatures are shown by the red points in the plot. These daily temperatures are unusual because they occur together, and are likely caused by the same underlying weather event. Refer Figure \@ref(fig:an2).
+
+```{r an2, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Collective Anomalies", out.height="27%"}
+set.seed(567)
+c(rnorm(15, 30, 2), rnorm(5, 40, 2.1), rnorm(10, 30, 2)) %>% ts() -> myts
+dates <- 1:30
+plot(dates, myts, type = 'l',ylab = "Temp in Celsius", xlab = 'Dates', 
+     main = "Collective Anomalies through a dummy data")
+points(16:20, myts[16:20], col = 'red', pch = 16)
+points(1:15, myts[1:15], col = 'black', pch = 16)
+points(21:30, myts[21:30], col = 'black', pch = 16)
+```
+
+## Grubb's Test
+We saw that visual assessment of outliers works well when the majority of data points are grouped together and rest of them lie separate.  In statistics there are several tests to detect anomalies.  **Grubb's Test** is one of these. Grubb's test assesses whether the point that lies farthest from the mean in a dataset could be an outlier. This point will either be the largest or smallest value in the data.  This test is however based on assumption that data points are normally distributed.  So before proceeding for this test, we must be sure that there is a plausible explanation for this assumption. *(We can check normality of data points by plotting a histogram.  For other methods please refer to chapter on linear regression.)*
+
+Let's run this test on `nhtemp` data example, which we have already seen in \@ref(fig:an1) (Left). So let's check its normality assumption.
+```{r an3, fig.align='center', fig.show='hold', fig.cap="Histogram for Grubb's test", out.height="27%"}
+hist(nhtemp, breaks = 20)
+```
+
+In figure \@ref(fig:an3) we can see that our assumption is nearly satisfied.  Let's run the test.
+
+```{r an}
+library(outliers)
+outliers::grubbs.test(nhtemp)
+```
+
+As p value is `0.15` we do not have strong evidence to reject null hypothesis that extreme maximum value is an outlier.
+
+## Seasonal Hybrid ESD Algorithm
+
+As we have seen that above test may not be appropriate for anomaly detection (normality assumption as well as detection of extreme values only), particularly detecting anomalies from a time series that may have seasonal variations.  We may install `AnomalyDetection` package development version from github using `devtools::install_github("twitter/AnomalyDetection")`.  Example: in `JohnsonJohnson` data having quarterly sales data, we can use the following syntax.
+
+```{r an4, fig.show='hold', fig.align='center', fig.cap="Seasonal Hybrid ESD Algorithm", message=FALSE, out.height="28%"}
+#devtools::install_github("twitter/AnomalyDetection")
+library(AnomalyDetection)
+AnomalyDetectionVec(as.vector(JohnsonJohnson), 
+                    period = 4, # Sesaonality
+                    plot = TRUE, # set FALSE when plot not needed
+                    direction = 'both' # set 'pos' for higher values
+                                       # or 'neg' for lower values
+                    )
+```
+
+In Figure \@ref(fig:an4), we can see that in output `$anoms` containing anomalies are denoted in blue dots.
+
+## k-Nearest Neighbour Distance Score
+One of greatest limitation of above two methods was that, these were applicable on univariate data series, whereas, in real world, data analysis will rarely be univariate.  The `knn` technique works on multivariate data, but for visulaisation purposes, we will first visulaise the results on bivariate data only. 
+
+**K-Nearest Neighbour** or **KNN** is a distance-based classifier, meaning that it implicitly assumes that the smaller the distance between two points, the more similar they are.  For bivariate data, we can understand the algorithm by plotting the data-points in a two dimensional scatter plot.  Now as the distance between any two points are usually calculated using *Euclidean Distance Metric*, we should ensure that the data is normalised/scaled before proceeding for distance calculation.
+
+**Problem Statement-1:**  Let us try to identify outliers in `virginica` Species' flower measurements.  So let's prepare the data.   We will make use of `scale` function available in base R, to normalise the data.  Remember that `scale` returns a matrix, so we may need to convert it into data.frame while using `ggplot2`.
+
+```{r an102}
+# Sample data
+df <- iris[101:150, 1:4]
+#  Scale the data
+df <- scale(df)
+```
+
+Let us visualise the data (in first two dimensions only). However, as our data is scaled already, we can try to visualise all the dimensions using a boxplot.  See both figures in \@ref(fig:an5).  The points/ouliers have been numbered (on the basis of row numbers) for interpretaion purposes.
+
+```{r an5, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Sepal Length Vs. Widths in Virginica", out.width="45%"}
+
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number()) %>% 
+  ggplot(aes(Sepal.Length, Sepal.Width)) +
+  geom_point(color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  theme_bw()
+
+# Helper Function
+find_outlier <- function(x) {
+  return(x < quantile(x, .25) - 1.5*IQR(x) | x > quantile(x, .75) + 1.5*IQR(x))
+}
+
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number()) %>% 
+  pivot_longer(-row, names_to = "Dimension", values_to = "Values") %>% 
+  group_by(Dimension) %>% 
+  mutate(outlier = ifelse(find_outlier(Values), row, NA)) %>% 
+  ggplot(aes(Dimension, Values)) +
+  geom_boxplot(outlier.colour = "red") +
+  geom_text(aes(label=outlier), na.rm=TRUE, hjust=-.5) +
+  theme_bw()
+```
+
+Now, let's proceed to identify outliers in R. We will make use of `get.knn` function from `FNN` package.  However, `k` parameter is required beforehand.
+
+```{r an6, warning=FALSE, message=FALSE}
+# Load the library
+library(FNN)
+# get kNN object, using k = 5
+viginica_knn <- FNN::get.knn(df[, 1:2], 5)
+```
+
+The `knn` object created above will have two sub-objects (both matrices having columns equal to chosen `k`), one having nearest neighbors' indices and another having distances from those.  Let's view their top 6 rows.
+
+```{r an7}
+head(viginica_knn$nn.index)
+head(viginica_knn$nn.dist)
+```
+
+Using `rowMeans` we can calculate mean distance for each data point.  The bigger this score is, the chances of that record being an outlier are relatively higher.  Let's also store that mean distance in a variable/column say `score` in main dataset, and visualise the results by setting the point-size with this mean distance (actually its square root).  In Figure \@ref(fig:an8), we may notice that points lying far away are bigger becuase their chances of being outliers is high.
+
+```{r an8, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="k-Nearest Neighbour Distance", out.height="28%"}
+score <- rowMeans(viginica_knn$nn.dist)
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = score) %>% 
+  ggplot(aes(Sepal.Length, Sepal.Width)) +
+  geom_point(aes(size = score),color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  theme_bw() +
+  labs(title = "KNN method of outlier")
+
+```
+
+Now, we can run the algorithm to find the outlier on the basis of all variables in the dataset.
+
+```{r an88}
+virginica_knn <- FNN::get.knn(df, 5)
+score <- rowMeans(virginica_knn$nn.dist)
+# Which point is farthest-Outlier
+which.max(score)
+```
+
+
+## Local Outlier Factor
+As against kNN which uses distances of k neighbors, this algorithm uses density of each data point vis-a-vis density of its nearest neighbors. kNN distance seems to be good at detecting points that are really far from their neighbors, sometimes called global anomalies, but sometimes fail to capture all of the points that might be considered anomalous like local anomalies.  Local Anomalies may lie near to a cluster still they won't be like their neighbors. To understand it better, see the plot in Figure \@ref(fig:an9) consisting of dummy data.
+
+```{r an9, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Local Outlier factor", out.height="28%"}
+set.seed(123)
+dummy <- data.frame(
+  sales = rnorm(25, 500, 100),
+  profit = rnorm(25, 75, 10)
+)
+dummy2 <- data.frame(
+  sales = rnorm(25, 1000, 5),
+  profit = rnorm(25, 75, 2)
+)
+dummy3 <- data.frame(
+  sales = rnorm(5, 500, 100),
+  profit = rnorm(5, 120, 10)
+)
+dummy4 <- data.frame(
+  sales = rnorm(5, 1000, 10),
+  profit = rnorm(5, 90, 2)
+)
+dummy <- rbind(dummy, dummy2, dummy3, dummy4)
+
+plot(profit ~ sales, data = dummy, xlim = c(0, 1100), ylim = c(0, 200))
+points(profit ~ sales, data = dummy[51:55,], xlim = c(0, 1100), ylim = c(0, 200), col = 'red', pch = 20)
+points(profit ~ sales, data = dummy[56:60,], xlim = c(0, 1100), ylim = c(0, 200), col = 'blue', pch = 20)
+```
+
+The red points may be global outliers, being far from its immediate neigbors, yet the blue points may be local anomalies as these are not like their immediate neighbors and may be local anomalies.
+
+As stated, LOF segregates the data points based on the ratio of density of that point with that of densities of its neighbors.  A score `> 1` thus indicates that the data point may be an anomaly.  Let's see that on same problem statement.
+
+```{r an10, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="LOF", out.width="48%"}
+library(dbscan)
+lof_score <- lof(df, 5)
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = lof_score) %>% 
+  ggplot(aes(Sepal.Length, Sepal.Width)) +
+  geom_point(aes(size = score),color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  scale_size_continuous(guide = FALSE) +  
+  theme_bw() +
+  labs(title = "LOF method of outlier")
+
+df_prcomp <- prcomp(df, scale. = TRUE)
+
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = lof_score,
+         PC1 = df_prcomp$x[,1],
+         PC2 = df_prcomp$x[,2]) %>% 
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(size = score),color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  scale_size_continuous(guide = FALSE) +  
+  theme_bw() +
+  labs(title = "LOF method of outlier\nVisualised on principal components")
+```
+
+Clearly, in Figure \@ref(fig:an10) (left), where we have plotted the data in 2 dimensions only despite that we have attempted to find the LOF on the basis of all four dimensions. We can see presence of local anomalies, within the clustered data points. E.g. points nos. 31, 23, etc. were earlier given more weight instead of point nos.15, 10, etc. which are now given more weight.  However, if we want to visaulise it on first two principal components, we can do that (Refer Figure \@ref(fig:an10) (Right)). We can also verify this.
+
+```{r an11}
+# Biggest Anomaly - kNN
+which.max(score)
+
+# Biggest Anomaly - LOF
+which.max(lof_score)
+```
+
+Histograms of both `knn` and `LOF` scores can also be drawn, as in Figure \@ref(fig:an12).
+
+```{r an12, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Histogram - KNN(Left) and LOF (Right)", out.width="48%"}
+hist(score, breaks = 40, 
+     main = "Histogram of KNN scores in IRIS-Virginica data")
+hist(lof_score, breaks = 40, 
+     main = "Histogram of LOF scores in IRIS-Virginica data")
+```
+
+## Isolation Trees/Forest
+
+Isolation Forest is an unsupervised tree based model, which actually works on path length instead of distance or density measures.  Tree based models use decision tree(s) to determine the value/class of an observation given its value. In other words, it determines or try to identify a path from the root node to a leaf node based on the value of the observation in question. Forest (or Random Forest) are actually collection of smaller trees and thus using ensemble learning methods to make decision, instead of a single complex tree.
+
+Let us work on the same problem statement above.  Firstly, we will build a single decision tree.  WE will use a development version package `isofor` which can be downloaded using `remotes::install_github("Zelazny7/isofor")`.  To build forest/tree we will use function `iForest`.  Its argument `nt` will determine the number of trees to be built in ensemble.  Another important argument is `phi` which determines the number of samples to draw without replacement to construct each tree.  So let's use `nt = 1` and `phi = 100`.
+
+```{r an13, message=FALSE, warning=FALSE}
+# remotes::install_github("Zelazny7/isofor")
+library(isofor)
+# Generate a single tree
+# Specify number of samples explicitly
+viginica_1 <- iForest(df, nt = 1, phi = 100)
+
+# Generate isolation score
+iso_score_1 <- predict(viginica_1, df)
+
+# View fisrt 10 scores
+iso_score_1[1:10]
+```
+*Score interpretations*: The closer the score is to 1, the more likely the point is an anomaly.  However, if their scores are below 0.5, they are probably just normal points within the trend. 
+
+Let's just visualise the scores on Principal Component plot again.
+
+```{r an24, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Isolation Tree Method", out.width="48%"}
+
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = iso_score_1,
+         PC1 = df_prcomp$x[,1],
+         PC2 = df_prcomp$x[,2]) %>% 
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(size = score),color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  scale_size_continuous(guide = FALSE) +  
+  theme_bw() +
+  labs(title = "Isolation Tree based outlier\nVisualised on principal components")
+
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = iso_score_1,
+         PC1 = df_prcomp$x[,1],
+         PC2 = df_prcomp$x[,2],
+         is_outlier = factor(ifelse(ntile(iso_score_1, 10) >= 10, "O", "N"))) %>% 
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(size = score, color = is_outlier)) +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  scale_color_manual(values = c(O = "red", N = "black"), guide = "none") +
+  scale_size_continuous(guide = FALSE) +  
+  theme_bw() +
+  labs(title = "Isolation Tree based outlier\nTop-10%")
+```
+Let's also try a forest (ensemble) approach.  Refer Figure \@ref(fig:an14), we can see that scores are modified using ensemble methods.  However, when we gradually increase number of trees, these scores will stabilise.
+
+```{r an14, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="100 Isolation Trees (Left) Comparison of 1 vs. 100 trees (Right)", out.width="48%"}
+iso_100 <- iForest(df, nt = 100, phi = 100)
+
+# Generate scores
+
+iso_score_100 <- predict(iso_100, df)
+
+# View Results
+df %>% 
+  as.data.frame() %>% 
+  mutate(row = row_number(),
+         score = iso_score_100,
+         PC1 = df_prcomp$x[,1],
+         PC2 = df_prcomp$x[,2],
+         is_outlier = factor(ifelse(ntile(iso_score_100, 10) >= 10, "O", "N"))) %>% 
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(size = score, color = is_outlier)) +
+  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  scale_color_manual(values = c(O = "red", N = "black"), guide = "none") +
+  scale_size_continuous(guide = FALSE) +  
+  theme_bw() +
+  labs(title = "Isolation Tree based outlier\nNumber of Trees = 100")
+
+plot(iso_score_1, iso_score_100, xlim = c(0, 1), ylim = c(0, 1), 
+     main = "Comparision of Tree Vs. Forest Method")
+abline(a = 0, b = 1)
+
+```
+
+**Contour plots:**  We can also visualise the results of scores of anomaly detection, using contour plots.  See the plot in Figure \@ref(fig:an16).
+
+```{r an16, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Contour Plot", out.width="90%"}
+# Create PRCOMP data
+df_grid <- data.frame(
+  PC1 = df_prcomp$x[,1],
+  PC2 = df_prcomp$x[,2]
+)
+
+# Create Sequences
+pc1_seq <- seq(min(df_prcomp$x[,1]), max(df_prcomp$x[,1]), length.out = 25)
+pc2_seq <- seq(min(df_prcomp$x[,2]), max(df_prcomp$x[,2]), length.out = 25)
+# Create Grid
+my_grid <- expand.grid(PC1 = pc1_seq, PC2 = pc2_seq)
+
+# Create model for Pr comp
+iso_model <- iForest(df_grid, nt = 100, phi = 100)
+# append scores
+my_grid$scores <- predict(iso_model, my_grid)
+
+# Draw Plot
+library(lattice)
+contourplot(scores ~ PC1 + PC2, data = my_grid, region = TRUE)
+```
+
+**Including categorical variables** One benefit of using forest tree method of anomaly detection, is that we can include categorical values also.  Only condition is that these should be of `factor` type.
+
+**Problem Statement-2:** Let's now try to find out anomalies on full `iris` data.  We can check column types before proceeding.
+
+```{r an15}
+sapply(iris, class)
+```
+
+Our condition is met.  So we can proceed directly to build a decision tree/Forest.  For sake of simplicity, let's build a simple tree (one). Refer Figure \@ref(fig:an18).
+
+```{r an18, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Including categorical variable", out.width="98%"}
+# New Iforest Model
+iso_model_new <- iForest(iris, nt = 1, phi = 100)
+new_scores <- predict(iso_model_new, iris)
+head(new_scores)
+
+# Full PRCOMP for Visual
+iris_pr <- prcomp(iris[, 1:4])
+
+data.frame(
+  PC1 = iris_pr$x[,1],
+  PC2 = iris_pr$x[,2]
+) %>% 
+  mutate(score = new_scores,
+         Species = iris$Species) %>% 
+  ggplot(aes(PC1, PC2, color = Species)) +
+  geom_point(aes(size = score)) +
+  guides(size = FALSE) +
+  theme_bw() +
+  labs(title = "Decision Tree\nVisualised on Principal Components")
+```
+
+## Including categorical variables in LOF
+We can also include categorical variable in `Local outlier factor` using `gower distance` calculation method.  Gower method lets us calculate distance between categorical observations, most importantly when the categories are not ordered.  To calculate it we can use function `daisy` from library `cluster` in R. Let's see LOF score calculation on the above example. The plot generated can be seen in Figure \@ref(fig:an20).
+
+```{r an20, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Including categorical variable", out.width="90%"}
+library(cluster)
+iris_dist <- daisy(iris, metric = "gower")
+iris_lof <- lof(iris_dist, minPts = 5)
+
+data.frame(
+  PC1 = iris_pr$x[,1],
+  PC2 = iris_pr$x[,2]
+) %>% 
+  mutate(score = iris_lof,
+         Species = iris$Species) %>% 
+  ggplot(aes(PC1, PC2, color = Species)) +
+  geom_point(aes(size = score)) +
+  guides(size = FALSE) +
+  theme_bw() +
+  labs(title = "LOF Scores\nVisualised on Principal Components")
+```
+
+## Time Series Anomalies
+In time series data, an anomaly/outlier can be termed as a data point which is not following the common collective trend or seasonal or cyclic pattern of the entire data and is significantly distinct from rest of the data.
+
+To calculate/detect anomalies, in R, we make use of package `timetk`.  The package works on `tibble` instead of `time series` data, so we may to prep our data/time series accordingly.
+
+**Problem Statement** Let's find out anomalies, if any on Sunspots data available in base R^[Monthly numbers of sunspots, as from the World Data Center, aka SIDC. This is the version of the data that will occasionally be updated when new counts become available.].
+
+```{r an17, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Time Series Anomalies", out.width="90%"}
+start_date <- as.Date("1749-01-01")
+end_date <- as.Date("2013-09-01")
+date_sequence <- seq(start_date, end_date, by = "months")
+
+sunspot_df <- sunspot.month %>%
+  as.data.frame() %>%
+  set_names("value") %>%
+  mutate(date = date_sequence)
+
+library(timetk)
+sunspot_df %>% 
+  plot_anomaly_diagnostics(date, value,
+                           .interactive = FALSE) 
+
+sunspot_df %>% 
+  tk_anomaly_diagnostics(date, value) %>% 
+  filter(anomaly == 'Yes')
+```
+
+We can anomalies highlighted in red, in Figure \@ref(fig:an17) and anomalies filtered out in code above.  We may also implement Seasonal Hybrid ESD algorithm already discussed above.
+
+

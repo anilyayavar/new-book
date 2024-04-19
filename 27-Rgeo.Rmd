@@ -1,0 +1,89 @@
+# Reverse geo-coding
+## Introduction
+**Geo-coding** is the process of converting a human-readable address into geographic coordinates, such as latitude and longitude. Geocoding is the process of determining the location of an address on a map. So, plotting the places on geographical map layers require extraction of latitudes and longitudes from master databases.
+
+**Reverse geo-coding**, on the other hand, is the process of converting geographic coordinates (latitude and longitude) into a human-readable address, such as a street address, city, state/province, and country. In other words, it's the process of determining a location's address based on its geographic coordinates.  
+
+Both geo-coding and reverse geo-coding are important in geospatial data analysis, as they allow us to link spatial information with non-spatial information, such as demographic data, land use data, or other forms of spatial data. This information can then be used to gain insights into patterns and relationships in the data, and to make informed decisions based on location information.  
+
+Reverse geo-coding can be used in forensic data analysis to help identify the location of transactions or events. For example, it can be used to determine the location of an ATM or point of sale device where a fraudulent transaction occurred. It can also be used to analyze patterns of activity in a particular geographic area, such as the frequency and timing of certain types of transactions.  As another example, we may think of an application data, where mobile or hand held devices are used to capture data at the time and place of intended service delivery.  Auditors may use the geo-spatial data captured by these devices to cross check/verify the actual points of service delivery.
+
+## Widely used databases
+**OpenStreetMap** (OSM) is one of the most popular and widely used master databases for geo-coding and reverse geo-coding. OSM is a free and open-source map of the world, created and maintained by a community of volunteers. It provides a rich and detailed set of spatial data, including street names, addresses, and other points of interest.  
+
+Other popular master databases for geo-coding and reverse geo-coding include **Google Maps**. Google Maps provides a rich set of geo-coding and reverse geo-coding APIs that are widely used in web and mobile applications. Google Maps provides a comprehensive set of spatial data, including street names, addresses, and other points of interest.
+
+## Example in R
+### Prerequisites
+```{r}
+library(tidygeocoder)
+```
+
+### Function to be used
+We will use `reverse_geo()` function from this library.  Syntax is
+
+```
+reverse_geo(
+  lat,
+  long,
+  method = "osm",
+  address = "address",
+  full_results = FALSE
+  ...
+)
+```
+Here -
+
+- `lat` and `long` are, as the names suggest, latitude and longitudes for the place, of which address is to be extracted.
+- `method` argument provides for geo service to be used.  Default is `osm`.  Other services available are - `arcgis`, `geocodio`, `google`, etc.
+- `address` provides the column name to be used.
+- `full_results` by default is `FALSE`.  But if set to `TRUE` returns all available data from the geocoding service.
+- for other arguments, please check help of the function.
+
+### Practical data-set
+**Remember one thing, the function is not vectorised.**  So we will have to use `apply` family or `purrr::map` family of functions to get reverse geo-coding information.
+
+```{r}
+
+# Coordinates of tajmahal
+reverse_geo(lat = 27.1751, 
+            long = 78.421, 
+            full_results = TRUE, 
+            method = 'osm')
+```
+
+### Using it in a dataset
+Let's build a sample dataset of say 4 values/places of interest in India
+```{r echo=FALSE}
+sample <- data.frame(
+  lat = c(27.1751, 24.8318, 27.1795, 28.5245),
+  long = c(78.0421, 79.9199, 78.0211, 77.1855)
+)
+
+knitr::kable(sample)
+```
+
+Now extracting information for these using `purrr::map` family
+```{r}
+library(dplyr, warn.conflicts = FALSE)
+library(purrr, warn.conflicts = FALSE)
+
+results <- pmap_dfr(sample,
+     ~ reverse_geo(..1, # first column in sample
+                   ..2, # second column in sample
+                   full_results = TRUE)) %>% 
+  select(lat, long, country, state, city, village, address, postcode)
+  
+```
+
+### View above results 
+```{r echo=FALSE}
+knitr::kable(results) 
+```
+
+### Alternate syntax (for those who do not want to use `purrr::pmap_dfr`)
+```
+sapply(seq(nrow(sample)),
+       function(x) reverse_geo(sample$lat[x], sample$long[x], full_results = TRUE)) %>% 
+  map_dfr(rbind)
+```

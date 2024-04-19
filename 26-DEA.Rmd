@@ -1,0 +1,88 @@
+# Data Envelopment Analysis
+Data Envelopment Analysis (DEA) is a method for measuring the efficiency of a set of decision-making units (DMUs) that was developed in the late 1970s by Abraham Charnes, William Cooper, and Edwardo Rhodes. It was originally developed to evaluate the performance of U.S. banks, but has since been applied to a wide range of industries and sectors.
+
+It provides a way to measure the relative efficiency of different DMUs, even when they produce different combinations of outputs and use different combinations of inputs. This can be useful for identifying best practices and areas for improvement, and for making decisions about which DMUs to invest in or prioritize.
+
+## How it works?
+At a high level, DEA works by comparing the input-output combinations of different decision-making units (DMUs) to determine which DMUs are operating efficiently and which are not. Specifically, DEA tries to identify the "efficient frontier" of DMUs that are using their inputs to produce the optimum amount of outputs possible.
+
+To do this, DEA uses a mathematical model that takes into account the inputs and outputs of each DMU, as well as any weights or constraints that may apply. The model then calculates a "score" for each DMU based on how well it performs relative to the other DMUs in the group. DMUs that score higher are considered more efficient than those that score lower. 
+
+## Use-cases
+DEA has a wide range of applications across different industries and sectors. Here are a few examples:
+
+- **Firm Performance Evaluation**: DEA can be used to evaluate the performance of firms in a given industry, by comparing their input-output combinations to identify which firms are operating more efficiently than others. This can help investors and policymakers make decisions about which firms to invest in or support.
+
+- **Education Quality Assessment**: DEA can be used to assess the quality of schools, by comparing their input-output combinations to identify which schools are producing better outcomes (e.g., higher test scores) with fewer resources. This can help policymakers allocate education funding more effectively.
+
+- **Healthcare Efficiency Analysis**: DEA can be used to analyze the efficiency of hospitals and healthcare providers, by comparing their input-output combinations to identify which providers are delivering better outcomes (e.g., lower mortality rates) with lower costs. This can help healthcare systems optimize resource allocation and improve patient outcomes.
+
+- **Regional Development Analysis**: DEA can be used to compare the efficiency of different regions or countries, by comparing their input-output combinations to identify which regions/countries are making the best use of their resources. This can help policymakers identify areas for improvement and develop targeted interventions to promote economic growth.
+
+## Possible uses in Audit
+Data Envelopment Analysis (DEA) can be used in audit to evaluate the efficiency of an organization or process. Auditors can use DEA to identify areas of inefficiency within an organization by comparing the inputs and outputs of different departments or processes. For example, an auditor could use DEA to compare the efficiency of different production lines within a manufacturing plant or the efficiency of different branches within a bank.
+
+By using DEA, auditors can identify areas where an organization is not using its resources effectively and recommend changes to improve efficiency. This can help organizations reduce costs, improve productivity, and increase profits.  DEA can also be used to evaluate the efficiency of different audit methods and procedures. For example, an auditor could use DEA to compare the efficiency of different sampling methods to determine which method is most effective at detecting errors or fraud.  Undoubtedly, DEA is a powerful tool that can help auditors identify areas of inefficiency and recommend changes to improve organizational performance.
+
+## A practical example in R
+We will now see a complete practical example of doing DEA in R.
+
+### Pre-requisites
+We will use library `deaR` to measuring DEA efficiency.  
+```{r message=FALSE, warning=FALSE}
+library(deaR)
+```
+### Sample data-set
+Let us assume, we have a data/KPIs of six stores located across India.  
+```{r echo=FALSE}
+store <- data.frame(
+       Store = c('Delhi', 'Gurgaon', 'Bengalore', 'Chennai', 'Mumbai', 'Nagpur'),
+          x1 = c(51L, 60L, 43L, 53L, 43L, 44L),
+          x2 = c(38L, 45L, 33L, 43L, 38L, 35L),
+          y1 = c(169L, 243L, 173L, 216L, 155L, 169L),
+          y2 = c(119L, 167L, 158L, 138L, 161L, 157L)
+         )
+knitr::kable(store)
+```
+In the above sample, we have only two inputs, `x1` and `x2` and two outputs, `y1` and `y2`.  Here -
+
+- `x1` and `x2` represents machine hours and employee + management hours per week;
+- `y1` and `y2` represents quantity of products `A` and `B` produced per week, at the locations given.
+
+### Performing DEA in R
+Now our objective is to first find out the effective DMUs, i.e. which DMUs are using their inputs effectively.  Here we will also assume constant returns to scale i.e. output will be doubled if inputs are doubled.
+
+DEA in `deaR` is a two step process.  
+
+- **Step-1**:  We will make data in the form as required for the package; using `make_deadata()` function.  `inputs`, `outputs` and `dmus` require column references in the data provided.
+- **Step-2**: Performing actual analysis, using `model_basic` which takes previously created data (step-1) and two other essential arguments, 
+  + `orientation`: which takes a string value; `"io"` (input oriented), `"oo"` (output oriented), or `"dir"` (directional)
+  + `rts`: again takes a string; specifying type of returns to scale, equal to `"crs"` (constant), `"vrs"` (variable), `"nirs"` (non-increasing), `"ndrs"` (non-decreasing) or `"grs"` (generalized)
+  + Other arguments may be passed on as per need.  See `?model_basic` for more help.
+
+```{r}
+store_dea <- make_deadata(store, inputs = 2:3, outputs = 4:5, dmus = 1)
+model <- model_basic(store_dea, orientation = 'io', rts = 'crs')
+```
+
+We have stored the DEA model in `model` variable just created.  Now we can use the following functions to get `efficiencies`, `targets` and `lambdas` respectively.  
+
+```{r}
+efficiencies(model)
+targets(model)
+lambdas(model)
+```
+
+### Interpreting above results
+ 
+ - As evident from the named function `efficiencies` returned the efficiencies of all DMUs.  We can see that all DMUs except `Delhi` and `Nagpur` are working efficiently.
+ - `targets` give us the optimum values of inputs and/or outputs for the given values.  We can see that we have to reduce `x1` and `x2` to given values at `Delhi` and `Nagpur`.
+ - `lambdas` give the lambdas of the DEA solution.
+ - Further, the `plot()` function will output the following plots which are easy to inerpret.
+
+
+```{r deaplots, message=FALSE, out.width='30%', fig.show='hold', fig.align='center', fig.cap="Data Envelopment Analysis Plots"}
+plot(model)
+```
+
+The example was simple enough.  However, we can easily perform DEA on any number of inputs and outputs, using R.
