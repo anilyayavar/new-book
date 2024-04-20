@@ -6,7 +6,7 @@
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <title>Chapter 19 Finding duplicates | Data Analytics in Audit, using R</title>
   <meta name="description" content="This book is intended for auditors performing exploratory data analytics using R programming language, mainly baseR and Tidyverse." />
-  <meta name="generator" content="bookdown 0.38 and GitBook 2.6.7" />
+  <meta name="generator" content="bookdown 0.39 and GitBook 2.6.7" />
 
   <meta property="og:title" content="Chapter 19 Finding duplicates | Data Analytics in Audit, using R" />
   <meta property="og:type" content="book" />
@@ -23,7 +23,7 @@
 <meta name="author" content="Anil Goyal" />
 
 
-<meta name="date" content="2024-04-19" />
+<meta name="date" content="2024-04-20" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -167,8 +167,8 @@ div.csl-indent {
 <li class="chapter" data-level="" data-path="index.html"><a href="index.html"><i class="fa fa-check"></i>Preface</a>
 <ul>
 <li class="chapter" data-level="" data-path="index.html"><a href="index.html#acknowledgments"><i class="fa fa-check"></i>Acknowledgments</a></li>
-<li class="chapter" data-level="" data-path="index.html"><a href="index.html#overview"><i class="fa fa-check"></i>Overview</a></li>
-<li class="chapter" data-level="" data-path="index.html"><a href="index.html#advantages-of-r"><i class="fa fa-check"></i>Advantages of R</a></li>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html#r-not-just-a-letter"><i class="fa fa-check"></i>R, not just a letter</a></li>
+<li class="chapter" data-level="" data-path="index.html"><a href="index.html#why-r"><i class="fa fa-check"></i>Why R?</a></li>
 </ul></li>
 <li class="chapter" data-level="" data-path="about-author.html"><a href="about-author.html"><i class="fa fa-check"></i>About author</a></li>
 <li class="chapter" data-level="" data-path="gearing-up.html"><a href="gearing-up.html"><i class="fa fa-check"></i>Gearing up</a>
@@ -713,23 +713,23 @@ div.csl-indent {
 <div id="prerequisites-4" class="section level3 unnumbered hasAnchor">
 <h3>Prerequisites<a href="finding-duplicates.html#prerequisites-4" class="anchor-section" aria-label="Anchor link to header"></a></h3>
 <p>Let us load <code>tidyverse</code> first.</p>
-<div class="sourceCode" id="cb1189"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1189-1"><a href="finding-duplicates.html#cb1189-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div>
+<div class="sourceCode" id="cb1191"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1191-1"><a href="finding-duplicates.html#cb1191-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div>
 <p>Detection of duplicates is a frequent requirement in audit analytics, be it case of detecting risk of duplicate invoices or simply detection of duplicates in social sector audits<a href="#fn43" class="footnote-ref" id="fnref43"><sup>43</sup></a>.</p>
 <p>Let us create an sample data of invoices.</p>
-<div class="sourceCode" id="cb1190"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1190-1"><a href="finding-duplicates.html#cb1190-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb1190-2"><a href="finding-duplicates.html#cb1190-2" tabindex="-1"></a><span class="co"># let&#39;s create 10 invoices</span></span>
-<span id="cb1190-3"><a href="finding-duplicates.html#cb1190-3" tabindex="-1"></a>invoices <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">invoice_no =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>,</span>
-<span id="cb1190-4"><a href="finding-duplicates.html#cb1190-4" tabindex="-1"></a>                       <span class="at">invoice_date =</span> <span class="fu">seq.Date</span>(<span class="fu">as.Date</span>(<span class="st">&quot;2010-01-01&quot;</span>),</span>
-<span id="cb1190-5"><a href="finding-duplicates.html#cb1190-5" tabindex="-1"></a>                                               <span class="fu">as.Date</span>(<span class="st">&quot;2010-01-10&quot;</span>), </span>
-<span id="cb1190-6"><a href="finding-duplicates.html#cb1190-6" tabindex="-1"></a>                                               <span class="at">by =</span> <span class="st">&quot;day&quot;</span>),</span>
-<span id="cb1190-7"><a href="finding-duplicates.html#cb1190-7" tabindex="-1"></a>                       <span class="at">amount =</span> <span class="fu">sample</span>(<span class="dv">1000</span><span class="sc">:</span><span class="dv">2000</span>, <span class="dv">10</span>))</span>
-<span id="cb1190-8"><a href="finding-duplicates.html#cb1190-8" tabindex="-1"></a>invoices <span class="ot">&lt;-</span> <span class="fu">slice_sample</span>(invoices,</span>
-<span id="cb1190-9"><a href="finding-duplicates.html#cb1190-9" tabindex="-1"></a>                         <span class="at">n =</span> <span class="dv">12</span>, </span>
-<span id="cb1190-10"><a href="finding-duplicates.html#cb1190-10" tabindex="-1"></a>                         <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
-<span id="cb1190-11"><a href="finding-duplicates.html#cb1190-11" tabindex="-1"></a><span class="co"># let us also assume each has different description</span></span>
-<span id="cb1190-12"><a href="finding-duplicates.html#cb1190-12" tabindex="-1"></a>invoices<span class="sc">$</span>description <span class="ot">&lt;-</span> LETTERS[<span class="dv">1</span><span class="sc">:</span><span class="dv">12</span>]</span>
-<span id="cb1190-13"><a href="finding-duplicates.html#cb1190-13" tabindex="-1"></a><span class="co"># view the data</span></span>
-<span id="cb1190-14"><a href="finding-duplicates.html#cb1190-14" tabindex="-1"></a>invoices</span></code></pre></div>
+<div class="sourceCode" id="cb1192"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1192-1"><a href="finding-duplicates.html#cb1192-1" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb1192-2"><a href="finding-duplicates.html#cb1192-2" tabindex="-1"></a><span class="co"># let&#39;s create 10 invoices</span></span>
+<span id="cb1192-3"><a href="finding-duplicates.html#cb1192-3" tabindex="-1"></a>invoices <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">invoice_no =</span> <span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>,</span>
+<span id="cb1192-4"><a href="finding-duplicates.html#cb1192-4" tabindex="-1"></a>                       <span class="at">invoice_date =</span> <span class="fu">seq.Date</span>(<span class="fu">as.Date</span>(<span class="st">&quot;2010-01-01&quot;</span>),</span>
+<span id="cb1192-5"><a href="finding-duplicates.html#cb1192-5" tabindex="-1"></a>                                               <span class="fu">as.Date</span>(<span class="st">&quot;2010-01-10&quot;</span>), </span>
+<span id="cb1192-6"><a href="finding-duplicates.html#cb1192-6" tabindex="-1"></a>                                               <span class="at">by =</span> <span class="st">&quot;day&quot;</span>),</span>
+<span id="cb1192-7"><a href="finding-duplicates.html#cb1192-7" tabindex="-1"></a>                       <span class="at">amount =</span> <span class="fu">sample</span>(<span class="dv">1000</span><span class="sc">:</span><span class="dv">2000</span>, <span class="dv">10</span>))</span>
+<span id="cb1192-8"><a href="finding-duplicates.html#cb1192-8" tabindex="-1"></a>invoices <span class="ot">&lt;-</span> <span class="fu">slice_sample</span>(invoices,</span>
+<span id="cb1192-9"><a href="finding-duplicates.html#cb1192-9" tabindex="-1"></a>                         <span class="at">n =</span> <span class="dv">12</span>, </span>
+<span id="cb1192-10"><a href="finding-duplicates.html#cb1192-10" tabindex="-1"></a>                         <span class="at">replace =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb1192-11"><a href="finding-duplicates.html#cb1192-11" tabindex="-1"></a><span class="co"># let us also assume each has different description</span></span>
+<span id="cb1192-12"><a href="finding-duplicates.html#cb1192-12" tabindex="-1"></a>invoices<span class="sc">$</span>description <span class="ot">&lt;-</span> LETTERS[<span class="dv">1</span><span class="sc">:</span><span class="dv">12</span>]</span>
+<span id="cb1192-13"><a href="finding-duplicates.html#cb1192-13" tabindex="-1"></a><span class="co"># view the data</span></span>
+<span id="cb1192-14"><a href="finding-duplicates.html#cb1192-14" tabindex="-1"></a>invoices</span></code></pre></div>
 <pre><code>##    invoice_no invoice_date amount description
 ## 1           4   2010-01-04   1525           A
 ## 2           6   2010-01-06   1937           B
@@ -744,9 +744,9 @@ div.csl-indent {
 ## 11          8   2010-01-08   1117           K
 ## 12         10   2010-01-10   1228           L</code></pre>
 <p>To find duplicate records on the basis of multiple atrributes say <code>invoice_no</code>, <code>invoice_date</code> and <code>amount</code>, we can use function <code>duplicated</code> as shown below-</p>
-<div class="sourceCode" id="cb1192"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1192-1"><a href="finding-duplicates.html#cb1192-1" tabindex="-1"></a>attrib_cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;invoice_no&quot;</span>, <span class="st">&quot;invoice_date&quot;</span>, <span class="st">&quot;amount&quot;</span>)</span>
-<span id="cb1192-2"><a href="finding-duplicates.html#cb1192-2" tabindex="-1"></a>invoices <span class="sc">%&gt;%</span> </span>
-<span id="cb1192-3"><a href="finding-duplicates.html#cb1192-3" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">if_all</span>(<span class="fu">all_of</span>(attrib_cols), duplicated))</span></code></pre></div>
+<div class="sourceCode" id="cb1194"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1194-1"><a href="finding-duplicates.html#cb1194-1" tabindex="-1"></a>attrib_cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;invoice_no&quot;</span>, <span class="st">&quot;invoice_date&quot;</span>, <span class="st">&quot;amount&quot;</span>)</span>
+<span id="cb1194-2"><a href="finding-duplicates.html#cb1194-2" tabindex="-1"></a>invoices <span class="sc">%&gt;%</span> </span>
+<span id="cb1194-3"><a href="finding-duplicates.html#cb1194-3" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">if_all</span>(<span class="fu">all_of</span>(attrib_cols), duplicated))</span></code></pre></div>
 <pre><code>##   invoice_no invoice_date amount description
 ## 1          9   2010-01-09   1298           G
 ## 2          9   2010-01-09   1298           H
@@ -758,11 +758,11 @@ div.csl-indent {
 <p><strong>Explanation:</strong> Using <code>if_all</code> or <code>if_any</code> with <code>dplyr::filter</code> provides us a way to filter simultaneously based on many columns. The second argument to be provided in these functions is mostly a function which returns logical values. So use of <code>duplicate</code> in second argument filters all (because of <code>if_all</code>) columns provided in first argument based on values returned by applying function mentioned on second argument, on those columns.</p>
 </blockquote>
 <p>If however, the requirement is to find all the records with duplicate attributes, we may change our strategy slightly.</p>
-<div class="sourceCode" id="cb1194"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1194-1"><a href="finding-duplicates.html#cb1194-1" tabindex="-1"></a>invoices <span class="sc">%&gt;%</span> </span>
-<span id="cb1194-2"><a href="finding-duplicates.html#cb1194-2" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">all_of</span>(attrib_cols)) <span class="sc">%&gt;%</span> </span>
-<span id="cb1194-3"><a href="finding-duplicates.html#cb1194-3" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">if_all</span>(<span class="fu">everything</span>(), duplicated)) <span class="sc">%&gt;%</span> </span>
-<span id="cb1194-4"><a href="finding-duplicates.html#cb1194-4" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> </span>
-<span id="cb1194-5"><a href="finding-duplicates.html#cb1194-5" tabindex="-1"></a>  <span class="fu">semi_join</span>(invoices, ., <span class="at">by =</span> <span class="fu">all_of</span>(attrib_cols)) </span></code></pre></div>
+<div class="sourceCode" id="cb1196"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1196-1"><a href="finding-duplicates.html#cb1196-1" tabindex="-1"></a>invoices <span class="sc">%&gt;%</span> </span>
+<span id="cb1196-2"><a href="finding-duplicates.html#cb1196-2" tabindex="-1"></a>  <span class="fu">select</span>(<span class="fu">all_of</span>(attrib_cols)) <span class="sc">%&gt;%</span> </span>
+<span id="cb1196-3"><a href="finding-duplicates.html#cb1196-3" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="fu">if_all</span>(<span class="fu">everything</span>(), duplicated)) <span class="sc">%&gt;%</span> </span>
+<span id="cb1196-4"><a href="finding-duplicates.html#cb1196-4" tabindex="-1"></a>  <span class="fu">distinct</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb1196-5"><a href="finding-duplicates.html#cb1196-5" tabindex="-1"></a>  <span class="fu">semi_join</span>(invoices, ., <span class="at">by =</span> <span class="fu">all_of</span>(attrib_cols)) </span></code></pre></div>
 <pre><code>## Warning: Using `all_of()` outside of a selecting function was deprecated in tidyselect 1.2.0.
 ## ℹ See details at &lt;https://tidyselect.r-lib.org/reference/faq-selection-context.html&gt;
 ## This warning is displayed once every 8 hours.
