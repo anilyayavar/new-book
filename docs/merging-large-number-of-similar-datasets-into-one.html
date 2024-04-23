@@ -23,7 +23,7 @@
 <meta name="author" content="Anil Goyal" />
 
 
-<meta name="date" content="2024-04-20" />
+<meta name="date" content="2024-04-23" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -382,11 +382,15 @@ div.csl-indent {
 <ul>
 <li class="chapter" data-level="9.4.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#group_by"><i class="fa fa-check"></i><b>9.4.1</b> <code>group_by()</code></a></li>
 <li class="chapter" data-level="9.4.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#summarise"><i class="fa fa-check"></i><b>9.4.2</b> <code>summarise()</code></a></li>
+<li class="chapter" data-level="9.4.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#ungroup"><i class="fa fa-check"></i><b>9.4.3</b> <code>ungroup()</code></a></li>
+<li class="chapter" data-level="9.4.4" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#by-argument-in-mutate-summarise-etc.-functions"><i class="fa fa-check"></i><b>9.4.4</b> <code>.by</code> argument in <code>mutate</code>, <code>summarise</code>, etc. functions</a></li>
+<li class="chapter" data-level="9.4.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#reframe"><i class="fa fa-check"></i><b>9.4.5</b> <code>reframe()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#other-useful-functions-in-dplyr"><i class="fa fa-check"></i><b>9.5</b> Other Useful functions in <code>dplyr</code></a>
 <ul>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#if_else"><i class="fa fa-check"></i><code>if_else()</code></a></li>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_when"><i class="fa fa-check"></i><code>case_when()</code></a></li>
+<li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_match"><i class="fa fa-check"></i><code>case_match()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.6" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#window-functionsoperations"><i class="fa fa-check"></i><b>9.6</b> Window functions/operations</a></li>
 </ul></li>
@@ -723,23 +727,23 @@ Figure 22.1: Preview of example excel file
 </p>
 </div>
 <p>We will use library <code>readxl</code> to read excel files. This library is bundled with <code>tidyverse</code> but is not part of core tidyverse, so it has to be loaded explicitly, though explicit download is not required if <code>tidyverse</code> is installed in the system.</p>
-<div class="sourceCode" id="cb1219"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1219-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1219-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1219-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1219-2" tabindex="-1"></a><span class="fu">library</span>(readxl)</span></code></pre></div>
+<div class="sourceCode" id="cb1230"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1230-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1230-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1230-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1230-2" tabindex="-1"></a><span class="fu">library</span>(readxl)</span></code></pre></div>
 <p>The following steps are used-</p>
 <p>Step-1: Read path</p>
 <p>Step-2: Collect Names of all sheets</p>
 <p>Step-3: Set names of elements of above vector onto itself</p>
 <p>Step-4: Read and combine all tables into one. We will use <code>purrr::map_dfr</code> for this.</p>
-<div class="sourceCode" id="cb1220"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1220-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-1" tabindex="-1"></a><span class="co"># Step-1</span></span>
-<span id="cb1220-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-2" tabindex="-1"></a>path <span class="ot">&lt;-</span> <span class="st">&quot;data/daur1.xlsx&quot;</span></span>
-<span id="cb1220-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-3" tabindex="-1"></a><span class="co"># Step-2</span></span>
-<span id="cb1220-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-4" tabindex="-1"></a>states_data <span class="ot">&lt;-</span> <span class="fu">excel_sheets</span>(path) <span class="sc">%&gt;%</span> </span>
-<span id="cb1220-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-5" tabindex="-1"></a><span class="co"># step-3</span></span>
-<span id="cb1220-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-6" tabindex="-1"></a>    <span class="fu">set_names</span>(., .) <span class="sc">%&gt;%</span> </span>
-<span id="cb1220-7"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-7" tabindex="-1"></a><span class="co"># step-4</span></span>
-<span id="cb1220-8"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-8" tabindex="-1"></a>    <span class="fu">map_dfr</span>(read_excel, <span class="at">path=</span>path, <span class="at">.id =</span> <span class="st">&#39;State_name&#39;</span>)</span>
-<span id="cb1220-9"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-9" tabindex="-1"></a><span class="co"># print file</span></span>
-<span id="cb1220-10"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1220-10" tabindex="-1"></a>states_data</span></code></pre></div>
+<div class="sourceCode" id="cb1231"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1231-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-1" tabindex="-1"></a><span class="co"># Step-1</span></span>
+<span id="cb1231-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-2" tabindex="-1"></a>path <span class="ot">&lt;-</span> <span class="st">&quot;data/daur1.xlsx&quot;</span></span>
+<span id="cb1231-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-3" tabindex="-1"></a><span class="co"># Step-2</span></span>
+<span id="cb1231-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-4" tabindex="-1"></a>states_data <span class="ot">&lt;-</span> <span class="fu">excel_sheets</span>(path) <span class="sc">%&gt;%</span> </span>
+<span id="cb1231-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-5" tabindex="-1"></a><span class="co"># step-3</span></span>
+<span id="cb1231-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-6" tabindex="-1"></a>    <span class="fu">set_names</span>(., .) <span class="sc">%&gt;%</span> </span>
+<span id="cb1231-7"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-7" tabindex="-1"></a><span class="co"># step-4</span></span>
+<span id="cb1231-8"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-8" tabindex="-1"></a>    <span class="fu">map_dfr</span>(read_excel, <span class="at">path=</span>path, <span class="at">.id =</span> <span class="st">&#39;State_name&#39;</span>)</span>
+<span id="cb1231-9"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-9" tabindex="-1"></a><span class="co"># print file</span></span>
+<span id="cb1231-10"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1231-10" tabindex="-1"></a>states_data</span></code></pre></div>
 <pre><code>## # A tibble: 18 × 4
 ##    State_name     Year    Metric_1 Metric_2
 ##    &lt;chr&gt;          &lt;chr&gt;      &lt;dbl&gt;    &lt;dbl&gt;
@@ -777,39 +781,39 @@ Figure 22.1: Preview of example excel file
 Step-2: Split data frame into a list with separate dataframe for each state
 Step-3: Write to a separate file using <code>purrr::walk2()</code></p>
 <p>The complete algorithm is</p>
-<div class="sourceCode" id="cb1222"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1222-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-1" tabindex="-1"></a><span class="co"># step-1 : create a vector of file names (output)</span></span>
-<span id="cb1222-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-2" tabindex="-1"></a>file_names <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;data/&quot;</span>, <span class="fu">unique</span>(states_data<span class="sc">$</span>State_name), <span class="st">&quot;.csv&quot;</span>)</span>
-<span id="cb1222-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-3" tabindex="-1"></a></span>
-<span id="cb1222-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-4" tabindex="-1"></a>states_data <span class="sc">%&gt;%</span> </span>
-<span id="cb1222-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-5" tabindex="-1"></a>  <span class="fu">group_split</span>(State_name) <span class="sc">%&gt;%</span> </span>
-<span id="cb1222-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1222-6" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">walk2</span>(file_names, write.csv)</span></code></pre></div>
+<div class="sourceCode" id="cb1233"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1233-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-1" tabindex="-1"></a><span class="co"># step-1 : create a vector of file names (output)</span></span>
+<span id="cb1233-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-2" tabindex="-1"></a>file_names <span class="ot">&lt;-</span> <span class="fu">paste0</span>(<span class="st">&quot;data/&quot;</span>, <span class="fu">unique</span>(states_data<span class="sc">$</span>State_name), <span class="st">&quot;.csv&quot;</span>)</span>
+<span id="cb1233-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-3" tabindex="-1"></a></span>
+<span id="cb1233-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-4" tabindex="-1"></a>states_data <span class="sc">%&gt;%</span> </span>
+<span id="cb1233-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-5" tabindex="-1"></a>  <span class="fu">group_split</span>(State_name) <span class="sc">%&gt;%</span> </span>
+<span id="cb1233-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1233-6" tabindex="-1"></a>  purrr<span class="sc">::</span><span class="fu">walk2</span>(file_names, write.csv)</span></code></pre></div>
 <p>We can check that 3 new files with state_names as filenames have been created in the <code>data</code> folder/directory as desired.</p>
 </div>
 <div id="case-4-splitting-one-data-into-muliple-files-having-multiple-sheets" class="section level2 hasAnchor" number="22.4">
 <h2><span class="header-section-number">22.4</span> <strong>Case-4</strong>: Splitting one data into muliple files having multiple sheets<a href="merging-large-number-of-similar-datasets-into-one.html#case-4-splitting-one-data-into-muliple-files-having-multiple-sheets" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>Sometimes, we may require to split a file not only into multiple files, but simultaeously require to split each file into multiple excel sheets. E.g. A data having States and districts is to be split into State-wise files having a separate sheet for each district.</p>
 <p>This can be achieved using <code>writexl</code> library. In this case, we may write a custom function which can do our job easily.</p>
-<div class="sourceCode" id="cb1223"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1223-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
-<span id="cb1223-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-2" tabindex="-1"></a><span class="fu">library</span>(writexl)</span>
-<span id="cb1223-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-3" tabindex="-1"></a></span>
-<span id="cb1223-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-4" tabindex="-1"></a>book_and_sheets <span class="ot">&lt;-</span> <span class="cf">function</span>(df, x, y){</span>
-<span id="cb1223-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-5" tabindex="-1"></a>  df_by_x <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> </span>
-<span id="cb1223-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-6" tabindex="-1"></a>    <span class="fu">split</span>(.[[x]])</span>
-<span id="cb1223-7"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-7" tabindex="-1"></a>  </span>
-<span id="cb1223-8"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-8" tabindex="-1"></a>  save_to_excel <span class="ot">&lt;-</span> <span class="cf">function</span>(a, b){</span>
-<span id="cb1223-9"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-9" tabindex="-1"></a>    a <span class="sc">%&gt;%</span> </span>
-<span id="cb1223-10"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-10" tabindex="-1"></a>      <span class="fu">split</span>(.[[y]]) <span class="sc">%&gt;%</span> </span>
-<span id="cb1223-11"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-11" tabindex="-1"></a>      writexl<span class="sc">::</span><span class="fu">write_xlsx</span>(</span>
-<span id="cb1223-12"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-12" tabindex="-1"></a>        <span class="at">path =</span> <span class="fu">paste0</span>(<span class="st">&quot;data/data_by_&quot;</span>, b,<span class="st">&quot;_&quot;</span>,x, <span class="st">&quot;.xlsx&quot;</span>)</span>
-<span id="cb1223-13"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-13" tabindex="-1"></a>      )</span>
-<span id="cb1223-14"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-14" tabindex="-1"></a>    </span>
-<span id="cb1223-15"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-15" tabindex="-1"></a>  }</span>
-<span id="cb1223-16"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-16" tabindex="-1"></a>  </span>
-<span id="cb1223-17"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-17" tabindex="-1"></a>  <span class="fu">imap</span>(df_by_x, save_to_excel)</span>
-<span id="cb1223-18"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1223-18" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb1234"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1234-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1234-2"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-2" tabindex="-1"></a><span class="fu">library</span>(writexl)</span>
+<span id="cb1234-3"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-3" tabindex="-1"></a></span>
+<span id="cb1234-4"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-4" tabindex="-1"></a>book_and_sheets <span class="ot">&lt;-</span> <span class="cf">function</span>(df, x, y){</span>
+<span id="cb1234-5"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-5" tabindex="-1"></a>  df_by_x <span class="ot">&lt;-</span> df <span class="sc">%&gt;%</span> </span>
+<span id="cb1234-6"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-6" tabindex="-1"></a>    <span class="fu">split</span>(.[[x]])</span>
+<span id="cb1234-7"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-7" tabindex="-1"></a>  </span>
+<span id="cb1234-8"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-8" tabindex="-1"></a>  save_to_excel <span class="ot">&lt;-</span> <span class="cf">function</span>(a, b){</span>
+<span id="cb1234-9"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-9" tabindex="-1"></a>    a <span class="sc">%&gt;%</span> </span>
+<span id="cb1234-10"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-10" tabindex="-1"></a>      <span class="fu">split</span>(.[[y]]) <span class="sc">%&gt;%</span> </span>
+<span id="cb1234-11"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-11" tabindex="-1"></a>      writexl<span class="sc">::</span><span class="fu">write_xlsx</span>(</span>
+<span id="cb1234-12"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-12" tabindex="-1"></a>        <span class="at">path =</span> <span class="fu">paste0</span>(<span class="st">&quot;data/data_by_&quot;</span>, b,<span class="st">&quot;_&quot;</span>,x, <span class="st">&quot;.xlsx&quot;</span>)</span>
+<span id="cb1234-13"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-13" tabindex="-1"></a>      )</span>
+<span id="cb1234-14"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-14" tabindex="-1"></a>    </span>
+<span id="cb1234-15"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-15" tabindex="-1"></a>  }</span>
+<span id="cb1234-16"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-16" tabindex="-1"></a>  </span>
+<span id="cb1234-17"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-17" tabindex="-1"></a>  <span class="fu">imap</span>(df_by_x, save_to_excel)</span>
+<span id="cb1234-18"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1234-18" tabindex="-1"></a>}</span></code></pre></div>
 <p>The function <code>book_and_sheets</code> designed in above code helps us to write a data say <code>df</code> into separate files based on column <code>x</code> and each of these files is further divided into sheets based on column <code>y</code>. Only thing to be remembered is that we have to pass, <code>x</code> and <code>y</code> arguments as character strings; and <code>df</code> as variable.</p>
 <p>Example - splitting <code>mtcars</code> into files based on <code>cyl</code> and sheets based on <code>gear</code></p>
-<div class="sourceCode" id="cb1224"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1224-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1224-1" tabindex="-1"></a><span class="fu">book_and_sheets</span>(mtcars, <span class="st">&#39;cyl&#39;</span>, <span class="st">&#39;gear&#39;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb1235"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1235-1"><a href="merging-large-number-of-similar-datasets-into-one.html#cb1235-1" tabindex="-1"></a><span class="fu">book_and_sheets</span>(mtcars, <span class="st">&#39;cyl&#39;</span>, <span class="st">&#39;gear&#39;</span>)</span></code></pre></div>
 <pre><code>## $`4`
 ## [1] &quot;D:\\OneDrive - A c GeM CAG of INDIA\\new book\\Data\\data_by_4_cyl.xlsx&quot;
 ## 

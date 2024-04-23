@@ -23,7 +23,7 @@
 <meta name="author" content="Anil Goyal" />
 
 
-<meta name="date" content="2024-04-20" />
+<meta name="date" content="2024-04-23" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -382,11 +382,15 @@ div.csl-indent {
 <ul>
 <li class="chapter" data-level="9.4.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#group_by"><i class="fa fa-check"></i><b>9.4.1</b> <code>group_by()</code></a></li>
 <li class="chapter" data-level="9.4.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#summarise"><i class="fa fa-check"></i><b>9.4.2</b> <code>summarise()</code></a></li>
+<li class="chapter" data-level="9.4.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#ungroup"><i class="fa fa-check"></i><b>9.4.3</b> <code>ungroup()</code></a></li>
+<li class="chapter" data-level="9.4.4" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#by-argument-in-mutate-summarise-etc.-functions"><i class="fa fa-check"></i><b>9.4.4</b> <code>.by</code> argument in <code>mutate</code>, <code>summarise</code>, etc. functions</a></li>
+<li class="chapter" data-level="9.4.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#reframe"><i class="fa fa-check"></i><b>9.4.5</b> <code>reframe()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#other-useful-functions-in-dplyr"><i class="fa fa-check"></i><b>9.5</b> Other Useful functions in <code>dplyr</code></a>
 <ul>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#if_else"><i class="fa fa-check"></i><code>if_else()</code></a></li>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_when"><i class="fa fa-check"></i><code>case_when()</code></a></li>
+<li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_match"><i class="fa fa-check"></i><code>case_match()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.6" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#window-functionsoperations"><i class="fa fa-check"></i><b>9.6</b> Window functions/operations</a></li>
 </ul></li>
@@ -713,7 +717,7 @@ div.csl-indent {
 <h1><span class="header-section-number">Chapter 16</span> Data Cleaning in R<a href="data-cleaning-in-r.html#data-cleaning-in-r" class="anchor-section" aria-label="Anchor link to header"></a></h1>
 <p>Data cleansing is one of the important steps in data analysis. Multiple packages are available in r to clean the data sets. One of such packages is <code>janitor</code> which we will be using in this chapter along with few other packages.</p>
 <p>Let’s load it</p>
-<div class="sourceCode" id="cb1108"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1108-1"><a href="data-cleaning-in-r.html#cb1108-1" tabindex="-1"></a><span class="fu">library</span>(janitor)</span></code></pre></div>
+<div class="sourceCode" id="cb1119"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1119-1"><a href="data-cleaning-in-r.html#cb1119-1" tabindex="-1"></a><span class="fu">library</span>(janitor)</span></code></pre></div>
 <pre><code>## 
 ## Attaching package: &#39;janitor&#39;</code></pre>
 <pre><code>## The following objects are masked from &#39;package:stats&#39;:
@@ -722,18 +726,18 @@ div.csl-indent {
 <div id="cleaning-column-names." class="section level2 hasAnchor" number="16.1">
 <h2><span class="header-section-number">16.1</span> Cleaning Column names.<a href="data-cleaning-in-r.html#cleaning-column-names." class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>We know that names of objects in R follow certain conventions like we may not have certain special characters in names. If a space has been used that is to be quoted under a pair of backticks `. But generally when we read data from files in excel, we can have some ‘dirty’ names, which we should clean before proceeding. In such <code>clean_names()</code> come handy. E.g.</p>
-<div class="sourceCode" id="cb1111"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1111-1"><a href="data-cleaning-in-r.html#cb1111-1" tabindex="-1"></a><span class="co"># Create a data.frame with dirty names</span></span>
-<span id="cb1111-2"><a href="data-cleaning-in-r.html#cb1111-2" tabindex="-1"></a>test_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">matrix</span>(<span class="at">ncol =</span> <span class="dv">6</span>))</span>
-<span id="cb1111-3"><a href="data-cleaning-in-r.html#cb1111-3" tabindex="-1"></a></span>
-<span id="cb1111-4"><a href="data-cleaning-in-r.html#cb1111-4" tabindex="-1"></a><span class="fu">names</span>(test_df) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;firstName&quot;</span>, <span class="st">&quot;ábc@!*&quot;</span>, <span class="st">&quot;% successful (2009)&quot;</span>,</span>
-<span id="cb1111-5"><a href="data-cleaning-in-r.html#cb1111-5" tabindex="-1"></a>                    <span class="st">&quot;REPEAT VALUE&quot;</span>, <span class="st">&quot;REPEAT VALUE&quot;</span>, <span class="st">&quot;&quot;</span>)</span>
-<span id="cb1111-6"><a href="data-cleaning-in-r.html#cb1111-6" tabindex="-1"></a><span class="co"># View this data</span></span>
-<span id="cb1111-7"><a href="data-cleaning-in-r.html#cb1111-7" tabindex="-1"></a>test_df</span></code></pre></div>
+<div class="sourceCode" id="cb1122"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1122-1"><a href="data-cleaning-in-r.html#cb1122-1" tabindex="-1"></a><span class="co"># Create a data.frame with dirty names</span></span>
+<span id="cb1122-2"><a href="data-cleaning-in-r.html#cb1122-2" tabindex="-1"></a>test_df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">matrix</span>(<span class="at">ncol =</span> <span class="dv">6</span>))</span>
+<span id="cb1122-3"><a href="data-cleaning-in-r.html#cb1122-3" tabindex="-1"></a></span>
+<span id="cb1122-4"><a href="data-cleaning-in-r.html#cb1122-4" tabindex="-1"></a><span class="fu">names</span>(test_df) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;firstName&quot;</span>, <span class="st">&quot;ábc@!*&quot;</span>, <span class="st">&quot;% successful (2009)&quot;</span>,</span>
+<span id="cb1122-5"><a href="data-cleaning-in-r.html#cb1122-5" tabindex="-1"></a>                    <span class="st">&quot;REPEAT VALUE&quot;</span>, <span class="st">&quot;REPEAT VALUE&quot;</span>, <span class="st">&quot;&quot;</span>)</span>
+<span id="cb1122-6"><a href="data-cleaning-in-r.html#cb1122-6" tabindex="-1"></a><span class="co"># View this data</span></span>
+<span id="cb1122-7"><a href="data-cleaning-in-r.html#cb1122-7" tabindex="-1"></a>test_df</span></code></pre></div>
 <pre><code>##   firstName ábc@!* % successful (2009) REPEAT VALUE REPEAT VALUE   
 ## 1        NA     NA                  NA           NA           NA NA</code></pre>
 <p>Using <code>clean_names()</code> which is also pipe friendly, we can clean names in one step. (Results will be in snake case)</p>
-<div class="sourceCode" id="cb1113"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1113-1"><a href="data-cleaning-in-r.html#cb1113-1" tabindex="-1"></a>test_df <span class="sc">%&gt;%</span> </span>
-<span id="cb1113-2"><a href="data-cleaning-in-r.html#cb1113-2" tabindex="-1"></a>  <span class="fu">clean_names</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb1124"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1124-1"><a href="data-cleaning-in-r.html#cb1124-1" tabindex="-1"></a>test_df <span class="sc">%&gt;%</span> </span>
+<span id="cb1124-2"><a href="data-cleaning-in-r.html#cb1124-2" tabindex="-1"></a>  <span class="fu">clean_names</span>()</span></code></pre></div>
 <pre><code>##   first_name abc percent_successful_2009 repeat_value repeat_value_2  x
 ## 1         NA  NA                      NA           NA             NA NA</code></pre>
 <p>It -</p>
@@ -749,8 +753,8 @@ div.csl-indent {
 <div id="handling-duplicate-records" class="section level2 hasAnchor" number="16.2">
 <h2><span class="header-section-number">16.2</span> Handling duplicate records<a href="data-cleaning-in-r.html#handling-duplicate-records" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>In <code>janitor</code> package, we have a ready to use function <code>get_dupes()</code>. It allows us to find “similar” observations in a data set based on certain characteristics. Syntax is pretty simple, and function is pipe friendly too. Suppose we have to find out duplicate in <code>mtcars</code> dataset on each combination of <code>wt</code> and <code>cyl</code>.</p>
-<div class="sourceCode" id="cb1115"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1115-1"><a href="data-cleaning-in-r.html#cb1115-1" tabindex="-1"></a>mtcars <span class="sc">%&gt;%</span> </span>
-<span id="cb1115-2"><a href="data-cleaning-in-r.html#cb1115-2" tabindex="-1"></a>  <span class="fu">get_dupes</span>(wt, cyl)</span></code></pre></div>
+<div class="sourceCode" id="cb1126"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1126-1"><a href="data-cleaning-in-r.html#cb1126-1" tabindex="-1"></a>mtcars <span class="sc">%&gt;%</span> </span>
+<span id="cb1126-2"><a href="data-cleaning-in-r.html#cb1126-2" tabindex="-1"></a>  <span class="fu">get_dupes</span>(wt, cyl)</span></code></pre></div>
 <pre><code>##     wt cyl dupe_count  mpg  disp  hp drat  qsec vs am gear carb
 ## 1 3.44   6          2 19.2 167.6 123 3.92 18.30  1  0    4    4
 ## 2 3.44   6          2 17.8 167.6 123 3.92 18.90  1  0    4    4
@@ -769,24 +773,24 @@ div.csl-indent {
 <div id="fix-excel-dates-stored-as-serial-numbers" class="section level2 hasAnchor" number="16.5">
 <h2><span class="header-section-number">16.5</span> Fix excel dates stored as serial numbers<a href="data-cleaning-in-r.html#fix-excel-dates-stored-as-serial-numbers" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>While loading excel files in R, we may have sometimes noticed <code>41590</code> instead of having a <code>date format</code>. Sorting out this issue is again easy in <code>janitor</code> as we have a function <code>excel_numeric_to_date()</code> for this. Example</p>
-<div class="sourceCode" id="cb1117"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1117-1"><a href="data-cleaning-in-r.html#cb1117-1" tabindex="-1"></a>janitor<span class="sc">::</span><span class="fu">excel_numeric_to_date</span>(<span class="dv">41590</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb1128"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1128-1"><a href="data-cleaning-in-r.html#cb1128-1" tabindex="-1"></a>janitor<span class="sc">::</span><span class="fu">excel_numeric_to_date</span>(<span class="dv">41590</span>)</span></code></pre></div>
 <pre><code>## [1] &quot;2013-11-12&quot;</code></pre>
 </div>
 <div id="convert-a-mix-of-date-and-datetime-formats-to-date" class="section level2 hasAnchor" number="16.6">
 <h2><span class="header-section-number">16.6</span> Convert a mix of date and datetime formats to date<a href="data-cleaning-in-r.html#convert-a-mix-of-date-and-datetime-formats-to-date" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>Similar to above, we can also sort out, if we have a column mix of different date formats, using <code>janitor::convert_to_date()</code> or <code>janitor::convert_to_datetime()</code>. See Examples-</p>
-<div class="sourceCode" id="cb1119"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1119-1"><a href="data-cleaning-in-r.html#cb1119-1" tabindex="-1"></a>unsorted_dates <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&#39;2018-05-31&#39;</span>, <span class="st">&#39;41590&#39;</span>, <span class="dv">41590</span>)</span>
-<span id="cb1119-2"><a href="data-cleaning-in-r.html#cb1119-2" tabindex="-1"></a>janitor<span class="sc">::</span><span class="fu">convert_to_date</span>(unsorted_dates)</span></code></pre></div>
+<div class="sourceCode" id="cb1130"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1130-1"><a href="data-cleaning-in-r.html#cb1130-1" tabindex="-1"></a>unsorted_dates <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&#39;2018-05-31&#39;</span>, <span class="st">&#39;41590&#39;</span>, <span class="dv">41590</span>)</span>
+<span id="cb1130-2"><a href="data-cleaning-in-r.html#cb1130-2" tabindex="-1"></a>janitor<span class="sc">::</span><span class="fu">convert_to_date</span>(unsorted_dates)</span></code></pre></div>
 <pre><code>## [1] &quot;2018-05-31&quot; &quot;2013-11-12&quot; &quot;2013-11-12&quot;</code></pre>
 <p><strong>Note in above example, we have created a heterogeneous vector, but implicit coercion rules of R have converted all forms to character only.</strong></p>
 <p>In real world examples, where data is entered through multiple machines/data points simultaneously, we may a column mix of date formats. In that case, we may use <code>parse_date_time()</code> function in <code>lubridate</code> package. To allow different formats we have use <code>order</code> agument in this function. Example</p>
-<div class="sourceCode" id="cb1121"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1121-1"><a href="data-cleaning-in-r.html#cb1121-1" tabindex="-1"></a>mixed_dates <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;13-11-1991&quot;</span>, <span class="st">&quot;13-Sep-22&quot;</span>, </span>
-<span id="cb1121-2"><a href="data-cleaning-in-r.html#cb1121-2" tabindex="-1"></a>                 <span class="st">&quot;20 August 2000&quot;</span>, <span class="st">&quot;15 August 87&quot;</span>, </span>
-<span id="cb1121-3"><a href="data-cleaning-in-r.html#cb1121-3" tabindex="-1"></a>                 <span class="st">&quot;03/31/23&quot;</span>, <span class="st">&quot;12-31-2022&quot;</span>)</span>
-<span id="cb1121-4"><a href="data-cleaning-in-r.html#cb1121-4" tabindex="-1"></a></span>
-<span id="cb1121-5"><a href="data-cleaning-in-r.html#cb1121-5" tabindex="-1"></a>lubridate<span class="sc">::</span><span class="fu">parse_date_time</span>(mixed_dates,</span>
-<span id="cb1121-6"><a href="data-cleaning-in-r.html#cb1121-6" tabindex="-1"></a>                           <span class="at">orders =</span> <span class="fu">c</span>(<span class="st">&quot;d m y&quot;</span>, <span class="st">&quot;d B Y&quot;</span>, <span class="st">&quot;m/d/y&quot;</span>, <span class="st">&quot;d B y&quot;</span>),</span>
-<span id="cb1121-7"><a href="data-cleaning-in-r.html#cb1121-7" tabindex="-1"></a>                           <span class="at">locale =</span> <span class="st">&quot;eng&quot;</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb1132"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1132-1"><a href="data-cleaning-in-r.html#cb1132-1" tabindex="-1"></a>mixed_dates <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">&quot;13-11-1991&quot;</span>, <span class="st">&quot;13-Sep-22&quot;</span>, </span>
+<span id="cb1132-2"><a href="data-cleaning-in-r.html#cb1132-2" tabindex="-1"></a>                 <span class="st">&quot;20 August 2000&quot;</span>, <span class="st">&quot;15 August 87&quot;</span>, </span>
+<span id="cb1132-3"><a href="data-cleaning-in-r.html#cb1132-3" tabindex="-1"></a>                 <span class="st">&quot;03/31/23&quot;</span>, <span class="st">&quot;12-31-2022&quot;</span>)</span>
+<span id="cb1132-4"><a href="data-cleaning-in-r.html#cb1132-4" tabindex="-1"></a></span>
+<span id="cb1132-5"><a href="data-cleaning-in-r.html#cb1132-5" tabindex="-1"></a>lubridate<span class="sc">::</span><span class="fu">parse_date_time</span>(mixed_dates,</span>
+<span id="cb1132-6"><a href="data-cleaning-in-r.html#cb1132-6" tabindex="-1"></a>                           <span class="at">orders =</span> <span class="fu">c</span>(<span class="st">&quot;d m y&quot;</span>, <span class="st">&quot;d B Y&quot;</span>, <span class="st">&quot;m/d/y&quot;</span>, <span class="st">&quot;d B y&quot;</span>),</span>
+<span id="cb1132-7"><a href="data-cleaning-in-r.html#cb1132-7" tabindex="-1"></a>                           <span class="at">locale =</span> <span class="st">&quot;eng&quot;</span>)</span></code></pre></div>
 <pre><code>## [1] &quot;1991-11-13 UTC&quot; &quot;2022-09-13 UTC&quot; &quot;2000-08-20 UTC&quot; &quot;1987-08-15 UTC&quot;
 ## [5] &quot;2023-03-31 UTC&quot; &quot;2022-12-31 UTC&quot;</code></pre>
 </div>

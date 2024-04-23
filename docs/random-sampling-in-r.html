@@ -23,7 +23,7 @@
 <meta name="author" content="Anil Goyal" />
 
 
-<meta name="date" content="2024-04-20" />
+<meta name="date" content="2024-04-23" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -382,11 +382,15 @@ div.csl-indent {
 <ul>
 <li class="chapter" data-level="9.4.1" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#group_by"><i class="fa fa-check"></i><b>9.4.1</b> <code>group_by()</code></a></li>
 <li class="chapter" data-level="9.4.2" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#summarise"><i class="fa fa-check"></i><b>9.4.2</b> <code>summarise()</code></a></li>
+<li class="chapter" data-level="9.4.3" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#ungroup"><i class="fa fa-check"></i><b>9.4.3</b> <code>ungroup()</code></a></li>
+<li class="chapter" data-level="9.4.4" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#by-argument-in-mutate-summarise-etc.-functions"><i class="fa fa-check"></i><b>9.4.4</b> <code>.by</code> argument in <code>mutate</code>, <code>summarise</code>, etc. functions</a></li>
+<li class="chapter" data-level="9.4.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#reframe"><i class="fa fa-check"></i><b>9.4.5</b> <code>reframe()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.5" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#other-useful-functions-in-dplyr"><i class="fa fa-check"></i><b>9.5</b> Other Useful functions in <code>dplyr</code></a>
 <ul>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#if_else"><i class="fa fa-check"></i><code>if_else()</code></a></li>
 <li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_when"><i class="fa fa-check"></i><code>case_when()</code></a></li>
+<li class="chapter" data-level="" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#case_match"><i class="fa fa-check"></i><code>case_match()</code></a></li>
 </ul></li>
 <li class="chapter" data-level="9.6" data-path="data-transformation-in-dplyr.html"><a href="data-transformation-in-dplyr.html#window-functionsoperations"><i class="fa fa-check"></i><b>9.6</b> Window functions/operations</a></li>
 </ul></li>
@@ -716,7 +720,7 @@ div.csl-indent {
 <div id="prerequisites-3" class="section level3 unnumbered hasAnchor">
 <h3>Prerequisites<a href="random-sampling-in-r.html#prerequisites-3" class="anchor-section" aria-label="Anchor link to header"></a></h3>
 <p>Load <code>tidyverse</code></p>
-<div class="sourceCode" id="cb1123"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1123-1"><a href="random-sampling-in-r.html#cb1123-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div>
+<div class="sourceCode" id="cb1134"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1134-1"><a href="random-sampling-in-r.html#cb1134-1" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span></code></pre></div>
 </div>
 <div id="simple-random-sampling-with-and-without-replacement" class="section level2 hasAnchor" number="17.1">
 <h2><span class="header-section-number">17.1</span> Simple Random Sampling (With and without replacement)<a href="random-sampling-in-r.html#simple-random-sampling-with-and-without-replacement" class="anchor-section" aria-label="Anchor link to header"></a></h2>
@@ -982,7 +986,7 @@ dat %&gt;%
 <p>This sampling approach is defined in ISA-530 as <em>“a type of value-weighted selection in which sample size, selection and evaluation results in a conclusion in monetary amounts.”</em></p>
 <p>Our methodology is not much difference from methodology adopted in section <a href="random-sampling-in-r.html#srs">17.2</a> except that we will make use of <code>weight_by =</code> argument now.</p>
 <p>Let’s use <code>state.x77</code> data that comes with base R. Since the data is in matrix format, let’s first convert it data frame using <code>as.data.frame()</code> first.</p>
-<div class="sourceCode" id="cb1126"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1126-1"><a href="random-sampling-in-r.html#cb1126-1" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(state.x77)</span></code></pre></div>
+<div class="sourceCode" id="cb1137"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1137-1"><a href="random-sampling-in-r.html#cb1137-1" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(state.x77)</span></code></pre></div>
 <p>Other steps are simple.</p>
 <pre><code>set.seed(123)
 dat %&gt;% 
@@ -1159,10 +1163,10 @@ Figure 17.3: Illustration of Stratified Random Sampling
 </div>
 <p>The function <code>dplyr::group_by()</code> will be used here for stratification. Thereafter we can proceed for sampling described as above.</p>
 <p>Example Data: - Let’s include region in <code>state.x77</code> data using <code>dplyr::bind_cols</code>.</p>
-<div class="sourceCode" id="cb1128"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1128-1"><a href="random-sampling-in-r.html#cb1128-1" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">bind_cols</span>(</span>
-<span id="cb1128-2"><a href="random-sampling-in-r.html#cb1128-2" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(state.x77),</span>
-<span id="cb1128-3"><a href="random-sampling-in-r.html#cb1128-3" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(state.region)</span>
-<span id="cb1128-4"><a href="random-sampling-in-r.html#cb1128-4" tabindex="-1"></a>)</span></code></pre></div>
+<div class="sourceCode" id="cb1139"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1139-1"><a href="random-sampling-in-r.html#cb1139-1" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">bind_cols</span>(</span>
+<span id="cb1139-2"><a href="random-sampling-in-r.html#cb1139-2" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(state.x77),</span>
+<span id="cb1139-3"><a href="random-sampling-in-r.html#cb1139-3" tabindex="-1"></a>  <span class="fu">as.data.frame</span>(state.region)</span>
+<span id="cb1139-4"><a href="random-sampling-in-r.html#cb1139-4" tabindex="-1"></a>)</span></code></pre></div>
 <p>Let’s see first 6 rows of this data</p>
 <table>
 <colgroup>
@@ -1267,11 +1271,11 @@ Figure 17.3: Illustration of Stratified Random Sampling
 </tbody>
 </table>
 <p>We can check a summary of number of States per region</p>
-<div class="sourceCode" id="cb1129"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1129-1"><a href="random-sampling-in-r.html#cb1129-1" tabindex="-1"></a>dat <span class="sc">%&gt;%</span> </span>
-<span id="cb1129-2"><a href="random-sampling-in-r.html#cb1129-2" tabindex="-1"></a>  tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">&#39;State&#39;</span>) <span class="sc">%&gt;%</span> <span class="co"># this step will not be </span></span>
-<span id="cb1129-3"><a href="random-sampling-in-r.html#cb1129-3" tabindex="-1"></a>                                  <span class="co"># used in databases without row names</span></span>
-<span id="cb1129-4"><a href="random-sampling-in-r.html#cb1129-4" tabindex="-1"></a>  <span class="fu">group_by</span>(state.region) <span class="sc">%&gt;%</span> </span>
-<span id="cb1129-5"><a href="random-sampling-in-r.html#cb1129-5" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">states =</span> <span class="fu">n</span>())</span></code></pre></div>
+<div class="sourceCode" id="cb1140"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1140-1"><a href="random-sampling-in-r.html#cb1140-1" tabindex="-1"></a>dat <span class="sc">%&gt;%</span> </span>
+<span id="cb1140-2"><a href="random-sampling-in-r.html#cb1140-2" tabindex="-1"></a>  tibble<span class="sc">::</span><span class="fu">rownames_to_column</span>(<span class="st">&#39;State&#39;</span>) <span class="sc">%&gt;%</span> <span class="co"># this step will not be </span></span>
+<span id="cb1140-3"><a href="random-sampling-in-r.html#cb1140-3" tabindex="-1"></a>                                  <span class="co"># used in databases without row names</span></span>
+<span id="cb1140-4"><a href="random-sampling-in-r.html#cb1140-4" tabindex="-1"></a>  <span class="fu">group_by</span>(state.region) <span class="sc">%&gt;%</span> </span>
+<span id="cb1140-5"><a href="random-sampling-in-r.html#cb1140-5" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">states =</span> <span class="fu">n</span>())</span></code></pre></div>
 <pre><code>## # A tibble: 4 × 2
 ##   state.region  states
 ##   &lt;fct&gt;          &lt;int&gt;
@@ -1470,18 +1474,18 @@ dat %&gt;%
 <h2><span class="header-section-number">17.5</span> Cluster sampling<a href="random-sampling-in-r.html#cluster-sampling" class="anchor-section" aria-label="Anchor link to header"></a></h2>
 <p>ISA 530 does not explicitly define cluster sampling. Actually this sampling is sampling of strata and we can apply above mentioned techniques easily to sample clusters. E.g. in the sample data above, we can sample say, 2 clusters (or regions).</p>
 <p>Thus, our strategy would be first to sample groups from unique available values and thereafter filter all the records.</p>
-<div class="sourceCode" id="cb1133"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1133-1"><a href="random-sampling-in-r.html#cb1133-1" tabindex="-1"></a><span class="co"># set the seed</span></span>
-<span id="cb1133-2"><a href="random-sampling-in-r.html#cb1133-2" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
-<span id="cb1133-3"><a href="random-sampling-in-r.html#cb1133-3" tabindex="-1"></a><span class="co"># sample clusters</span></span>
-<span id="cb1133-4"><a href="random-sampling-in-r.html#cb1133-4" tabindex="-1"></a>clusters <span class="ot">&lt;-</span> <span class="fu">sample</span>(</span>
-<span id="cb1133-5"><a href="random-sampling-in-r.html#cb1133-5" tabindex="-1"></a>  <span class="fu">unique</span>(dat<span class="sc">$</span>state.region),</span>
-<span id="cb1133-6"><a href="random-sampling-in-r.html#cb1133-6" tabindex="-1"></a>  <span class="at">size =</span> <span class="dv">2</span></span>
-<span id="cb1133-7"><a href="random-sampling-in-r.html#cb1133-7" tabindex="-1"></a>)</span>
-<span id="cb1133-8"><a href="random-sampling-in-r.html#cb1133-8" tabindex="-1"></a><span class="co"># filter all records in above clusters</span></span>
-<span id="cb1133-9"><a href="random-sampling-in-r.html#cb1133-9" tabindex="-1"></a>clust_samp <span class="ot">&lt;-</span> dat <span class="sc">%&gt;%</span> </span>
-<span id="cb1133-10"><a href="random-sampling-in-r.html#cb1133-10" tabindex="-1"></a>  <span class="fu">filter</span>(state.region <span class="sc">%in%</span> clusters)</span>
-<span id="cb1133-11"><a href="random-sampling-in-r.html#cb1133-11" tabindex="-1"></a><span class="co"># check number of records</span></span>
-<span id="cb1133-12"><a href="random-sampling-in-r.html#cb1133-12" tabindex="-1"></a>clust_samp<span class="sc">$</span>state.region <span class="sc">%&gt;%</span> <span class="fu">table</span>()</span></code></pre></div>
+<div class="sourceCode" id="cb1144"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1144-1"><a href="random-sampling-in-r.html#cb1144-1" tabindex="-1"></a><span class="co"># set the seed</span></span>
+<span id="cb1144-2"><a href="random-sampling-in-r.html#cb1144-2" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb1144-3"><a href="random-sampling-in-r.html#cb1144-3" tabindex="-1"></a><span class="co"># sample clusters</span></span>
+<span id="cb1144-4"><a href="random-sampling-in-r.html#cb1144-4" tabindex="-1"></a>clusters <span class="ot">&lt;-</span> <span class="fu">sample</span>(</span>
+<span id="cb1144-5"><a href="random-sampling-in-r.html#cb1144-5" tabindex="-1"></a>  <span class="fu">unique</span>(dat<span class="sc">$</span>state.region),</span>
+<span id="cb1144-6"><a href="random-sampling-in-r.html#cb1144-6" tabindex="-1"></a>  <span class="at">size =</span> <span class="dv">2</span></span>
+<span id="cb1144-7"><a href="random-sampling-in-r.html#cb1144-7" tabindex="-1"></a>)</span>
+<span id="cb1144-8"><a href="random-sampling-in-r.html#cb1144-8" tabindex="-1"></a><span class="co"># filter all records in above clusters</span></span>
+<span id="cb1144-9"><a href="random-sampling-in-r.html#cb1144-9" tabindex="-1"></a>clust_samp <span class="ot">&lt;-</span> dat <span class="sc">%&gt;%</span> </span>
+<span id="cb1144-10"><a href="random-sampling-in-r.html#cb1144-10" tabindex="-1"></a>  <span class="fu">filter</span>(state.region <span class="sc">%in%</span> clusters)</span>
+<span id="cb1144-11"><a href="random-sampling-in-r.html#cb1144-11" tabindex="-1"></a><span class="co"># check number of records</span></span>
+<span id="cb1144-12"><a href="random-sampling-in-r.html#cb1144-12" tabindex="-1"></a>clust_samp<span class="sc">$</span>state.region <span class="sc">%&gt;%</span> <span class="fu">table</span>()</span></code></pre></div>
 <pre><code>## .
 ##     Northeast         South North Central          West 
 ##             9             0            12             0</code></pre>
