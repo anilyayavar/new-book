@@ -1,0 +1,680 @@
+# Part VI: Network Analytics {-}
+
+# Network Analytics/Graph theory in R
+
+**The content is under development/Finalisation.**
+
+Network analysis has emerged as a pivotal tool in the realm of audit analytics, offering auditors a powerful method to uncover intricate relationships and patterns within vast datasets. Leveraging the rich ecosystem of packages in R, auditors can construct, visualize, and analyze networks with ease, enabling them to detect anomalies, identify key players, and assess the robustness of interconnected systems. From detecting fraud to optimizing supply chains, the application of network analysis in auditing not only enhances risk assessment but also empowers auditors to make data-driven decisions with greater precision and confidence.  So let's dive in.
+
+## An introduction to Graph theory
+Network analysis applies concepts of graph theory, which is branch of mathematics, to analyze and interpret complex systems, such as social networks, transportation networks, and biological networks, to uncover patterns, structures, and dynamics within these systems. Graph theory focuses on the properties and characteristics of graphs, such as paths, cycles, connectivity, and graph coloring.
+
+### Definition of a graph
+By definition, a graph is a mathematical structure consisting of a set of vertices (or nodes or actors) and a set of edges (or connections or links) that establish relationships between these vertices. Mathematically a graph $G = (V, E)$ consists of a set $V$ of vertices/nodes and a set $E$ of edges/links, as illustrated in \@ref(fig:gra1).  A vertex $V$ may represent real-world objects such as persons, computers, products, etc.  An edge $E$, on the other hand may represent the _relationship_ between the nodes, it connects, such as friendship between those persons, or physical connection between the computers, etc.
+```{r gra1, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An Example Graph", out.width="100%"}
+library(igraph)
+library(igraphdata)
+data("kite")
+kite <- upgrade_graph(kite)
+plot(kite, vertex.size = 25)
+```
+
+### Types of graph {-}
+Example graph shown in figure \@ref(fig:gra1) is basically an **Undirected Graph**, where the edges between the nodes aren't directed.  E.g. A connection between two computers.  On the other hand, if the edge(s) between the nodes is following a direction or specific order, then the graph is known as **Directed Graph**.  Example on twitter (now X) an user may follow other users without being followed by them in turn, as shown in figure \@ref(fig:gra2).
+
+```{r gra2, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An Example Directed Graph", out.width="100%", out.height="33%"}
+library(tidyverse)
+set.seed(123)
+igraph::as_data_frame(kite) %>% 
+  slice(1:9) %>% 
+  graph_from_data_frame() %>% 
+  plot(vertex.size = 25)
+```
+
+Moreover, sometimes an edge may be connected with itself.  In this case, the edge is called as **self-edge** and such graphs (allowing vertices to join themselves) are called as **Pseudographs**.  As real-world example of pseudographs think of transactions between different firms.  A firm should usually transact with other firms but sometimes it may transact within its own account maintained separately for a specific purpose.  Example in figure \@ref(fig:gra3) (left) node `E` is connected with itself.  
+
+Further sometimes there may be more than one edge connecting same pair of nodes (in same order).  Such edges are called as **multi-edges**; e.g. in figure \@ref(fig:gra3) (right) there are two edges connecting from `B` to `E`.  In real-world example we can think of multiple flights operating between same pair of airports by different carriers.
+
+```{r gra3, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Examples of Self Edge and Multi Edge", out.width="48%", out.height="33%"}
+set.seed(123)
+igraph::as_data_frame(kite) %>% 
+  slice(c(1, 3, 5:6)) %>% 
+  add_row(from = "E", to = "E") %>% 
+  graph_from_data_frame() %>% 
+  plot(vertex.size = 45)
+igraph::as_data_frame(kite) %>% 
+  slice(c(1, 3, 5:6)) %>% 
+  add_row(from = "B", to = "E") %>% 
+  graph_from_data_frame() %>% 
+  plot(vertex.size = 45)
+```
+
+**Complete Graphs** are graphs where all pairs of vertices are connected by an edge.  Example complete graphs are shown in the figure \@ref(fig:gra4).  While in real-world instances of complete graphs may be rare, it maybe possible that a few of the nodes/vertices in a bigger graph show complete mutual relationship.  In other words, the graph of those vertices if taken as a sub-graph is complete, then that complete subgraph is called as **clique**.  As an example think of a subgraph consisting of nodes `B, D, E and G` in graph shown in \@ref(fig:gra1) is a clique.
+
+```{r gra4, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Examples of Complete Graphs", out.width="49%", out.height="31%"}
+
+CompleteGraph <- function(n) {
+  myEdges <- combn(1:n,2)
+  myGraph <- graph(myEdges, directed=FALSE)
+  return(myGraph)
+}
+
+plot(CompleteGraph(4), vertex.size = 45)
+plot(CompleteGraph(6), vertex.size = 45,)
+```
+
+Before moving on, let us learn about two more specific types of graph.  One is known as **Bipartite Graphs**.  These are actually graphs having two mutually disjoint set of vertices with condition that no pair within the same set is connected.  E.g. graph in figure \@ref(fig:gra5) (Left) is a bipartite graph. We can think of two departments where edges represent correspondence between officials between the two departments.  Actually the idea can be extended to form k-partite graphs having `k` such disjoint sets.
+
+Another category is **Trees**, representing hierarchical relationships among entities/individuals. In a tree, vertices are connected through edges or links, making it a type of graph. For a graph to qualify as a tree, there must be precisely one path between any pair of vertices when considered undirected. The bipartite graph illustrated in the example figure \@ref(fig:gra5) (on the left) can also be interpreted as a tree because it meets this criterion. Refer figure \@ref(fig:gra5) (Right) wherein the same graph has been redrawn as a tree.
+
+```{r gra5, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Bipartite and Tree Graph example", out.width="49%", out.height="40%"}
+set.seed(1)
+g <- sample_bipartite(4, 6, p = .41)  
+
+# define color and shape mappings.
+col <- c("steelblue", "orange")
+shape <- c("circle", "square")
+
+plot(subgraph(g, V(g)[-6]) - edge("5|2"),
+     vertex.color = col[as.numeric(V(g)$type)+1],
+     vertex.shape = shape[as.numeric(V(g)$type)+1],
+     vertex.size = 35,
+     layout = layout_as_bipartite
+)
+
+plot(subgraph(g, V(g)[-6]) - edge("5|2"),
+     vertex.color = "pink",
+     vertex.shape = "square",
+     vertex.size = 35,
+     layout = layout_as_tree
+)
+```
+
+### Vertex and Edge attributes
+Recall that a Graph basically consists of two sets $(V, E)$ wherein $V$ is a set of `vertices` and $E$ is set of `edges`.  In their simplest form, these sets can be conceived as lists, but both can be enriched by incorporating additional attributes.  E.g. if a graph consists of airports and flights operating between them, the set $V$ representing airports could include attributes such as, (i) names, (ii) types whether domestic or international, (iii) geographical coordinates, (iv) State/Country in which located, etc. and so on.  Similarly, the set of edges $E$ could encompass additional details like (i) the count of flights operating between two airports, (ii) the airlines servicing those flights, (iii) the aerial distance between airports, and so on. An example may be seen in figure \@ref(fig:gra6).
+
+```{r gra6, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Examples of Vertex and Edge properties", out.width="98%", out.height="32%"}
+library(ggraph)
+airtrans <- data.frame(
+  from = c("A", "A", "A", "B", "C"),
+  to = c("B", "C", "D", "C", "D")
+) |> as.matrix()
+
+airtransgraph <- graph_from_edgelist(airtrans, directed = FALSE)
+V(airtransgraph)$loc <- c("New Delhi", "Bangalore", "Mumbai", "Pune")
+V(airtransgraph)$country <- rep("India", 4)
+E(airtransgraph)$dist <- c(1750, 1150, 1200, 850, 120)
+E(airtransgraph)$airline <- c(rep("Vistara", 3), "Indigo", "Air India")
+
+ggraph(airtransgraph, layout = 'kk') +
+  geom_edge_fan(aes(label = paste0("Operating Airlines:", airline, ", Distance:", dist, " Kms")),
+                angle_calc = "along",
+                label_dodge = unit(2.5, 'mm'),
+                label_size = 4
+  ) +
+  geom_node_point(size = 20, color = "#D4E7C5") +
+  geom_node_text(aes(label = paste0(name, " \n(Airport:", loc, ")\n", country)), size = 3) +
+  scale_x_continuous(expand = expansion(mult = 0.1)) +
+  theme_void()
+```
+
+
+## Practical approach for creating graphs in R
+
+### Packages to use
+One of the best packages for creating and analysing graphs in R is `igraph`.  Package `igraph` was originally developed by **Gábor Csárdi** and **Tamás Nepusz**, and is written in the C programming language in order to achieve good performance.
+Let's load it.
+
+```
+library(igraph)
+```
+
+Apart from `igraph` which in itself is a complete package for network analysis, we will also be using `visNetwork` and `ggraph` packages.  Former is used to create interactive network charts and latter is used to create `ggplot2` compatible plots so that these can be customised further in familiar environment.
+
+Let's now proceed to learn creating graph objects in R.  Actually graph objects can be created in many ways, out of which we will learn three methods.  These methods will serve our purpose most of the time.
+
+### Creating a graph from data frame
+
+When working with data analysis, data frames are often our primary tool. Consequently, the most common and practical approach to creating graphs in igraph involves utilizing data.frame objects. Essentially, the `data.frame` objects we use to generate graphs should consist of at least two columns, where each row represents an edge within the intended graph. The first column is interpreted as the `'from'` node, while the second column is considered the `'to'` node, regardless of their respective column names. To achieve this, we employ the `graph_from_data_frame()` function from the `igraph` library. Its syntax is as follows:
+
+```
+graph_from_data_frame(
+  d =         ,  # data.frame
+  directed = TRUE,
+  vertices = NULL # optional data.frame of vertices
+)
+```
+Example-1:  Let's construct a graph object from a data frame containing four edges.
+```{r gra7}
+# Example data frame of edges
+df <- data.frame(
+  from = c(1, 1, 3, 3),
+  to = c(2, 3, 5, 4)
+)
+# Creating graph object
+gr1 <- graph_from_data_frame(df)
+# Let's print it
+gr1
+```
+
+Here, we observe that a graph object named `gr1` has been successfully generated and printed in the console, providing us with pertinent information about it.
+
++ The first line always begins with `IGRAPH`, followed by seven characters, which represent the initial characters of a unique graph ID. Interested users can employ the `graph_id()` function to retrieve the full ID if needed.
++ Subsequently, a four-letter character string is displayed. In this example, two are `UN`, followed by two blanks or `--`. These characters signify the following:
+  - The first letter distinguishes between directed (`D`) and undirected (`U`) graphs.
+  - The second letter, `N`, denotes named graphs, i.e., graphs with the name vertex attribute set.
+  - The third letter, `W`, indicates weighted graphs, i.e., graphs with the weight edge attribute set.
+  - The fourth letter, `B`, signifies bipartite graphs, i.e., graphs with the type vertex attribute set.
++ Following this is the count of vertices and edges, separated by two dashes.
++ Starting from the second line, the graph's attributes are listed, separated by commas. Each attribute's type – graph (`g`), vertex (`v`), or edge (`e`) – and data type – character (`c`), numeric (`n`), logical (`l`), or other (`x`) – are specified.
++ In the last line a few of the edges are printed.
+
+Readers may notice that all four edges from our df have been imported into the gr1 graph and are displayed accordingly.
+
+Now `directed` argument by default is `TRUE` so by default the graph created is `directed` as also confirmed by first alphabet `D` in the four character string.  So let's check how an undirected graph is created and printed.
+
+```{r gra8}
+# Creating graph object
+gr2 <- graph_from_data_frame(df, directed = FALSE)
+# Let's print it
+gr2
+```
+
+All good.  First letter is now `U` representing undirected graph.  Readers may also notice another change while printing the edges that these are now printed without any arrow mark.  Here we created another graph object just to show how the `directed` argument is used.  However, any existing **`directed` graph can be converted to an `undirected` graph** using function `as.directed()`.  Check-
+
+```{r gra9}
+as.undirected(gr1)
+```
+
+Now what about the last argument `vertices = ` in the function `graph_from_data_frame`? In most of the cases, the `d` argument having data of edges may be sufficient, yet sometimes a graph may contain isolates (isolated nodes not connected with any other edge).  So to include those vertices, we may use `vertices` argument.  Additionally to include any of the vertex property in the graph being created, we may use that as an additional columns in the data frame.  Similar to this analogy, all additional columns in our edges dataset (after first two columns) will be used to set edge properties.
+
+Example-2: Let's add an isolated edge `"6"` in our graph.
+```{r gra10}
+df_v <- data.frame(
+  id = c(1, 2, 3, 4, 5, 6),
+  name = c("Ram", "Shyam", "Alex", "Bob", "Charlie", "Kumar")
+)
+# Creating graph object
+gr3 <- graph_from_data_frame(df, directed = FALSE, vertices = df_v)
+# Let's print it
+gr3
+```
+
+Notice the change in number of edges now.  Also notice that the edges printed with different names due to presence of column named `name` in vertices data frame.
+
+Readers may try to add additional columns in edge dataset/data frame and create respective graph objects.
+
+### Creating a graph from Edge list
+
+Creating graphs from edge-lists is nearly the same approach as creating graphs from data frames.  Only difference is absence of `vertices` argument here.  The syntax is
+```
+graph_from_edgelist(el, directed = TRUE)
+```
+Here `el` should be a two column matrix, character or numeric, representing edges; and thus that's another difference here.
+
+```{r gra11}
+edges <- data.frame(
+  origin = c("Ram", "Ram", "Alex", "Alex"), 
+  dest = c("Shyam", "Alex", "Charlie", "Bob")
+)
+edges <- as.matrix(edges)
+# Now let's create a graph
+gr4 <- graph_from_edgelist(edges, directed = FALSE)
+# And print it
+gr4
+```
+
+Fine enough.  We have successfully created an undirected graph with `5` nodes and `4` edges.
+
+### Creating a graph from adjacency matrix
+But what exactly is an adjacency matrix? It's a square matrix sized $n \times n$, where both the rows and columns are indexed by $n$ vertices. The $(i, j)$-th entry of this matrix holds significance:
+
+*   In a graph devoid of any edge attribute such as `weight`, a value of `1` signifies the existence of an edge from vertex $v_{i}$ to $v_j$. Conversely, a value of `0` indicates the absence of an edge between those two vertices.
+*   However, in graphs equipped with edge attributes like `weight`, the corresponding numerical value represents the weight of the edge from vertex $v_{i}$ to $v_j$.
+
+Example:  Let's try to create graph as shown in \@ref(fig:gra6) through corresponding adjacency matrix.  First, without weights.
+
+```{r gra12}
+# Let's create the matrix
+adj_mat <- structure(c(0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0), dim = c(4L, 
+4L), dimnames = list(c("DEL", "BNG", "BOM", "PNQ"), c("DEL", 
+"BNG", "BOM", "PNQ")))
+adj_mat
+# Let's create the graph
+gr5 <- graph_from_adjacency_matrix(adj_mat)
+# Let's print it
+gr5
+```
+
+So far so good.  Directed graph (default) has been created with edges between airports both to and from separately. Now let us try to create weighted graph for the same data where weights will now be the distance between those airports.
+```{r gra13}
+# Let's create the matrix
+adj_mat2 <- structure(c(0, 1750, 1150, 1200, 1750, 0, 850, 0, 1150, 850, 
+0, 120, 1200, 0, 120, 0), dim = c(4L, 4L), dimnames = list(c("DEL", 
+"BNG", "BOM", "PNQ"), c("DEL", "BNG", "BOM", "PNQ")))
+adj_mat2
+# Let's create the graph
+gr6 <- graph_from_adjacency_matrix(adj_mat2, weighted = TRUE)
+# Let's print it
+gr6
+```
+This time notice that edge property named `weight` with `numeric` type has been added to the graph.
+
+### Getting data back from graph objects
+Once the graph objects have been created getting the data back both in `data.frame` or adjacency `matrix` is pretty easy.  For this we can use either of `igraph` functions `as_data_frame()` or `as_adjacency_matrix()`.  Let check both these functions.
+
+1. `as_data_frame()` : Since package `tibble`'s earlier versions also had a same named function, it is safe to use `igraph::as_data_frame()` to avoid conflict and bug in the code.  It takes a igraph object and outputs a `data.frame`.  For example let's get the data back from `gr6` object created in above code.  Since the `gr6` was created from an adjacency matrix it will be amusing to see if the function is working correctly.
+
+```{r gra14}
+igraph::as_data_frame(gr6)
+```
+
+From the output above, it is clear that the function worked correctly.  Since the graph was `directed` the edges have been created from both sides.  So let's also check the function's output in case of undirected graph.
+
+```{r gra15}
+igraph::as_data_frame(as.undirected(gr6))
+```
+Absolutely fine.  But notice that weights of the edges has been combined while converting directed graph to an undirected graph.  That also can be tackled of while using `as.undirected()` by tweaking the argument `edge.attr.comb` which basically takes a function to combine the separate edge attributes.  So,
+
+```{r gra16}
+as.undirected(gr6, edge.attr.comb = list(weight = mean)) %>%
+  igraph::as_data_frame()
+```
+
+It will not be out of place to mention here that this function has an additional argument `what`, in case requirement is to export `"vertex"` and/or `"edges"` data.  If the argument is set to `"both"` the two data-sets will be returned in a list.
+
+```{r gra17}
+# Vertices data only
+igraph::as_data_frame(gr6, what = "vertices")
+```
+
+2. `as_adjacency_matrix()` : Similar to above function, her this function will take an igraph object and returns adjacency `matrix` here instead.  So let's check it also.
+
+```{r gra18}
+as.undirected(gr6, edge.attr.comb = list(weight = mean)) %>%
+  igraph::as_adjacency_matrix()
+```
+
+We may notice that adjacency matrix has been returned but without weights.  So to map `weights` we may use its `attr` argument which by default is `NULL`.
+
+```{r gra19}
+as.undirected(gr6, edge.attr.comb = list(weight = mean)) %>%
+  igraph::as_adjacency_matrix(attr = "weight")
+```
+
+## Adding vertex and/or edge attributes to an existing `igraph` object
+We've previously explored how vertex and edge properties can be incorporated into an `igraph` during its creation. However, there may be instances where the need arises to add vertex and/or edge properties to an `igraph` object after its creation or to an existing igraph object. Before delving into that, let's first understand how we can retrieve existing edges, nodes, or their attributes from an existing `igraph`.
+
+1. Getting vertices of an `igraph` using `V()`
+```{r gra20}
+V(gr6)
+```
+
+2. Getting edges of an `igraph` using `E()`
+```{r gra21}
+E(gr6)
+```
+
+3. Extracting edge or vertex attribute using `$`
+```{r gra22}
+# Vertex Property "name"
+V(gr6)$name
+# Edge property "weight"
+E(gr6)$weight
+```
+
+4. Adding vertex or edge property similarly using `$`
+```{r gra23}
+# adding vertex property say "airport_name"
+V(gr6)$airport_name <- c("New Delhi", "Bengaluru", "Mumbai", "Pune")
+# Single value will be replicated across all values
+V(gr6)$country <- "India"
+
+## Let's check it
+igraph::as_data_frame(gr6, what = "vertices")
+```
+
+Let's also add some edge property too.
+```{r gra24}
+# Adding edge property "carrier"
+E(gr6)$carrier <- c(rep("Vistara",6), rep("Indigo", 2), rep("Air India", 2))
+# Adding another edge property on the basis of condition
+E(gr6)$route <- case_when(
+  E(gr6)$weight <= 400 ~ "Short",
+  E(gr6)$weight <= 1000 ~ "Medium",
+  TRUE ~ "Long"
+)
+
+## Let's check it
+igraph::as_data_frame(gr6)
+```
+
+## Visualising graphs
+After covering graph definition and storage methods, let's explore techniques for visualizing them. Visualization is crucial for conveying the essence of graphs and networks, with the arrangement and style playing significant roles in communication. Apart from factors related to visual appeal, layout becomes crucial. The relative positioning of vertices greatly impacts visualization effectiveness. This is evident from the comparison of two graphs in Figure \@ref(fig:gra25), both representing the same graph depicted earlier in Figure \@ref(fig:gra2).
+
+```{r gra25, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two layouts of a same graph", out.height="34%", out.width="48%"}
+set.seed(123)
+igraph::as_data_frame(kite) %>% 
+  slice(1:9) %>% 
+  graph_from_data_frame() %>% 
+  plot(vertex.size = 25, layout = layout_as_star)
+
+igraph::as_data_frame(kite) %>% 
+  slice(1:9) %>% 
+  graph_from_data_frame() %>% 
+  plot(vertex.size = 25, layout = layout_as_tree)
+
+```
+
+Nowadays, there are many packages available in R to plot or visualise graph objects while analysing network data. Of these, we will learn two here, (i) one plotting with `igraph` only though the plots created will be static; and (ii) `visNetwork` which will be used to create interactive visualizations.  Visualizing geographical networks have been discussed separately in an another Chapter.
+
+## Plotting using `plot()` in `igraph`
+Plotting `igraph` objects in R is very simple.  Just use `plot` command which basically uses `plot.igraph` method, and will plot any igraph object using default values to its other arguments.  As we have already seen that layouts are important while plotting graph objects, we can set layout using argument `layout` in `plot`.
+
+In the following example (Figure \@ref(fig:gra26)), we can see two random layouts of same graph as we have seen in Figure \@ref(fig:gra25).
+```{r gra26, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two Other layouts of a same graph", out.height="34%", out.width="48%"}
+my_gr <- igraph::as_data_frame(kite) %>% 
+  slice(1:9) %>% 
+  graph_from_data_frame()
+
+set.seed(12345)
+plot(my_gr, vertex.size = 25, layout = layout_randomly)
+
+set.seed(54321)
+plot(my_gr, vertex.size = 25, layout = layout_randomly)
+```
+
+In the above example, we have seen that same layout may generate different coordinates for plotting at each iteration.  However, using specific random number seed, we can fix the random layout of graph for purpose of reproducibility. 
+
+Before moving on let's create a famous network/graph of `Zachary karate club` and learn how to plot network graph effectively.  The description available on Wikipedia for this network, I am reproducing here. *A social network of a karate club was studied by Wayne W. Zachary for a period of three years from 1970 to 1972.[2] The network captures 34 members of a karate club, documenting links between pairs of members who interacted outside the club. During the study a conflict arose between the administrator "John A" and instructor "Mr. Hi" (pseudonyms), which led to the split of the club into two. Half of the members formed a new club around Mr. Hi; members from the other part found a new instructor or gave up karate. Based on collected data Zachary correctly assigned all but one member of the club to the groups they actually joined after the split.*
+
+This graph object is available in package `igraphdata` from which we can load it.
+```{r gra27, warning=FALSE}
+library(igraph)
+library(igraphdata)
+data("karate")
+karate
+karate_data <- igraph::as_data_frame(karate)
+head(karate_data)
+plot(karate, layout = layout_nicely)
+```
+
+### Layouts
+Network layouts are algorithms that return coordinates for each node in a network. The igraph library offers several built-in layouts.  Learning the algorithm behind these layouts is outside the scope of the chapter.
+
+- `layout_as_bipartite()` Minimize edge-crossings in a simple two-row (or column) layout for bipartite graphs.
+- `layout_as_star()` A simple layout generator, that places one vertex in the center of a circle and the rest of the vertices equidistantly on the perimeter.
+- `layout_as_tree()` The **Reingold-Tilford** graph layout algorithm having a tree-like layout, perfect for trees, acceptable for graphs with not too many cycles.
+- `layout_in_circle()` Places vertices on a circle, in the order of their vertex ids.
+- `layout_nicely()` This function tries to choose an appropriate graph layout algorithm for the graph, automatically, based on a simple algorithm.
+- `layout_on_grid()` places vertices on a rectangular grid, in two or three dimensions
+- `layout_on_sphere()` Places vertices on a sphere, approximately uniformly, in the order of their vertex ids.
+- `layout_randomly()` This function uniformly randomly places the vertices of the graph in two or three dimensions. 
+- `layout_with_dh()` Places vertices of a graph on the plane, according to the simulated annealing algorithm by **Davidson and Harel**.
+- `layout_with_fr()` Places vertices on the plane using the force-directed layout algorithm by **Fruchterman and Reingold**.
+- `layout_with_gem()` Places vertices on the plane using the GEM force-directed layout algorithm.
+- `layout_with_kk()` **Kamada-Kawai** layout algorithm which places the vertices on the plane, or in 3D space, based on a physical model of springs.
+- `layout_with_sugiyama()` **Sugiyama** layout algorithm for layered directed acyclic graphs. The algorithm minimized edge crossings.
+
+Discussing each and every layout here will be out of the scope. Readers are advised to play with these different layouts to get a fair understanding of these layouts.  However, we may see a few useful layouts as example on `karate` data.
+
+- Circular layout: Figure \@ref(fig:gra28) Left.
+- Fruchterman Reingold: Figure \@ref(fig:gra28) Right.
+- Kamada Kawai: Figure \@ref(fig:gra29) Left.
+- Sugiyama: Figure \@ref(fig:gra29) Right.
+- Tree layouts (two representations): Figure \@ref(fig:gra30).
+
+```{r gra28, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+igraph_options(vertex.size = 18)
+par(mfrow = c(1, 2))
+
+plot(karate, layout = layout_in_circle)
+title("Circular layout")
+
+plot(karate, layout = layout_with_fr)
+title("Fruchterman - Reingold")
+```
+
+```{r gra29, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two Other layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+par(mfrow = c(1, 2))
+
+plot(karate, layout = layout_with_kk)
+title("Kamada Kawai")
+
+plot(karate, layout = layout_with_sugiyama)
+title("Sugiyama")
+```
+
+```{r gra30, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two Tree layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+par(mfrow = c(1, 2))
+
+plot(karate, layout = layout_as_tree)
+title("Default Tree layout")
+
+plot(karate, layout = layout_as_tree(karate, circular = TRUE))
+title("circular Tree")
+```
+
+### Displaying Vertex/Edge properties
+While the layouts may be important when displaying networks, additional information such as displaying vertex or edge properties such as their categories, etc. may also play an important role.  Edge/Vertex properties can both be continuous and/or discrete and visualising those properties in a network shall be through usual properties like color, size, width, shape, etc.  Out `karate` graph object is already colored, so readers may be wondering how the vertices are colored in the representation.  
+
+Actually vertices, in an igraph object can be colored using its property attribute `color`.  Let's retrieve it to understand.
+```{r gra31}
+V(karate)$color
+```
+We may see some discrete integer values are stored therein.  Let's reallocate these to specific colors as we want.
+
+```{r gra32, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Vertex coloring in Network", out.height="34%", out.width="98%"}
+V(karate)$color <- c("red", "dodgerblue")[V(karate)$color]
+head(V(karate)$color)
+plot(karate, layout = layout_nicely)
+```
+
+Similarly, we can use following attributes to display certain properties of vertices/edges in an igraph plot.
+
++ **Vertex Properties**
+  - `size` - Size of the vertex. Default is 15
+  - `color` - Fill color of the vertex
+  - `frame.color` - Border color of vertex
+  - `shape` - shape of vertex.  Can allocate one of the following `c("circle", "square", "rectangle", "none")`.
+  - `label` - a character vector used to label the nodes
+  - `label.family` Font family of label.  Default is `serif`
+  - `label.font` Font of label. `1` means plain (default), `2`: bold, `3` italic, `4` bold italic `5` symbol
+  - `label.cex` font size of label
+
++ **Edge properties**
+  - `color` color of edge
+  - `width` edge width
+  - `lty` line type for edges (`0` or `"blank"`; `1` or `"solid"`; `2` or `"dashed"`; `3` or `"dotted"`; `4` or `"dotdash"`, `6` or `"twodash"`)
+  - `label` label of edges (`label.family`, `lable.font` and `label.cex` similarly for font family, font type and font size respectively)
+  - `curved`: Edge curvature; range is `0-1`
+  - `arrow.size` Arrow size (default is 1) (for directed graphs)
+  - `arrow.width` arrow width, default is `1`.
+  - `arrow.mode`: arrow mode (`0` means no arrow; `1` back, `2` forward arrow, `3` both)
+  
+Apart from adding these properties to igraph object we can set these properties as arguments in the plot function, just by adding `edge.` or `vertex.` before the property/attribute name.
+  
+Let's see some of these through the following example.
+```{r gra33, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Edge and Vertex properties in Network", out.width="98%"}
+# set reproducible layout
+set.seed(123)
+l_s <- layout_nicely(karate)
+
+# Add vertex labels
+V(karate)$label <- stringr::str_remove(V(karate)$name, "Actor ")
+
+# Change shapes of two prominent actors
+V(karate)$shape <- ifelse(V(karate)$name %in% c("Mr Hi", "John A"), "rectangle", "circle")
+
+# Change Edge width as per "weight"
+E(karate)$width <- E(karate)$weight
+
+plot(karate, layout = l_s, edge.label.cex = 0.7)
+```
+
+## Using `visNetwork` for interactive visualizations
+
+
+
+## Subgraphs, adding or deleting edges/vertices
+
+
+## Describing network/graph for edges and nodes therein
+
+
+# Applying network analysis in audit/fraud detection
+## Use case-1: Finding network of related entities/persons - Identity Theft {#dup_net}
+**The Following Content is Under Development.**
+
+Imagine a scenario when users may have multiple IDs such as mobile numbers, email ids, and say some other ID issued by a Government Department say Income Tax Department (e.g. PAN number in Indian Scenario).  Using techniques mentioned in section \@ref(dup), we may easily find out duplicate users, i.e. duplicates on the basis of one ID.  Sometimes need arise where we have to find out network of all the duplicate users where they have changed one or two IDs but retained another. E.g. There may be a social sector scheme where any beneficiary is expected to be registered only once for getting that scheme benefits.  Scheme audit(s) may require auditors to check duplicate beneficiaries using multiple IDs.
+
+Understand this with the table \@ref(tab:gra101).
+```{r gra101, echo=FALSE, fig.show='hold', message=FALSE, warning=FALSE, fig.align='center'}
+library(tidyverse)
+library(kableExtra)
+PANs <- paste0(
+  "PANNO", c("0000", "0000", "1111", "2222", "3333", "4444", "5555", "5555", "6666", "7777"),
+  c("A", "A", "B", "C", "D", "E", "F", "F", "G", "H")
+)
+
+emails <- paste0(c("aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh", "iiii", "bbbb"), "@gmail.com")
+
+
+tele <- paste0("9", c("1", "2", "3", "4", "1", "1", "5", "6", "3", "2") %>%
+  map_chr(~ rep(.x, 9) %>%
+    paste0(collapse = "")))
+
+dummy_data <- data.frame(
+  ID = 1:10,
+  Mobile = tele,
+  Email = emails,
+  PAN = PANs
+)
+
+kable(dummy_data, caption = "Dummy Data")
+```
+
+It may be seen that out of ten persons, two with IDs 6 and 10 respectively share none of IDs out of Email, PAN and Telephone number. But if we see closely, ID-6 shares mobile number with ID-1 who in turn share PAN number with ID-2.  ID-2 further shares both Email and Mobile number with ID-6 thus establishing a relation and a network between ID-6 and ID-10.  This is clear in figure at \@ref(fig:igraph11). _Note that we are not considering names while finding out duplicates._
+
+```{r igraph11, fig.show='hold', fig.align='center', fig.cap="Network diagram of connected entities", out.width="75%"}
+
+knitr::include_graphics("images/canvas.png")
+```
+
+We may find these duplicates using a branch of mathematics called _Graph Theory_.^[[https://en.wikipedia.org/wiki/Graph_theory](https://en.wikipedia.org/wiki/Graph_theory)] We won't be discussing any core concepts of graph theory here.  There are a few packages to work with graph theory concepts in R, and we will be using `igraph` [@R-igraph] for our analysis here. Let's load the library.
+
+```{r message=FALSE, warning=FALSE}
+library(igraph)
+
+```
+
+```{r}
+dat <- data.frame(
+  MainID = 1:9,
+  Name = c("A", "B", "C", "B", "E", "A", "F", "G", "H"),
+  ID1 = c(11,12,13,13,14,15,16,17,17),
+  ID2 = c("1a", "1b","1b", "2a", "2b", "2c", "2c", "2e", "3a"),
+  ID3 = c("AB", "AB", "BC", "CD", "EF", "GH", "HI", "HI", "JK")
+)
+# A preview of our sample data
+dat
+```
+
+Now the complete algorithm is as under-
+```{r}
+id_cols <- c("ID1", "ID2", "ID3")
+dat %>% 
+  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
+  pivot_longer(cols = all_of(id_cols), 
+               values_drop_na = TRUE) %>% 
+  select(MainID, value) %>% 
+  graph_from_data_frame() %>%
+  components() %>%
+  pluck(membership) %>%
+  stack() %>%
+  set_names(c('UNIQUE_ID', 'MainID')) %>%
+  right_join(dat %>% 
+               mutate(MainID = as.factor(MainID)), 
+             by = c('MainID'))
+```
+
+We may see that we have got unique ID of users based on all three IDs. Let us understand the algorithm used step by step.
+
+__Step-1__: First we have to ensure that all the ID columns (Store names of these columns in one vector say `id_cols`) must be of same type.  Since we had a mix of character (Alphanumeric) and numeric IDs, using `dplyr::across` with `dplyr::mutate` we can convert all the three ID columns to character type. Readers may refer to section \@ref(vectors) for type change, and section \@ref(across) for changing data type of multiple columns simultaneously using `dplyr::across`.
+
+Thus, first two lines of code above correspond to this step only.
+```
+id_cols <- c("ID1", "ID2", "ID3")
+dat %>%
+  mutate(across(.cols = id_cols, as.character))
+```
+
+__Step-2__: Pivot all id columns to longer format so that all Ids are linked with one main ID.  Now two things should be kept in mind.  One that there should be a main_Id column in the data frame.  If not create one using `dplyr::row_number()` before pivoting.  Secondly, if there are `NA`s in any of the IDs these have to be removed while pivoting.  Use argument `values_drop_na = TRUE` inside the `tidyr::pivot_longer`. Thus, this step will correspond to this line-
+```
+pivot_longer(cols = all_of(id_cols), values_drop_na = TRUE)
+```
+where - first argument data is invisibly passed through dplyr pipe i.e. `%>%`. Upto this step, our data frame will look like -
+```{r echo=FALSE}
+id_cols <- c("ID1", "ID2", "ID3")
+dat %>% 
+  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
+  pivot_longer(cols = all_of(id_cols), 
+               values_drop_na = TRUE)
+```
+
+
+__Step-3:__ Now we need only two columns, one is `mainID` and another is `value` which is created by pivoting all ID columns.  We will use `select(MainID, value)` for that.
+
+__Step-4:__ Thereafter we will create a graph object from this data (output after step-3), using `igraph` package.  Interested readers may see how the graph object will look like, using `plot()` function. The output is shown in figure \@ref(fig:igraph2). __However, this step is entirely optional and it may also be kept in mind that graph output of large data will be highly cluttered and may not be comprehensible at all.__
+
+```{r igraph2, fig.align='center', fig.show='hold', fig.cap="Plot of graph object"}
+dat %>% 
+  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
+  pivot_longer(cols = all_of(id_cols), 
+               values_drop_na = TRUE) %>% 
+  select(MainID, value) %>% 
+  graph_from_data_frame() %>%
+  plot()
+```
+
+__Step-5:__ This step will be a combination of three lines of codes which will number each ID based on connectivity of all components in the graph objects.  Actually `components` will give us an object where `$membership` will give us `unique_ids` for each component in the graph.
+```{r echo=FALSE}
+id_cols <- c("ID1", "ID2", "ID3")
+dat %>% 
+  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
+  pivot_longer(cols = all_of(id_cols), 
+               values_drop_na = TRUE) %>% 
+  select(MainID, value) %>% 
+  graph_from_data_frame() -> dat2
+dat2 %>% 
+  components()
+```
+Next we have to `purrr::pluck`, `$membership` only from this object, which will return a named vector.  
+```{r echo=FALSE}
+dat2 %>% 
+  components() %>% 
+  pluck(membership)
+```
+
+We can then `stack` this named vector into a data frame using `stack` and `set_names`
+```{r echo=FALSE}
+dat2 %>% 
+  components() %>% 
+  pluck(membership) %>% 
+  stack %>% 
+  set_names(c('UNIQUE_ID', 'MainID'))
+```
+
+I suggest to purposefully name second column in the output data as `MainID` so that it can be joined with original data frame in the last step.  `UNIQUE_ID` in this data will give us the new column which will allocate same ID to all possible duplicates in network of three IDs.
+
+__Step-6:__ In the last step we have to join the data frame back to original data frame.  Since the type of `MainID` is now factor type, we can convert type of this column in original data frame before `right_join` the same.  Hence the final step, `right_join(dat %>% mutate(MainID = as.factor(MainID)), by = c('MainID'))`.
+
+## Use case-2: Classification using graph theory
+
+*The Content is Under Development.*
+
+## Use case-3: Finding circular transactions
+
+*The Content is Under Development.*
+
+

@@ -1,88 +1,9 @@
-# Part IV: Techniques for Audit/Fraud detection {-}
-
-# Data Cleaning in R
-Data cleansing is one of the important steps in data analysis. Multiple packages are available in r to clean the data sets.  One of such packages is `janitor` which we will be using in this chapter along with few other packages.  
-
-Let's load it
-```{r}
-library(janitor)
-```
-
-## Cleaning Column names.
-We know that names of objects in R follow certain conventions like we may not have certain special characters in names.  If a space has been used that is to be quoted under a pair of backticks \`.  But generally when we read data from files in excel, we can have some 'dirty' names, which we should clean before proceeding.  In such `clean_names()` come handy.  E.g.
-```{r}
-# Create a data.frame with dirty names
-test_df <- as.data.frame(matrix(ncol = 6))
-
-names(test_df) <- c("firstName", "ábc@!*", "% successful (2009)",
-                    "REPEAT VALUE", "REPEAT VALUE", "")
-# View this data
-test_df
-```
-
-Using `clean_names()` which is also pipe friendly, we can clean names in one step.  (Results will be in snake case)
-```{r}
-test_df %>% 
-  clean_names()
-```
-
-It -
-
-+ Parses letter cases and separators to a consistent format.
-+ Default is to `snake_case`, but other cases like `camelCase` are available
-+ Handles special characters and spaces, including transliterating characters like `œ` to `oe`.
-+ Appends numbers to duplicated names
-+ Converts `“%”` to “percent” and `“#”` to `“number”` to retain meaning
-+ Spacing (or lack thereof) around numbers is preserved
-
-## Handling duplicate records
-In `janitor` package, we have a ready to use function `get_dupes()`. It allows us to find “similar” observations in a data set based on certain characteristics.  Syntax is pretty simple, and function is pipe friendly too.  Suppose we have to find out duplicate in `mtcars` dataset on each combination of `wt` and `cyl`.  
-```{r}
-mtcars %>% 
-  get_dupes(wt, cyl)
-```
-We can see that it returns all duplicate records with an additional column `dupe_count` so that these duplicates can be analysed separately.
-
-## Remove Constant (Redundant) columns
-Dropping columns from a `data.frame` that contain only a single constant value throughout is again easy through `janitor::remove_constant()`.
-
-## Remove empty rows and/or columns
-While importing messy data from excel files, we may get some empty rows and/or columns.  Sorting out this issue, is easy using `janitor::remove_empty()`.
-
-## Fix excel dates stored as serial numbers
-While loading excel files in R, we may have sometimes noticed `41590` instead of having a `date format`.  Sorting out this issue is again easy in `janitor` as we have a function `excel_numeric_to_date()` for this. Example
-```{r}
-janitor::excel_numeric_to_date(41590)
-```
-
-## Convert a mix of date and datetime formats to date
-Similar to above, we can also sort out, if we have a column mix of different date formats, using `janitor::convert_to_date()` or `janitor::convert_to_datetime()`.  See Examples-
-```{r}
-unsorted_dates <- c('2018-05-31', '41590', 41590)
-janitor::convert_to_date(unsorted_dates)
-```
-**Note in above example, we have created a heterogeneous vector, but implicit coercion rules of R have converted all forms to character only.**
-
-In real world examples, where data is entered through multiple machines/data points simultaneously, we may a column mix of date formats.  In that case, we may use `parse_date_time()` function in `lubridate` package.  To allow different formats we have use `order` agument in this function.  Example
-
-```{r}
-mixed_dates <- c("13-11-1991", "13-Sep-22", 
-                 "20 August 2000", "15 August 87", 
-                 "03/31/23", "12-31-2022")
-
-lubridate::parse_date_time(mixed_dates,
-                           orders = c("d m y", "d B Y", "m/d/y", "d B y"),
-                           locale = "eng")
-```
-
-
-
 # Random sampling in R
 International Standard On Auditing - 530 defines^[[https://www.ifac.org/system/files/downloads/a027-2010-iaasb-handbook-isa-530.pdf](https://www.ifac.org/system/files/downloads/a027-2010-iaasb-handbook-isa-530.pdf)] audit sampling as _the application of audit procedures to less than 100% of items within a population of audit relevance such that all sampling units have a chance of selection in order to provide the auditor with a reasonable basis on which to draw conclusions about the entire population._  Statistical sampling is further defines as _an approach to sampling having two characteristics - random selection of samples, and the use of probability theory to evaluate sample results, including measurement of sampling risk._
 
 Appendix 4 of ISA 53 further prescribes different statistical methods of sample selection.  We will discuss here each type of sampling methodology used to sample records for audit.
 
-### Prerequisites {-}
+**Prerequisites**
 
 Load `tidyverse`
 ```{r message=FALSE}
@@ -306,7 +227,3 @@ clust_samp <- dat %>%
 # check number of records
 clust_samp$state.region %>% table()
 ```
-
-
-
-

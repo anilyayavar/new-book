@@ -1,4 +1,3 @@
-# (APPENDIX) Appendix {-} 
 # Regex - A quick introduction
 
 A __Regular Expression__, or __regex__ for short, is a powerful tool, which helps us writing code for pattern matching in texts.  Regex, is a pattern that describes a set of strings. It is a sequence of characters that define a search pattern. It is used to search for and manipulate text. Regex can be used in many programming languages, including R.
@@ -16,40 +15,59 @@ In R, we can use the `grep` and `gsub` functions to search for and manipulate te
 
 ## Basic Regex -  Literal Characters
 
-Every _literal character_, in itself is a regex that matches itself. Thus, `a` matches third character in text `Charles`.  These literal characters are case sensitive.
+Every _literal character_, in itself is a `regex` that matches itself. Thus, `a` matches third character in text `Charles`.  These literal characters are case sensitive.
 
 Example-1
 ```{r}
 ex_text <- "This is an example text"
 # Match literal `x`
-grepl(pattern = "x", ex_text)
+str_view(ex_text, "x")
 # Match Upper case literal "X"
-grepl("X", ex_text)
+str_view(ex_text, "X", match = NA)
 ```
 
-## Metacharacters 
+### Case sensitivity
+As the literals are case_sensitive and we sometimes are not aware of exact case, to match case insensitive literals, we can make use of `stringr` function `regex` in this case, wherein an argument `ignore_case` (note snake case) is there.  Actually, behind the scenes, all regex expressions in stringr are wrapped in this function with argument defaults as `FALSE`. Thus, the code in above example is actually equivalent to the following-
 
+```{r}
+# Match literal `x`
+str_view(ex_text, regex("x"))
+# Match Upper case literal "X"
+str_view(ex_text, regex("X"), match = NA)
+```
+
+Thus, to match case insensitive literals (or other regex expressions) we may make use of the argument `ignore_case` like this-
+
+```{r}
+# Match literal `x`
+str_view(ex_text, regex("X", ignore_case = TRUE))
+```
+
+## Metacharacters
 ### Character sets
+
 It is always not feasible to put every literal characters.  We may also match literal characters from a given set of options. To **match a group of characters** we have to put all these in square brackets.  So, `[abc]` matches either of `a`, `b`, or `c`.  
 
 Example-
 ```{r}
 ex_vec <- c("Apple", "Orange", "Myrrh")
 # matches a vowel
-grepl("[aeiou]", ex_vec)
+str_view(ex_vec, "[aeiou]")
+# matches a vowel irrespective of case
+str_view(ex_vec, regex("[aeiou]", ignore_case = TRUE))
 ```
 To **match a range of characters/numbers** we can separate these by hyphen in square brackets. So, `[a-n]` will match a character from range `[abcdefghijklmn]`.
 
 Example-
 ```{r}
 ex_text <- "The quick brown fox jumps over the lazy dog"
-grepl("[a-z]", ex_text)
-grepl("[X-Z]", ex_text)
+# Match a, b or c in lower case
+str_view(ex_text, regex("[a-c]"))
 ```
 Example-2
 ```{r}
 ex_colors <- c("grey", "black", "gray")
-grepl("gr[ae]y", ex_colors)
+str_view(ex_colors, "gr[ae]y")
 ```
 
 We can also use __pre-built character classes__ listed below.
@@ -70,7 +88,7 @@ We can also use __pre-built character classes__ listed below.
 Example-
 ```{r}
 ex_vec2 <- c("One apple", "2 Oranges")
-grepl("[:digit:]", ex_vec2)
+str_view(ex_vec2, "[:digit:]", match = NA)
 ```
 
 ### Non-printable characters/ Meta characters (short-hand character classes)
@@ -78,7 +96,7 @@ grepl("[:digit:]", ex_vec2)
 We can use special character sequences to put non-printable characters in our regular expression(s). E.g. `\t` matches a tab character.  __But since `\` is an escape character in R, we need to escape it too.__  So to match a tab character we have to put `\\t` in our regex sequence.  Regex for that matches new line (line feed) is `\\n`. `Regex` for other meta characters is listed below-
 
   + `\\s` matches a white-space character.  Moreover, its complement `\\S` matches any character except a white-space.
-  + `\\w` matches any alphanumeric character. Similarly, its complement is `\\W` which matches any character except alphanumeric charachters.
+  + `\\w` matches any alphanumeric character. Similarly, its complement is `\\W` which matches any character except alphanumeric characters.
   + `\\d` matches any digit.  Similarly, its complement is `\\D` which matches any character except digits.
   + `\\b` matches any word boundary.  Thus, `\\B` matches any character except a word boundary.
   + `.` matches any character. To match a literal dot `.` we have to escape that; and thus `\\.` matches a dot character.
@@ -86,10 +104,11 @@ We can use special character sequences to put non-printable characters in our re
 See these examples-
 ```{r}
 ex_vec3 <- c("One apple", "2 oranges & 3 bananas.")
-# match word boundary
-grepl("\\w", ex_vec3)
+# match word character
+str_view(ex_vec3, "\\w", match = NA)
 # match any character followed by a dot character
-grepl(".\\.", ex_vec3)
+str_view(ex_vec3, ".\\.", match = NA)
+# Note both character and dot will be matched
 ```
 
 ## Quantifiers
@@ -108,7 +127,7 @@ Thus, we may match two consecutive vowels using `[aeiou]{2}`.  See this example
 
 ```{r}
 ex_vec <- c("Apple", "Banana", "pineapple")
-grepl("[aeiou]{2}", ex_vec)
+str_view(ex_vec, "[aeiou]{2}", match = NA)
 ```
 ## Alternation
 
@@ -118,21 +137,17 @@ Alternation in regular expressions allows you to match one pattern or another, d
 Let's start with a basic example to illustrate how alternation works:
 
 ```{r}
-library(stringr)
-
 string <- "I have an apple and a banana"
 pattern <- "apple|banana"
 
-str_extract_all(string, pattern)
+str_extract(string, pattern)
 ```
 ##### Order of Precedence
 
 When using alternation, it's important to keep in mind the order of precedence rules. In general, the first pattern that matches the input string will be selected, and subsequent patterns will not be considered. Here's an example to illustrate this:
 ```{r}
 string <- "I have a pineapple and an apple"
-pattern <- "apple|pineapple"
-
-str_extract(string, pattern)
+str_extract(string, pattern = "apple|pineapple")
 ```
 In this example, we have a string `string` that contains the words "apple" and "pineapple". We want to extract the first occurrence of either "apple" or "pineapple" from this text using a regular expression pattern that utilizes alternation. The pattern `apple|pineapple` means "match 'apple' OR 'pineapple'". However, since the input string contains "pineapple" before "apple", the `str_extract()` function selects the first matching string "pineapple".
 
@@ -143,12 +158,10 @@ We can also use parentheses to group alternative patterns together. This can be 
 string <- "Apple and pineapples are good for health"
 pattern <- "(apple|banana|cherry) (and|or) (pineapple|kiwi|mango)"
 
-str_extract(string, regex(pattern, ignore_case = TRUE))
-# Returns "apple and pineapple"
-
+str_view(string, regex(pattern, ignore_case = TRUE))
 ```
 
-In above example, we have used `stringr::regex()` to modify regex flag to ignore cases while matching.
+In above examples, we have used `stringr::regex()` to modify regex flag to ignore cases while matching.
 
 ## Anchors
 
@@ -160,25 +173,22 @@ The beginning anchor `^` and end anchor `$` are used to match patterns at the be
 ```{r}
 string <- "The quick brown fox jumps over the lazy dog. The fox is brown."
 pattern <- "^the"
-str_extract_all(string, regex(pattern, ignore_case = TRUE))
+str_view(string, regex(pattern, ignore_case = TRUE))
 ```
-In the above example, if we want to extract word `the` which is at the beginning of a sentence only, we can use this regex.
-
+In the above example, we are matching word `the` which is at the beginning of a sentence only.
 
 ### Word Boundary Anchors
-
 The word boundary anchor `\\b` is used to match patterns at the beginning or end of a word within the input string.  Example
 ```{r}
 string <- 'Apple and pineapple, both are good for health'
 pattern <- '\\bapple\\b'
-str_extract_all(string, regex(pattern, ignore_case = TRUE))
-
+str_view(string, regex(pattern, ignore_case = TRUE))
 ```
 In the above example, though `apple` string is contained in another word `pineapple` we are limiting our search for whole words only.
 
 ## Capture Groups
 
-A capture group is a way to group a part of a regular expression and capture it as a separate substring. This can be useful when you want to extract or replace a specific part of a string.  In R, capture groups are denoted by parentheses `()`. Anything inside the parentheses is captured and can be referenced later in the regular expression or in the replacement string.
+A capture group is a way to group a part of a regular expression and capture it as a separate sub-string. This can be useful when you want to extract or replace a specific part of a string.  In R, capture groups are denoted by parentheses `()`. Anything inside the parentheses is captured and can be referenced later in the regular expression or in the replacement string.
 
 One use of capturing group is to refer back to it within a match with back reference: `\1` refers to the match contained in the first parenthesis, `\2` in the second parenthesis, and so on. 
 
@@ -188,34 +198,32 @@ Example-1
 my_fruits <- c('apple', 'banana', 'coconut', 'berry', 'cucumber', 'date')
 # search for repeated alphabet
 pattern <- '(.)\\1'
-grep(pattern, my_fruits, perl = TRUE, value = TRUE)
-
+str_view(my_fruits, regex(pattern), match = NA)
 ```
 Example-2
 ```{r}
 # search for repeated pair of alphabets
 pattern <- '(..)\\1'
-grep(pattern, my_fruits, perl = TRUE, value = TRUE)
+str_view(my_fruits, regex(pattern), match = NA)
 ```
 
 Another way to use capturing group is, when we want to replace the pattern with something else.  It is better to understand this with the following example-
 ```{r}
 # We have names in last_name, first_name format
 names <- c('Hanks, Tom', 'Affleck, Ben', 'Damon, Matt')
-# Using this regex, we can convert these to first_name last_name format
+str_view(names)
 
-gsub('(\\w+),\\s+(\\w+)', '\\2 \\1', names, perl = TRUE)
+# Using this regex, we can convert these to first_name last_name format
+str_replace_all(names, '(\\w+),\\s+(\\w+)', '\\2 \\1')
 
 ```
 
-
 ## Lookarounds
-
-__Lookahead__ and __lookbehinds__ are zero-width assertions in regex. They are used to match a pattern only if it is followed or preceded by another pattern, respectively. The pattern in the lookahead or lookbehind is not included in the match.
+__Look-ahead__ and __look-behinds__ are zero-width assertions in regex. They are used to match a pattern only if it is followed or preceded by another pattern, respectively. The pattern in the look-ahead or look-behind is not included in the match.
 
 ### Lookahead
 
-A lookahead is used to match a pattern only if it is followed by another pattern. *Positive Lookaheads* are written as `(?=...)`, where `...` is the pattern that must follow the match.
+A look-ahead is used to match a pattern only if it is followed by another pattern. *Positive Lookaheads* are written as `(?=...)`, where `...` is the pattern that must follow the match.
 
 For example, the regex pattern `hello(?= world)` matches "hello" only if it is followed by " world". It matches "hello world" but not "hello there world" or "hello".
 
@@ -223,13 +231,12 @@ Example
 
 ```{r}
 string <- c("hello world", "hello there world", "hello")
-grep("hello(?= world)", string, value = TRUE, perl = TRUE)
-
+str_view(string, "hello(?= world)", match = NA)
+# Note that "world" is not included in the match
 ```
 
 ### Lookbehind
-
-A lookbehind is used to match a pattern only if it is preceded by another pattern. Lookbehinds are written as `(?<=...)`, where `...` is the pattern that must precede the match.
+A look-behind is used to match a pattern only if it is preceded by another pattern. Look-behinds are written as `(?<=...)`, where `...` is the pattern that must precede the match.
 
 For example, the regex pattern `(?<=hello )world` matches "world" only if it is preceded by "hello ". It matches "hello world" but not "world hello" or "hello there world".
 
@@ -237,22 +244,21 @@ Example
 
 ```{r}
 string <- c("hello world", "world hello", "hello there world")
-grep("(?<=hello )world", string, value = TRUE, perl = TRUE)
+str_view(string, "(?<=hello )world", match = NA)
 
 ```
 
 ### Negative Lookahead and Lookbehinds
 
-Negative lookahead and negative lookbehinds are used to match a pattern only if it is not followed or preceded by another pattern, respectively. Negative lookahead and lookbehinds are written as `(?!...)` and `(?<!...)`, respectively.
+Negative look-ahead and negative look-behinds are used to match a pattern only if it is not followed or preceded by another pattern, respectively. Negative look-ahead and look-behinds are written as `(?!...)` and `(?<!...)`, respectively.
 
 For example, the regex pattern `hello(?! world)` matches "hello" only if it is not followed by " world". It matches "hello there" but not "hello world" or "hello world there".
 
 Example-
 
-
 ```{r}
 string <- c("hello there", "hello world", "hello world there")
-grep("hello(?! world)", string, value = TRUE, perl = TRUE)
+str_view(string, "hello(?! world)", match = NA)
 
 ```
 
@@ -260,35 +266,35 @@ And the regex pattern `(?<!hello )world` matches "world" only if it is not prece
 
 ```{r}
 string <- c("hello world", "world hello", "hello there world")
-grep("(?<!hello )world", string, value = TRUE, perl = TRUE)
+str_view(string, "(?<!hello )world", match = NA)
 ```
 
-*While the difference between the lookahead and lookbehind may be subtle, yet these become clear when string/pattern replacment or extraction is required.*  Example- 
+*While the difference between the look-ahead and look-behind may be subtle, yet these become clear when string/pattern replacement or extraction is required.*  
+
+Examples- 
 ```{r}
-library(stringr)
+string <- "I have 10 apples, 6 pineapples and 5 bananas"
 
-string <- "I have 10 apples and 5 bananas"
+# look-behind to match "apples" preceded by a digit and a space
+pattern1 <- "(?<=\\d\\s)apples"  
 
-pattern1 <- "(?<=\\d\\s)apples"  # lookbehind to match "apples" preceded by a digit and a space
-pattern2 <- "\\d+(?=\\sbanana)"  # lookahead to match count of bananas
+# look-ahead to match count of apples
+pattern2 <- "\\d+(?=\\sapple)"  
 
-str_extract(string = string, pattern = pattern1)
-str_extract(string = string, pattern = pattern2)
+str_view(string = string, pattern = pattern1, match = NA)
+str_view(string = string, pattern = pattern2, match = NA)
 ```
 
 ## Comments
-
-
 ### Comments within regex
 We can use the # character to add comments within a regex pattern.  Any text following the `#` symbol on a line is ignored by the regex engine and treated as a comment. This can be useful for documenting your regex patterns or temporarily disabling parts of a pattern for testing or debugging.  Example-
 
 ```{r}
-grep( "x(?#this is a comment)", c("xyz","abc"), perl = TRUE, value = TRUE)
+str_view(c("xyz","abc"), "x(?#this is a comment)", match = NA)
 ```
 
-
 ### Verbose Mode (multi-line comments)
-In regular expressions, verbose mode is a feature that allows you to write more readable and maintainable regex patterns by adding comments and whitespace without affecting their behavior. To enable verbose mode, we can use the `(?x)` or `(?verbose)` modifier at the beginning of your regex pattern.
+In regular expressions, verbose mode is a feature that allows you to write more readable and maintainable regex patterns by adding comments and white-space without affecting their behavior. To enable verbose mode, we can use the `(?x)` or `(?verbose)` modifier at the beginning of your regex pattern.
 
 Example - Using this regex we can extract words that contain a vowel at third place.
 ```{r}
@@ -299,5 +305,11 @@ pattern <- "(?x)      # Enable verbose mode
             [aeiou]   # Match a vowel
             \\w*      # Match optional word characters
             \\b       # Match word boundary"
-str_extract_all(string, pattern)
+str_view(string, pattern, match = NA)
 ```
+
+
+# Regex in human readble format using `rebus`
+*The content is under development*
+
+
