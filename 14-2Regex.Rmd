@@ -312,4 +312,417 @@ str_view(string, pattern, match = NA)
 # Regex in human readble format using `rebus`
 *The content is under development*
 
+# Human readble regex in `rebus`
+
+Regular expressions, as explained in earlier chapter, are very powerful. However they are often difficult to interpret. There is a package called `rebus` in R, which allows us to build complex regular expressions from human readable expressions. So instead of writing `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}` and later trying to decipher what this expression actually meant, we can use a more human-readble format -
+
+```
+one_or_more(char_class(ASCII_ALNUM %R% "._%+-")) %R%
+  "@" %R%
+  one_or_more(char_class(ASCII_ALNUM %R% ".-")) %R%
+  DOT %R%
+  ascii_alpha(2, 4)
+```
+Many of us could have by now correctly guessed that these both are regular expressions to detect email addresses from the given text strings.  Rebus actually contains functions like `char_class()` or `one_or_more()` to make building regular expressions easier.  So let's dive in to learn the package.
+
+First of all let's load the library.  Alongside let's also load `stringr` so that we can use its function `str_view` to understand the examples. **Readers may note here that this library `rebus` also contains a function `regex` which creates a conflict with `stringr::regex`.  So to avoid that conflict we may use library `conflicted` here which may set our preferential library in case of conflicts.**
+
+```{r}
+library(rebus)
+library(stringr)
+library(conflicted)
+conflict_prefer("regex", "stringr")
+conflicts_prefer(rebus::or)
+```
+
+## Operators for concatenation and alternation
+For concatenating two regular expressions we may use either of the operators `%R%` or `%c%` which like a pipe operator concatenates LHS and RHS together as one regular expression.
+
+For alternation we may use either the operator `%|%` or function `or()` from the package which separates two regular expressions through a pipe for alternation.
+Example-1:
+```{r}
+my_colors <- c("red", "grey", "blue", "gray")
+str_view(my_colors, "gr" %R% or("a" , "e") %R% "y")
+# Note operator precedence
+# This actually means either "gra" or "ey"
+str_view(my_colors, "gr" %R% "a" %|% "e" %R% "y")
+```
+
+## Literal Characters, specvial characters and case sensitivity
+The literal characters may, as we learnt earlier, may be given in the string as they mean. Literals are case sensitive too.  So if we want a case insensitive match, there is a function `case_insensitive` here which will take care of the requirement.
+
+Example-2:
+```{r}
+ex_text <- "This is an example text."
+# Match literal `x`
+str_view(ex_text, "X", match = NA)
+str_view(ex_text, case_insensitive("X"), match = NA)
+```
+
+To match special characters which may have special meaning in regular expressions, we have constants here.  In rebus, the constants are usually available in `UPPER CASE` and equivalent functions are available in `lower case`.  The following special character constants are available -
+
+```{r}
+BACKSLASH
+CARET
+DOLLAR
+DOT
+PIPE
+QUESTION
+STAR
+PLUS
+OPEN_PAREN
+CLOSE_PAREN
+OPEN_BRACKET
+CLOSE_BRACKET
+OPEN_BRACE
+```
+
+Example-3:
+```{r}
+str_view(ex_text, DOT)
+```
+
+
+## Metacharacters
+### Character classes
+To group characters together in a class to match any of them, we may use function `char_class()` in rebus package. See example-4:
+```{r}
+ex_vec <- c("Apple", "Orange", "Myrrh")
+# matches a vowel
+str_view(ex_vec, char_class("aeiou"))
+# matches a vowel irrespective of case
+str_view(ex_vec, case_insensitive(char_class("aeiou")))
+```
+
+To **match a range of characters/numbers** we separate these by hyphen in square brackets (in normal regex building). So, `char_class("a-d")` will match a character from range `[abcd]`.
+
+Example-5:
+```{r}
+ex_text <- "The quick brown fox jumps over the lazy dog."
+# Match a, b or c in lower case
+str_view(ex_text, char_class("a-d"))
+```
+
+For negated character classes we again have an intuitively named function `negated_char_class()` in R, which we can use as per our requirement.
+
+Example-6:
+```{r}
+ex_text <- "The quick brown fox jumps over the lazy dog."
+# Match all text except vowels
+str_view(ex_text, negated_char_class("aeiou"))
+# Note that upper case and dot character have also been matched.
+```
+
+
+### Built-in Character classes
+We can also use __pre-built character classes__ available in rebus, as listed below.
+
+```{r}
+ALPHA
+ALNUM
+BLANK
+DIGIT
+LOWER
+PRINT
+PUNCT
+SPACE
+UPPER
+HEX_DIGIT
+ANY_CHAR
+GRAPHEME
+NEWLINE
+DGT
+WRD
+SPC
+NOT_DGT
+NOT_WRD
+NOT_SPC  # Equivalent to "\\S"
+ASCII_DIGIT
+ASCII_LOWER
+ASCII_UPPER
+ASCII_ALPHA
+ASCII_ALNUM
+```
+
+See another example.
+
+Example-7:
+```{r}
+ex_text <- "The quick brown fox jumps over the lazy dog."
+# Match TAB or SPACE Characters
+str_view(ex_text, BLANK)
+# Match all UPPER CASE characters
+str_view(ex_text, UPPER)
+```
+
+Besides the afore-mentioned class constants, we have `lower case` equivalent functions for these character classes for a more useful regex building.
+
+```
+alnum(lo, hi, char_class = TRUE)
+alpha(lo, hi, char_class = TRUE)
+blank(lo, hi, char_class = TRUE)
+cntrl(lo, hi, char_class = TRUE)
+digit(lo, hi, char_class = TRUE)
+graph(lo, hi, char_class = TRUE)
+lower(lo, hi, char_class = TRUE)
+printable(lo, hi, char_class = TRUE)
+punct(lo, hi, char_class = TRUE)
+space(lo, hi, char_class = TRUE)
+upper(lo, hi, char_class = TRUE)
+hex_digit(lo, hi, char_class = TRUE)
+any_char(lo, hi)
+grapheme(lo, hi)
+newline(lo, hi)
+dgt(lo, hi, char_class = FALSE)
+wrd(lo, hi, char_class = FALSE)
+spc(lo, hi, char_class = FALSE)
+not_dgt(lo, hi, char_class = FALSE)
+not_wrd(lo, hi, char_class = FALSE)
+not_spc(lo, hi, char_class = FALSE)
+ascii_digit(lo, hi, char_class = TRUE)
+ascii_lower(lo, hi, char_class = TRUE)
+ascii_upper(lo, hi, char_class = TRUE)
+ascii_alpha(lo, hi, char_class = TRUE)
+ascii_alnum(lo, hi, char_class = TRUE)
+char_range(lo, hi, char_class = lo < hi)
+number_range(lo, hi, allow_leading_zeroes = FALSE, capture = FALSE)
+```
+In the above functions, both `lo` and `hi` accept positive integers as quantifiers; and `char_class` argument a logical value.  See these examples.
+
+Example-8:
+```{r}
+ip_add <- "My IP address is 255.1.2.50"
+str_view(ip_add, digit(1, 3))
+str_view(ip_add, digit(3))
+str_view(ip_add, not_dgt(5))
+# Note this will match none
+str_view(ip_add, space(2))
+```
+
+### Word Boundaries
+
+To match a word boundary (or its negation) we have `BOUNDARY` (and `NOT_BOUNDARY`) in rebus. Function `whole_word(x)`, on the other hand, wraps the regex in word boundary tokens to match a whole word.  See following example.
+
+Example-9:
+```{r}
+ex_text <- "The thermometer, they were searching is placed in a leather box."
+# Note three matches
+str_view(ex_text, "the")
+# There is no match
+str_view(ex_text, whole_word("the"), match = NA)
+str_view(ex_text, case_insensitive(whole_word("the")), match = NA)
+str_view(ex_text, BOUNDARY %R% case_insensitive("the"))
+str_view(ex_text, NOT_BOUNDARY %R% "the")
+```
+
+## Quantifiers
+
+We learnt following quantifiers in regular expressions.
+
+- `+` __1 or more__ occurrences
+- `*` __0 or more__
+- `?` __0 or 1__
+- `{}` specified numbers
+  + `{n}` exactly n
+  + `{n,}` n or more
+  + `{n,m}` between n and m
+
+We have meaningfully named functions for each of the above quantifiers in rebus.
+
+- `one_or_more(x, char_class = NA)`
+- `zero_or_more(x, char_class = NA)`
+- `optional(x, char_class = NA)`
+- `repeated(x, lo, hi, lazy = FALSE, char_class = NA)`
+  + where `lo` and `hi` represent `n` and `m` equivalently.
+  
+Additionally, we may notice an argument `char_class = NA` which accepts a logical value for case when `x` is required to be wrapped in a character class.
+
+We may match two consecutive vowels using `repeated("aeiou", 2, char_class = TRUE)`.  See this example.
+
+Example-10:
+```{r}
+ex_vec <- c("1 apple", "2 bananas", "3 pineapples")
+# match two consecutive vowels
+str_view(ex_vec, repeated("aeiou", 2, char_class = TRUE))
+# match a number followed by apple with an optional space
+str_view(ex_vec, one_or_more(DIGIT) %R% optional(BLANK) %R% "apple")
+```
+
+## Anchors
+
+Anchors in regular expressions allow us to match patterns at specific positions within the input string. In rebus, we have constants `START` and `END` to match the beginning or end positions within the input text, respectively. 
+
+Example-11:
+```{r}
+string <- "The quick brown fox jumps over the lazy dog. The fox is brown."
+str_view(string, START %R% case_insensitive("the"))
+```
+In the above example, we are matching word `the` which is at the beginning of a sentence only.  There is one more function `exactly(x)` in rebus which makes the regular expression match the whole string, from start to end, in fact a shortcut of `START %R% x %R% END`.
+
+Example-12:
+```{r}
+ex_vec <- c("apple", "banana", "cherry", "pineapple")
+str_view(ex_vec, exactly("apple"))
+```
+
+## Capture Groups
+We have seen that a capture group is a way to group a part of a regular expression and capture it as a separate substring. This is useful when we want to extract or replace a specific part of a string.  In R, capture groups are denoted by parentheses `()`. Anything inside the parentheses is captured and can be referenced later in the regular expression or in the replacement string.  We also learnt that capturing groups are useful to refer back to it within a match with back reference: `\1` refers to the match contained in the first parenthesis, `\2` in the second parenthesis, and so on. 
+
+In rebus, there are two functions `capture(x)` and `group(x)` for capturing regex.  Former is good with match functions while latter is mostly used with alternations.
+
+Example-13:
+```{r}
+## capture(x)
+my_fruits <- c('apple', 'banana', 'coconut', 'berry', 'cucumber', 'date')
+str_remove_all(my_fruits, capture(char_class("aeiou")))
+
+## group()
+my_toppings <- group("olive" %|% "mushroom" %|% "tomato")
+pizza <- "We have olive, mushroom, chicken and capsicum pizza in our menu."
+# Extract my favourite topping from available pizza menu.
+str_extract_all(pizza, pattern = my_toppings)
+
+```
+
+Backreferences for replacement operations, are denoted by constants `REF#` where `#` is actually a digit from 1 to 9.
+
+Example-14:
+
+```{r}
+my_fruits <- c('apple', 'banana', 'coconut', 'berry', 'cucumber', 'date')
+# search for repeated alphabet
+str_view(my_fruits, capture(ANY_CHAR) %R% REF1 , match = NA)
+```
+
+Similar to previous chapter, we can use capturing group to replace the pattern with something else.  
+
+Example-15:
+```{r}
+# We have names in last_name, first_name format
+names <- c('Hanks, Tom', 'Affleck, Ben', 'Damon, Matt')
+str_view(names)
+# Pattern to capture first name and last name
+pat <- capture(whole_word(one_or_more(ALPHA))) %R% "," %R% optional(SPACE) %R% capture(whole_word(one_or_more(ALPHA)))
+repl <- REF2 %R% " " %R% REF1
+# Using this regex, we can convert these to first_name last_name format
+str_replace_all(names, pat, repl)
+```
+
+## Lookarounds
+As we had learnt, __lookaheads__ and __lookbehinds__ are zero-width assertions in regex. They are used to match a pattern only if it is followed or preceded by another pattern, respectively. The pattern in the `lookahead` or `lookbehind` is not included in the match.
+
+We have intuitively named functions to deal with all four lookarounds-
+```
+lookahead(x)
+negative_lookahead(x)
+lookbehind(x)
+negative_lookbehind(x)
+```
+
+Example-16: Find character `q` not followed by `u`
+
+```{r}
+countries <- c("mozambique", "qatar", "iraq")
+# With lookahead
+str_view(countries, "q" %R% negative_lookahead("u"))
+# Without Lookahaed - Notice the difference
+str_view(countries, "q" %R% negated_char_class("u"))
+```
+
+Example-17:  
+```{r}
+# Lookahead
+string <- c("hello world", "hello there world", "hello")
+str_view(string, "hello" %R% lookahead(optional(SPACE) %R% "world"), match = NA)
+# Note that "world" is not included in the match
+
+# Lookbehind
+str_view(string, lookbehind("hello" %R% optional(SPACE)) %R% "world", match = NA)
+
+# Negative lookahead
+str_view(string, "hello" %R% negative_lookahead(optional(SPACE) %R% "world"), match = NA)
+
+# Negative lookbehind
+str_view(string, negative_lookbehind("hello" %R% optional(SPACE)) %R% "world", match = NA)
+```
+
+More examples.
+
+Example-18:
+```{r}
+string <- "I have 10 apples, 6 pineapples and 5 bananas"
+
+# lookahead to match count of apples
+pattern1 <- one_or_more(DIGIT) %R% lookahead(optional(SPACE) %R% "apple") 
+# How many apples?
+str_view(string = string, pattern = pattern1, match = NA)
+```
+
+## Some useful regex functions
+
+### Matching valid dates
+
+
+```{r}
+# Individual date-time components
+DTSEP             # optional selected punctuation or space
+CENTURY           # exactly two digits
+YEAR              # one to four digits
+YEAR2             # exactly two digits
+YEAR4             # exactly four digits
+MONTH             # number from 1 to 12, leading zero
+WEEK_OF_YEAR      # number from 0 to 53, leading zero
+DAY               # number from 1 to 31, leading zero
+DAY_SINGLE        # leading space
+HOUR24            # 24 hour clock, leading zero
+HOUR12            # 12 hour clock, leading zero
+HOUR24_SINGLE     # 24 hour clock, leading space
+HOUR12_SINGLE     # 12 hour clock, leading space
+MINUTE            # number from 0 to 59, leading zero
+SECOND            # number from 0 to 61 (leap seconds), leading zero
+FRACTIONAL_SECOND # a second optional decimal point and up to 6 digits
+AM_PM             # AM or PM, any case
+TIMEZONE_OFFSET   # optional plus or minus, then four digits
+TIMEZONE          # Any value returned by OlsonNames()
+# ISO 8601 formats
+ISO_DATE          # %Y-%m-%d
+ISO_TIME          # %H:%M:%S
+ISO_DATETIME      # ISO_DATE followed by ISO_TIME, separated by space or "T".
+# Compound forms, separated by DTSEP
+YMD
+YDM
+MYD
+MDY
+DYM
+DMY
+HMS
+HM
+MS
+```
+
+Example-19:
+```{r}
+# We have some dates - both valid and invalid
+some_dates <- c("2000-13-01", "2025-08-09","2000-01-32", "2000-00-01", "2000-01-00", "2020-05-20")
+
+str_view(some_dates, ISO_DATE)
+
+# Similarly some time formats
+some_times <- c("24:00:00", "23:60:59", "23:59:62", "23 59 59", "23:55:55", "00:00:00")
+str_view(some_times, ISO_TIME)
+```
+
+## Roman numerals
+To match Roman numerals we have a constant `ROMAN` as well as a function `roman(lo, hi)` in rebus.
+
+Example-20:
+```{r}
+# Some Roman numerals, both valid and invalid
+some_numbers <- c("MMMDCCCXLVIII", "MMMCMDCCCXLVIIV", "MCD", "XIL", "LIX", "XL")
+# Find valid roam numerals
+str_view(some_numbers, exactly(roman()))
+```
+
+
+
 
