@@ -1,5 +1,553 @@
 # Part-V: Time Series Analysis {-}
 
-# Manipulating Date/Date-time objects using lubridate 
+# Dates and Times
 
-*The content is under development*
+## Base R classes to deal with dates and times
+
+```{r lubri0, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.show = "hold", fig.align = "center")
+```
+
+There may hardly be any data analytics activity, wherein we do not have to deal with temporal information and thus need to manipulate dates and date-time objects/variables. To deal with these variable types, R has four core data types/classes,
+
+-   `Date` To deal with date objects (note: `D` in UPPER case)
+-   `POSIXct` To deal with times
+-   `POSIXlt` To deal with times (for difference between these two refer section \@ref(timm).)
+-   `difftime` To deal with time-spans
+
+### Dates
+
+`Date` objects can be created from `string/character` type objects (we will just see that date objects can be created from numeric objects too), using base R's function `as.Date()` which accepts a character vector and a format to parse the date from the given string of characters. E.g.
+
+```{r}
+as.Date("2000-12-12") # default format
+as.Date("12-12-2000", format = "%d-%m-%Y") # custom format
+```
+
+In the above example, we can see that a custom format has been given to parse the character string into the date type object. We can check the `class` of the object created.
+
+```{r}
+a_date <- as.Date("20-12-2022", format = "%d-%m-%Y")
+class(a_date)
+```
+
+The format used in the above function accepts special codes, which can be seen by running `?strptime` in your R console. A ready reference for most used codes is however, given in table \@ref(tab:lubri001) in section \@ref(strpp). The date objects in R, are actually based on numeric classes which actually store the number of days since an epoch. Check the following code-
+
+```{r}
+class(Sys.Date())
+typeof(Sys.Date())
+unclass(Sys.Date())
+```
+
+So, in R versions 4.3.0 and later, it also accepts a number to convert into a date using the number of days elapsed since epoch. So,
+
+```{r}
+as.Date(1)
+```
+
+Here date since one day of default origin date `r as.Date("1970-01-01")` has been returned.  However, default `origin` can be changed using the argument `origin`.  Example,
+```{r}
+# One day since launch of R version 1.0
+as.Date(1, origin = "2000-02-29")
+```
+
+### Times {#timm}
+
+Now, to create date-time objects we can use either of `POSIXct` and `POSIXlt` classes, i.e. by using `as.POSIXct()` and/or `as.POSIXlt()` functions, as shown below.
+
+```{r}
+as.POSIXct("1990/2/17 12:20:05") # default format
+as.POSIXct("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+as.POSIXlt("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+```
+
+As regards, the difference between these two classes, `POSIXct` stores *seconds* since UNIX epoch (and other information), and `POSIXlt`, which stores a list of *day*, *month*, *year*, *hour*, *minute*, *second*, etc., which can be understood from the following codes.
+
+> `ct` in `POSIXct` stands for calendar time whereas, `lt` in `POSIXlt` stands for local time, explaining the conceptual difference.
+
+```{r}
+time_ct <- as.POSIXct("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+class(time_ct)
+unclass(time_ct)
+
+## POSIXlt
+# Convert above object into POSIXlt type
+time_lt <- as.POSIXlt(time_ct)
+# Let us print
+time_lt
+class(time_lt)
+unclass(time_lt)
+```
+
+Similar to `as.Date()`, `as.POSIXct()` also accepts a number and converts it into a date-time object using that much number of seconds since epoch.
+
+```{r}
+as.POSIXct(60)
+```
+
+### Times (without dates)
+
+In base R, we do not have specific class to deal with time objects. However, there is a package `hms` part of `tidyverse` which can be used to create time objects to perform required calculations.
+
+```{r}
+hms::as_hms(10)
+```
+
+### Timespan {#diffftime}
+In base R, besides above date/date-time object classes, there is a special class which creates time difference between two given temporal objects in specified units.  The class is `difftime`.
+
+```{r}
+(freedom_age <- Sys.Date() - as.Date("1947-08-15"))
+class(freedom_age)
+unclass(freedom_age)
+```
+Function `difftime` can create difftime objects, as per specific requirement due to presence of an argument `units` which can take values from one of `“auto”`, `“secs”`, `“mins”`, `“hours”`, `“days”`, `“weeks”`.
+
+```{r}
+difftime(as.Date("2020-02-29"), as.Date("2019-02-28"), units = "weeks")
+```
+We can also create a difftime object by coercion.
+```{r}
+a_difftime <- as.difftime(15, units = "days")
+a_difftime
+class(a_difftime)
+```
+
+### Time zones
+
+Run the function `Sys.timezone()` in your console to check the current timezone. Function `OlsonNames()` will however, display the known location for time-zones.
+
+```{r}
+Sys.timezone()
+OlsonNames()[c(253, 284)]
+```
+
+So, we may use `tz` argument of `as.POSIXlt()` and `as.POSIXct()` functions to coerce the numeric or other class variables to dates and/or times.
+
+```{r}
+as.POSIXct(1, tz = "GMT")
+```
+
+### Coercion
+In earlier sections we have already seen coercing functions useful to coerce the objects from one class to another.  
+
+- `as.Date()`
+- `as.POSIXct()`
+- `as.POSIXlt()`
+- `as.difftime()`
+
+### Extracting parts from dates/times
+Base R provides us some useful function to extract relevant part of objects of dates/times classes.
+
+- `weekdays(x, abbreviate = FALSE)` to extract the weekday name.  (Output is in character vector)
+- `months(x, abbreviate = FALSE)` to extract the month name.  (Output is in character vector)
+- `quarters(x)` to extract the quarter.  Output is in character vector.
+- `julian(x)` to extract the days elapsed since origin.  Output is in numeric vector.
+
+Examples-
+```{r}
+dates_vec <- as.Date(15001 + 1:7)
+weekdays(dates_vec)
+months(dates_vec)
+quarters(dates_vec)
+julian(dates_vec)
+```
+
+### Other useful related functions
+There are certain other useful functions to the related classes which are useful in data analytics.
+
+1. `seq.Date(from, to, by, length.out = NULL, along.with = NULL, ...)` where-
+
+- `from` and `to` are start and end dates respectively
+- `by` is increment of sequence which can accept either of these
+    + a number to be taken in days,
+    + an object of class `difftime`
+    + a character string, containing one of "day", "week", "month", "quarter" or "year". This can optionally be preceded by a (positive or negative) integer and a space, or followed by "s".
+- `length.out` is optional argument accepting an integer, for desired length of the sequence.
+- `along.with` take the length from the length of this argument.
+
+Example-
+```{r}
+seq(as.Date("2000/1/1"), by = "month", length.out = 12)
+```
+
+
+### `strptime` character codes {#strpp}
+
+A few format codes useful to parse date/date-time objects in R, are listed below for ready reference.  To know more about these codes, readers can see the output of `?strptime()` in their console.
+
+
+|     Format     | Meaning                                                                                                                                                                                                                                                                          |
+|:------------------:|----------------------------------------------------|
+| `%y` (or `%Y`) | Year without (or with) Century                                                                                                                                                                                                                                                   |
+|      `%m`      | Month as decimal number (01-12)                                                                                                                                                                                                                                                  |
+| `%B` (or `%b`) | Month name in full (or abbreviated) in current locale                                                                                                                                                                                                                            |
+|      `%d`      | Day of the month (01-31)                                                                                                                                                                                                                                                         |
+|      `%H`      | Hours as decimal number (00-23)                                                                                                                                                                                                                                                  |
+|      `%I`      | Hours as decimal number, in 12 hour format (00-12)                                                                                                                                                                                                                               |
+|      `%M`      | Minute as decimal number (00-59)                                                                                                                                                                                                                                                 |
+|      `%S`      | Second as integer (00-61) allowing up to two leap-seconds                                                                                                                                                                                                                         |
+|     `%OS`      | Second(s) as decimal number                                                                                                                                                                                                                                                      |
+|      `%T`      | Equivalent to `%H:%M:%S`                                                                                                                                                                                                                                                         |
+|      `%p`      | AM/PM indicator in the locale.                                                                                                                                                                                                                                                   |
+| `%A` (or `%a`) | Full (or abbreviated) week-day name, in current locale                                                                                                                                                                                                                               |
+|      `%j`      | Day of year as decimal number (001--366): For input, 366 is only valid in a leap year.                                                                                                                                                                                           |
+|      `%u`      | Weekday as a decimal number (1--7, Monday is 1)                                                                                                                                                                                                                                  |
+|      `%w`      | Weekday as decimal number (0--6, Sunday is 0).                                                                                                                                                                                                                                   |
+|      `%U`      | Week of the year as decimal number (00--53) using Sunday as the first day 1 of the week (and typically with the first Sunday of the year as day 1 of week 1). **The US convention.**                                                                                             |
+|      `%V`      | Week of the year as decimal number (01--53) as defined in ISO 8601. If the week (starting on Monday) containing 1 January has four or more days in the new year, then it is considered week 1. Otherwise, it is the last week of the previous year, and the next week is week 1. |
+|      `%W`      | Week of the year as decimal number (00--53) using Monday as the first day of week (and typically with the first Monday of the year as day 1 of week 1). **The UK convention**.                                                                                                   |
+|      `%z`      | Offset from UTC                                                                                                                                                                                                                                                                  |
+|      `%Z`      | Time Zone name                                                                                                                                                                                                                                                                   |
+
+: (#tab:lubri001) Conversion Specifications for Date/Date-time
+
+## Using `lubridate` package for parsing/creating dates
+Package `lubridate` which is now part of core `tidyverse` is extremely helpful package while analysing temporal variables in data.  Creating date/date-time objects and converting variables from numeric/character to these types is easier than in base R.  Besides, it offers us some other temporal class objects to make our time-series analysis easier.
+
+### Date/date-time objects creation
+Date and Date-time object classes in `lubridate` are defined similarly as in base R.  So we can create a date (or date-time) using a number of days (or seconds) elapsed since epoch.
+
+```{r lubri1}
+library(lubridate, warn.conflicts = FALSE)
+# Creation using numbers
+as_date(2392)
+as_datetime(206668800)
+
+# Converting from one type to another
+(date_today <- as_date(now()))
+
+# Check its class
+class(date_today)
+
+# Or see what's all in there
+unclass(date_today)
+```
+
+### Parsing date/date-time objects  from `character`
+In `lubridate` parsing date/date-time objects from character strings is pretty easy as we have a number of functions useful to parse dates/date-times written in any specific locale/order irrespective of the delimiter used to separate different components of date/time therein. In these functions, the orders of the year (`y`), quarter (`q`), month (`m`) date (`d`) hour (`h`) minute (`m`) and second (`s`) are represented by their first characters.  These are -
+
+- `ymd_hms`, `ymd_hm`, `ymd_h`, `ymd`
+- `dmy_hms`, `dmy_hm`, `dmy_h`, `dmy`
+- `mdy_hms`, `mdy_hm`, `mdy_h`, `mdy`
+- `ydm_hms`, `ydm_hm`, `ydm_h`, `ydm`
+- `myd`, `dym`
+- `yq`, `ym`, `my`
+
+A few of the examples are -
+
+```{r}
+ymd("19760720")
+dmy("01.12.2004")
+dmy("15th of January, 2006")
+mdy_hm("August 15th, 1947 at 10:45 PM")
+my("04-2006")
+yq("2024: Quarter 4")
+```
+To parse date-time from a fraction of year passed, we can use `date_decimal()`. Example-
+
+```{r}
+date_decimal(2024.162)
+```
+
+### Parsing dates/date-times from individual conponents
+For the scenario, where we have to create date/date-times we can make use of two functions `make_date` and `make_datetime`.  Syntax is
+
+```
+make_datetime(
+  year = 1970L,
+  month = 1L,
+  day = 1L,
+  hour = 0L,
+  min = 0L,
+  sec = 0,
+  tz = "UTC"
+)
+
+make_date(year = 1970L, month = 1L, day = 1L)
+```
+
+Example-
+```{r}
+make_date(year = 1947, month = 8, day = 15)
+```
+
+## Extracting and setting date/date-time components
+
+### Extraction
+We can extract the specific components from date/date-times using, intuitively named accessor functions, which are listed below.  Note that in all of these functions the individual date components is in singular; as plural component functions will be used in different context, as we will discuss in Section \@ref(perriod).
+
+- `year()` for Year; `isoyear()` for ISO 8601 Year
+- `semester()` for Semester
+- `quarter()` for Quarter
+- `month()` for Month
+- `week` for Week of the year, `isoweek()` for ISO 8601 Week
+- `day` for Day of the month, `wday()` for Day of the week, `qday()` for Day of the quarter
+- `hour()`, `minute()` and `second()` for Hour, Minute and Second respectively
+- `tz()` for Time Zone
+
+See following examples.
+```{r}
+# Make an example date
+(a_time <- as_datetime(999999999))
+# Extract the DAY of the month
+day(a_time)
+# Extract Weekday name in full
+wday(a_time, label = TRUE, abbr = FALSE)
+# Extract second component
+second(a_time)
+# Extract Month name (abbreviated)
+month(a_time, label = TRUE, abbr = TRUE)
+# Extract week number of the year
+week(a_time)
+```
+Besides above functions, there are a few functions which are helpful in knowing certain characteristics of date/date-time variable.  These functions return which logical vectors, are listed as -
+
+- `am(x)`, `pm(x)` to know whether the `x` is in AM or PM, respectively.
+- `dst(x)` to know whether `x` is in Daylight savings.
+- `leap_year(x)` to know whether `x` is a leap year.
+
+Examples-
+```{r}
+# Is our a_time AM?
+am(a_time)
+# Is a_time falling in leap year?
+leap_year(a_time)
+# Is it during DST?
+dst(a_time)
+```
+
+### Setting Components
+Just like we used accessor functions to extract the date-time components, we can use those functions to set specific component in date/date-time object/variable.  See Example-
+
+```{r}
+# Initial variable
+a_time
+# Setting component - Year
+year(a_time) <- 2024
+# Print modified variable
+a_time
+
+# Modify Time zone
+tz(a_time) <- "Asia/Kolkata"
+# print modified variable
+a_time
+```
+Finally, function `update` can also be used to return a date with the specified elements updated.  Example-
+
+```{r}
+EOD <- dmy("31-01-2024")
+EOD <- update(EOD, year = 2020)
+EOD
+# If values are too big, they will roll-over:
+update(EOD, month = 2)
+
+```
+
+## Time spans
+
+When we subtract a date-time object from another in base R, we get a `difftime` object, as we have already seen in section \@ref(diffftime).
+
+We know that every time/date unit is not same in strict sense.  Like leap years may have 366 days whereas others have 365 days.  Now there is a concept of leap seconds too.  Moreover, certain countries have daylight saving time and thus, every day is not of equal length there.  In order to deal with specific and clear requirements on date calculations, there are three different classes in `lubridate`, as discussed next.
+
+Lubridate has three classes, which may sound similar at first, but are different in their working.  These are -
+
+- `period`
+- `duration`
+- `interval`
+
+Let us discuss about each one separately.
+
+### Periods {#perriod}
+The `period` objects track changes in clock times and ignore time line irregularities.  So every time object is of standard length like our clocks. 
+
+Period objects can be created in `lubridate` using **pluralized** date component functions.  Example-
+```{r}
+(one_year <- years(1))
+class(one_year)
+# Add one year PERIOD to get a leap year?
+a_date <- dmy("01-03-2019")
+a_date + years(1)
+```
+
+### Durations
+Durations, on the other hand track changes in physical time, i.e. taking into account all the timeline adjusting irregularities.  These duration objects can be created in lubridate, by adding `d` as prefix to all pluralized `period` objects.
+
+```{r}
+(one_year_duration <- dyears(1))
+class(one_year_duration)
+# Add one year DURATION to get a leap year date?
+a_date + dyears(1)
+```
+
+### Intervals
+The objects of class `interval` represent **specific** interval on the timeline.  In other words, these have a specific start and end date/datetimes.  These can be created in lubridate using function `interval`, which has syntax like -
+
+```
+interval(start = NULL, end = NULL, tzone = tz(start))
+```
+This should be clear with the following examples.
+```{r}
+(a_interval <- interval(dmy("15-08-1947"), today()))
+class(a_interval)
+```
+
+Intervals can also be created using special operator `%--%`. E.g.
+```{r}
+(interval1 <- dmy("15-08-1947") %--% dmy("26-01-1950"))
+```
+
+## Performing calculations on intervals/dates
+There are a few functions to make our life easier while performing data analysis on temporal fields.  These are -
+
+### `%within%` operator
+Operator `a %within% b` checks whether interval/date-time `a` falls with interval `b`.  Returns boolean value(s).
+```{r}
+interval1 %within% a_interval
+```
+
+### Backward intervals
+Intervals in lubridate can be backwards too.  E.g.
+```{r}
+(back_interval <- dmy("26-01-2024") %--% dmy("15-01-2024"))
+```
+
+### Flipping intervals
+Function `int_flip()` can flip the interval.  E.g.
+```{r}
+int_flip(back_interval)
+```
+
+### Checking alignment of two intervals
+Function `int_aligns` tests if two intervals share an endpoint. The direction of each interval is ignored.  In other words, it actually tests whether the earliest or latest moments of each interval occur at the same time.  E.g.
+
+```{r}
+int1 <- interval(ymd("2001-01-01"), ymd("2002-01-01"))
+int2 <- interval(ymd("2001-06-01"), ymd("2002-01-01"))
+int3 <- interval(ymd("2003-01-01"), ymd("2004-01-01"))
+
+int_aligns(int1, int2)
+int_aligns(int1, int3)
+```
+
+### Checking Overlap in two intervals
+Function `int_overlaps` can test if two intervals overlap each other.
+```{r}
+int_overlaps(int1, int2)
+```
+
+### Length of the interval
+Function `int_length()` can calculate the length of interval and returns a `numeric` variable equal to the seconds in that interval.  E.g.
+
+```{r}
+int_length(back_interval)
+```
+
+### Adding Months without exceeding last day of the month.
+Operators `%m+%` and `%m-%` will add (or subtract) months to a date without exceeding the last day of the new month.  E.g.
+```{r}
+(leap <- ymd("2012-02-29"))
+
+leap %m+% years(1)
+leap %m+% years(-1)
+leap %m-% years(1)
+```
+Another Example-
+```{r}
+jan <- ymd_hms("2010-01-31 03:04:05")
+jan + months(1:3) # Feb 31 and April 31 returned as NA
+# NA "2010-03-31 03:04:05 UTC" NA
+jan %m+% months(1:3) # No rollover
+```
+
+### Adding with Rollback
+One more function `add_with_rollback()` which performs similarly, but has more control due to specific syntax-
+
+```
+add_with_rollback(e1, e2, roll_to_first = FALSE, preserve_hms = TRUE)
+```
+Example-
+```{r}
+x <- ymd_hms("2019-01-29 01:02:03")
+add_with_rollback(x, months(1))
+add_with_rollback(x, months(1), preserve_hms = FALSE)
+add_with_rollback(x, months(1), roll_to_first = TRUE)
+add_with_rollback(x, months(1), roll_to_first = TRUE, preserve_hms = FALSE)
+```
+
+### Coercing one time span unit to another
+
+Time-span objects in lubridate can be coerced from one to another using coercing functions,
+
+- `as.period(x, unit)`
+- `as.duration(x)`
+- `as.interval(x, start)`
+- `make_difftime(x)` 
+
+Examples-
+```{r}
+# With Period - clock time
+(per <- days(31))
+(int1 <- as.interval(per, dmy("01022020")))
+
+# With Duration - physical time
+(dur <- ddays(31))
+(int2 <- as.interval(dur, dmy("01022020")))
+```
+
+## Rounding date-time variables
+There are dedicated functions to round the dates as per specific requirements.
+
+- `floor_date()` takes a date-time object and rounds it down to the nearest boundary of the specified time unit.
+- `ceiling_date()` takes a date-time object and rounds it up to the nearest boundary of the specified time unit.
+- `round_date()` takes a date-time object and time unit, and rounds it to the nearest value of the specified time unit.
+
+Examples-
+```{r}
+x <- ymd_hms("2009-08-03 12:01:59.23")
+round_date(x, "month")
+round_date(x, "week")
+floor_date(x, "day")
+ceiling_date(x, "month")
+```
+Three other functions helps rolling a date forward or backwards, as
+
+- `rollbackward()` changes a date to the last day of the previous month or to the first day of the month. 
+- `rollforward()` rolls to the last day of the current month or to the first day of the next month. Optionally, the new date can retain the same hour, minute, and second information.
+- `rollback()` is a synonym for `rollbackward()`.
+
+See these examples-
+```{r}
+date <- ymd_hms("2010-03-03 12:44:22")
+
+rollbackward(date)
+rollbackward(date, roll_to_first = TRUE)
+rollbackward(date, preserve_hms = FALSE)
+rollbackward(date, roll_to_first = TRUE, preserve_hms = FALSE)
+rollforward(date)
+rollforward(date, roll_to_first = TRUE)
+```
+## Representing date and date-times in cutomised formats
+In all of the above sections, we saw that once R recognises a temporal object, it depicts that objects in a uniform format.  See
+```{r}
+(date1 <- dmy("01-01-2020"))
+(date2 <- ymd("2020/01/01"))
+as.character(date1)
+```
+In the output/console all dates print like a character/string.  However, sometimes requirement is to have print dates in a specific customised format.  In this scenario, function `strftime()` comes to our rescue which converts objects of classes "POSIXlt" and "POSIXct" representing calendar dates and times to specific character representation.  Character codes can be used from the table \@ref(tab:lubri001) in section \@ref(strpp).
+
+See following examples-
+```{r}
+strftime(Sys.Date(), format = "%d %B %Y")
+```
+
+In this context, let's also discuss about a special date stamping function in `lubridate` which can format date/time outputs based on human friendly formats. Functions `stamp()`, `stamp_date` and `stamp_time()` will create a function from the given template, which can be applied to date/time objects to re-format them.  Example-
+
+```{r}
+eclipse_dates <- dmy(c("11-7-2010", "13-11-2012", "3-11-2013"))
+eclipse_stamp <- stamp_date("There was a solar eclipse on January 13th, 1999")
+eclipse_stamp(eclipse_dates)
+```
+
+
+----------------------------------
