@@ -160,12 +160,12 @@
 <span class="header-section-number">39.2</span> Anomaly detection - by inspection<a class="anchor" aria-label="anchor" href="#anomaly-detection---by-inspection"><i class="fas fa-link"></i></a>
 </h2>
 <p>Several times, anomalies or outliers are detectable by observation. The <code><a href="https://rdrr.io/r/base/summary.html">summary()</a></code> function prints the <em>maximum</em>, <em>minimum</em>, <em>upper</em> and <em>lower quartiles</em>, and the <em>mean</em> and <em>median</em>, and can give a sense for how far an extreme point lies from the rest of the data. E.g. Let’s visualise the mean annual temperatures in degrees Fahrenheit in New Haven, Connecticut, from 1912 to 1971, through a boxplot (Refer Figure <a href="anomaly-detection.html#fig:an1">39.1</a>. This data is available in base R, as <code>nhtemp</code>.</p>
-<div class="sourceCode" id="cb1973"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1982"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/summary.html">summary</a></span><span class="op">(</span><span class="va">nhtemp</span><span class="op">)</span></span></code></pre></div>
 <pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 ##   47.90   50.58   51.20   51.16   51.90   54.60</code></pre>
 <p>The easiest way to get a sense for how unusual a particular value is is by using a graphical summary like a boxplot. In R, this is created using the <code>boxplot</code> function. The <code>boxplot</code> function takes a column of values as an input argument, here illustrated with the temperature data, and produces a box and whiskers representation of the distribution of the values. The extreme values are represented as distinct points, making them easier to spot. We can also make use of ggplot2. Examples from both base R and ggplot2 are shown in Figure <a href="anomaly-detection.html#fig:an1">39.1</a>.</p>
-<div class="sourceCode" id="cb1975"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1984"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot</a></span><span class="op">(</span><span class="va">nhtemp</span>, main <span class="op">=</span> <span class="st">"Box plot of nhtemp data"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html">ggplot</a></span><span class="op">(</span><span class="va">iris</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html">aes</a></span><span class="op">(</span><span class="va">Species</span>, <span class="va">Petal.Length</span>, color <span class="op">=</span> <span class="va">Species</span> <span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_boxplot.html">geom_boxplot</a></span><span class="op">(</span>outlier.colour <span class="op">=</span> <span class="st">"red"</span>, outlier.size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
@@ -192,7 +192,7 @@ Figure 39.2: Collective Anomalies
 </h2>
 <p>We saw that visual assessment of outliers works well when the majority of data points are grouped together and rest of them lie separate. In statistics there are several tests to detect anomalies. <strong>Grubb’s Test</strong> is one of these. Grubb’s test assesses whether the point that lies farthest from the mean in a dataset could be an outlier. This point will either be the largest or smallest value in the data. This test is however based on assumption that data points are normally distributed. So before proceeding for this test, we must be sure that there is a plausible explanation for this assumption. <em>(We can check normality of data points by plotting a histogram. For other methods please refer to chapter on linear regression.)</em></p>
 <p>Let’s run this test on <code>nhtemp</code> data example, which we have already seen in <a href="anomaly-detection.html#fig:an1">39.1</a> (Left). So let’s check its normality assumption.</p>
-<div class="sourceCode" id="cb1976"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1985"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="va">nhtemp</span>, breaks <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span></code></pre></div>
 <div class="figure" style="text-align: center">
 <span style="display:block;" id="fig:an3"></span>
@@ -201,7 +201,7 @@ Figure 39.3: Histogram for Grubb’s test
 </p>
 </div>
 <p>In figure <a href="anomaly-detection.html#fig:an3">39.3</a> we can see that our assumption is nearly satisfied. Let’s run the test.</p>
-<div class="sourceCode" id="cb1977"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1986"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://www.R-project.org">outliers</a></span><span class="op">)</span></span>
 <span><span class="fu">outliers</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/outliers/man/grubbs.test.html">grubbs.test</a></span><span class="op">(</span><span class="va">nhtemp</span><span class="op">)</span></span></code></pre></div>
 <pre><code>## 
@@ -217,7 +217,7 @@ Figure 39.3: Histogram for Grubb’s test
 <span class="header-section-number">39.4</span> Seasonal Hybrid ESD Algorithm<a class="anchor" aria-label="anchor" href="#seasonal-hybrid-esd-algorithm"><i class="fas fa-link"></i></a>
 </h2>
 <p>As we have seen that above test may not be appropriate for anomaly detection (normality assumption as well as detection of extreme values only), particularly detecting anomalies from a time series that may have seasonal variations. We may install <code>AnomalyDetection</code> package development version from github using <code>devtools::install_github("twitter/AnomalyDetection")</code>. Example: in <code>JohnsonJohnson</code> data having quarterly sales data, we can use the following syntax.</p>
-<div class="sourceCode" id="cb1979"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1988"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co">#devtools::install_github("twitter/AnomalyDetection")</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va">AnomalyDetection</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/pkg/AnomalyDetection/man/AnomalyDetectionVec.html">AnomalyDetectionVec</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/vector.html">as.vector</a></span><span class="op">(</span><span class="va">JohnsonJohnson</span><span class="op">)</span>, </span>
@@ -253,13 +253,13 @@ Figure 39.4: Seasonal Hybrid ESD Algorithm
 <p>One of greatest limitation of above two methods was that, these were applicable on univariate data series, whereas, in real world, data analysis will rarely be univariate. The <code>knn</code> technique works on multivariate data, but for visulaisation purposes, we will first visulaise the results on bivariate data only.</p>
 <p><strong>K-Nearest Neighbour</strong> or <strong>KNN</strong> is a distance-based classifier, meaning that it implicitly assumes that the smaller the distance between two points, the more similar they are. For bivariate data, we can understand the algorithm by plotting the data-points in a two dimensional scatter plot. Now as the distance between any two points are usually calculated using <em>Euclidean Distance Metric</em>, we should ensure that the data is normalised/scaled before proceeding for distance calculation.</p>
 <p><strong>Problem Statement-1:</strong> Let us try to identify outliers in <code>virginica</code> Species’ flower measurements. So let’s prepare the data. We will make use of <code>scale</code> function available in base R, to normalise the data. Remember that <code>scale</code> returns a matrix, so we may need to convert it into data.frame while using <code>ggplot2</code>.</p>
-<div class="sourceCode" id="cb1981"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1990"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Sample data</span></span>
 <span><span class="va">df</span> <span class="op">&lt;-</span> <span class="va">iris</span><span class="op">[</span><span class="fl">101</span><span class="op">:</span><span class="fl">150</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span></span>
 <span><span class="co">#  Scale the data</span></span>
 <span><span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/scale.html">scale</a></span><span class="op">(</span><span class="va">df</span><span class="op">)</span></span></code></pre></div>
 <p>Let us visualise the data (in first two dimensions only). However, as our data is scaled already, we can try to visualise all the dimensions using a boxplot. See both figures in <a href="anomaly-detection.html#fig:an5">39.5</a>. The points/ouliers have been numbered (on the basis of row numbers) for interpretaion purposes.</p>
-<div class="sourceCode" id="cb1982"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1991"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">df</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html">as.data.frame</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>row <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/row_number.html">row_number</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
@@ -290,13 +290,13 @@ Figure 39.5: Sepal Length Vs. Widths in Virginica
 </p>
 </div>
 <p>Now, let’s proceed to identify outliers in R. We will make use of <code>get.knn</code> function from <code>FNN</code> package. However, <code>k</code> parameter is required beforehand.</p>
-<div class="sourceCode" id="cb1983"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1992"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the library</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va">FNN</span><span class="op">)</span></span>
 <span><span class="co"># get kNN object, using k = 5</span></span>
 <span><span class="va">viginica_knn</span> <span class="op">&lt;-</span> <span class="fu">FNN</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/FNN/man/get.knn.html">get.knn</a></span><span class="op">(</span><span class="va">df</span><span class="op">[</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">2</span><span class="op">]</span>, <span class="fl">5</span><span class="op">)</span></span></code></pre></div>
 <p>The <code>knn</code> object created above will have two sub-objects (both matrices having columns equal to chosen <code>k</code>), one having nearest neighbors’ indices and another having distances from those. Let’s view their top 6 rows.</p>
-<div class="sourceCode" id="cb1984"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1993"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html">head</a></span><span class="op">(</span><span class="va">viginica_knn</span><span class="op">$</span><span class="va">nn.index</span><span class="op">)</span></span></code></pre></div>
 <pre><code>##      [,1] [,2] [,3] [,4] [,5]
 ## [1,]   37   16   49   11   45
@@ -305,7 +305,7 @@ Figure 39.5: Sepal Length Vs. Widths in Virginica
 ## [4,]   34   27   29   33   28
 ## [5,]    5   17   46   38   41
 ## [6,]   36    8   30   23   31</code></pre>
-<div class="sourceCode" id="cb1986"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1995"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html">head</a></span><span class="op">(</span><span class="va">viginica_knn</span><span class="op">$</span><span class="va">nn.dist</span><span class="op">)</span></span></code></pre></div>
 <pre><code>##           [,1]      [,2]      [,3]      [,4]      [,5]
 ## [1,] 0.3100808 0.3476803 0.3476803 0.4416741 0.6290499
@@ -315,7 +315,7 @@ Figure 39.5: Sepal Length Vs. Widths in Virginica
 ## [5,] 0.0000000 0.0000000 0.3145250 0.3476803 0.4416741
 ## [6,] 0.1572625 0.5645648 0.6290499 0.6397904 0.6953605</code></pre>
 <p>Using <code>rowMeans</code> we can calculate mean distance for each data point. The bigger this score is, the chances of that record being an outlier are relatively higher. Let’s also store that mean distance in a variable/column say <code>score</code> in main dataset, and visualise the results by setting the point-size with this mean distance (actually its square root). In Figure <a href="anomaly-detection.html#fig:an8">39.6</a>, we may notice that points lying far away are bigger becuase their chances of being outliers is high.</p>
-<div class="sourceCode" id="cb1988"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1997"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">score</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html">rowMeans</a></span><span class="op">(</span><span class="va">viginica_knn</span><span class="op">$</span><span class="va">nn.dist</span><span class="op">)</span></span>
 <span><span class="va">df</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html">as.data.frame</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
@@ -333,7 +333,7 @@ Figure 39.6: k-Nearest Neighbour Distance
 </p>
 </div>
 <p>Now, we can run the algorithm to find the outlier on the basis of all variables in the dataset.</p>
-<div class="sourceCode" id="cb1989"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb1998"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">virginica_knn</span> <span class="op">&lt;-</span> <span class="fu">FNN</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/FNN/man/get.knn.html">get.knn</a></span><span class="op">(</span><span class="va">df</span>, <span class="fl">5</span><span class="op">)</span></span>
 <span><span class="va">score</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colSums.html">rowMeans</a></span><span class="op">(</span><span class="va">virginica_knn</span><span class="op">$</span><span class="va">nn.dist</span><span class="op">)</span></span>
 <span><span class="co"># Which point is farthest-Outlier</span></span>
@@ -353,7 +353,7 @@ Figure 39.7: Local Outlier factor
 </div>
 <p>The red points may be global outliers, being far from its immediate neigbors, yet the blue points may be local anomalies as these are not like their immediate neighbors and may be local anomalies.</p>
 <p>As stated, LOF segregates the data points based on the ratio of density of that point with that of densities of its neighbors. A score <code>&gt; 1</code> thus indicates that the data point may be an anomaly. Let’s see that on same problem statement.</p>
-<div class="sourceCode" id="cb1991"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2000"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/mhahsler/dbscan">dbscan</a></span><span class="op">)</span></span>
 <span><span class="va">lof_score</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dbscan/man/lof.html">lof</a></span><span class="op">(</span><span class="va">df</span>, <span class="fl">5</span><span class="op">)</span></span>
 <span><span class="va">df</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
@@ -388,16 +388,16 @@ Figure 39.8: LOF
 </p>
 </div>
 <p>Clearly, in Figure <a href="anomaly-detection.html#fig:an10">39.8</a> (left), where we have plotted the data in 2 dimensions only despite that we have attempted to find the LOF on the basis of all four dimensions. We can see presence of local anomalies, within the clustered data points. E.g. points nos. 31, 23, etc. were earlier given more weight instead of point nos.15, 10, etc. which are now given more weight. However, if we want to visaulise it on first two principal components, we can do that (Refer Figure <a href="anomaly-detection.html#fig:an10">39.8</a> (Right)). We can also verify this.</p>
-<div class="sourceCode" id="cb1992"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2001"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Biggest Anomaly - kNN</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html">which.max</a></span><span class="op">(</span><span class="va">score</span><span class="op">)</span></span></code></pre></div>
 <pre><code>## [1] 32</code></pre>
-<div class="sourceCode" id="cb1994"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2003"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Biggest Anomaly - LOF</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/which.min.html">which.max</a></span><span class="op">(</span><span class="va">lof_score</span><span class="op">)</span></span></code></pre></div>
 <pre><code>## [1] 7</code></pre>
 <p>Histograms of both <code>knn</code> and <code>LOF</code> scores can also be drawn, as in Figure <a href="anomaly-detection.html#fig:an12">39.9</a>.</p>
-<div class="sourceCode" id="cb1996"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2005"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="va">score</span>, breaks <span class="op">=</span> <span class="fl">40</span>, </span>
 <span>     main <span class="op">=</span> <span class="st">"Histogram of KNN scores in IRIS-Virginica data"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="va">lof_score</span>, breaks <span class="op">=</span> <span class="fl">40</span>, </span>
@@ -415,7 +415,7 @@ Figure 39.9: Histogram - KNN(Left) and LOF (Right)
 </h2>
 <p>Isolation Forest is an unsupervised tree based model, which actually works on path length instead of distance or density measures. Tree based models use decision tree(s) to determine the value/class of an observation given its value. In other words, it determines or try to identify a path from the root node to a leaf node based on the value of the observation in question. Forest (or Random Forest) are actually collection of smaller trees and thus using ensemble learning methods to make decision, instead of a single complex tree.</p>
 <p>Let us work on the same problem statement above. Firstly, we will build a single decision tree. WE will use a development version package <code>isofor</code> which can be downloaded using <code>remotes::install_github("Zelazny7/isofor")</code>. To build forest/tree we will use function <code>iForest</code>. Its argument <code>nt</code> will determine the number of trees to be built in ensemble. Another important argument is <code>phi</code> which determines the number of samples to draw without replacement to construct each tree. So let’s use <code>nt = 1</code> and <code>phi = 100</code>.</p>
-<div class="sourceCode" id="cb1997"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2006"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># remotes::install_github("Zelazny7/isofor")</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va">isofor</span><span class="op">)</span></span>
 <span><span class="co"># Generate a single tree</span></span>
@@ -431,7 +431,7 @@ Figure 39.9: Histogram - KNN(Left) and LOF (Right)
 ##  [8] 0.6085593 0.4989121 0.6085593</code></pre>
 <p><em>Score interpretations</em>: The closer the score is to 1, the more likely the point is an anomaly. However, if their scores are below 0.5, they are probably just normal points within the trend.</p>
 <p>Let’s just visualise the scores on Principal Component plot again.</p>
-<div class="sourceCode" id="cb1999"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2008"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">df</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html">as.data.frame</a></span><span class="op">(</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html">%&gt;%</a></span> </span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>row <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/row_number.html">row_number</a></span><span class="op">(</span><span class="op">)</span>,</span>
@@ -466,7 +466,7 @@ Figure 39.10: Isolation Tree Method
 </p>
 </div>
 <p>Let’s also try a forest (ensemble) approach. Refer Figure <a href="anomaly-detection.html#fig:an14">39.11</a>, we can see that scores are modified using ensemble methods. However, when we gradually increase number of trees, these scores will stabilise.</p>
-<div class="sourceCode" id="cb2000"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2009"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">iso_100</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/isofor/man/iForest.html">iForest</a></span><span class="op">(</span><span class="va">df</span>, nt <span class="op">=</span> <span class="fl">100</span>, phi <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Generate scores</span></span>
@@ -499,7 +499,7 @@ Figure 39.11: 100 Isolation Trees (Left) Comparison of 1 vs. 100 trees (Right)
 </p>
 </div>
 <p><strong>Contour plots:</strong> We can also visualise the results of scores of anomaly detection, using contour plots. See the plot in Figure <a href="anomaly-detection.html#fig:an16">39.12</a>.</p>
-<div class="sourceCode" id="cb2001"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2010"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create PRCOMP data</span></span>
 <span><span class="va">df_grid</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span></span>
 <span>  PC1 <span class="op">=</span> <span class="va">df_prcomp</span><span class="op">$</span><span class="va">x</span><span class="op">[</span>,<span class="fl">1</span><span class="op">]</span>,</span>
@@ -528,18 +528,18 @@ Figure 39.12: Contour Plot
 </div>
 <p><strong>Including categorical variables</strong> One benefit of using forest tree method of anomaly detection, is that we can include categorical values also. Only condition is that these should be of <code>factor</code> type.</p>
 <p><strong>Problem Statement-2:</strong> Let’s now try to find out anomalies on full <code>iris</code> data. We can check column types before proceeding.</p>
-<div class="sourceCode" id="cb2002"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2011"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/lapply.html">sapply</a></span><span class="op">(</span><span class="va">iris</span>, <span class="va">class</span><span class="op">)</span></span></code></pre></div>
 <pre><code>## Sepal.Length  Sepal.Width Petal.Length  Petal.Width      Species 
 ##    "numeric"    "numeric"    "numeric"    "numeric"     "factor"</code></pre>
 <p>Our condition is met. So we can proceed directly to build a decision tree/Forest. For sake of simplicity, let’s build a simple tree (one). Refer Figure <a href="anomaly-detection.html#fig:an18">39.13</a>.</p>
-<div class="sourceCode" id="cb2004"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2013"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># New Iforest Model</span></span>
 <span><span class="va">iso_model_new</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/isofor/man/iForest.html">iForest</a></span><span class="op">(</span><span class="va">iris</span>, nt <span class="op">=</span> <span class="fl">1</span>, phi <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span><span class="va">new_scores</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/predict.html">predict</a></span><span class="op">(</span><span class="va">iso_model_new</span>, <span class="va">iris</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html">head</a></span><span class="op">(</span><span class="va">new_scores</span><span class="op">)</span></span></code></pre></div>
 <pre><code>## [1] 0.3687105 0.3687105 0.3687105 0.3687105 0.3687105 0.6607827</code></pre>
-<div class="sourceCode" id="cb2006"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2015"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Full PRCOMP for Visual</span></span>
 <span><span class="va">iris_pr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/prcomp.html">prcomp</a></span><span class="op">(</span><span class="va">iris</span><span class="op">[</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span></span>
 <span></span>
@@ -566,7 +566,7 @@ Figure 39.13: Including categorical variable
 <span class="header-section-number">39.8</span> Including categorical variables in LOF<a class="anchor" aria-label="anchor" href="#including-categorical-variables-in-lof"><i class="fas fa-link"></i></a>
 </h2>
 <p>We can also include categorical variable in <code>Local outlier factor</code> using <code>gower distance</code> calculation method. Gower method lets us calculate distance between categorical observations, most importantly when the categories are not ordered. To calculate it we can use function <code>daisy</code> from library <code>cluster</code> in R. Let’s see LOF score calculation on the above example. The plot generated can be seen in Figure <a href="anomaly-detection.html#fig:an20">39.14</a>.</p>
-<div class="sourceCode" id="cb2007"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2016"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://svn.r-project.org/R-packages/trunk/cluster/">cluster</a></span><span class="op">)</span></span>
 <span><span class="va">iris_dist</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/cluster/man/daisy.html">daisy</a></span><span class="op">(</span><span class="va">iris</span>, metric <span class="op">=</span> <span class="st">"gower"</span><span class="op">)</span></span>
 <span><span class="va">iris_lof</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/dbscan/man/lof.html">lof</a></span><span class="op">(</span><span class="va">iris_dist</span>, minPts <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span>
@@ -596,7 +596,7 @@ Figure 39.14: Including categorical variable
 <p>In time series data, an anomaly/outlier can be termed as a data point which is not following the common collective trend or seasonal or cyclic pattern of the entire data and is significantly distinct from rest of the data.</p>
 <p>To calculate/detect anomalies, in R, we make use of package <code>timetk</code>. The package works on <code>tibble</code> instead of <code>time series</code> data, so we may to prep our data/time series accordingly.</p>
 <p><strong>Problem Statement</strong> Let’s find out anomalies, if any on Sunspots data available in base R<a class="footnote-ref" tabindex="0" data-toggle="popover" data-content="&lt;p&gt;Monthly numbers of sunspots, as from the World Data Center, aka SIDC. This is the version of the data that will occasionally be updated when new counts become available.&lt;/p&gt;"><sup>47</sup></a>.</p>
-<div class="sourceCode" id="cb2008"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb2017"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">start_date</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"1749-01-01"</span><span class="op">)</span></span>
 <span><span class="va">end_date</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"2013-09-01"</span><span class="op">)</span></span>
 <span><span class="va">date_sequence</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq</a></span><span class="op">(</span><span class="va">start_date</span>, <span class="va">end_date</span>, by <span class="op">=</span> <span class="st">"months"</span><span class="op">)</span></span>
@@ -672,7 +672,7 @@ Figure 39.15: Time Series Anomalies
 <footer class="bg-primary text-light mt-5"><div class="container"><div class="row">
 
   <div class="col-12 col-md-6 mt-3">
-    <p>"<strong>R for Audit Analytics</strong>" was written by Anil Goyal. It was last built on 2024-07-29.</p>
+    <p>"<strong>R for Audit Analytics</strong>" was written by Anil Goyal. It was last built on 2024-07-31.</p>
   </div>
 
   <div class="col-12 col-md-6 mt-3">
