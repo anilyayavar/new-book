@@ -1,0 +1,396 @@
+# Factors
+We often have a requirement, where we need to have our character variable representing categorical data that should take values from a fixed and known set of finite values (or categories).  Additionally sometimes these categories need to be sorted in a specific order which may not be alphabetical.  Categorical data like this plays an important role in data analytics. 
+
+To deal with such categorical data, we have a special class `factor` in R.  In data analytical tasks we often need to create use factors, so let us discuss about these in a bit detail.
+
+## Factors in base R
+Factors in R are objects built over atomic data-type `integer`.  We have two primary functions to create (and coerce) factors from character vectors.
+
+- `factor`
+- `as.factor()`
+
+Of these, `factor` provides us with full customisation as it is the basic function to create factor objects in base R.  Let us discuss both.
+
+### Creating factors from scratch
+Now, let us create factor from a character vector having values from `shirt_sizes`.
+
+```{r}
+shirt_sizes <- c("S", "M", "L", "XL", "XXL")
+```
+
+Let us say, we have 10 shirts from these sizes randomly.
+
+```{r}
+# 10 shirts with following sizes
+# Notice one shirt with size small case l and one XXXL
+shirts <- c("S", "s", "L", "XL", "XXXL", "S", "M", "M", "L", "L")
+
+# Let us create a factor of shirt_sizes
+shirt_f <- factor(shirts, levels = shirt_sizes)
+shirt_f
+```
+In the output above we get `NA`s silently in place of values that were not available in our allowed values (read levels).  
+
+Now check its type and class.
+
+```{r}
+typeof(shirt_f)
+class(shirt_f)
+```
+We can see that `factor` class is actually built upon the `integer` class underneath and labels (taking values from levels by default) shown in the output.
+
+```{r}
+unclass(shirt_f)
+```
+
+We can, however, modify labels without modifying the levels by providing values (in a vector) to the `labels` argument.  Let us now create another factor with labels different than levels.
+```{r}
+set.seed(123)
+# 100 Shirts
+shirts2 <- sample(shirt_sizes, 100, replace = TRUE)
+shirts2_f <- factor(shirts2, levels = shirt_sizes, labels = c("Small", "Medium", "Large", "Extra Large", "Extra Extra large"))
+# Let's view some shirts
+head(shirts2_f)
+# Check its levels
+levels(shirts2_f)
+```
+
+Function `summary` gives us count for each level in the given factor.
+
+```{r}
+summary(shirts2_f)
+```
+
+### Coercing objects to factor
+Up to now, we created a factor from set of allowable finite values (read `levels`) and displayed them using meaningful `labels`.  Function `is.factor()` will check whether the given vector is a factor or not. On the other hand, function `as.factor` will coerce the existing character vector to a factor variable by using all the distinct values available therein as levels, but sorted alphabetically.
+
+```{r}
+is.factor(iris$Species)
+shirts2_coerced <- as.factor(shirts2)
+head(shirts2_coerced)
+levels(shirts2_coerced)
+# Check summary too
+summary(shirts2_coerced)
+```
+
+This problem was not there in our earlier factor created from scratch, because there it took levels from the provided vector which we sorted meaningfully ourselves, and thus having more control.  
+
+### Order in factors {#ordfact}
+To sort the factors in a meaningful way, we can actually create ordered factor.  Ordered factor can be created either by 
+
+- using `ordered = TRUE` argument in function `factor`; or by 
+- coercing a given factor to an ordered factor using function `ordered()`.  
+
+Clearly, latter method will again order the given factor as per the levels present in the factor.
+
+```{r}
+shirts2_ordered <- factor(
+  shirts2,
+  levels = shirt_sizes,
+  labels = c("Small", "Medium", "Large", 
+             "Extra Large", "Extra Extra large"),
+  ordered = TRUE
+)
+
+```
+
+Ordering a factor in R has another benefit, we can actually perform calculations on the ordered factor.
+Suppose if we want to find how many shirts do we have of sizes "Large" or greater.
+
+
+```{r error=TRUE}
+# How many shirts are there of sizes L or greater?
+sum(shirts2_ordered >= "Large")
+# But unordered factor will result in error.
+sum(shirts2_f >= "Large")
+```
+
+We can check the given factor is an ordered factor or not using function `is.ordered()`.  E.g.
+```{r}
+is.ordered(shirts2_ordered)
+is.ordered(shirts2_f)
+```
+
+## Factors in `forcats`
+Package `forcats` which is part of core tidyverse provides us with more robust and useful ways to create and deal with factor variables.  In `forcats` we have function `fct` for creating factor variables. It will produce errors if any value is not available in the given levels, to avoid bugs/typographical errors in the code.  E.g.
+```{r error=TRUE}
+library(forcats)
+months_31 <- c("Jan", "Mar", "May", "Jul", "Aug", "Oxt", "Dec")
+fct(months_31, levels = month.abb)
+```
+
+## Inspecting Factors
+### Summarising factors
+The `summary()` method works well to give the counts for each level.
+```{r}
+shirts2_fct <- fct(shirts2)
+summary(shirts2_fct)
+```
+
+Like `count` in `dplyr`, here we have `fct_count()` to give us level wise counts and/or proportions.  The difference from `summary()` is however in output type.  Function `fct_count()` returns a `tibble` instead.  E.g.
+```{r}
+fct_count(shirts2_fct)
+# Sort in decreasing counts
+fct_count(shirts2_fct, sort = TRUE)
+# Include proportions also
+fct_count(shirts2_fct, sort = TRUE, prop = TRUE)
+```
+### Unique levels only
+Function `fct_unique()` from the package, returns a factor with unique values, removing duplicates.  E.g.
+```{r}
+fct_unique(shirts2_fct)
+```
+
+## Order in Factors
+### Default ordering in factors
+Orders created in factor variables using `fct` are sorted as per the levels given in the level argument. If the argument is not supplied then it is sorted on the basis of first appearance (as against alphabetically in the `factor`), as we observed in output of above example.
+
+To learn more functions from `forcats` we will use `gss_cat` data frame which is part of the `forcats` package itself and GSS here stands for General Social Survey.  It actually consists of many factor variables.  For some other use cases, we will also use `economics_long` data which is part of `tidyr` package.
+
+### Reordering factors
+If we analyse the (mean) number of hours spent per day on TV watching across different religions in `gss_cat`, we can see that -
+
+```{r reord, fig.show='hold', fig.align='center', fig.cap="Factors with default order"}
+library(tidyverse)
+gss_cat |>
+  summarise(tv = mean(tvhours, na.rm = TRUE), .by = relig) |>
+  ggplot(aes(relig, tv)) +
+  geom_col() +
+  coord_flip()
+```
+
+In above case (\@ref(fig:reord)), the order of `relig` factor is meaningful when sorted on the basis of summarised values of another numerical variable present in the data.  Function `fct_reorder` is helpful in these scenarios.
+
+```
+fct_reorder(
+  .f,
+  .x,
+  .fun = median,
+  ...,
+  .na_rm = NULL,
+  .default = Inf,
+  .desc = FALSE
+)
+```
+Where - 
+
+- `.f` is the factor variable to be sorted.
+- `.x` is the numerical variable based on which `.f` is to be sorted.
+- `.fun` is the optional function (default is `median`) to be used when there are multiple values of .x for any of the level in `.f`.
+
+So, in above example, we can re-order the levels using this function.  See figure \@ref(fig:reord2) -
+
+```{r reord2, fig.show='hold', fig.align='center', fig.cap="Factors with reordered levels"}
+gss_cat |>
+  summarise(tv = mean(tvhours, na.rm = TRUE), .by = relig) |>
+  ggplot(aes(fct_reorder(relig, tv), tv)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = "Religion")
+```
+
+This function is also useful in sorting box-plots.  As an example refer Figure \@ref(fig:reord3).
+```{r reord3, fig.show='hold', fig.align='center', fig.cap="Unsorted boxes with unordered levels"}
+economics_long |> 
+  ggplot(aes(x = value01, y = variable)) +
+  geom_boxplot() +
+  ggtitle("Unsorted Boxes")
+```
+```{r reord4, fig.show='hold', fig.align='center', fig.cap="Boxes sorted on Median reordering factor levels"}
+economics_long |> 
+  mutate(variable = fct_reorder(variable, value01)) |> 
+  ggplot(aes(x = value01, y = variable)) +
+  geom_boxplot() +
+  ggtitle("Boxes sorted on Median")
+```
+
+### Reordering factors with two other variables.
+Sometimes, a factor variable needs to be sorted on the basis of first (or last) values of two other variables.  In such `fct_reorder2()` is useful.  As compared to `fct_reorder()` it takes an extra argument `.y` and is having syntax like
+
+```
+fct_reorder2(
+  .f,
+  .x,
+  .y,
+  .fun = last2,
+  ...,
+  .na_rm = NULL,
+  .default = -Inf,
+  .desc = TRUE
+)
+```
+Here default function is `last2` which simply means that levels of `.f` are sorted on the basis of last values of `.y` when plotted against `.x` as in grouped line charts.  E.g. See Figure \@ref(fig:reord5).
+```{r reord5, fig.show='hold', fig.align='center', fig.cap="Factors reordered on two criteria"}
+library(patchwork)
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+
+default <- economics_long |> 
+  filter(date < dmy("31122003"), date >= dmy("01011995")) |> 
+  ggplot(aes(date, value01)) +
+  geom_line(aes(group = variable, color = variable)) +
+  ggtitle("Default legend")
+
+aligned <- economics_long |> 
+  filter(date < dmy("31122003"), date >= dmy("01011995")) |> 
+  mutate(variable = fct_reorder2(variable, date, value01)) |> 
+  ggplot(aes(date, value01)) +
+  geom_line(aes(group = variable, color = variable)) +
+  ggtitle("Legend aligned with \nlast values of each line")
+
+default + aligned
+```
+
+
+### Changing orders of few factor labels only
+Sometimes, we may have a factor whose levels are already meaningfully sorted.  E.g. income levels in `gss_cat`.  Check the plot in Figure \@ref(fig:reord6).
+
+```{r reord6, fig.show='hold', fig.align='center', fig.cap="Default Income levels"}
+gss_cat |> 
+  ggplot(aes(rincome)) +
+  geom_bar() +
+  coord_flip()
+```
+
+The levels of income are already sorted in a meaningful way.  However, sometimes we may want to change order of a few levels only.  E.g. `Not applicable` in the Figure \@ref(fig:reord6) which if re-leveled in the end may be more meaningful.  In such cases, we may use `fct_relevel`.  The function takes a factor variable and thereafter we may pass all those levels as arguments which we want to move in the end.  After rearranging the bars (levels), the plot will look like as in Figure \@ref(fig:reord7)
+
+```{r reord7, fig.show='hold', fig.align='center', fig.cap="Modifying levels manually"}
+gss_cat |> 
+  ggplot(aes(fct_relevel(rincome, "Not applicable"))) +
+  geom_bar() +
+  coord_flip() +
+  labs(x= "Income levels")
+```
+
+### Ordering bar charts in order of frequency {#infreq}
+Function `fct_infreq()` is helpful in sorting the factor in decreasing order of frequency and thus, can be used to sort the bar charts (Refer charts in Figure \@ref(fig:fct16)).
+
+```{r fct16, fig.align='center', fig.show='hold', fig.cap="Default and increasing order by Frequency"}
+
+default <- mpg |> 
+  ggplot(aes(trans)) +
+  geom_bar()
+
+increasing <- mpg |> 
+  ggplot(aes(fct_infreq(trans))) +
+  geom_bar()
+default + increasing
+```
+
+
+### Reversing the factor levels
+Using `fct_rev()` we can reverse the order of levels in any factor. E.g. Figure \@ref(fig:reord8).
+```{r reord8, fig.show='hold', fig.align='center', fig.cap="Reversing levels"}
+mpg |> 
+  mutate(trans = fct_rev(fct_infreq(trans))) |> 
+  ggplot(aes(trans)) +
+  geom_bar()
+```
+
+### Other reordering
+There are two more functions which can be used to reorder factor levels -
+
+- `fct_inorder()`: by the order in which they first appear.
+- `fct_inseq()`: by numeric value of level.
+
+Readers may explore these functions by themselves.
+
+### More on ordering factors
+In section \@ref(ordfact) we saw how an unordered factor can be turned into an ordered factor.  This ordering can cause one side effect while plotting in ggplot2.  Ordered factor use `scale_color_viridis` by default whereas unordered factor doesn't.  See following example (Notice how the color scale has been Figure \@ref(fig:moreord) to Figure \@ref(fig:moreord2)).
+
+```{r moreord, fig.cap="Use of color scale in ordered and unordered factors"}
+mtcars %>% 
+  mutate(cyl = ordered(factor(cyl))) %>% 
+  ggplot(aes(wt, mpg)) +
+  geom_point(size = 5, aes(color = cyl)) +
+  ggtitle("Ordered Factor")
+```
+
+```{r moreord2, fig.cap="Use of color scale in ordered and unordered factors"}
+mtcars %>% 
+  mutate(cyl = factor(cyl)) %>% 
+  ggplot(aes(wt, mpg)) +
+  geom_point(size = 5, aes(color = cyl)) +
+  ggtitle("Unordered Factor")
+```
+
+
+## Levels in Factors
+
+### Modifying factor levels by applying a function
+
+Function `fct_relabel` in `forcats` powerhouse applies a function `.fun` to each of the level in `.f` factor supplied to it.  E.g. Change the case of each of the variable name in `economics_long` (Figure \@ref(fig:reord9)).
+
+```{r reord9, fig.show='hold', fig.align='center', fig.cap="Applying a function to all labels"}
+economics_long |> 
+  mutate(variable = fct_relabel(variable, str_to_upper)) |> 
+  ggplot(aes(x = value01, y = variable)) +
+  geom_boxplot() 
+```
+
+### Modifying factor levels manually
+Using function `fct_recode()` we can change the levels from the given factor manually.  We have to provide new levels manually through a sequence of named character vectors where the name gives the new level, and the value gives the old level. Levels not otherwise mentioned will be left as is. Levels can be removed by naming them `NULL`.  See Example
+```{r}
+x <- factor(c("apple", "bear", "banana", "dear"))
+fct_recode(x, fruit = "apple", fruit = "banana")
+```
+To collapse multiple levels (lumping) into one we can use its cousin `fct_collapse()`.  Example
+```{r}
+x <- factor(c("apple", "bear", "banana", "dear"))
+fct_collapse(x, fruit = c("apple", "banana"))
+```
+### Lump uncommon factor levels into `other`
+Package `forcats` provides us a family of 4 functions that are useful in lumping together the levels meeting some given criteria.  These are
+
+- `fct_lump_min()`: lumps levels that appear fewer than min times.
+- `fct_lump_prop()`: lumps levels that appear in fewer than (or equal to) `prop` * `n` times.
+- `fct_lump_n()` lumps all levels except for the n most frequent (or least frequent if `n` < 0)
+- `fct_lump_lowfreq()` lumps together the least frequent levels, ensuring that `"other"` is still the smallest level.
+
+These all functions, apart from taking factors `f` as argument, also take one or more argument, which fits into the case-
+
+- `n` Positive `n` preserves the most common `n` values. Negative `n` preserves the least common `-n` values.
+- `prop` Positive `prop` lumps values which do not appear at least `prop` of the time. Negative prop lumps values that do not appear at most `-prop` of the time.
+- `min` Preserve levels that appear at least `min` number of times.
+- `w` An optional numeric vector giving weights for frequency of each value (not level) in `f`.
+- `other_level`: Value of level used for `"other"`(default) values. Always placed at end of levels.
+
+Some examples-
+
+```{r fctlump, fig.show='hold', fig.align='center', fig.cap="Lumping Factors"}
+# We can check the religion in `gss_cat` and followers count
+gss_cat %>% 
+  count(relig)
+
+# Let's restrict these to 5 religions only
+gss_cat %>% 
+  ggplot(aes(fct_lump_n(relig, n = 5))) +
+  geom_bar()
+```
+
+In Figure \@ref(fig:fctlump) we can see that there are five religions plus `"other"` category placed in last.  We may also notice that bars are not sorted yet.
+
+We may also make use of `w` argument, if we already have our factor and its counts of levels in another vector.  See figure \@ref(fig:fctlump2) -
+
+```{r fctlump2, fig.show='hold', fig.align='center', fig.cap="Lumping Factors by making use of w argument"}
+gss_cat %>% 
+  count(relig) %>% 
+  # Making use of `w` argument
+  mutate(relig = fct_lump_n(relig, n = 5, w = n)) %>% 
+  ggplot(aes(relig, n)) +
+  geom_bar(stat = "identity")
+```
+
+To sort the levels in increasing order of frequency we can use `fct_infreq()` function which we learnt in section \@ref(infreq). It may also take `w` argument (optionally, of course) if we have our factor levels already counted.  So, to sort the levels in Figure \@ref(fig:fctlump2), we may make use of this function one step before lumping.  See figure \@ref(fig:fctlump3).
+
+```{r fctlump3, fig.show='hold', fig.align='center', fig.cap="Sorting and Lumping Factors"}
+gss_cat %>% 
+  count(relig) %>% 
+  # Sorting making use of `w` argument
+  mutate(relig = fct_infreq(relig, w = n),
+         relig = fct_lump_n(relig, n = 5, w = n)) %>% 
+  ggplot(aes(relig, n)) +
+  geom_bar(stat = "identity")
+```
+
+---------------------------------------------
