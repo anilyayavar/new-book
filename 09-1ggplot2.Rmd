@@ -1091,14 +1091,14 @@ customise aesthetics such as size, color, position, shape, etc.
 
 In the charts we have generated so far, the aesthetic mappings with data
 were default and we haven't customised those default scales. We may
-divide our customisation requirements of these scales into three
-categories, which we learn in this section.
+divide our customisation requirements of these scales into three broad
+categories, which we will learn in this section.
 
--   position scales,
--   color (or fill) scales
--   other scales.
+-   Modifying scales related to position aesthetics,
+-   Modifying scale related to color (or fill) aesthetics,
+-   Scales mapped to other aesthetics.
 
-### Position scales i.e. transforming axes
+### Modifying scales mapped to position aesthetics i.e. transforming axes
 
 We have seen that default coordinate system used by ggplot2 is Cartesian
 and to plot the data two position aesthetics `x` and `y` are required.
@@ -1189,7 +1189,7 @@ ggplot(economics, aes(date, psavert)) +
                      labels = scales::label_percent(scale = 1))
 ```
 
-In figure \@ref(fig:scale4), we have modified (i) name of `x` axis, (ii) breaks, which places the label, (iii) label for 2 digits of year, (iv) limited the data to be plotted, (v) name of `y` axis and (vi) modified the bales of `y` axis as percentages; all using scale functions.
+In figure \@ref(fig:scale4), we have modified (i) name of `x` axis, (ii) breaks, which places the label, (iii) label for 2 digits of year, (iv) limited the data to be plotted using `limits`, (v) name of `y` axis and (vi) modified the bales of `y` axis as percentages; all using scale functions.
 
 Readers may have noticed that we have modified the axes lables in plot in figure \@ref(fig:scale4) using `scales` package. Using `scales` library we may modify format of labels (refer plot in figure \@ref(fig:scale3)).
 
@@ -1213,6 +1213,46 @@ Some other functions in `scales` library useful for displaying numerical data on
 -   `scales::label_date_short()` formats dates
 -   `scale::label_wrap()` useful to wrap long strings across multiple
     lines.
+    
+In figure \@ref(fig:scale4), though we have limited the scale for a fixed duration, readers may notice that there is still an empty space on both sides of the scale.  In figure \@ref(fig:rgg20) the space between `y` axis labels and bars may be annoying to some.  To modify this empty space on scales (usually position scales) we can use `expand` argument of `scale_*_*` function through another function `expansion`.  This function `expansion` has two arguments namely `mult` and `add`.  
+
+- `mult` argument takes a vector with two numeric elements which indicate range expansion factors.
+- `add` argument also takes a vector with two numeric elements but these indicate additive range expansion constants.
+
+To understand this let's again consider the example in figure \@ref(fig:rgg20).  Providing `mult = c(0, 0.2)` in `expansion` multiplies `x` axis (continuous in this case) with `0` times on left side, and `0.2` times of `limit` on right side.  See output in figure \@ref(fig:scale5).
+
+
+```{r scale5, fig.show='hold', fig.align='center', fig.cap="Modifying scale limits though expansion"}
+aggregated_mpg <- mpg |> 
+  summarise(mean_cty = mean(cty),
+            .by = class) 
+
+ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
+  geom_bar(stat = "identity") +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.2)))
+  
+```
+
+### Adding secondary position axis
+Most of the times two different position aesthetics are shown in same plot having different scales altogether.  In such cases secondary axes can be useful for comparing datasets with different magnitudes or units, allowing for a clearer representation of diverse data sets within a single chart.  However, caution is needed as secondary axes can sometimes lead to misleading interpretations. If not used carefully, they might obscure important trends or create confusion, especially if the scale differences are not immediately obvious to the viewer.
+
+Secondary axes can be added in ggplot2, using `sec_axis` function as an argument to `sec.axis` inside `scale`s.  As an example, we can see the two `y` axis representing same data both in degree Fahrenheit and degree Celsius in figure \@ref(fig:scale6).  First argument of `sec_axis` takes a transformation function using tidyverse style syntax.  Another useful argument is `name` apart from other usual functions like `labels`, etc.
+
+```{r scale6, fig.show='hold', fig.align='center', fig.cap="Adding Secondary Axis"}
+airquality |>
+  mutate(Month = factor(month.abb[Month], ordered = TRUE, levels = month.abb)) |>
+  ggplot(aes(fct_rev(Month), Temp)) +
+  geom_bar(
+    stat = "summary",
+    fun = mean
+  ) +
+  scale_y_continuous(name = "Average Temp (\u00B0F)",
+                     expand = expansion(mult = c(0, 0.1)),
+                     sec.axis = sec_axis(~ (. - 32) * 5 / 9,
+                                         name = " Average Temp (\u00B0C)")) +
+  scale_x_discrete(name = "Month") 
+  
+```
 
 ### Customising color (or fill) mappings
 
@@ -1315,6 +1355,7 @@ that of values available in data, we have `scale_shape_identity()` or to
 change shapes manually we have `scale_shape_manual` which takes a named
 vector. Readers are advised to go through these functions through their
 help pages and use-cases by themselves.
+
 
 ## Coordinate systems
 
