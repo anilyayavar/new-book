@@ -3,29 +3,43 @@
 source("_common.R")
 ```
 
-# Reverse geo-coding
+# Reverse geocoding {#sec-revgeocoding}
+
 ## Introduction
-**Geo-coding** is the process of converting a human-readable address into geographic coordinates, such as latitude and longitude. Geocoding is the process of determining the location of an address on a map. So, plotting the places on geographical map layers require extraction of latitudes and longitudes from master databases.
 
-**Reverse geo-coding**, on the other hand, is the process of converting geographic coordinates (latitude and longitude) into a human-readable address, such as a street address, city, state/province, and country. In other words, it's the process of determining a location's address based on its geographic coordinates.  
+**Geocoding**, which we learnt in @sec-geocoding, is the process of converting a human-readable address into geographic coordinates, such as latitude and longitude. It lets us place addresses on a map.
 
-Both geo-coding and reverse geo-coding are important in geospatial data analysis, as they allow us to link spatial information with non-spatial information, such as demographic data, land use data, or other forms of spatial data. This information can then be used to gain insights into patterns and relationships in the data, and to make informed decisions based on location information.  
+**Reverse geocoding**, on the other hand, is the process of converting geographic coordinates (latitude and longitude) into a human-readable address, such as a street, village or city, district, state and country. In other words, it determines the address of a place from its coordinates.
 
-Reverse geo-coding can be used in forensic data analysis to help identify the location of transactions or events. For example, it can be used to determine the location of an ATM or point of sale device where a fraudulent transaction occurred. It can also be used to analyze patterns of activity in a particular geographic area, such as the frequency and timing of certain types of transactions.  As another example, we may think of an application data, where mobile or hand held devices are used to capture data at the time and place of intended service delivery.  Auditors may use the geo-spatial data captured by these devices to cross check/verify the actual points of service delivery.
+Both are important in geospatial data analysis. They allow us to link spatial information with non-spatial information, such as demographic data or land records, and to see patterns and relationships based on location.
+
+Reverse geocoding is especially useful in forensic data analysis. Mobile phones and handheld devices now record the coordinates of almost every activity. A photo of a newly built house, an attendance marked by a field worker, a ration distributed through a point-of-sale machine, a payment made at an ATM. Each comes with a latitude and a longitude. Reverse geocoding turns these numbers into places that an auditor can read and check, such as "is this photo really from the village where the work was claimed?".
 
 ## Widely used databases
-**OpenStreetMap** (OSM) is one of the most popular and widely used master databases for geo-coding and reverse geo-coding. OSM is a free and open-source map of the world, created and maintained by a community of volunteers. It provides a rich and detailed set of spatial data, including street names, addresses, and other points of interest.  
 
-Other popular master databases for geo-coding and reverse geo-coding include **Google Maps**. Google Maps provides a rich set of geo-coding and reverse geo-coding APIs that are widely used in web and mobile applications. Google Maps provides a comprehensive set of spatial data, including street names, addresses, and other points of interest.
+**OpenStreetMap** (OSM) is one of the most popular and widely used databases for geocoding and reverse geocoding. OSM is a free and open map of the world, created and maintained by a community of volunteers. It has a rich and detailed set of spatial data, including street names, addresses and other points of interest. Its free service, called *Nominatim*, allows only light use, about one request per second.
+
+Other popular services include **Google Maps**, **ArcGIS** and several Indian map providers. They provide geocoding and reverse geocoding through paid APIs, and are widely used in web and mobile applications.
+
+::: callout-warning
+## Privacy
+
+Coordinates of a beneficiary's home are personal data, just like the address. Do not send such coordinates to public services. Use only services approved by your organisation. In this chapter, we use the coordinates of well-known monuments only.
+:::
 
 ## Example in R
+
 ### Prerequisites
+
 ```{r}
+#| message: false
+library(tidyverse)
 library(tidygeocoder)
 ```
 
 ### Function to be used
-We will use `reverse_geo()` function from this library.  Syntax is
+
+We will use the `reverse_geo()` function from `tidygeocoder`. Its main arguments are these.
 
 ```
 reverse_geo(
@@ -33,62 +47,117 @@ reverse_geo(
   long,
   method = "osm",
   address = "address",
-  full_results = FALSE
+  full_results = FALSE,
   ...
 )
 ```
-Here -
 
-- `lat` and `long` are, as the names suggest, latitude and longitudes for the place, of which address is to be extracted.
-- `method` argument provides for geo service to be used.  Default is `osm`.  Other services available are - `arcgis`, `geocodio`, `google`, etc.
-- `address` provides the column name to be used.
-- `full_results` by default is `FALSE`.  But if set to `TRUE` returns all available data from the geocoding service.
-- for other arguments, please check help of the function.
+-   `lat` and `long` are, as the names suggest, the latitude and longitude of the place whose address is to be found.
+-   `method` is the service to be used. The default is `osm`. Other services available include `arcgis`, `geocodio` and `google`.
+-   `address` is the name of the output column holding the address.
+-   `full_results` is `FALSE` by default. If set to `TRUE`, it returns all available details from the service, such as the city, district, state and postcode in separate columns.
+-   For other arguments, please check the help of the function.
 
-### Practical data-set
-**Remember one thing, the function is not vectorised.**  So we will have to use `apply` family or `purrr::map` family of functions to get reverse geo-coding information.
+### A single place
 
-```{r }
+Let us find the address of the Taj Mahal, from its coordinates.
 
-# Coordinates of tajmahal
-reverse_geo(lat = 27.1751, 
-            long = 78.421, 
-            full_results = TRUE, 
-            method = 'osm')
+```{r}
+#| message: false
+reverse_geo(lat = 27.1751, long = 78.0421, method = "osm")
 ```
 
-### Using it in a dataset
-Let's build a sample dataset of say 4 values/places of interest in India
-```{r echo=FALSE}
-sample <- data.frame(
-  lat = c(27.1751, 24.8318, 27.1795, 28.5245),
+::: callout-tip
+## Coordinates need care
+
+Each digit of a coordinate matters. One degree of latitude is about 111 km, so the third decimal place is about 100 metres. If the longitude above is mistyped as 78.421 instead of 78.0421, the "Taj Mahal" turns out to be a village in Firozabad district, about 40 km away. When coordinates are typed by hand, always check a few of them on a map.
+:::
+
+### Several places at once
+
+`reverse_geo()` is vectorised. We can give it vectors of latitudes and longitudes, and it returns one row for each. Let us build a sample dataset of four places of interest in India.
+
+```{r}
+sample_places <- tibble(
+  lat  = c(27.1751, 24.8318, 27.1795, 28.5245),
   long = c(78.0421, 79.9199, 78.0211, 77.1855)
 )
 
-knitr::kable(sample)
+knitr::kable(sample_places)
 ```
 
-Now extracting information for these using `purrr::map` family
+When the coordinates are already in a data frame, the companion function **`reverse_geocode()`** is even more convenient. We simply name the latitude and longitude columns, and it adds the address as a new column.
+
 ```{r}
-library(dplyr, warn.conflicts = FALSE)
-library(purrr, warn.conflicts = FALSE)
+#| message: false
+results <- sample_places |>
+  reverse_geocode(lat = lat, long = long, method = "osm", full_results = TRUE)
 
-results <- pmap_dfr(sample,
-     ~ reverse_geo(..1, # first column in sample
-                   ..2, # second column in sample
-                   full_results = TRUE)) %>% 
-  select(lat, long, country, state, city, village, address, postcode)
-  
+results |>
+  select(lat, long, address, any_of(c("state_district", "state", "postcode"))) |>
+  knitr::kable()
 ```
 
-### View above results 
-```{r echo=FALSE}
-knitr::kable(results) 
+With `full_results = TRUE`, the result has many more columns, one for each part of the address. Which columns appear depends on the place. A monument in a city and a spot in a village give different parts. `any_of()` selects only those of the listed columns which actually exist, so that the code does not fail if one is missing.
+
+## An audit example, checking geotagged photos
+
+Many government schemes ask field staff to upload a geotagged photo of each completed work, such as a house, a pond or a road. The work is claimed to be at a particular place. Reverse geocoding the photo's coordinates tells us where the photo was *actually* taken.
+
+Let us use our four coordinates as the geotags of four such photos. Each comes with the place where the work was *claimed* to be. One of the claims is wrong.
+
+```{r}
+photos <- sample_places |>
+  mutate(photo_id      = c("PH-101", "PH-102", "PH-103", "PH-104"),
+         claimed_place = c("Agra", "Khajuraho", "Mathura", "Delhi"),
+         .before = 1)
+
+photos
 ```
 
-### Alternate syntax (for those who do not want to use `purrr::pmap_dfr`)
+We reverse geocode the photos, and check whether the address returned contains the claimed place.
+
+```{r}
+#| message: false
+photos_checked <- photos |>
+  reverse_geocode(lat = lat, long = long, method = "osm") |>
+  mutate(matches_claim = str_detect(str_to_lower(address), str_to_lower(claimed_place)))
+
+photos_checked |>
+  select(photo_id, claimed_place, address, matches_claim)
 ```
-sapply(seq(nrow(sample)),
-       function(x) reverse_geo(sample$lat[x], sample$long[x], full_results = TRUE)) %>% 
-  map_dfr(rbind)
-```
+
+Photo PH-103 was claimed to show a work in Mathura. But its geotag is in Agra, more than 50 km away. Such a photo needs explanation. It may be a photo of a different work, or of no work at all.
+
+::: callout-warning
+## Caution
+
+Comparing text in this way is a rough first check. Place names are spelt in many ways, such as *Gurgaon* and *Gurugram*, and the address returned by the service may use a different name, or a larger or smaller unit, than the claim. Treat a mismatch as a question to be checked, not as a finding. For large data, it is better to compare codes, such as district codes, or to use the map-based checks of @sec-maps, where we measured the distance between a geotag and the site directly.
+:::
+
+## A suggested workflow
+
+1.  **Use an approved service** for any coordinates that relate to people.
+2.  **Check the coordinates** for obvious errors, such as swapped latitude and longitude, or points outside India.
+3.  **Reverse geocode each unique location once**, using `reverse_geocode()` on a data frame, and save the results.
+4.  **Compare** the returned place with the claimed place, by name or preferably by code.
+5.  **Measure the distance** between the geotag and the claimed site, where the site's coordinates are known.
+6.  **Verify** every mismatch with records or a field visit.
+
+::: callout-important
+## Remember
+
+A geotag tells us where the *phone* was, not necessarily where the *work* is. And geotags can be faked. A correct geotag supports a claim, but does not prove it. A wrong one is a strong reason to look closer.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `reverse_geo(lat, long, method)` | tidygeocoder | Address for vectors of coordinates |
+| `reverse_geocode(.tbl, lat, long)` | tidygeocoder | Adds the address to a data frame of coordinates |
+| `full_results = TRUE` | tidygeocoder | Returns each part of the address in a separate column |
+| `any_of()` | dplyr | Selects the listed columns which exist |
+| `str_detect()`, `str_to_lower()` | stringr | Checks whether the claimed place appears in the address |
+
+: Functions used in this chapter {#tbl-revgeofunctions}

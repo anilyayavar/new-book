@@ -56,7 +56,8 @@ n_private <- 72
 hospitals <- tibble(
   hospital_id = sprintf("H%03d", 1:(n_public + n_private)),
   type = c(rep("Public", n_public), rep("Private", n_private)),
-  district = c(rep(districts, each = n_public / 8), sample(districts, n_private, replace = TRUE))
+  # each district has one district hospital (H001 to H008) and five CHCs
+  district = c(districts, rep(districts, each = 5), sample(districts, n_private, replace = TRUE))
 ) |>
   mutate(
     hospital_name = c(

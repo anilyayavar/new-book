@@ -3,7 +3,268 @@
 source("_common.R")
 ```
 
-# Geo-Coding in R
+# Geocoding in R {#sec-geocoding}
 
-*The content is under development*
+Most records give location as an **address**, not as coordinates. A vendor's address, a beneficiary's village, a hospital's location. To put such records on a map, or to measure distances between them, we must first convert the address into latitude and longitude. This is called **geocoding**.
 
+The reverse, converting latitude and longitude into an address, is called **reverse geocoding**. We will learn it in the next chapter.
+
+## Where can geocoding help an auditor?
+
+-   **Checking claimed distances.** Travel allowance, transport charges and freight claims depend on distance. Geocoding the places lets us compare the claimed distance with the actual one.
+-   **Shared locations.** Two "different" vendors, or many beneficiaries, at the same address can point to fake entities or duplicate registration. This complements the duplicate tests of @sec-dup.
+-   **Distance between supplier and site.** A supplier located far away from the delivery site may be a front for someone else, or may be charging for transport that never happened.
+-   **Mapping records** which only have addresses, so that the techniques of @sec-maps can be applied.
+
+## How geocoding works
+
+A geocoding service keeps a large database of places and addresses with their coordinates. We send it an address as text. It searches for the best match, and returns the coordinates, along with details like the full address it matched.
+
+Several services are available.
+
+-   **OpenStreetMap Nominatim.** Free and open, based on the OpenStreetMap community map. It is the default in R's `tidygeocoder` package. Its usage policy allows only light use, about one request per second, and asks users to credit OpenStreetMap.
+-   **Commercial services**, such as those offered by Google, ArcGIS and several Indian map providers. They often give better results for Indian addresses, but need an account and an API key, and usually charge beyond a free limit.
+
+::: callout-warning
+## Never send personal data to a public service
+
+Geocoding sends your addresses to someone else's server. Do **not** send addresses of beneficiaries, patients, employees or taxpayers to public services. Use only services approved by your organisation for such data. In this chapter, we geocode only public places, such as monuments and well-known markets.
+:::
+
+## Prerequisites
+
+We will use `tidygeocoder` for geocoding, and `sf` for distances.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(tidygeocoder)
+library(sf)
+```
+
+## Geocoding a few places
+
+The function `geocode()` from `tidygeocoder` works on a data frame. We tell it which column holds the address, and which service (`method`) to use. Let us geocode a few well-known places.
+
+```{r}
+#| message: false
+places <- tibble(place = c("Taj Mahal, Agra",
+                           "Hawa Mahal, Jaipur",
+                           "Charminar, Hyderabad",
+                           "Victoria Memorial, Kolkata",
+                           "Gateway of India, Mumbai",
+                           "Xyzabc Nagar, Nowhere"))
+
+places_geo <- places |>
+  geocode(address = place, method = "osm")
+
+places_geo
+```
+
+`geocode()` has added two columns, `lat` and `long`. The last "place" is made up, and the service could not find it. So its coordinates are `NA`. Always check for such failures before going ahead.
+
+```{r}
+places_geo |>
+  filter(is.na(lat))
+```
+
+::: callout-tip
+## Geocode once, save the result
+
+Geocoding is slow, and free services limit how much you can use them. Do not geocode the same addresses again and again. Geocode once, save the result with `write_csv()`, and read the saved file in later work.
+:::
+
+### More details about each match
+
+With `full_results = TRUE`, the service returns everything it knows about the match. This is useful to judge the *quality* of each match.
+
+```{r}
+#| message: false
+places_geo_full <- places |>
+  slice(1:3) |>
+  geocode(address = place, method = "osm", full_results = TRUE)
+
+places_geo_full |>
+  select(place, lat, long, display_name, class, type)
+```
+
+The `display_name` column shows the full address that the service actually matched. The `class` and `type` columns tell what kind of place it is. Reading these is the best way to catch wrong matches.
+
+::: callout-warning
+## Beware of approximate matches
+
+When a service cannot find the exact address, it often returns the centre of the town, district or pin code instead, without any warning. In Indian addresses, which are often written in very different ways, this is common. So two vendors may appear to be at "the same location" only because both were matched to the centre of the same town. Always look at what was matched, before drawing conclusions.
+:::
+
+## From coordinates to map points
+
+Latitude and longitude are in the **WGS 84** coordinate system, whose code is `EPSG:4326`. We met coordinate systems in @sec-maps. To turn the geocoded table into map points, we use `st_as_sf()`. Note that the *longitude* comes first, because it is the x-coordinate.
+
+```{r}
+places_sf <- places_geo |>
+  filter(!is.na(lat)) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+places_sf
+```
+
+### Measuring distances
+
+`st_distance()` measures distances between points. For latitude and longitude, `sf` correctly measures along the curved surface of the earth, and returns the result in metres. Let us find the distances between our places, in kilometres.
+
+```{r}
+dist_matrix <- st_distance(places_sf)
+
+dist_km <- round(units::drop_units(dist_matrix) / 1000)
+dimnames(dist_km) <- list(places_sf$place, places_sf$place)
+
+dist_km
+```
+
+`st_distance()` with a single set of points returns a matrix of the distance between every pair. `units::drop_units()` removes the unit "m", so that we can divide by 1,000 to get kilometres.
+
+These are straight-line distances, as a bird would fly. Roads and railway lines are always longer. This simple fact is the basis of our first audit check.
+
+## Audit use case 1, checking claimed travel distances
+
+Suppose a department pays travel allowance partly on the basis of the distance claimed by the employee. Let us check a few claims. The table below is made up. The places are well-known towns.
+
+```{r}
+ta_claims <- tribble(
+  ~claim_no, ~from,               ~to,                   ~claimed_km,
+  "TA-01",   "Lucknow",           "Varanasi",            320,
+  "TA-02",   "Bhopal",            "Indore",              195,
+  "TA-03",   "Patna",             "Gaya",                115,
+  "TA-04",   "Jaipur",            "Ajmer",               60,
+  "TA-05",   "Dehradun",          "Haridwar",            160,
+  "TA-06",   "Bhubaneswar",       "Puri",                65
+)
+```
+
+We need the coordinates of each town. Since a town appears in more than one claim, we geocode each town only once.
+
+```{r}
+#| message: false
+towns <- tibble(town = unique(c(ta_claims$from, ta_claims$to))) |>
+  mutate(address = paste0(town, ", India")) |>
+  geocode(address = address, method = "osm")
+
+towns
+```
+
+We added ", India" to each name, so that the service does not pick a town of the same name in another country. Now we join the coordinates to both ends of each claim, and measure the straight-line distance.
+
+```{r}
+from_pts <- ta_claims |>
+  left_join(towns, by = c("from" = "town")) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+to_pts <- ta_claims |>
+  left_join(towns, by = c("to" = "town")) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+ta_checked <- ta_claims |>
+  mutate(straight_km = round(as.numeric(st_distance(from_pts, to_pts, by_element = TRUE)) / 1000),
+         ratio = round(claimed_km / straight_km, 2))
+
+ta_checked
+```
+
+How do we read the `ratio`? Road distance in India is usually around 1.2 to 1.5 times the straight-line distance. So a ratio in that range is normal.
+
+-   A ratio **below 1** is impossible. No road is shorter than a straight line. Such a claim is certainly wrong. Here, that means the claim from Jaipur to Ajmer.
+-   A ratio **far above 1.5** suggests an inflated claim. Here, the claim from Dehradun to Haridwar is more than three times the straight-line distance.
+
+```{r}
+ta_checked |>
+  filter(ratio < 1 | ratio > 1.8)
+```
+
+::: callout-note
+## Straight-line or road distance?
+
+The straight-line distance is a quick filter, not the final answer. For the flagged claims, check the actual road or rail distance from official tables, or from a routing service. Some routes are genuinely long because of hills, rivers or the lack of a direct road.
+:::
+
+## Audit use case 2, different vendors, same place
+
+In @sec-dup, we found look-alike vendor names. Another sign of fake or related vendors is that their addresses point to the same place, even though they are written differently. Let us look at a few vendors of a department. The addresses are of well-known commercial areas, and the vendors are made up.
+
+```{r}
+vendors <- tribble(
+  ~vendor,                   ~address,
+  "Shubh Laxmi Traders",     "Nehru Place, New Delhi",
+  "Gupta Office Supplies",   "Chandni Chowk, Delhi",
+  "Shree Balaji Enterprises","Nehru Place, Delhi",
+  "Raj Computers",           "Lajpat Nagar, New Delhi",
+  "Om Sai Suppliers",        "Karol Bagh, New Delhi",
+  "Modern Stationers",       "Nehru Place Market, New Delhi"
+)
+```
+
+```{r}
+#| message: false
+vendors_geo <- vendors |>
+  geocode(address = address, method = "osm")
+
+vendors_geo
+```
+
+Three vendors give addresses in Nehru Place, written in three different ways. To find vendors at the same place, we round the coordinates to three decimal places, which is about 100 metres, and look for vendors that share a rounded location.
+
+```{r}
+vendors_geo |>
+  mutate(spot = paste(round(lat, 3), round(long, 3))) |>
+  filter(n() > 1, .by = spot) |>
+  arrange(spot)
+```
+
+Two vendors share a location. But what happened to the third Nehru Place vendor? Let us see what the service actually matched for each of the three addresses.
+
+```{r}
+#| message: false
+vendors |>
+  filter(str_detect(address, "Nehru Place")) |>
+  geocode(address = address, method = "osm", full_results = TRUE) |>
+  select(vendor, address, display_name)
+```
+
+"Nehru Place, New Delhi" has been matched to *Motilal Nehru Place*, a road in central Delhi, several kilometres away from the Nehru Place market. A small difference in how the address was written led to a completely different place. This is exactly the problem of approximate matches that we warned about earlier. An auditor who relied on the coordinates alone would have missed that all three vendors are in the same market.
+
+So the analysis finds two vendors at one spot, and a careful reading of the matched addresses adds the third. Three "different" vendors are located in the same market. This is not wrong by itself. A market like Nehru Place has hundreds of shops. But if these three vendors also bid in the same tenders, as in @sec-apriori, or share a phone number or bank account, the case for a closer look becomes strong.
+
+::: callout-tip
+## Audit tip
+
+Rounding to three decimal places groups points within about 100 metres. Rounding to four places, about 10 metres, is stricter. Choose according to the quality of your addresses. With precise addresses, use four places. With addresses that only give a locality, three or even two places may be better.
+:::
+
+## A suggested workflow
+
+1.  **Use an approved service.** Never send personal addresses to a public geocoder.
+2.  **Clean the addresses first.** Add the state and "India", remove extra spaces, and expand common short forms.
+3.  **Geocode each unique address once**, and save the results.
+4.  **Check the failures** (`NA` coordinates) and the quality of matches, using `full_results = TRUE`.
+5.  **Turn the results into points** with `st_as_sf(coords = c("long", "lat"), crs = 4326)`.
+6.  **Measure distances** with `st_distance()`, and compare with claims.
+7.  **Look for shared locations**, by rounding coordinates.
+8.  **Verify** each flagged case with records, and with official distance tables or site visits.
+
+::: callout-important
+## Remember
+
+Geocoding gives the location of the *address as written*, not necessarily the location of the *thing*. A wrong or vague address gives a wrong or vague location. Treat geocoded locations as approximate, and always look at the matched address before drawing a conclusion.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `geocode(address = , method = )` | tidygeocoder | Adds latitude and longitude for addresses in a data frame |
+| `full_results = TRUE` | tidygeocoder | Returns the full match details, to judge quality |
+| `st_as_sf(coords = c("long", "lat"), crs = 4326)` | sf | Turns latitude and longitude into map points |
+| `st_distance()` | sf | Distances between points, in metres |
+| `units::drop_units()` | units | Removes units from distances |
+| `round()` with `filter(n() > 1, .by = )` | base R, dplyr | Finds records sharing a location |
+
+: Functions used in this chapter {#tbl-geocodefunctions}
