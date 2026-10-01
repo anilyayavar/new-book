@@ -207,6 +207,61 @@ Notice one more thing. Both these bills are far above ₹ 50,000, the limit of t
 The minimum of five bills and the RSF cut-off of 2.5 are not fixed rules. Sort the table by RSF and read from the top. Look at the bills behind each high RSF until the cases stop being interesting. In large data, it also helps to add a materiality condition, for example, consider only those subsets where the largest amount is above a certain value.
 :::
 
+### Variations of RSF
+
+The classic RSF compares the largest amount (often written as L1) with the second largest (L2). It is simple and works well when a subset has *one* odd amount. But it has a blind spot. Suppose a vendor has managed to get *two* inflated bills paid. Then the largest and second largest are both inflated, and their ratio is close to 1. Both bills hide behind each other.
+
+Let us see this with a small example. *Sunrise Electricals* usually sends bills of about ₹ 15,000. But two bills of about ₹ 1.6 lakh each have also been paid.
+
+```{r}
+sunrise <- c(14200, 16850, 12900, 15400, 13750, 168500, 154200)
+
+largest <- max(sunrise)
+second  <- sort(sunrise, decreasing = TRUE)[2]
+others  <- sort(sunrise, decreasing = TRUE)[-1]   # all except the largest
+
+c(L1_by_L2          = largest / second,
+  L1_by_mean_others = largest / mean(others),
+  L1_by_median      = largest / median(sunrise))
+```
+
+The classic RSF is only about 1.1, and the vendor looks perfectly normal. So auditors also use other measures in the denominator.
+
+-   **L1 / average of the other records.** The largest amount is compared with the mean of all the *remaining* amounts. We leave out the largest one itself, otherwise it would pull the mean up. This measure catches our vendor better, at about 4.4. But the second inflated bill is still inside the mean, and still pulls it up.
+-   **L1 / median.** The median is the middle value of the subset. It hardly moves even when a few amounts are very large. So it represents the *usual* amount well. Here, the largest bill is about 11 times the usual bill, and the problem is obvious.
+
+Let us calculate all three on our bills data.
+
+```{r}
+bills |>
+  summarise(bills     = n(),
+            l1_l2     = round(max(amount) / sort(amount, decreasing = TRUE)[2], 2),
+            l1_mean   = round(max(amount) / mean(sort(amount, decreasing = TRUE)[-1]), 2),
+            l1_median = round(max(amount) / median(amount), 2),
+            .by = vendor) |>
+  filter(bills >= 5) |>
+  arrange(desc(l1_median)) |>
+  head(6)
+```
+
+All three measures put *Kaveri Suppliers* and *Shree Ganesh Transport* at the top. In our data, each of them has only one odd bill, so the classic RSF was enough. But notice that the values of the three measures are on different scales. Even for an ordinary vendor in our data, the largest bill is about four times the median bill. So a cut-off that suits one measure does not suit another. Choose the cut-off separately for each measure, by reading down the sorted list as before.
+
+@tbl-rsfvariants sums up the three measures.
+
+| Measure | Compares the largest amount with | Strength | Weakness |
+|----------------|-------------------|-------------------|-------------------|
+| L1 / L2 | The second largest amount | Simple, and standard in forensic literature | Misses a subset with two or more odd amounts |
+| L1 / average of others | The mean of all other amounts | Uses all records of the subset | Mean is still pulled up by other large amounts |
+| L1 / median | The middle amount of the subset | Not disturbed by a few odd amounts | Needs a different, higher cut-off |
+
+: Variations of the Relative Size Factor {#tbl-rsfvariants}
+
+::: callout-tip
+## Audit tip
+
+Run more than one variation. A subset flagged by L1/median but *not* by L1/L2 is a sign that it may have more than one odd amount. In that case, look at all its large amounts, and not just the largest one. A still more robust option is to measure how far the largest amount is from the median in units of the *median absolute deviation*, which R calculates with `mad()`. This is often called a *robust z-score*.
+:::
+
 ## Number duplication test
 
 In real life, amounts of bills vary a lot. A stationery bill may be ₹ 5,523 one day and ₹ 6,218 the next. So if we count how many times each *exact* amount appears in the data, most amounts should appear only once, or perhaps twice by coincidence.

@@ -440,10 +440,113 @@ data.frame(
          Species = iris$Species) %>% 
   ggplot(aes(PC1, PC2, color = Species)) +
   geom_point(aes(size = score)) +
-  guides(size = FALSE) +
+  guides(size = "none") +
   theme_bw() +
   labs(title = "LOF Scores\nVisualised on Principal Components")
 ```
+
+### How does Gower distance work?
+
+kNN and LOF need a *distance* between every pair of records. For numbers this is easy. But what is the distance between "Air" and "Sleeper", or between "Group A" and "Group C"? Gower distance answers this in a simple way.
+
+-   For a **numeric** column, it takes the difference between the two values and divides it by the range (maximum minus minimum) of that column. So the result is always between 0 and 1.
+-   For a **categorical** column, the distance is 0 if the two values are the same, and 1 if they are different.
+-   The final distance is the average of these column-wise distances.
+
+So every column contributes equally, and the final distance is always between 0 and 1. This is why we did not have to scale the data before using `daisy()`.
+
+### Why categories matter, an audit example
+
+Let us see why including categorical columns can make a real difference. Consider travel allowance (TA) claims of employees. Each claim records the grade of the employee, the mode of travel, the distance travelled and the amount claimed. Suppose the entitlement rules are as below.
+
+| Grade | Entitled to travel by |
+|---------|----------------------|
+| Group A | Air or AC-2 |
+| Group B | AC-2 or AC-3 |
+| Group C | AC-3 or Sleeper |
+
+: Travel entitlement in our example {#tbl-taentitle}
+
+We have about 300 claims, created in the folded code below. Three problem claims have been planted. Two Group C employees have claimed *air* fare. Their amounts are quite normal *for an air journey* of that distance. The third claim is an AC-3 journey with a hugely inflated amount.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the TA claims data"
+set.seed(2611)
+
+entitled <- list(`Group A` = c("Air", "AC-2"),
+                 `Group B` = c("AC-2", "AC-3"),
+                 `Group C` = c("AC-3", "Sleeper"))
+rate_per_km <- c(Air = 6, `AC-2` = 2.6, `AC-3` = 1.8, Sleeper = 0.7)
+
+n <- 300
+claims <- tibble(grade = sample(names(entitled), n, replace = TRUE,
+                                prob = c(0.25, 0.35, 0.4))) |>
+  mutate(mode        = map_chr(grade, \(g) sample(entitled[[g]], 1)),
+         distance_km = round(runif(n, 200, 1800)),
+         amount      = round(distance_km * rate_per_km[mode] * 2 *
+                               runif(n, 0.9, 1.15) + 500))
+
+planted <- tibble(grade       = c("Group C", "Group C", "Group B"),
+                  mode        = c("Air", "Air", "AC-3"),
+                  distance_km = c(1150, 1420, 900),
+                  amount      = c(14300, 17600, 41000))
+
+claims <- bind_rows(claims, planted) |>
+  mutate(claim_id = sprintf("TA-%03d", row_number()), .before = 1)
+```
+
+```{r}
+tail(claims, 4)
+```
+
+**Step-1: LOF on numeric columns only.** First, let us do what we did earlier in this chapter. We use only the two numeric columns, distance and amount, scale them, and calculate LOF.
+
+```{r}
+claims$lof_numeric <- claims |>
+  select(distance_km, amount) |>
+  scale() |>
+  lof(minPts = 10)
+
+claims |>
+  arrange(desc(lof_numeric)) |>
+  head(5)
+```
+
+The inflated AC-3 claim, `TA-303`, is at the top, with a very high score. That is good. But the two Group C air claims are nowhere near the top. This is not surprising. Looking at distance and amount alone, these claims look exactly like the many genuine air claims of Group A officers.
+
+**Step-2: LOF with categorical columns, using Gower distance.** Now we include grade and mode of travel as well. `daisy()` needs categorical columns as factors, so we convert them first.
+
+```{r}
+gower_dist <- claims |>
+  select(grade, mode, distance_km, amount) |>
+  mutate(across(c(grade, mode), as.factor)) |>
+  daisy(metric = "gower")
+
+claims$lof_gower <- lof(gower_dist, minPts = 10)
+
+claims |>
+  arrange(desc(lof_gower)) |>
+  head(5)
+```
+
+Now all three planted claims are at the top. A Group C employee travelling by air is a rare *combination* in the data, and Gower distance makes that rarity visible to LOF.
+
+Let us compare the rank of the three claims under both methods. A rank of 1 means the most anomalous claim.
+
+```{r}
+claims |>
+  mutate(rank_numeric = rank(-lof_numeric),
+         rank_gower   = rank(-lof_gower)) |>
+  filter(claim_id %in% c("TA-301", "TA-302", "TA-303")) |>
+  select(claim_id, grade, mode, amount, rank_numeric, rank_gower)
+```
+
+::: callout-tip
+## Audit tip
+
+If the rules are known and simple, as in our entitlement table, a direct rule-based check is better. Just join the claims with the entitlement table and list every claim where the mode is not allowed for the grade. Anomaly detection is useful when the rules are not known, are too many to code, or when we want to discover patterns that nobody has thought of. In practice, use both.
+:::
 
 ## Time Series Anomalies
 In time series data, an anomaly/outlier can be termed as a data point which is not following the common collective trend or seasonal or cyclic pattern of the entire data and is significantly distinct from rest of the data.
@@ -472,5 +575,114 @@ sunspot_df %>%
   filter(anomaly == 'Yes')
 ```
 
-We can anomalies highlighted in red, in @fig-an17 and anomalies filtered out in code above.  We may also implement Seasonal Hybrid ESD algorithm already discussed above.
+We can see anomalies highlighted in red, in @fig-an17 and anomalies filtered out in code above.  We may also implement Seasonal Hybrid ESD algorithm already discussed above.
+
+### How does this method work?
+
+`tk_anomaly_diagnostics()` works in two steps.
+
+1.  It first splits the series into three parts, using a method called STL decomposition. The **trend** is the long-term rise or fall. The **season** is the pattern which repeats every year, or every week. The **remainder** is whatever is left after removing the trend and season.
+2.  It then looks for unusually large values in the remainder only. The usual rule of the boxplot is used, so a value far outside the middle 50% of the remainders is called an anomaly.
+
+So a value is called an anomaly only if it cannot be explained by the trend *and* the usual seasonal pattern. We learnt about these components of a time series in the chapter on time series analysis.
+
+### An audit example, monthly expenditure
+
+Every auditor in government knows the *March rush*. Offices spend much more in March than in other months, to use up the budget before the financial year ends. So a high expenditure in March is expected. What an auditor wants to find is a month which is unusual *even after allowing* for this pattern.
+
+Let us create six years of monthly expenditure of an office, from April 2019 to March 2025, in ₹ lakh. The expenditure grows a little every year, and March is always much higher than other months. We have planted one odd month, October 2023, when some unusual payments were made.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the monthly expenditure data"
+set.seed(2611)
+
+months <- seq(as.Date("2019-04-01"), as.Date("2025-03-01"), by = "month")
+
+# Seasonal pattern from April to March. March is the rush month.
+season <- c(0.8, 0.85, 0.9, 0.9, 0.95, 0.95, 1, 1, 1.05, 1.1, 1.3, 2.4)
+position_in_fy <- ((month(months) + 8) %% 12) + 1   # April = 1, ..., March = 12
+
+expenditure <- tibble(
+  month = months,
+  amount = round(40 * 1.06^(seq_along(months) / 12) * season[position_in_fy] *
+                   runif(length(months), 0.92, 1.08), 2)
+)
+
+# Planted case. Unusual payments in October 2023.
+odd <- expenditure$month == as.Date("2023-10-01")
+expenditure$amount[odd] <- expenditure$amount[odd] * 2.3
+```
+
+```{r}
+head(expenditure)
+```
+
+**Attempt 1. A simple boxplot rule.** Let us first try what we learnt at the start of this chapter. `boxplot.stats()` returns, in its `out` element, the values which lie outside the whiskers of a boxplot.
+
+```{r}
+outliers <- boxplot.stats(expenditure$amount)$out
+
+expenditure |>
+  filter(amount %in% outliers)
+```
+
+Every single March has been flagged, along with October 2023. Even February 2025 is flagged, only because expenditure has grown over the years and recent months are naturally higher. This is not useful. The March peaks are the normal pattern of this office, and the one really odd month is lost in the crowd.
+
+**Attempt 2. Allowing for the season.** Now let us use `tk_anomaly_diagnostics()`. We tell it that the season repeats every 12 months, with `.frequency = 12`.
+
+```{r}
+expenditure |>
+  tk_anomaly_diagnostics(month, amount, .frequency = 12, .message = FALSE) |>
+  filter(anomaly == "Yes") |>
+  select(month, observed, season, trend, remainder)
+```
+
+This is much better. October 2023 is flagged. But so are a few early Marches. Why? Look at how the March peak behaves. It is not a fixed *amount* above other months. It is a fixed *proportion*, about 2.4 times a normal month. As total expenditure grows over the years, the March peak grows in rupees too. STL expects a season of the same size every year, so it gets the early Marches slightly wrong.
+
+**Attempt 3. Working on the log scale.** The fix is simple. We take the logarithm of the amounts. On the log scale, "2.4 times" becomes a fixed *difference*, whatever the size of the expenditure. So the seasonal pattern becomes the same size every year.
+
+```{r}
+expenditure |>
+  mutate(log_amount = log(amount)) |>
+  tk_anomaly_diagnostics(month, log_amount, .frequency = 12, .message = FALSE) |>
+  filter(anomaly == "Yes") |>
+  select(month, observed, remainder)
+```
+
+Now only October 2023 is flagged. This is exactly the month we planted. The same result can be seen in @fig-expanom.
+
+```{r}
+#| label: fig-expanom
+#| fig-cap: "Anomalies in monthly expenditure, on log scale"
+#| message: false
+expenditure |>
+  mutate(log_amount = log(amount)) |>
+  plot_anomaly_diagnostics(month, log_amount, .frequency = 12,
+                           .interactive = FALSE, .message = FALSE,
+                           .title = "Monthly expenditure (log scale)")
+```
+
+::: callout-tip
+## Audit tip
+
+Use the log scale whenever the ups and downs of a series grow along with its level. This is true of most financial data, like expenditure, revenue, sales or tax collections. A quick look at a line plot of the data will tell you. If the March peaks get taller over the years, use the log.
+:::
+
+::: callout-note
+## The March rush is itself an audit issue
+
+The seasonal method treats the March rush as *normal*, because it happens every year. But for an auditor, the rush itself may be a finding. Ministry of Finance guidelines on expenditure management require that expenditure in March should not exceed 15% of the budget for the year. We can check this directly, by finding the share of March in each financial year's expenditure.
+
+```{r}
+expenditure |>
+  mutate(fin_year = if_else(month(month) >= 4, year(month), year(month) - 1)) |>
+  summarise(total = sum(amount),
+            march = sum(amount[month(month) == 3]),
+            .by = fin_year) |>
+  mutate(march_share_pct = round(100 * march / total, 1))
+```
+
+Here `fin_year` 2019 means the financial year 2019-20, and so on. In every year, March accounts for more than 15% of the annual expenditure.
+:::
 
