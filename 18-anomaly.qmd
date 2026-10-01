@@ -35,13 +35,18 @@ summary(nhtemp)
 
 The easiest way to get a sense for how unusual a particular value is is by using a graphical summary like a boxplot. In R, this is created using the `boxplot` function. The `boxplot` function takes a column of values as an input argument, here illustrated with the temperature data, and produces a box and whiskers representation of the distribution of the values. The extreme values are represented as distinct points, making them easier to spot.  We can also make use of ggplot2.  Examples from both base R and ggplot2 are shown in @fig-an1.
 
-```{r fig-an1, fig.show='hold', fig.align='center', fig.cap="Outliers through Boxplot", out.width="45%"}
+::: {#fig-an1}
+
+```{r fig.show='hold', fig.align='center', out.width="45%"}
 boxplot(nhtemp, main = "Box plot of nhtemp data")
 ggplot(iris, aes(Species, Petal.Length, color = Species )) +
   geom_boxplot(outlier.colour = "red", outlier.size = 2) +
   theme_bw() +
   labs(title = "Petal Lengths in Iris Data")
 ```
+
+Outliers through Boxplot
+:::
 
 It's important to note that a **point anomaly** is not necessarily always extreme. A point anomaly can also arise as an unusual combination of values across several attributes.  
 
@@ -108,7 +113,9 @@ df <- scale(df)
 
 Let us visualise the data (in first two dimensions only). However, as our data is scaled already, we can try to visualise all the dimensions using a boxplot.  See both figures in @fig-an5.  The points/ouliers have been numbered (on the basis of row numbers) for interpretaion purposes.
 
-```{r fig-an5, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Sepal Length Vs. Widths in Virginica", out.width="45%"}
+::: {#fig-an5}
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="45%"}
 
 df %>% 
   as.data.frame() %>% 
@@ -134,6 +141,9 @@ df %>%
   geom_text(aes(label=outlier), na.rm=TRUE, hjust=-.5) +
   theme_bw()
 ```
+
+Sepal Length Vs. Widths in Virginica
+:::
 
 Now, let's proceed to identify outliers in R. We will make use of `get.knn` function from `FNN` package.  However, `k` parameter is required beforehand.
 
@@ -209,7 +219,9 @@ The red points may be global outliers, being far from its immediate neigbors, ye
 
 As stated, LOF segregates the data points based on the ratio of density of that point with that of densities of its neighbors.  A score `> 1` thus indicates that the data point may be an anomaly.  Let's see that on same problem statement.
 
-```{r fig-an10, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="LOF", out.width="48%"}
+::: {#fig-an10}
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 library(dbscan)
 lof_score <- lof(df, 5)
 df %>% 
@@ -239,6 +251,9 @@ df %>%
   labs(title = "LOF method of outlier\nVisualised on principal components")
 ```
 
+LOF
+:::
+
 Clearly, in @fig-an10 (left), where we have plotted the data in 2 dimensions only despite that we have attempted to find the LOF on the basis of all four dimensions. We can see presence of local anomalies, within the clustered data points. E.g. points nos. 31, 23, etc. were earlier given more weight instead of point nos.15, 10, etc. which are now given more weight.  However, if we want to visaulise it on first two principal components, we can do that (Refer @fig-an10 (Right)). We can also verify this.
 
 ```{r an11}
@@ -251,12 +266,17 @@ which.max(lof_score)
 
 Histograms of both `knn` and `LOF` scores can also be drawn, as in @fig-an12.
 
-```{r fig-an12, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Histogram - KNN(Left) and LOF (Right)", out.width="48%"}
+::: {#fig-an12}
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 hist(score, breaks = 40, 
      main = "Histogram of KNN scores in IRIS-Virginica data")
 hist(lof_score, breaks = 40, 
      main = "Histogram of LOF scores in IRIS-Virginica data")
 ```
+
+Histogram - KNN(Left) and LOF (Right)
+:::
 
 ## Isolation Trees/Forest
 
@@ -313,7 +333,9 @@ df %>%
 ```
 Let's also try a forest (ensemble) approach.  Refer @fig-an14, we can see that scores are modified using ensemble methods.  However, when we gradually increase number of trees, these scores will stabilise.
 
-```{r fig-an14, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="100 Isolation Trees (Left) Comparison of 1 vs. 100 trees (Right)", out.width="48%"}
+::: {#fig-an14}
+
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 iso_100 <- iForest(df, nt = 100, phi = 100)
 
 # Generate scores
@@ -341,6 +363,9 @@ plot(iso_score_1, iso_score_100, xlim = c(0, 1), ylim = c(0, 1),
 abline(a = 0, b = 1)
 
 ```
+
+100 Isolation Trees (Left) Comparison of 1 vs. 100 trees (Right)
+:::
 
 **Contour plots:**  We can also visualise the results of scores of anomaly detection, using contour plots.  See the plot in @fig-an16.
 
@@ -429,8 +454,8 @@ To calculate/detect anomalies, in R, we make use of package `timetk`.  The packa
 
 ```{r fig-an17, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Time Series Anomalies", out.width="90%"}
 start_date <- as.Date("1749-01-01")
-end_date <- as.Date("2013-09-01")
-date_sequence <- seq(start_date, end_date, by = "months")
+# one date per month, as many as there are values in the series
+date_sequence <- seq(start_date, by = "months", length.out = length(sunspot.month))
 
 sunspot_df <- sunspot.month %>%
   as.data.frame() %>%
