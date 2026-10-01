@@ -1,0 +1,418 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Duplicate Detection {#sec-dup}
+
+Duplicate detection is one of the oldest and most useful checks in audit. It is simple to understand. It is also simple to run. Yet it often gives the quickest results in a fraud or forensic audit.
+
+A duplicate payment means money has gone out twice for the same thing. Sometimes it is an honest mistake. Sometimes it is not. In either case, it is a loss to the organisation, and the auditor must find it.
+
+Duplicates may point to many kinds of problems. A few common ones are:
+
+-   **Double billing.** A supplier submits the same invoice twice, and both get paid.
+-   **Expense reimbursement fraud.** An employee claims the same bill twice, perhaps once in each of two months.
+-   **Payroll fraud.** The same person appears twice on the pay roll, or a "ghost" employee shares the bank account of a real one.
+-   **Beneficiary fraud.** In welfare schemes, one person registers twice to get the benefit twice.
+-   **Data entry errors and system glitches.** A record is keyed in twice, or an interface between two systems posts the same transaction again.
+
+In this chapter we will learn how to find such duplicates in R. We will start with the simplest case, where two records are exactly the same. We will then move to cases where records are *almost* the same. These are harder to find, and they are usually the more interesting ones for an auditor.
+
+## Prerequisites
+
+We will use three packages in this chapter. `tidyverse` gives us `dplyr` and `stringr`. `janitor` gives us a very handy function `get_dupes()`. `stringdist` will help us find names which are similar but not identical.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(janitor)
+library(stringdist)
+```
+
+## Our sample data
+
+To learn the tests, we need some data where we already know the answers. So let us create a small *payment register* of an imaginary office for the financial year 2024-25. It has about 170 payments made to 14 vendors. We have deliberately planted a few duplicates in it. Our job in this chapter is to find all of them using R.
+
+The code to create the data is given below. New readers need not worry about this code right now. You may expand it later, once you are comfortable with `dplyr`.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the sample payment register"
+set.seed(2025)
+
+# Vendor master
+vendors <- tibble(
+  vendor_id   = sprintf("V%03d", 1:14),
+  vendor_name = c("Sharma Traders", "Gupta Enterprises", "Bharat Stationers",
+                  "Kaveri Suppliers", "Laxmi Electricals", "National Printers",
+                  "Om Sai Caterers", "Patel Hardware", "Rajdhani Computers",
+                  "Shree Ganesh Transport", "Ashok Estates", "Verma & Sons",
+                  "Sharma Trader's", "Guptha Enterprises")
+)
+
+# 150 ordinary payments
+n <- 150
+payments <- tibble(
+  vendor_id    = sample(vendors$vendor_id[c(1:10, 12)], n, replace = TRUE),
+  invoice_no   = paste0("INV-", sample(1000:9999, n)),
+  invoice_date = as.Date("2024-04-01") + sample(0:330, n, replace = TRUE),
+  amount       = round(runif(n, 2000, 200000))
+)
+
+# Monthly office rent. Same amount every month, but genuine.
+rent <- tibble(
+  vendor_id    = "V011",
+  invoice_no   = paste0("AE/RENT/", 1:12),
+  invoice_date = seq(as.Date("2024-04-01"), by = "month", length.out = 12),
+  amount       = 45000
+)
+
+# Planted case 1. Invoices paid twice (one of them thrice).
+paid_again <- payments[c(12, 47, 47, 101), ]
+
+# Planted case 2. Same invoice keyed in again with a slightly different number.
+retyped <- payments[c(23, 88), ] |>
+  mutate(invoice_no = c(str_remove(invoice_no[1], "-"),
+                        str_to_lower(invoice_no[2])))
+
+# Planted case 3. Same bill raised again with a suffix "A", two days later.
+suffixed <- payments[64, ] |>
+  mutate(invoice_no   = paste0(invoice_no, "A"),
+         invoice_date = invoice_date + 2)
+
+# Planted case 4. Same invoice paid to a look-alike vendor.
+lookalike <- payments |>
+  filter(vendor_id %in% c("V001", "V002")) |>
+  slice(c(2, 5)) |>
+  mutate(vendor_id = if_else(vendor_id == "V001", "V013", "V014"))
+
+payments <- bind_rows(payments, rent, paid_again, retyped, suffixed, lookalike) |>
+  mutate(payment_date = invoice_date + sample(7:45, n(), replace = TRUE)) |>
+  arrange(payment_date) |>
+  mutate(voucher_no = sprintf("PV-%04d", row_number())) |>
+  left_join(vendors, by = "vendor_id") |>
+  select(voucher_no, payment_date, vendor_id, vendor_name,
+         invoice_no, invoice_date, amount)
+
+# Planted case 5. Two rows repeated in the data extract itself.
+payments <- bind_rows(payments, payments[c(30, 90), ]) |>
+  arrange(voucher_no)
+```
+
+Let us have a look at the first few rows.
+
+```{r}
+head(payments)
+```
+
+Each row is one payment. The columns are:
+
+-   `voucher_no` is the payment voucher number, given by the office.
+-   `payment_date` is the date on which payment was made.
+-   `vendor_id` and `vendor_name` tell us who was paid.
+-   `invoice_no` and `invoice_date` come from the bill submitted by the vendor.
+-   `amount` is the amount paid, in rupees.
+
+## What do we mean by a duplicate?
+
+This question looks simple. But it is the most important step of the whole exercise. Two records are "duplicates" only with respect to some columns, which we choose. These chosen columns are called the **key**.
+
+Consider two payments to Sharma Traders. Both are for ₹ 25,000. Are they duplicates? We cannot say yet. If they also have the same invoice number, they almost certainly are. If the invoice numbers differ and the payments are a month apart, they are probably two genuine supplies.
+
+So, before running any test, the auditor must decide the key. Forensic auditors commonly use the kinds of tests summarised in @tbl-duptests.
+
+| Test | What matches | What differs | Typical finding |
+|------------------|------------------|------------------|-------------------|
+| Exact duplicate | Every column | Nothing | Same row repeated in data, or keyed in twice |
+| Same-Same-Same | All key columns, say vendor, invoice number and amount | Other columns like voucher number and date | Same invoice paid twice |
+| Same-Same-Different | Two key columns, say vendor and amount | The third key column, say invoice number | Same bill re-submitted with a new or altered number |
+| Fuzzy duplicate | Values are *similar*, not equal | Spelling, case, punctuation | Look-alike vendors, retyped invoice numbers |
+
+: Types of duplicate tests {#tbl-duptests}
+
+The names *Same-Same-Same* and *Same-Same-Different* are commonly used in forensic analytics literature. They are easy to remember. Three key columns are compared. The name tells us which of the three should match and which should not.
+
+## Exact duplicates
+
+Let us begin with the easiest case. Are there rows which are the same in every column?
+
+Base R has a function `duplicated()`, which we met in @sec-basefuns. It returns `TRUE` for every row which has already appeared earlier in the data. So summing it up gives the number of extra copies.
+
+```{r}
+sum(duplicated(payments))
+```
+
+There are two such rows. But `duplicated()` marks only the *second* copy as `TRUE`. The first copy is marked `FALSE`. An auditor usually wants to see both copies side by side. For this, `get_dupes()` from `janitor` is much more convenient. If we do not give it any column names, it uses all columns.
+
+```{r}
+#| message: false
+payments |>
+  get_dupes()
+```
+
+The output shows each duplicate row along with a new column `dupe_count`. This column tells us how many times that row appears.
+
+Note that even the voucher numbers are the same here. A real office would never issue the same voucher number twice. So these are not two payments. These are the *same* payment appearing twice in our data. This usually happens when data is exported from a system, or when two files are merged carelessly.
+
+::: callout-tip
+## Audit tip
+
+Always check exact duplicates first, and *before* any other analysis. If the data itself has repeated rows, every total, average and count you calculate will be wrong. Ask the data owner why the rows are repeated. Do not just delete them silently. The answer may itself be an audit finding about the quality of the IT system.
+:::
+
+Once we are satisfied with the reason, we may remove the repeated rows using `dplyr::distinct()`. It keeps only the first copy of each row.
+
+```{r}
+payments <- payments |>
+  distinct()
+
+nrow(payments)
+```
+
+## Same-Same-Same test
+
+Now let us look for the real problem. Has any invoice been paid more than once?
+
+For this, our key will be three columns. These are `vendor_id`, `invoice_no` and `amount`. If all three match, the same bill has been paid again. Voucher numbers and payment dates will be different, of course, because these are two separate payments.
+
+We just have to pass the key columns to `get_dupes()`.
+
+```{r}
+sss <- payments |>
+  get_dupes(vendor_id, invoice_no, amount)
+
+sss
+```
+
+We see three invoices here. One invoice of National Printers has been paid three times. Two invoices of Laxmi Electricals have been paid twice each. Look at the `payment_date` column. In one case the second payment was made only two days after the first. In real life, such cases need a closer look at the approval process.
+
+### How much money is involved?
+
+An audit observation is incomplete without the money value. In each group, one payment was correct and the rest were extra. So the excess payment is the amount multiplied by one less than the number of times it was paid.
+
+```{r}
+sss |>
+  summarise(
+    times_paid = n(),
+    amount = first(amount),
+    excess_paid = (n() - 1) * first(amount),
+    .by = c(vendor_id, invoice_no)
+  )
+```
+
+We may add a further `summarise()` to get the grand total. That total is the figure which goes into the audit observation.
+
+```{r}
+sss |>
+  summarise(excess_paid = (n() - 1) * first(amount), .by = c(vendor_id, invoice_no)) |>
+  summarise(total_excess = sum(excess_paid))
+```
+
+So, in our small data, ₹ 4,08,824 has been paid in excess on just three invoices.
+
+::: callout-note
+## Choosing the key wisely
+
+Why did we not use `invoice_date` in the key? We could have. But dates are often entered differently by different clerks, so adding more columns to the key can make us *miss* duplicates. On the other hand, too few columns produce too many false alarms. Start with a small key. Then add columns if the output is too long to examine.
+:::
+
+## Same-Same-Different test
+
+A clever fraudster knows that most accounting software rejects an invoice number already entered for a vendor. So they change the invoice number a little. They may add a suffix, or change one digit. The Same-Same-Same test above will not catch this.
+
+This is where the Same-Same-Different test helps. Here we look for records where the **vendor** and the **amount** are the same, but the **invoice number is different**.
+
+In `dplyr`, we can do this with `filter()` and its `.by` argument, which we learnt in @sec-DPLYRR. Inside each group of vendor and amount, we keep the group only if it has more than one distinct invoice number. The function `n_distinct()` counts the distinct values.
+
+```{r}
+ssd <- payments |>
+  filter(n_distinct(invoice_no) > 1, .by = c(vendor_id, amount)) |>
+  arrange(vendor_id, amount, invoice_date)
+
+ssd |>
+  select(voucher_no, vendor_name, invoice_no, invoice_date, amount)
+```
+
+Let us read this output carefully, group by group.
+
+1.  **Gupta Enterprises, ₹ 29,117.** Invoice numbers are `INV-9665` and `INV9665`. Only the hyphen is missing. This is clearly the same invoice entered again.
+2.  **Rajdhani Computers, ₹ 93,149.** Invoice numbers are `INV-8850` and `INV-8850A`, dated two days apart. Adding a suffix like "A" is a classic way to get a bill paid twice. This needs to be examined with the original documents.
+3.  **Rajdhani Computers, ₹ 1,27,872.** Invoice numbers are `inv-3601` and `INV-3601`. Only the case differs. Again the same invoice.
+4.  **Ashok Estates, ₹ 45,000.** Twelve invoices, one for each month. This is the monthly rent of the office building. It is *not* a duplicate. The same amount is genuinely paid every month.
+
+So the test has found the real problems. But it has also raised one **false alarm**. This is normal. Every duplicate test produces some false alarms. The auditor's job is to reduce them sensibly and then examine the rest.
+
+### Reducing false alarms with a date window
+
+Rent, salary, annual maintenance charges and similar payments repeat by their very nature. But they repeat after a gap, usually a month or more. A bill re-submitted for double payment usually comes within a few days or weeks of the original.
+
+So let us also calculate how many days have passed since the previous invoice of the same vendor and amount. The function `lag()` gives us the previous value within each group.
+
+```{r}
+ssd <- ssd |>
+  mutate(days_since_previous = as.numeric(invoice_date - lag(invoice_date)),
+         .by = c(vendor_id, amount))
+
+ssd |>
+  select(vendor_name, invoice_no, invoice_date, amount, days_since_previous)
+```
+
+For rent, the gap is around 30 days each time. For the suspicious groups, the gap is zero or two days. Now we keep only those groups where some invoice came within, say, 15 days of the previous one.
+
+```{r}
+ssd |>
+  filter(any(days_since_previous <= 15, na.rm = TRUE), .by = c(vendor_id, amount)) |>
+  select(voucher_no, vendor_name, invoice_no, invoice_date, amount)
+```
+
+The rent payments are gone. Only the three suspicious groups remain.
+
+::: callout-warning
+## Caution
+
+The window of 15 days is only an example. Choose it according to the business. A fortnightly payment would need a shorter window. A fraudster who knows about this test may also wait for a few weeks before re-submitting the bill. So treat the date window as a way to *rank* cases for examination, not as a final rule.
+:::
+
+### Other combinations
+
+The Same-Same-Different idea works with any combination of columns. We only have to decide which two should match and which one should differ. For example, let us look for the same invoice number and amount, but paid to **different vendors**.
+
+```{r}
+payments |>
+  filter(n_distinct(vendor_id) > 1, .by = c(invoice_no, amount)) |>
+  arrange(invoice_no) |>
+  select(voucher_no, vendor_id, vendor_name, invoice_no, amount)
+```
+
+This is an interesting result. An invoice of *Sharma Traders* has also been paid to *Sharma Trader's*. An invoice of *Gupta Enterprises* has also been paid to *Guptha Enterprises*. These look-alike names have different vendor codes. This is a serious red flag. We will come back to it in @sec-dup-fuzzy.
+
+A few other useful combinations are given in @tbl-ssdmore.
+
+| Same | Same | Different | What it may reveal |
+|----------------|----------------|----------------|-------------------------|
+| Employee | Amount | Claim number | Same medical or travel bill claimed twice |
+| Bank account | Scheme | Beneficiary ID | One person drawing benefit under two IDs |
+| Bank account | Pay month | Employee ID | Ghost employee sharing a real employee's account |
+| Vendor | Invoice number | Amount | Invoice amount altered after first payment |
+
+: Some other Same-Same-Different combinations {#tbl-ssdmore}
+
+## Hidden duplicates, and why cleaning matters
+
+Look again at the groups found by the Same-Same-Different test. `INV-9665` and `INV9665` are the same invoice. So are `inv-3601` and `INV-3601`. But the Same-Same-Same test missed them, because to a computer these strings are different.
+
+This teaches us an important lesson. **Clean the key columns before testing for duplicates.** For invoice numbers, a simple cleaning would be to
+
+-   convert everything to upper case, and
+-   remove spaces, hyphens, slashes and other punctuation.
+
+We learnt the required `stringr` functions in @sec-strng. The regular expression `[^A-Z0-9]` means "any character which is not a capital letter or a digit". Removing all such characters leaves only letters and digits.
+
+```{r}
+payments <- payments |>
+  mutate(invoice_clean = invoice_no |>
+           str_to_upper() |>
+           str_remove_all("[^A-Z0-9]"))
+
+payments |>
+  get_dupes(vendor_id, invoice_clean, amount) |>
+  select(vendor_id, invoice_no, invoice_clean, amount, dupe_count, voucher_no)
+```
+
+Now the Same-Same-Same test finds five invoices instead of three. The two retyped invoices have been caught as well.
+
+::: callout-tip
+## Audit tip
+
+Similar cleaning applies to other key columns too. Remove spaces from PAN and bank account numbers. Remove leading zeros where the system may or may not store them. Convert names to one case. A few minutes spent on cleaning can bring out duplicates that would otherwise stay hidden.
+:::
+
+## Fuzzy duplicates in names {#sec-dup-fuzzy}
+
+Our last test found two invoices paid to look-alike vendors. Such vendors are often the root of the problem. A fictitious vendor is created with a name very close to a genuine one. Bills of the genuine vendor are then paid again, to the fictitious one. A casual reader of the payment register will not notice the difference.
+
+Cleaning alone cannot catch these. *Sharma Traders* and *Sharma Trader's* differ by an apostrophe. *Gupta* and *Guptha* differ by one letter. We need a way to measure how *similar* two names are. We discussed several such measures in @sec-strsim. Here we will use the Jaro-Winkler distance. It is `0` for identical strings and close to `1` for completely different ones.
+
+The idea is simple. We compare every vendor name in the vendor master with every other vendor name. Then we look at the pairs with the smallest distance.
+
+**Step-1:** Make all possible pairs of vendors. `cross_join()` joins every row of one table with every row of another. Since we join `vendors` with itself, we would get each pair twice, and also each vendor paired with itself. The `filter()` keeps each pair only once.
+
+```{r}
+vendor_pairs <- vendors |>
+  cross_join(vendors, suffix = c("_1", "_2")) |>
+  filter(vendor_id_1 < vendor_id_2)
+
+nrow(vendor_pairs)
+```
+
+**Step-2:** Calculate the distance between the two names in each pair. We convert both names to lower case first, as the measure is case sensitive.
+
+```{r}
+vendor_pairs <- vendor_pairs |>
+  mutate(jw_distance = stringdist(tolower(vendor_name_1),
+                                  tolower(vendor_name_2),
+                                  method = "jw"))
+```
+
+**Step-3:** Sort the pairs by distance and look at the closest ones.
+
+```{r}
+vendor_pairs |>
+  arrange(jw_distance) |>
+  head(5)
+```
+
+The first two pairs stand out clearly. Their distance is about 0.02. The next pair is already at about 0.29, and those names have nothing in common. So, in this data, a cut-off of say 0.1 separates suspicious pairs from the rest.
+
+```{r}
+vendor_pairs |>
+  filter(jw_distance < 0.1)
+```
+
+::: callout-note
+## How to choose the cut-off?
+
+There is no fixed rule. Sort the pairs by distance and read down the list. You will usually find a point after which the pairs stop looking alike. Use that point as the cut-off for this data. With large vendor masters, also compare other fields like PAN, GSTIN, bank account, address and mobile number. Two vendors with different names but the same bank account are even more suspicious than look-alike names.
+:::
+
+Comparing every name with every other name creates a very large table when the master is big. A master of 10,000 vendors gives about five crore pairs. In such cases, compare names only within smaller groups, say within the same state or the same first letter. This is called *blocking*.
+
+## Duplicates across more than one ID
+
+Sometimes duplicates are hidden even better. A beneficiary may register twice with a different mobile number but the same bank account. Then again with a different bank account but the same Aadhaar or PAN. No single column shows a duplicate. But together, the records form a chain.
+
+Such chains can be found using graph theory. We have discussed this with a complete example in @sec-dup_net.
+
+## A suggested workflow
+
+Let us put everything together. For any payment, claim or beneficiary data, an auditor may follow these steps.
+
+1.  **Understand the data.** Know what each column means and which columns identify a transaction.
+2.  **Check exact duplicates.** Find repeated rows with `get_dupes()`. Find out why they exist, then remove them with `distinct()`.
+3.  **Clean the key columns.** Fix case, spaces, punctuation and leading zeros.
+4.  **Run the Same-Same-Same test** on the cleaned key. Quantify the excess payment.
+5.  **Run Same-Same-Different tests** on suitable combinations. Use date windows and business knowledge to reduce false alarms.
+6.  **Look for fuzzy duplicates** in master data like vendors, employees and beneficiaries.
+7.  **Verify with documents.** Analytics only points to the cases. The finding is confirmed only after examining the original bills, approvals and bank records.
+
+::: callout-important
+## Remember
+
+A duplicate found in data is a *lead*, not a *finding*. There may be a genuine reason, such as a part payment, a cancelled and re-issued cheque, or a credit note. Always examine the supporting records before reporting.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `duplicated()` | base R | Marks every repeat occurrence as `TRUE` |
+| `get_dupes()` | janitor | Shows all copies of duplicate records, with a count |
+| `distinct()` | dplyr | Keeps only one copy of each row |
+| `n_distinct()` | dplyr | Counts distinct values, used in Same-Same-Different tests |
+| `lag()` | dplyr | Gives the previous value, used for date windows |
+| `str_to_upper()`, `str_remove_all()` | stringr | Clean key columns before testing |
+| `cross_join()` | dplyr | Makes all possible pairs of records |
+| `stringdist()` | stringdist | Measures how similar two strings are |
+
+: Functions used in this chapter {#tbl-dupfunctions}
