@@ -21,7 +21,7 @@ In this chapter we will learn how to find such duplicates in R. We will start wi
 
 ## Prerequisites
 
-We will use three packages in this chapter. `tidyverse` gives us `dplyr` and `stringr`. `janitor` gives us a very handy function `get_dupes()`. `stringdist` will help us find names which are similar but not identical.
+We will use three packages in this chapter. `tidyverse` gives us `dplyr` and `stringr`. `janitor` gives us a very handy function `get_dupes()`. `stringdist` will help us find names which are similar but not identical. Later in the chapter, we will also use `cagmetaphone` to find names which sound alike. Its installation is explained in @sec-strsim.
 
 ```{r}
 #| message: false
@@ -347,12 +347,6 @@ nrow(vendor_pairs)
 
 With 14 vendors, we get 13 + 12 + ... + 1 = 91 pairs.
 
-::: callout-warning
-## Use `inner_join()` here, not `left_join()`
-
-If we write `left_join()` in the code above, we get 92 rows instead of 91. A left join keeps *every* row of the left table, even when it finds no match. The last vendor, V014, has no vendor with a greater ID. So `left_join()` keeps it anyway, with `NA` in all the `_2` columns. `inner_join()` keeps only the rows which find a match.
-:::
-
 ::: callout-tip
 ## Why not `cross_join()`?
 
@@ -429,21 +423,54 @@ stringdist("sharma traders",
 All three vendors starting with "Sharma Tr..." are treated as the same. Soundex works best on single words like surnames. For full names, use it along with another measure, not alone.
 :::
 
+### A better phonetic measure, Double Metaphone
+
+Double Metaphone is a more refined way to check whether two names *sound* alike. It gives two codes for each name, a *primary* and a *secondary* code. We learnt in @sec-strsim that comparing these codes gives three levels of match. These are strong, normal and weak. We also saw there that the package `cagmetaphone` keeps the full code, while other packages keep only the first four characters. Full codes matter here, because firm names are long.
+
+Let us calculate the codes for all our vendors. `double_metaphone_vec()` returns a data frame with two columns, `primary` and `secondary`. We attach these to the vendor master.
+
+```{r}
+library(cagmetaphone)
+
+vendor_codes <- vendors |>
+  bind_cols(double_metaphone_vec(vendors$vendor_name))
+
+vendor_codes
+```
+
+Now we make pairs exactly as before, and compare the codes of each pair.
+
+```{r}
+vendor_codes |>
+  inner_join(vendor_codes, by = join_by(vendor_id < vendor_id), suffix = c("_1", "_2")) |>
+  mutate(match_level = case_when(
+    primary_1 == primary_2 ~ "strong",
+    primary_1 == secondary_2 | secondary_1 == primary_2 ~ "normal",
+    secondary_1 == secondary_2 ~ "weak",
+    TRUE ~ "none"
+  )) |>
+  filter(match_level != "none") |>
+  select(vendor_name_1, vendor_name_2, match_level)
+```
+
+Only our two look-alike pairs are matched. *Sharma Traders* and *Sharma Trader's* have exactly the same primary code, so it is a strong match. *Guptha* is coded as `KP0...`, because "th" may be spoken like the "th" in "think". But its secondary code is `KPT...`, the same as the primary code of *Gupta*. So it is a normal match. Unlike Soundex, the full codes did not match any other firm.
+
 @tbl-simmeasures sums up when each measure is useful in audit work.
 
-| Measure | `method` | Range | Best suited for |
+| Measure | How to calculate | Result | Best suited for |
 |----------------|----------------|----------------|-------------------------|
-| Levenshtein | `"lv"` | 0 upwards, counts edits | Codes of fixed length, like PAN, GSTIN or invoice numbers |
-| Jaro-Winkler | `"jw"` | 0 to 1 | Names of persons and firms, with one common cut-off |
-| Q-gram | `"qgram"` | 0 upwards | Longer text like addresses, where words may be rearranged |
-| Soundex | `"soundex"` | 0 or 1 | Single words that sound alike, like *Geeta* and *Gita* |
+| Levenshtein | `stringdist(method = "lv")` | 0 upwards, counts edits | Codes of fixed length, like PAN, GSTIN or invoice numbers |
+| Jaro-Winkler | `stringdist(method = "jw")` | 0 to 1 | Names of persons and firms, with one common cut-off |
+| Q-gram | `stringdist(method = "qgram")` | 0 upwards | Longer text like addresses, where words may be rearranged |
+| Soundex | `stringdist(method = "soundex")` | 0 or 1 | Single words that sound alike, like *Geeta* and *Gita* |
+| Double Metaphone | `double_metaphone_vec()` | Strong, normal, weak or no match | Full names of persons and firms that sound alike |
 
 : Choosing a string similarity measure {#tbl-simmeasures}
 
 ::: callout-tip
 ## Audit tip
 
-A pair flagged by two different measures is a stronger lead than a pair flagged by only one. For example, a pair with a low Jaro-Winkler distance *and* the same Soundex code deserves a closer look first. For more phonetic measures, such as Metaphone and Double Metaphone, refer back to @sec-strsim.
+A pair flagged by two different measures is a stronger lead than a pair flagged by only one. For example, a pair with a low Jaro-Winkler distance *and* a strong Double Metaphone match deserves a closer look first. One measure checks spelling, the other checks sound. Together they catch both typing mistakes and deliberate look-alike names.
 :::
 
 Comparing every name with every other name creates a very large table when the master is big. A master of 10,000 vendors gives about five crore pairs. In such cases, compare names only within smaller groups, say within the same state or the same first letter. This is called *blocking*.
@@ -484,5 +511,6 @@ A duplicate found in data is a *lead*, not a *finding*. There may be a genuine r
 | `str_to_upper()`, `str_remove_all()` | stringr | Clean key columns before testing |
 | `inner_join()` with `join_by(x < y)` | dplyr | Makes each pair of records only once |
 | `stringdist()` | stringdist | Measures how different two strings are, by the chosen `method` |
+| `double_metaphone_vec()` | cagmetaphone | Gives full length primary and secondary sound codes for names |
 
 : Functions used in this chapter {#tbl-dupfunctions}

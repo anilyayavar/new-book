@@ -132,18 +132,70 @@ data.frame(
 ```
 Note that we cannot calculate `metaphone` for special characters even for spaces.
 
-*Double metaphone* is not vectorised.  So we have to use `apply` family of functions here.
+*Double metaphone* can be calculated with function `DoubleMetaphone()` from `PGRdup` package.  The function is vectorised.  It returns a list of two vectors, `primary` and `alternate`, which are the two codes.
 
 ```{r}
 suppressPackageStartupMessages(library(PGRdup))
-library(purrr)
 
 data.frame(
   nameset1 = tolower(nameset1),
   nameset2 = tolower(nameset2)
-) %>% 
-  mutate(DMP_1_1 = map_chr(nameset1, ~DoubleMetaphone(.x)[[1]]),
-         DMP_1_2 = map_chr(nameset1, ~DoubleMetaphone(.x)[[2]]),
-         DMP_2_1 = map_chr(nameset2, ~DoubleMetaphone(.x)[[1]]),
-         DMP_2_2 = map_chr(nameset2, ~DoubleMetaphone(.x)[[2]]))
+) %>%
+  mutate(DMP_1_1 = DoubleMetaphone(nameset1)$primary,
+         DMP_1_2 = DoubleMetaphone(nameset1)$alternate,
+         DMP_2_1 = DoubleMetaphone(nameset2)$primary,
+         DMP_2_2 = DoubleMetaphone(nameset2)$alternate)
 ```
+
+::: callout-warning
+## `PGRdup` keeps only four characters
+
+`DoubleMetaphone()` of `PGRdup` cuts every code to its first **four** characters.  This was the default in the original design of the algorithm.  It works well for short single names like the ones above.  But longer names, and names of firms, get the same code merely because they *begin* alike.
+
+```{r}
+DoubleMetaphone(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))$primary
+```
+
+Both surnames get `PTKR`.  Both firms get `XRMT`.  In audit work, where we compare full names of beneficiaries or vendors, this can produce many false matches.
+:::
+
+### Full length Double Metaphone with `cagmetaphone`
+
+To overcome this limitation, an R package `cagmetaphone` was developed by *Atharv Tyagi* during an internship under the author's guidance.  It is a port of the Python reference implementation of Double Metaphone.  It keeps codes of up to 32 characters instead of four.  The package is not on CRAN yet, and can be installed from GitHub.
+
+```{r}
+#| eval: false
+# install.packages("remotes")
+remotes::install_github("AtharvTyagi1805/cagmetaphone")
+```
+
+It has two functions.  `double_metaphone()` takes a single string and returns its two codes.  `double_metaphone_vec()` takes a vector of strings and returns a data frame with columns `primary` and `secondary`.
+
+```{r}
+library(cagmetaphone)
+
+double_metaphone("Guptha")
+
+double_metaphone_vec(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))
+```
+
+Now the four names get four different primary codes.  For short names, the codes are the same as those from `PGRdup`.
+
+Let us now apply the three matching levels, described above, on our two sets of names.
+
+```{r}
+dm_1 <- double_metaphone_vec(nameset1)
+dm_2 <- double_metaphone_vec(nameset2)
+
+data.frame(nameset1, nameset2) %>%
+  mutate(match_level = case_when(
+    dm_1$primary == dm_2$primary ~ "strong",
+    dm_1$secondary == dm_2$primary | dm_1$primary == dm_2$secondary ~ "normal",
+    dm_1$secondary == dm_2$secondary ~ "weak",
+    TRUE ~ "no match"
+  ))
+```
+
+Notice that *Dr. Suchitra* does not match *Suchitra*.  The title "Dr." changes the beginning of the code, and phonetic codes depend heavily on how a name begins.  So, before comparing names, it is a good practice to remove titles and honorifics like Dr., Shri, Smt., Mr. and M/s.
+
+We will use this package again to find look-alike vendor names in @sec-dup-fuzzy.
