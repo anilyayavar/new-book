@@ -4,38 +4,346 @@ source("_common.R")
 ```
 
 # Detecting gaps in sequences {#sec-gaps}
-*The content is under development and finalisation*
-Audit analytics often requires us to check for gaps in sequences of numbers. Gaps in Sequentially numbered objects such as purchase orders, invoice numbers, cheque numbers, etc should be accounted for. Thus, auditors may require to exercise this audit check as a part of audit analytics.
 
-## When sequence numbers are available as `numeric` column
+Audit analytics often requires us to check for gaps in sequences of numbers. Gaps in sequentially numbered objects such as purchase orders, invoice numbers, cheque numbers, receipt books, etc. should be accounted for. Thus, auditors may require to exercise this audit check as a part of audit analytics.
+
+Why does a gap matter? Serially numbered documents are a basic internal control. Every number should be either *used* or *accounted for*. A missing cheque leaf may have been used to make an unrecorded payment. A missing receipt may mean money was collected but never brought into account. A missing purchase order may hide a purchase made outside the system. In each case, the gap is a question which the auditee must answer.
+
+In this chapter, we will first learn the basic idea using a simple example. Then we will apply it to a realistic cheque issue register, where we will also see some traps which a careless analysis can fall into.
+
+## Prerequisites
+
+```{r}
+#| message: false
+library(tidyverse)
+```
+
+## The basic idea
+
+### When sequence numbers are available as `numeric` column
+
 We will have starting and ending numbers in such sequence. Let us allocate these in two variables.
+
 ```{r}
 start_num <- 500301 # say
 end_num <- 503500 # say
 ```
 
-It means we have `r end_num - start_num + 1` terms (say cheques) issued in the series.  Further suppose, the cheque numbers issued are stored in some column say `cheque_no` in a given data frame, have a total count say `r end_num - start_num + 1 -23`. To simulate
+It means we have `r end_num - start_num + 1` terms (say cheques) in the series. Further suppose, the cheque numbers issued are stored in some column say `cheque_no` in a given data frame, and have a total count say `r end_num - start_num + 1 - 23`. To simulate,
+
 ```{r}
 set.seed(123)
 cheque_no <- sample(start_num:end_num, 3177, replace = FALSE)
 ```
-To find out the gaps we may simply use function `setdiff` on these two.
+
+To find out the gaps we may simply use function `setdiff()` on these two. `setdiff(x, y)` returns those elements of `x` which are not present in `y`. So it gives us the numbers in the full series which are not present among the issued cheques.
+
 ```{r}
 setdiff(start_num:end_num, cheque_no)
 ```
 
-## When sequence numbers are available as `character()` column
+These are the `r length(setdiff(start_num:end_num, cheque_no))` missing numbers.
 
-We may easily replicate above procedure for gap detection, even if the sequence column is of character type.  E.g. If the cheque numbers have a prefix say, 'A', then the cheque numbers may look like-
+### When sequence numbers are available as `character()` column
+
+We may easily replicate above procedure for gap detection, even if the sequence column is of character type. E.g. If the cheque numbers have a prefix say, 'A', then the cheque numbers may look like-
+
 ```{r echo=FALSE}
 cheque_no <- paste0("A", cheque_no)
 head(cheque_no, 10)
 ```
 
-In these case, we may first substitute prefix with nothing and then proceed as above.  
+In such cases, we may first substitute the prefix with nothing, convert the result to a number, and then proceed as above.
 
 ```{r}
 modified_cheques <- sub("A", "", cheque_no) |> as.integer()
 missing_cheques <- setdiff(start_num:end_num, modified_cheques)
 missing_cheques
 ```
+
+In real data, the prefix may not always be the same. For example, receipt numbers may look like `TR5/000123`, where `TR5` is the series and `000123` is the serial number. A more general way is to take out only the digits at the end, using `str_extract()` from `stringr`, which we learnt in @sec-strng. The regular expression `\\d+$` means "one or more digits at the end of the string".
+
+```{r}
+receipts <- c("TR5/000121", "TR5/000122", "TR5/000124", "TR5/000125", "TR5/000128")
+
+receipt_no <- str_extract(receipts, "\\d+$") |> as.integer()
+receipt_no
+
+setdiff(min(receipt_no):max(receipt_no), receipt_no)
+```
+
+The leading zeros disappear automatically when we convert the text to a number. If the data has more than one series, we can also take out the series part with `str_extract(receipts, "^[^/]+")`, and then look for gaps within each series separately. We will see how to do this for each group in the next section.
+
+## A realistic example, a cheque issue register
+
+Let us now work with something closer to real life. A drawing and disbursing office issues cheques from cheque books of 100 leaves each. During 2024-25, it used four cheque books. Every cheque issued is entered in a *cheque issue register*. Spoilt or cancelled leaves are entered in a separate *register of cancelled cheques*.
+
+As usual, the code to create the data is folded below. A few problems have been planted in it.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the cheque registers"
+set.seed(2025)
+
+# Cheque books received during the year
+books <- tibble(
+  book       = c("Book-1", "Book-2", "Book-3", "Book-4"),
+  first_leaf = c(500301, 500401, 500501, 718201),
+  last_leaf  = c(500400, 500500, 500600, 718300)
+)
+
+payees <- c("Bharat Stationers", "Ganga Printers", "Kaveri Suppliers",
+            "Laxmi Hardware", "Om Sai Caterers", "Rajdhani Travels",
+            "Surya Security Services", "Yamuna Cleaning Services",
+            "GPF Advance", "Medical Reimbursement", "TA Bill", "Pay Bill")
+
+# Book-4 was used only up to leaf 718236 by 31 March 2025
+used_leaves <- c(500301:500600, 718201:718236)
+
+# Spoilt leaves, properly recorded as cancelled
+cancelled <- tibble(
+  cheque_no = c(500322, 500350, 500415, 500530, 718210),
+  reason    = c("Spoilt in writing", "Wrong payee name", "Torn",
+                "Amount overwritten", "Signature mismatch")
+)
+
+# Leaves missing without any record
+not_accounted <- c(500457, 500458, 500459, 500563)
+
+register <- tibble(cheque_no = setdiff(used_leaves, c(cancelled$cheque_no, not_accounted))) |>
+  mutate(issue_date = sort(as.Date("2024-04-01") + sample(0:364, n(), replace = TRUE)),
+         payee      = sample(payees, n(), replace = TRUE),
+         amount     = round(rlnorm(n(), log(25000), 0.8)))
+
+# Planted case 1. Cheque 500389 wrongly entered in the register as 500388
+register$cheque_no[register$cheque_no == 500389] <- 500388
+
+# Planted case 2. Cheque 500512 shown with a date 40 days before its neighbours
+register$issue_date[register$cheque_no == 500512] <-
+  register$issue_date[register$cheque_no == 500511] - 40
+
+register <- register |> arrange(issue_date)
+```
+
+Let us look at the data.
+
+```{r}
+head(register)
+nrow(register)
+
+books
+
+cancelled
+```
+
+### Step 1. Link each cheque to its cheque book
+
+The four books are not one continuous series. Book-4 comes from a completely different series. So we cannot simply take the smallest and largest cheque number of the whole register. We must look for gaps *within each book*.
+
+The register does not say which book a cheque came from. But we know the first and last leaf of each book. A cheque belongs to a book if its number lies *between* the first and last leaf of that book. This is an inequality join, which we learnt in @sec-nonequi. The helper `between()` inside `join_by()` does exactly this.
+
+```{r}
+register <- register |>
+  left_join(books, by = join_by(between(cheque_no, first_leaf, last_leaf)))
+
+register |>
+  count(book)
+```
+
+Every cheque has found its book. If any cheque had shown `NA` in the `book` column, it would mean a cheque number from a book which is not on record. That itself would be a serious finding.
+
+### Step 2. Find the gaps within each book
+
+Now we apply `setdiff()` within each book. `reframe()` is like `summarise()`, but it can return any number of rows for each group. We learnt it in @sec-DPLYRR.
+
+But what should be the full series for each book? Our first thought may be "from the first leaf to the last leaf of the book". Let us try that.
+
+```{r}
+register |>
+  reframe(missing = setdiff(first_leaf[1]:last_leaf[1], cheque_no),
+          .by = book) |>
+  count(book)
+```
+
+Book-4 shows 65 missing leaves. That looks alarming. But look again. The register shows that Book-4 was used only up to leaf 718236 by the end of the year. Leaves after that are simply *not yet used*. They are not gaps.
+
+So the correct series runs from the first leaf of the book to the *last leaf actually used*. The unused leaves are listed separately.
+
+```{r}
+gaps <- register |>
+  reframe(missing = setdiff(first_leaf[1]:max(cheque_no), cheque_no),
+          .by = book)
+
+gaps
+```
+
+::: callout-tip
+## Audit tip
+
+Unused leaves are not gaps, but they are not to be ignored either. Ask for the cheque book and physically verify that all the unused leaves (here 718237 to 718300) are actually present and blank. A blank leaf torn out from the back of a book is a well known way of drawing an unrecorded cheque.
+:::
+
+### Step 3. Remove the gaps which are accounted for
+
+Some of these missing leaves were spoilt and cancelled, and are properly recorded in the register of cancelled cheques. Those are accounted for. `anti_join()` keeps only those rows of the first table which have no match in the second. We learnt it under filtering joins in the chapter on combining tables.
+
+```{r}
+unexplained <- gaps |>
+  anti_join(cancelled, by = join_by(missing == cheque_no))
+
+unexplained
+```
+
+Five leaves are still not accounted for.
+
+### Step 4. Report gaps as ranges
+
+When many numbers are missing, a long list is hard to read. It is better to report a run of consecutive numbers as a single range, like "500457 to 500459".
+
+The trick is simple. In a run of consecutive numbers, each number is exactly one more than the previous one. So we start a new *run* whenever the difference from the previous number is not 1. `cumsum()` on these "new run" flags gives every run its own number.
+
+```{r}
+unexplained |>
+  arrange(book, missing) |>
+  mutate(new_run = missing - lag(missing, default = 0) != 1,
+         run = cumsum(new_run)) |>
+  summarise(from = min(missing),
+            to = max(missing),
+            leaves = n(),
+            .by = c(book, run))
+```
+
+This output can go straight into an audit query.
+
+## Other checks on a sequence
+
+A gap is not the only thing that can go wrong with serial numbers. Two more checks take only a line or two of code, and should always be run along with the gap test.
+
+### Same number used twice
+
+A serial number should appear only once. Let us look for any cheque number which appears more than once.
+
+```{r}
+register |>
+  filter(n() > 1, .by = cheque_no) |>
+  select(cheque_no, issue_date, payee, amount)
+```
+
+Cheque number 500388 appears twice, for two different payees. Now recall that 500389 was in our list of unexplained gaps. A duplicate and a gap next to each other usually mean a simple typing mistake. The second cheque was most likely 500389, entered wrongly as 500388. The cheque counterfoil or the bank statement will confirm this. If confirmed, *both* the duplicate and the gap are explained together.
+
+::: callout-note
+## Read the tests together
+
+Always read the gap list and the duplicate list side by side. A gap with no duplicate near it is more serious than a gap which sits right next to a duplicate. For more on duplicates, see @sec-dup.
+:::
+
+### Numbers out of order with dates
+
+Cheques are used one after another. So a cheque with a higher number should not carry an *earlier* date than the cheque before it. If it does, the cheque may have been backdated, for example to show that a payment was made within the financial year.
+
+Let us sort the register by cheque number and compare each date with the date of the previous cheque.
+
+```{r}
+register |>
+  arrange(cheque_no) |>
+  mutate(previous_date = lag(issue_date),
+         days_back = as.numeric(previous_date - issue_date),
+         .by = book) |>
+  filter(days_back > 0) |>
+  select(book, cheque_no, issue_date, previous_date, days_back, payee)
+```
+
+Cheque 500512 is dated 40 days *before* the cheque just before it. This needs an explanation.
+
+::: callout-warning
+## Caution
+
+Small reversals of a day or two can happen genuinely. For example, two cheques may be written on the same day and entered in the register in a different order. Look first at the large reversals. You may add a condition like `days_back > 7` to filter out the small ones.
+:::
+
+## Gaps in dates
+
+Sometimes the sequence is not of numbers but of *dates*. A cash book must be written up and closed every working day. Daily collection data should have an entry for every working day. A missing date may mean that the cash book was not closed, or that the day's collection was not accounted for.
+
+The idea is the same as before. We build the full list of expected dates, and use `setdiff()` to find the ones missing from the data. The only extra work is to remove the non-working days. We will use `lubridate`, which we learnt in @sec-lubridate.
+
+Suppose an office works Monday to Friday. Let us take the dates on which its cash book was closed during the last quarter of 2024-25.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the cash book closing dates"
+holidays <- as.Date(c("2025-02-26", "2025-03-14", "2025-03-31"))
+
+all_days <- seq(as.Date("2025-01-01"), as.Date("2025-03-31"), by = "day")
+working  <- all_days[!wday(all_days, week_start = 1) %in% 6:7 & !all_days %in% holidays]
+
+# Four working days on which the cash book was not closed
+closing_dates <- setdiff(working, as.Date(c("2025-01-17", "2025-02-10",
+                                            "2025-02-11", "2025-03-20"))) |>
+  as.Date()
+```
+
+Now, the analysis. First, all days of the quarter.
+
+```{r}
+all_days <- seq(as.Date("2025-01-01"), as.Date("2025-03-31"), by = "day")
+length(all_days)
+```
+
+Next, we remove Saturdays and Sundays, and the gazetted holidays of the quarter. With `week_start = 1`, `wday()` numbers Monday as 1 and Sunday as 7. So 6 and 7 are the weekend.
+
+```{r}
+holidays <- as.Date(c("2025-02-26", "2025-03-14", "2025-03-31"))
+
+working_days <- all_days[!wday(all_days, week_start = 1) %in% 6:7 &
+                         !all_days %in% holidays]
+length(working_days)
+```
+
+Finally, we compare with the closing dates. `setdiff()` drops the `Date` class of its result, so we convert it back with `as.Date()`.
+
+```{r}
+missing_days <- setdiff(working_days, closing_dates) |> as.Date()
+
+tibble(date = missing_days,
+       day = wday(missing_days, label = TRUE, abbr = FALSE))
+```
+
+The cash book was not closed on four working days, including two days in a row in February.
+
+::: callout-tip
+## Audit tip
+
+Get the list of holidays from the office itself, for the correct year and state. Holidays differ between states and between years. A wrong holiday list will either hide real gaps or show false ones.
+:::
+
+## A suggested workflow
+
+1.  **Know the series.** Collect the first and last numbers of every cheque book, receipt book or number series issued during the period, from the stock register.
+2.  **Clean the numbers.** Separate the prefix or series from the serial number, and convert the serial number to a number.
+3.  **Link each document to its series**, using an inequality join on the first and last numbers.
+4.  **Find the gaps within each series**, from the first number to the last number actually used.
+5.  **Remove gaps which are accounted for**, like cancelled or spoilt documents, with `anti_join()`.
+6.  **Check for duplicates and for numbers out of date order**, and read them together with the gaps.
+7.  **Verify unused stock physically**, and ask the auditee to explain every remaining gap.
+
+::: callout-important
+## Remember
+
+The analysis tells us *which* numbers are missing. Only the records can tell us *why*. Every unexplained gap must be put to the auditee. Until it is explained, a missing cheque or receipt is a possible loss.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `setdiff(x, y)` | base R | Elements of `x` which are not in `y`, used to find missing numbers and dates |
+| `str_extract()` | stringr | Takes out the serial number part of a text, using a regular expression |
+| `join_by(between())` | dplyr | Links each number to the series or book it falls in |
+| `reframe()` | dplyr | Like `summarise()`, but can return many rows per group |
+| `anti_join()` | dplyr | Keeps rows that have no match in another table, used to remove accounted gaps |
+| `lag()`, `cumsum()` | dplyr, base R | Group consecutive missing numbers into ranges |
+| `seq(by = "day")` | base R | Builds the full list of dates in a period |
+| `wday()` | lubridate | Gives the day of the week, used to remove weekends |
+
+: Functions used in this chapter {#tbl-gapfunctions}
