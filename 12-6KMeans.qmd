@@ -3,6 +3,395 @@
 source("_common.R")
 ```
 
-# Clustering in R (Using Kmeans algorithm)
+# Clustering with k-means {#sec-kmeans}
 
-*The content is under development*
+In the previous chapter, PCA helped us *look* at many indicators at once. On the map of hospitals, we could see that hospitals were not spread evenly. They sat in groups. Public hospitals in one area, most private hospitals in another, and a small set far away from both.
+
+**Clustering** is the task of finding such groups automatically. A *cluster* is a group of units which are similar to each other, and different from units in other groups. No one tells the method what the groups are. It finds them from the data itself. In machine learning, such methods are called *unsupervised*, because there is no "correct answer" given to learn from.
+
+The difference from PCA is simple. **PCA reduces the columns**, eleven indicators into two or three components. **Clustering groups the rows**, a hundred and twenty hospitals into a few groups.
+
+The most widely used clustering method is **k-means**. It is simple, fast and easy to explain, which is important when the results go into an audit report.
+
+## Where can clustering help an auditor?
+
+-   **Peer groups.** A small rural CHC and a large private multispeciality hospital should not be judged against each other. Clustering creates groups of similar units, so that each unit can be compared with its real peers.
+-   **Spotting an odd group.** Sometimes a whole group of units behaves differently from the rest. For example, a set of hospitals all following the same unusual billing pattern, perhaps run by the same people. Clustering can bring such a group out.
+-   **Spotting the odd one out within a group.** A unit far from the centre of its own cluster is unusual *even among its peers*.
+-   **Planning audit coverage.** Clusters can serve as *strata* for sampling, so that every kind of unit is covered in the audit.
+-   **Segmenting vendors, beneficiaries or taxpayers** by their behaviour, to design different checks for different segments.
+
+## How does k-means work?
+
+Suppose we want to divide the hospitals into `k` groups. k-means works in a few simple steps.
+
+1.  **Start.** Pick `k` points at random as the starting *centres* of the groups.
+2.  **Assign.** Put every hospital into the group whose centre is nearest to it.
+3.  **Update.** Move each centre to the average position of the hospitals now in its group.
+4.  **Repeat** steps 2 and 3, until hospitals stop changing groups.
+
+That is all. The final centres are called **centroids**. Each centroid is like an "average hospital" of its group.
+
+The method tries to make each group as *tight* as possible. It measures tightness by the **within-cluster sum of squares**, that is, the sum of squared distances of hospitals from their own centroid. The smaller this number, the tighter the groups.
+
+Since k-means works with distances, everything we learnt about distances in @sec-anomaly applies here too. Most importantly, all columns must be on the same scale.
+
+## Our data
+
+We will continue with the hospitals of the imaginary *Sarvajan Swasthya Yojana* (SSY), described in @sec-pca and in @sec-ssydata. We build the same eleven indicators for each hospital. The code is the same as in the PCA chapter, and is folded below.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to build hospital indicators (same as in the PCA chapter)"
+#| message: false
+library(tidyverse)
+
+hospitals <- read_csv("Data/ssy_hospitals.csv")
+packages  <- read_csv("Data/ssy_packages.csv")
+claims    <- read_csv("Data/ssy_claims.csv")
+
+claims_plus <- claims |>
+  mutate(main_package = str_extract(packages, "^[A-Z][0-9]+"),
+         los = as.numeric(discharge_date - admission_date),
+         n_addons = str_count(packages, ";")) |>
+  left_join(packages |> select(main_package = package_code, surgical, day_care),
+            by = "main_package") |>
+  arrange(hospital_id, patient_id, admission_date) |>
+  mutate(readmit = !is.na(lag(discharge_date)) &
+                   admission_date - lag(discharge_date) <= 30,
+         .by = c(hospital_id, patient_id))
+
+indicators <- claims_plus |>
+  summarise(n_claims         = n(),
+            avg_claim        = mean(claim_amount) / 1000,
+            avg_los          = mean(los),
+            pct_surgical     = 100 * mean(surgical),
+            pct_icu          = 100 * mean(str_detect(packages, "A01")),
+            pct_short_stay   = 100 * mean(los <= 1 & !day_care),
+            pct_weekend      = 100 * mean(wday(admission_date, week_start = 1) >= 6),
+            pct_readmit      = 100 * mean(readmit),
+            pct_female       = 100 * mean(gender == "F"),
+            pct_senior       = 100 * mean(age >= 60),
+            addons_per_claim = mean(n_addons),
+            .by = hospital_id) |>
+  left_join(hospitals, by = "hospital_id") |>
+  mutate(claims_per_bed = n_claims / beds)
+
+X <- indicators |>
+  select(claims_per_bed, avg_claim, avg_los, pct_surgical, pct_icu,
+         pct_short_stay, pct_weekend, pct_readmit, pct_female,
+         pct_senior, addons_per_claim)
+```
+
+We have `r nrow(X)` hospitals and `r ncol(X)` indicators. As discussed, we first scale the indicators, so that each has mean 0 and standard deviation 1.
+
+```{r}
+X_scaled <- scale(X)
+```
+
+## A first look, with two indicators
+
+To see k-means in action, let us start with just two indicators, which we can draw. We take claims per bed and average length of stay, and ask for 3 clusters.
+
+`kmeans()` is a base R function. Its first argument is the data, and `centers` is the number of clusters. Since the starting centres are chosen at random, we fix the random seed with `set.seed()`, so that the result can be reproduced.
+
+```{r}
+#| label: fig-km2d
+#| fig-cap: "k-means with 3 clusters on two indicators. Crosses show the centroids."
+two <- X_scaled[, c("claims_per_bed", "avg_los")]
+
+set.seed(123)
+km_two <- kmeans(two, centers = 3, nstart = 25)
+
+as_tibble(two) |>
+  mutate(cluster = factor(km_two$cluster)) |>
+  ggplot(aes(claims_per_bed, avg_los, colour = cluster)) +
+  geom_point(size = 2) +
+  geom_point(data = as_tibble(km_two$centers), colour = "black",
+             shape = 4, size = 6, stroke = 2) +
+  labs(x = "Claims per bed (standardised)", y = "Average length of stay (standardised)") +
+  theme_bw()
+```
+
+In @fig-km2d, the method has found three groups, and each cross marks the centroid of a group. One small group sits at the bottom right. These hospitals have many claims per bed and very short stays. The other two groups differ mainly in their length of stay.
+
+Now let us use all eleven indicators.
+
+## The `nstart` argument
+
+Before that, one practical point. Because k-means starts from random centres, a poor start can lead to a poor final result. The argument `nstart = 25` asks R to run the whole method 25 times, each time from a different random start, and to keep the best result, the one with the smallest within-cluster sum of squares. Always use a value of `nstart` of 20 or more.
+
+## How many clusters?
+
+k-means needs us to tell it `k`, the number of clusters. But usually we do not know it in advance. Two common methods help us choose.
+
+### The elbow method
+
+We run k-means for `k = 1, 2, 3, ...` and note the total within-cluster sum of squares each time. It always falls as `k` rises, because more groups means tighter groups. But after a point, adding one more group helps very little. That point, where the curve bends like an elbow, is a good choice for `k`.
+
+The function `fviz_nbclust()` from `factoextra` does all this and draws the chart (@fig-kmelbow).
+
+```{r}
+#| label: fig-kmelbow
+#| fig-cap: "Elbow method"
+#| message: false
+library(factoextra)
+
+set.seed(123)
+fviz_nbclust(X_scaled, kmeans, method = "wss", k.max = 8, nstart = 25)
+```
+
+The total sum of squares falls sharply up to `k = 3`, and only slowly after that. So the elbow is at 3.
+
+### The silhouette method
+
+The **silhouette** measures how well each unit fits in its own cluster, compared with the nearest other cluster. It ranges from -1 to 1.
+
+-   Close to **1** means the unit sits well inside its own cluster, far from others.
+-   Close to **0** means it lies on the border between two clusters.
+-   **Negative** means it is probably in the wrong cluster.
+
+We calculate the average silhouette of all units for each `k`, and choose the `k` with the highest average (@fig-kmsil).
+
+```{r}
+#| label: fig-kmsil
+#| fig-cap: "Average silhouette for different numbers of clusters"
+set.seed(123)
+fviz_nbclust(X_scaled, kmeans, method = "silhouette", k.max = 8, nstart = 25)
+```
+
+The average silhouette is highest at `k = 3`. Both methods agree, so we will use 3 clusters.
+
+::: callout-note
+## Business sense comes first
+
+These methods are guides, not rules. If an elbow is unclear, or the two methods disagree, try two or three values of `k` and look at the clusters each gives. Choose the one whose groups make the most sense for the audit. A clustering that you cannot explain is of little use in an audit report.
+:::
+
+## Running k-means
+
+```{r}
+set.seed(123)
+km <- kmeans(X_scaled, centers = 3, nstart = 25)
+```
+
+The result has several parts. The ones we need most are these.
+
+-   `cluster` gives the cluster number of each hospital.
+-   `size` gives the number of hospitals in each cluster.
+-   `centers` gives the centroids, in the scaled units.
+
+```{r}
+km$size
+```
+
+The three clusters have `r paste(km$size, collapse = ", ")` hospitals. One cluster is very small. Let us attach the cluster numbers to our indicators table.
+
+```{r}
+indicators <- indicators |>
+  mutate(cluster = factor(km$cluster))
+```
+
+::: callout-note
+## Cluster numbers are only labels
+
+The numbers 1, 2 and 3 have no meaning by themselves. With a different seed, the same groups may come out with different numbers. Always describe a cluster by what is *in* it, not by its number.
+:::
+
+## What are the clusters?
+
+The centroids are in scaled units, which are hard to read. It is easier to look at the *average of the original indicators* in each cluster. This is called **profiling** the clusters.
+
+```{r}
+cluster_profile <- indicators |>
+  summarise(hospitals = n(),
+            public    = sum(type == "Public"),
+            across(c(claims_per_bed, avg_los, pct_short_stay, pct_weekend, pct_readmit,
+                     pct_surgical, pct_icu, avg_claim, addons_per_claim), mean),
+            .by = cluster)
+
+cluster_profile |>
+  knitr::kable(digits = 1)
+```
+
+Now each cluster can be given a plain name.
+
+```{r}
+#| echo: false
+cp <- cluster_profile |> arrange(hospitals)
+small <- cp$cluster[1]
+pub   <- cp$cluster[cp$public == cp$hospitals & cp$hospitals > 6]
+priv  <- setdiff(cp$cluster, c(small, pub))
+```
+
+-   **Cluster `r pub`, public hospitals.** All `r cp$hospitals[cp$cluster == pub]` hospitals in it are public. They have longer stays, fewer surgeries, and lower average claims.
+-   **Cluster `r priv`, regular private hospitals.** `r cp$hospitals[cp$cluster == priv]` private hospitals, with more surgery and higher claims, as one would expect of private hospitals.
+-   **Cluster `r small`, a small and very different group.** Only `r cp$hospitals[cp$cluster == small]` private hospitals. They have more than twice the claims per bed of other hospitals, very short stays, many weekend admissions, about three times the usual readmissions, and nearly nine out of ten of their claims are for surgery.
+
+It is worth noticing that we never told k-means which hospitals are public and which are private. It found this difference by itself, from the indicators alone.
+
+## Seeing the clusters
+
+`fviz_cluster()` from `factoextra` draws the clusters on the first two principal components, the same kind of map we drew in the PCA chapter (@fig-kmmap).
+
+```{r}
+#| label: fig-kmmap
+#| fig-cap: "Clusters of hospitals, drawn on the first two principal components"
+fviz_cluster(km, data = X_scaled,
+             geom = "point", ellipse.type = "convex",
+             main = "Three clusters of hospitals") +
+  theme_bw()
+```
+
+The small cluster sits far away from the other two, exactly where PCA showed us the unusual hospitals.
+
+## Audit use case 1, an unusual group
+
+The small cluster is the most obvious lead. Let us list its members.
+
+```{r}
+indicators |>
+  filter(cluster == small) |>
+  select(hospital_name, district, beds, claims_per_bed, avg_los, pct_weekend, pct_readmit)
+```
+
+These hospitals are in different districts, yet they behave in the same unusual way. In a real audit, this would raise some natural questions. Are they owned or managed by the same people? Do they share doctors? Do their patients come through the same agents or camps? The cluster does not answer these questions, but it tells the auditor exactly where to ask them.
+
+## Audit use case 2, the odd one out among peers
+
+The cluster of regular private hospitals looks normal as a whole. But are all its members normal? A hospital can be very different from its peers, yet not different enough to form a cluster of its own. k-means will simply put it in the nearest cluster.
+
+So we measure, for each hospital, the **distance from the centroid of its own cluster**. A hospital far from its own centroid is unusual *even among its peers*. This is the same idea as the kNN distance of @sec-ano-knn, but measured from the group's centre.
+
+```{r}
+centre_of_own <- km$centers[km$cluster, ]
+
+indicators <- indicators |>
+  mutate(dist_own = sqrt(rowSums((X_scaled - centre_of_own)^2)))
+
+indicators |>
+  arrange(desc(dist_own)) |>
+  select(hospital_id, hospital_name, type, cluster, dist_own) |>
+  head(6)
+```
+
+The rows of `X_scaled` and of `centre_of_own` match hospital by hospital. So `X_scaled - centre_of_own` gives the difference of each hospital from its own centroid, for every indicator. Squaring, adding across indicators with `rowSums()`, and taking the square root gives the distance.
+
+Three private hospitals stand at the top. But *why* is each of them different? We can find this by looking at which indicators are farthest from the centroid. Since the data is scaled, the differences are in units of standard deviation, and can be compared across indicators.
+
+```{r}
+top3 <- indicators |> slice_max(dist_own, n = 3) |> pull(hospital_id)
+
+(X_scaled - centre_of_own) |>
+  as_tibble() |>
+  mutate(hospital_name = indicators$hospital_name,
+         hospital_id   = indicators$hospital_id) |>
+  filter(hospital_id %in% top3) |>
+  pivot_longer(-c(hospital_name, hospital_id),
+               names_to = "indicator", values_to = "difference") |>
+  slice_max(abs(difference), n = 2, by = hospital_name) |>
+  mutate(difference = round(difference, 1))
+```
+
+For each hospital, we kept the two indicators with the largest difference from the centroid. A positive difference means the hospital is *higher* than its peers, and a negative difference means it is *lower*.
+
+```{r}
+#| echo: false
+diffs <- (X_scaled - centre_of_own) |> as_tibble() |>
+  mutate(hospital_id = indicators$hospital_id, hospital_name = indicators$hospital_name) |>
+  filter(hospital_id %in% top3)
+icu_two <- diffs |> filter(pct_icu > 2) |> pull(hospital_name)
+other   <- setdiff(diffs$hospital_name, icu_two)
+```
+
+Two of these hospitals, `r paste(icu_two, collapse = " and ")`, are far above their peers on the share of claims with an ICU stay. That is a clear lead for an audit of medical records, to check whether ICU care was really needed. The third, `r other`, is different for another reason. It has far *fewer* women patients than its peers. This may have an innocent reason, for example a hospital that does not offer gynaecology or obstetrics. But under a scheme meant for all poor families, it may also be worth checking whether women beneficiaries are being turned away. Not every outlier points to fraud. But each one deserves a reason.
+
+::: callout-tip
+## Audit tip
+
+Always ask *why* a unit is flagged, and write the answer in simple words, as we did above. "Far from its cluster centre" means nothing to an auditee. "ICU billed in nearly three times the usual share of claims" is an observation that can be examined and answered.
+:::
+
+## Audit use case 3, clusters as strata for sampling
+
+When we cannot examine every unit, we select a sample. In @sec-stratified we learnt about stratified sampling, where the population is divided into groups (strata) and a sample is drawn from each. Clusters make natural strata, because units within a cluster are alike.
+
+A sensible plan for our hospitals could be this.
+
+-   Take **all** hospitals of the small unusual cluster, since the risk there is high.
+-   Take a random **20%** of each of the other two clusters.
+
+```{r}
+set.seed(2025)
+
+audit_sample <- bind_rows(
+  indicators |> filter(cluster == small),
+  indicators |> filter(cluster != small) |> slice_sample(prop = 0.2, by = cluster)
+)
+
+audit_sample |>
+  count(cluster, type)
+```
+
+The sample covers every kind of hospital, while giving full attention to the high-risk group. We may further add the hospitals that stood out as odd ones within their peer groups.
+
+## Clustering on principal components
+
+In the PCA chapter we saw that many of our indicators are strongly correlated. When this happens, a group of correlated indicators gets more say in the distances than it deserves. One way to avoid this is to run k-means on the first few **principal components** instead of the original indicators. The components are uncorrelated, and carry most of the information.
+
+```{r}
+pcs <- prcomp(X, scale. = TRUE)$x[, 1:3]
+
+set.seed(123)
+km_pc <- kmeans(pcs, centers = 3, nstart = 25)
+
+table(original = km$cluster, on_pcs = km_pc$cluster)
+```
+
+This table compares the two clusterings. Each row is a cluster from the original indicators, each column a cluster from the components. If every row has all its hospitals in a single column, the two clusterings found the same groups, only perhaps with different numbers. In our data, the result is the same either way. With other data, it may not be, and the clustering on components is usually the more reliable one.
+
+## Things to keep in mind
+
+::: callout-warning
+## Limitations of k-means
+
+-   **You must choose `k`.** The elbow and silhouette methods help, but the final choice needs judgement.
+-   **Scale first.** Without scaling, the indicator with the largest numbers decides the clusters.
+-   **Extreme units pull centroids.** A few extreme units can drag a centroid towards themselves, or form a cluster of their own. Here that helped us. In other data, you may want to set aside obvious outliers first.
+-   **k-means likes round, similar-sized groups.** It may not find groups of odd shapes, or very small groups, like our two ICU hospitals.
+-   **Numeric data only.** For data with categorical columns, use a method that works with Gower distance, such as `pam()` from the `cluster` package, together with `daisy()` which we met in @sec-ano-gower.
+-   **Results can change with the seed.** Use `set.seed()` and a large `nstart`.
+:::
+
+## A suggested workflow
+
+1.  **Choose the unit and the indicators**, guided by the audit questions.
+2.  **Scale the indicators.** If they are strongly correlated, consider using principal components instead.
+3.  **Choose `k`** with the elbow and silhouette methods, and with business sense.
+4.  **Run `kmeans()`** with `set.seed()` and `nstart = 25` or more.
+5.  **Profile the clusters** using the original indicators, and give each a plain name.
+6.  **Look for unusual clusters** and for units far from their own centroid.
+7.  **Explain each flagged unit** in simple words, from the indicators that differ most.
+8.  **Use the clusters** for peer comparison and for planning the audit sample, and verify with records.
+
+::: callout-important
+## Remember
+
+Clustering always produces clusters, even from data which has no natural groups. So a cluster is not a finding by itself. It becomes useful only when it makes sense, and when its members, on examination, really share something.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `scale()` | base R | Standardises indicators |
+| `kmeans(x, centers, nstart)` | stats | Runs k-means clustering |
+| `$cluster`, `$size`, `$centers` | stats | Cluster of each unit, cluster sizes, centroids |
+| `fviz_nbclust()` | factoextra | Elbow and silhouette charts for choosing `k` |
+| `fviz_cluster()` | factoextra | Draws clusters on the principal component map |
+| `rowSums()` | base R | Adds across columns, used for distances |
+| `slice_max()` | dplyr | Keeps the rows with the largest values in each group |
+| `slice_sample(prop = )` | dplyr | Random sample of a given proportion from each group |
+| `table()` | base R | Cross-tabulation, here to compare two clusterings |
+
+: Functions used in this chapter {#tbl-kmfunctions}
