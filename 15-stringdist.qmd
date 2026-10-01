@@ -5,163 +5,252 @@ source("_common.R")
 
 # Finding string similarity {#sec-strsim}
 
-Comparison of two (or more) numeric fields is an easy job in the sense that we can use multiple statistical methods available to measure comparison between these.  On the other hand, comparing strings in any way, shape or form is not a trivial task.  Despite this complexity, comparing text strings is a common and fundamental task in many text-processing algorithms.  Basic objective of all string similarity algorithms are to quantify the similarity between two text strings in terms of string metrics.   
+Comparing two numbers is easy. We can subtract one from the other, or use any of several statistical measures. Comparing two pieces of text is not so simple. Is *Geeta* the same as *Gita*? Is *M/s Sharma Traders* the same as *Sharma Trader's*? Is *Mohd. Iqbal* the same person as *Mohammad Iqbal*? A computer, checking for exact equality, will say "no" to all three.
 
-The fuzzy matching problems are to input two strings and return a score quantifying the likelihood that they are expressions of the same entity. So (`Geeta` and `Gita`) should get a high score but not (`Apple` and `Microsoft`).  Over several decades, various algorithms for fuzzy string matching have emerged. They have varying strengths and weaknesses. These fall into two broad categories: `lexical matching` and `phonetic matching`.
+**String similarity** methods solve this problem. They take two strings and return a score that tells how alike they are. A good method should give a high score to *Geeta* and *Gita*, but not to *Apple* and *Microsoft*. Matching strings in this approximate way is often called **fuzzy matching**.
 
-## Lexical matching
-*Lexical matching algorithms* match two strings based on some model of errors. Typically they are meant to match strings that differ due to spelling or typing errors. Consider `Atharv` and `ahtarv`. A lexical matching algorithm would pick up that `ht` is a transposition of `th`.  Such transposition errors are common. Given this, and that the rest of the two strings match exactly and are long enough, we should score this match as high. 
+Over several decades, many methods have been developed for this. They have different strengths and weaknesses. They fall into three broad groups.
 
-Normally, algorithms to find lexical matching, can be classified into 'edit distance based' or 'token based'.
+-   **Edit-based (lexical) methods** count how many small changes, like adding, removing or swapping letters, turn one string into the other. They are good at catching typing and spelling mistakes.
+-   **Token-based methods** break strings into small pieces, such as groups of letters or whole words, and compare the pieces. They are less affected by the order of words.
+-   **Phonetic methods** compare how strings *sound*. They are good at catching different spellings of the same name.
 
-### Levenshtein algorithm
-It is named after *Vladimir Levenshtein*, who considered this distance in 1965. The `Levenshtein distance` between two words is the minimum number of single-character edits (i.e. insertions, deletions or substitutions) required to change one word into the other.  Levenshtein distance may also be referred to as *edit distance*, although it may also denote a larger family of distance metrics. It is closely related to pairwise string alignments.  
+## Why does an auditor need string similarity?
 
-For the two words `helo` and `hello`, it is obvious that there is a missing character `"l"`. Thus to transform the word `helo` to `hello` all we need to do is insert that character. The distance, in this case, is `1` because there is only one edit needed.
+Names and addresses are typed by different people, at different times, in different systems. So the same person or firm is rarely written the same way everywhere. Exact matching misses such cases. Fuzzy matching finds them. Typical audit uses include these.
+
+-   **Duplicate beneficiaries or vendors**, registered twice with slightly different names, as we saw in @sec-dup-fuzzy.
+-   **Conflict of interest.** Matching the names of vendors' proprietors, partners or directors against the list of employees.
+-   **Ineligible beneficiaries.** Matching a list of beneficiaries against a list of deceased persons, government employees or income-tax payers, when there is no common ID.
+-   **Ghost employees.** Matching the pay roll against attendance or posting records.
+-   **Linking two databases** that were never designed to be linked, such as a scheme database and a land record.
+
+## Prerequisites
+
+We will mainly use the `stringdist` package. For phonetic codes, we also use `phonics` and `cagmetaphone`.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(stringdist)
+```
+
+## First, clean the strings
+
+Before measuring similarity, we should remove differences that do not matter. Otherwise, the methods waste their effort on them. For Indian names and firm names, common steps are these.
+
+-   **Case.** Convert everything to the same case. Most methods treat *A* and *a* as different letters.
+-   **Punctuation and extra spaces.** Remove full stops, apostrophes and commas, and squeeze multiple spaces into one.
+-   **Titles and common words.** Remove *Dr*, *Shri*, *Smt*, *Mr*, *Ms*, *M/s*, and words like *and sons* or *pvt ltd*, when they do not help to tell entities apart.
+-   **Common short forms.** Make *Mohd* and *Md* into *Mohammad*, and similar.
+
+Let us write a small function for this, using `stringr` functions that we learnt in @sec-strng.
+
+```{r}
+clean_name <- function(x) {
+  x |>
+    str_to_lower() |>
+    str_remove_all("['’]") |>
+    str_replace_all("[[:punct:]]", " ") |>
+    str_replace_all("\\b(dr|shri|smt|mr|mrs|ms|m s|kumari|late)\\b", " ") |>
+    str_replace_all("\\b(mohd|md)\\b", "mohammad") |>
+    str_squish()
+}
+
+clean_name(c("Dr. Suchitra", "M/s Sharma Trader's", "Mohd. Iqbal", "Shri  R.K.  Gupta"))
+```
+
+We first remove apostrophes, so that *Trader's* becomes *traders* and not *trader s*. Then `[[:punct:]]`, which matches any other punctuation mark, is replaced by a space. `\\b` marks the boundary of a word, so that *dr* is removed only as a whole word, and not from the middle of *Indra*. We discussed such patterns in @sec-regex.
+
+::: callout-tip
+## Audit tip
+
+Keep the original names in one column and the cleaned names in another. Match on the cleaned names, but always report the original names. The auditee will recognise *M/s Sharma Trader's*, not *sharma trader*.
+:::
+
+## Distance and similarity
+
+`stringdist()` returns a **distance**. Zero means the strings are identical, and larger numbers mean more different. Its companion `stringsim()` returns a **similarity** between 0 and 1. One means identical, and zero means completely different. The two carry the same information, scaled differently.
+
+```{r}
+stringdist("helo", "hello", method = "lv")
+stringsim("helo", "hello", method = "lv")
+```
+
+Both functions are vectorised. They compare the first element of one vector with the first of the other, the second with the second, and so on. Their main arguments are these.
+
+-   `a` and `b` are the two strings, or vectors of strings, to be compared.
+-   `method` is the method to use. The default is `osa`, explained below. Others include `lv`, `dl`, `hamming`, `lcs`, `qgram`, `cosine`, `jaccard`, `jw` and `soundex`.
+-   `q` is the size of the letter groups, for the token-based methods.
+-   `p` is the Winkler prefix factor, for the `jw` method.
+
+Similarity is often easier to work with, because it is on the same 0 to 1 scale for every method, whatever the length of the strings.
+
+## Edit-based methods
+
+Edit-based methods count the smallest number of changes needed to turn one string into another. They match strings based on a simple model of typing errors.
+
+### Levenshtein distance
+
+It is named after *Vladimir Levenshtein*, who considered this distance in 1965. The Levenshtein distance between two words is the minimum number of single-character edits, that is, insertions, deletions or substitutions, required to change one word into the other. It is often simply called the *edit distance*.
+
+For the two words *helo* and *hello*, there is a missing letter *l*. To change *helo* into *hello*, we need to insert just that one letter. So the distance is `1`, as we saw above.
+
+### Optimal String Alignment and Damerau-Levenshtein
+
+Consider *atharv* and its typo *ahtarv*. The letters *th* have been swapped to *ht*. Such swaps, called **transpositions**, are among the most common typing errors. Levenshtein counts a swap as two substitutions. **Optimal String Alignment** (`osa`) and **Damerau-Levenshtein** (`dl`) count it as a single edit.
+
+```{r}
+c(lv  = stringdist("atharv", "ahtarv", method = "lv"),
+  osa = stringdist("atharv", "ahtarv", method = "osa"),
+  dl  = stringdist("atharv", "ahtarv", method = "dl"))
+```
+
+This is why `osa` is the default method of `stringdist()`. For most typing errors, `osa` and `dl` give the same answer.
 
 ### Hamming distance
-This distance is computed by overlaying one string over another and finding the places where the strings vary. Note, classical implementation was meant to handle strings of same length. Some implementations may bypass this by adding a padding at prefix or suffix. Nevertheless, the logic is to find the total number of places one string is different from the other. 
 
-### Jaro-Winkler
-This algorithms gives high scores to two strings if, 
+This distance is computed by placing one string over the other, and counting the positions where the letters differ. It was designed for strings of the **same length**, such as codes. For strings of different lengths, `stringdist()` returns `Inf`.
 
-1. they contain same characters, but within a certain distance from one another, and 
-2. the order of the matching characters is same. 
+```{r}
+stringdist(c("ABCPS1234K", "ABCPS1234K"),
+           c("ABCPS1243K", "ABCPS123K"), method = "hamming")
+```
 
-To be exact, the distance of finding similar character is 1 less than half of length of longest string. So if longest strings has length of 5, a character at the start of the string 1 must be found before or on ((5/2)–1) ~ 2nd position in the string 2 to be considered valid match. Because of this, the algorithm is directional and gives high score if matching is from the beginning of the strings. 
+The first pair, two PAN-like codes with two digits swapped, differs in 2 positions. The second pair has different lengths, so the distance is infinite. Hamming distance is useful for fixed-length identifiers like PAN, IFSC, vehicle numbers or account numbers of a known length.
 
-### Q-Gram
-*Q-Grams* is based on the difference between occurences of `Q` consecutive characters in two strings.  To illustrate take a case of Q=3 (this special case is also called trigrams).  For `atharv` and its possible typo `ahtarv` the trigrams will be
+### Longest common subsequence
 
-- For atharv `{ath tha har arv}`
-- for ahtarv `{aht hta tar arv}`
+The `lcs` method looks for the longest **subsequence**, that is, letters appearing in the same order, though not necessarily next to each other, that both strings share. The distance is the number of letters left out of it, in both strings together.
 
-We can see that a total of `7` unique trigrams have been formed and out of these only `1` is similar.  Thus, 3-gram similarility would be `1/7=14%`.  We can see that this algorithm is not very effective for transpositions.
+### Jaro and Jaro-Winkler
 
-## Phonetic matching
-*Phonetic matching algorithms* match strings based on how similar they sound. Consider `Geeta` and `Gita.` They sound similar enough that one person might spell as `Geetha` or `Geeta`, another as `Gita.` As in this case, one is not necessarily a misspelling of the other. just sounds similar.
+The **Jaro** method gives a high score to two strings if
+
+1.  they contain the same characters, not too far from each other, and
+2.  the matching characters appear in the same order.
+
+To be exact, two characters count as matching only if they are no further apart than one less than half the length of the longer string. So if the longer string has 6 letters, a letter of the first string must be found within 2 positions of the same place in the second.
+
+**Jaro-Winkler** (`jw`) adds a bonus when the strings *begin* alike, controlled by the argument `p`, usually set to 0.1. The idea is that people rarely make mistakes in the first few letters of a name. Without `p`, the `jw` method gives the plain Jaro distance.
+
+```{r}
+c(jaro          = stringdist("martha", "marhta", method = "jw"),
+  jaro_winkler  = stringdist("martha", "marhta", method = "jw", p = 0.1))
+```
+
+Jaro-Winkler distance always lies between 0 and 1, whatever the length of the strings. This makes it easy to use one cut-off for all names, which is why it is very popular for matching names.
+
+## Token-based methods
+
+Token-based methods break each string into small pieces and compare the sets of pieces.
+
+### Q-grams
+
+A **q-gram** is a group of `q` consecutive characters. To illustrate, take `q = 3`. Groups of three letters are also called *trigrams*. For *atharv* and its possible typo *ahtarv*, the trigrams are as follows.
+
+-   For *atharv*, `{ath, tha, har, arv}`
+-   For *ahtarv*, `{aht, hta, tar, arv}`
+
+Only one trigram, *arv*, is common to both. Two measures can be built from these sets.
+
+-   The **q-gram distance** (`qgram`) counts the trigrams that are present in one string but not in the other. Here 3 of each string's 4 trigrams are unmatched, so the distance is 6.
+-   The **Jaccard** distance (`jaccard`) divides the number of *shared* trigrams by the number of *distinct* trigrams in the two strings together. Together, there are 7 distinct trigrams, and only 1 is shared. So the Jaccard similarity is 1/7, about 14%, and the Jaccard distance is 6/7.
+
+```{r}
+c(qgram   = stringdist("atharv", "ahtarv", method = "qgram", q = 3),
+  jaccard = stringdist("atharv", "ahtarv", method = "jaccard", q = 3),
+  jaccard_similarity = stringsim("atharv", "ahtarv", method = "jaccard", q = 3))
+```
+
+We can see that q-grams are not very effective for transpositions. A single swap of two letters breaks several trigrams at once. The **cosine** method (`cosine`) is a close cousin, which compares how often each q-gram occurs.
+
+### Word order
+
+Token-based methods have one big advantage. They are not much affected by the **order** of words. In Indian records, the same person may be written as *Rajesh Kumar Sharma* in one place and *Sharma Rajesh Kumar* in another.
+
+```{r}
+pair <- c("rajesh kumar sharma", "sharma rajesh kumar")
+
+c(osa     = stringsim(pair[1], pair[2], method = "osa"),
+  jw      = stringsim(pair[1], pair[2], method = "jw", p = 0.1),
+  qgram_2 = stringsim(pair[1], pair[2], method = "qgram", q = 2),
+  cosine  = stringsim(pair[1], pair[2], method = "cosine", q = 2))
+```
+
+OSA, a pure edit-based measure, sees these as very different. Jaro-Winkler is in between. The token-based measures see them as nearly the same. Another simple trick, which works with any method, is to **sort the words** of each name before comparing.
+
+```{r}
+sort_words <- function(x) {
+  map_chr(str_split(x, " "), \(w) paste(sort(w), collapse = " "))
+}
+
+sort_words(pair)
+```
+
+After sorting, both names become *kumar rajesh sharma*, and every method sees them as identical.
+
+## Phonetic methods
+
+*Phonetic matching methods* compare strings by how they sound. Consider *Geeta* and *Gita*. They sound alike, so one person may write *Geeta* and another *Gita*. Neither is a misspelling of the other. They simply sound the same.
 
 ### Soundex
-Created by *Robert Russel* and *Margaret King Odell* in 1918, this algorithm intended to match names and surnames based on the basic rules of English pronunciation, hence, similar names get the same value.
+
+Created by *Robert Russell* and *Margaret King Odell* in 1918, this method was meant to match names and surnames based on the basic rules of English pronunciation. Similar-sounding names get the same code. The code keeps the first letter, followed by three digits for the next few consonant sounds. `stringdist()` gives `0` when two strings have the same Soundex code, and `1` otherwise.
+
+```{r}
+stringdist(c("geeta", "susheel", "ram"), c("gita", "sushil", "rama"), method = "soundex")
+```
+
+Because Soundex looks at only the first few sounds, long names that merely *begin* alike also match. We saw this problem with firm names in @sec-dup-fuzzy.
 
 ### Metaphone
 
-Developed by *Lawrence Philips* in 1990, the Metaphone is also more accurate compared with the `Soundex` method as it takes into consideration the groups of letters. The disadvantage shows up when we apply it to reconcile the strings that are not in English, as it is based on the rules of English pronunciation.
+Developed by *Lawrence Philips* in 1990, Metaphone is more accurate than Soundex, because it takes groups of letters into account, such as *ph* sounding like *f*. Its disadvantage shows up with names that are not English, as it is based on the rules of English pronunciation. The `phonics` package calculates it.
 
-### Double Metaphone
-
-Following `Metaphone`, *Philips* also designed the *Double Metaphone*. As its name suggests, it returns two codes, so you have more chances to match the items, however, at the same time, it means a higher probability of an error. According to the algorithm, there are three matching levels: 
-
-- `primary key to the primary key = strongest match`, 
-- `secondary key to the primary key = normal match`, 
-- `secondary key against the secondary key = weakest match`.
-
-### Metaphone 3
-
-*Philips* further refined the double metaphone algorithm to produce better results.  The algorithm (Metaphone 3) is however, proprietary and is not open-source.
-
-## Examples
-
-In R, we can use `stringdist` package to calculate many of the above mentioned distances.  The function is vectorised.  The synatx is 
-
-```
-stringdist(
-  a,
-  b,
-  method = c("osa", "lv", "dl", "hamming", "lcs", "qgram", "cosine", "jaccard", "jw",
-    "soundex"),
-  useBytes = FALSE,
-  weight = c(d = 1, i = 1, s = 1, t = 1),
-  q = 1,
-  p = 0,
-  bt = 0,
-  nthread = getOption("sd_num_thread")
-)
-```
-
-where -
-
-- `a` and `b` are two strings/vectors for which similarity/distance is to be measured.
-- `method` to be used.  Default is 
-    + `osa` for *Optimal String Alignment*.  Other methods are-
-    + `lv` for *Levenstein distance*, 
-    + `dl` for *Damerau-Levenshtein*
-    + `hamming` for *Hamming distance*
-    + `lcs` for *Longest Common Substring*
-    + `qgram` for Q-Grams
-    + `cosine` for cosine 
-    + `jaccard` for Jaccard's algorithm
-    + `jw` for Jaro-Winkler
-    + `soundex` for Soundex
-- Other arguments are needed on the basis of algorithm chosen.
-
-
-To calculate 'metaphone' index we can use `phonics` package and for 'Double Metaphone' we can use `PGRdup` package in R.
-
-Example - Suppose we have a set of two names.
-```{r}
-nameset1 <- c('Geeta', 'Susheel', 'Ram', 'Dr. Suchitra')
-nameset2 <- c('Gita', 'Sushil', 'Rama', 'Suchitra')
-```
-
-Note most of these distances/similarity indices are cases sensitive, and therefore we have to use these methods with a bit cleaning first.  We can convert cases of all strings to lower-case to eliminate these (if) unwanted errors.
-
-```{r}
-library(stringdist)
-suppressPackageStartupMessages(library(dplyr))
-
-data.frame(
-  nameset1 = tolower(nameset1),
-  nameset2 = tolower(nameset2)
-) %>% 
-  mutate(lv_dist = stringdist(nameset1, nameset2, method = 'lv'),
-         jw_dist = stringdist(nameset1, nameset2, method = 'jw'),
-         qgram_3 = stringdist(nameset1, nameset2, method = 'qgram', q=3))
-```
-
-Creating Metaphone and Double Metaphone
 ```{r}
 library(phonics)
 
-data.frame(
-  nameset1 = tolower(nameset1),
-  nameset2 = tolower(nameset2)
-) %>% 
-  mutate(metaphone_1 = metaphone(nameset1),
-         metaphone_2 = metaphone(nameset2))
+metaphone(c("geeta", "gita", "susheel", "sushil", "laxmi", "lakshmi"))
 ```
-Note that we cannot calculate `metaphone` for special characters even for spaces.
 
-*Double metaphone* can be calculated with function `DoubleMetaphone()` from `PGRdup` package.  The function is vectorised.  It returns a list of two vectors, `primary` and `alternate`, which are the two codes.
+*Geeta* and *Gita* get the same code, and so do *Susheel* and *Sushil*. But *Laxmi* and *Lakshmi* do not. Metaphone codes *x* as *KS* and *sh* as *X*, so the two names get *LKSM* and *LKXM*. Such variations, very common in Indian names, are better handled during cleaning, for example by replacing *ksh* with *x* in both lists before matching.
+
+`metaphone()` works on single words. It cannot handle spaces or other special characters, so we apply it to cleaned single words, or to each word of a name separately.
+
+### Double Metaphone
+
+Following Metaphone, *Philips* also designed the **Double Metaphone**. As its name suggests, it returns two codes, a *primary* and a *secondary* one, so there are more chances to match. At the same time, it means a higher chance of a false match. There are three matching levels.
+
+-   Primary code against primary code is the **strongest** match.
+-   Secondary code against primary code is a **normal** match.
+-   Secondary code against secondary code is the **weakest** match.
+
+*Philips* later refined it further, as **Metaphone 3**. That algorithm is, however, proprietary and not open-source.
+
+Double Metaphone can be calculated with the function `DoubleMetaphone()` from the `PGRdup` package. The function is vectorised. It returns a list of two vectors, `primary` and `alternate`.
 
 ```{r}
 suppressPackageStartupMessages(library(PGRdup))
 
-data.frame(
-  nameset1 = tolower(nameset1),
-  nameset2 = tolower(nameset2)
-) %>%
-  mutate(DMP_1_1 = DoubleMetaphone(nameset1)$primary,
-         DMP_1_2 = DoubleMetaphone(nameset1)$alternate,
-         DMP_2_1 = DoubleMetaphone(nameset2)$primary,
-         DMP_2_2 = DoubleMetaphone(nameset2)$alternate)
+DoubleMetaphone(c("geeta", "gita", "susheel", "sushil"))
 ```
 
 ::: callout-warning
 ## `PGRdup` keeps only four characters
 
-`DoubleMetaphone()` of `PGRdup` cuts every code to its first **four** characters.  This was the default in the original design of the algorithm.  It works well for short single names like the ones above.  But longer names, and names of firms, get the same code merely because they *begin* alike.
+`DoubleMetaphone()` of `PGRdup` cuts every code to its first **four** characters. This was the default in the original design of the algorithm. It works well for short single names like the ones above. But longer names, and names of firms, get the same code merely because they *begin* alike.
 
 ```{r}
 DoubleMetaphone(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))$primary
 ```
 
-Both surnames get `PTKR`.  Both firms get `XRMT`.  In audit work, where we compare full names of beneficiaries or vendors, this can produce many false matches.
+Both surnames get `PTKR`. Both firms get `XRMT`. In audit work, where we compare full names of beneficiaries or vendors, this can produce many false matches.
 :::
 
 ### Full length Double Metaphone with `cagmetaphone`
 
-To overcome this limitation, an R package `cagmetaphone` was developed by *Atharv Tyagi* during an internship under the author's guidance.  It is a port of the Python reference implementation of Double Metaphone.  It keeps codes of up to 32 characters instead of four.  The package is not on CRAN yet, and can be installed from GitHub.
+To overcome this limitation, an R package `cagmetaphone` was developed by *Atharv Tyagi* during an internship under the author's guidance. It is a port of the Python reference implementation of Double Metaphone. It keeps codes of up to 32 characters instead of four. The package is not on CRAN yet, and can be installed from GitHub.
 
 ```{r}
 #| eval: false
@@ -169,7 +258,7 @@ To overcome this limitation, an R package `cagmetaphone` was developed by *Athar
 remotes::install_github("AtharvTyagi1805/cagmetaphone")
 ```
 
-It has two functions.  `double_metaphone()` takes a single string and returns its two codes.  `double_metaphone_vec()` takes a vector of strings and returns a data frame with columns `primary` and `secondary`.
+It has two functions. `double_metaphone()` takes a single string and returns its two codes. `double_metaphone_vec()` takes a vector of strings and returns a data frame with columns `primary` and `secondary`.
 
 ```{r}
 library(cagmetaphone)
@@ -179,23 +268,192 @@ double_metaphone("Guptha")
 double_metaphone_vec(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))
 ```
 
-Now the four names get four different primary codes.  For short names, the codes are the same as those from `PGRdup`.
+Now the four names get four different primary codes. For short names, the codes are the same as those from `PGRdup`.
 
-Let us now apply the three matching levels, described above, on our two sets of names.
+Let us apply the three matching levels to a few pairs of names. We write a small function, so that we can use it again later.
 
 ```{r}
-dm_1 <- double_metaphone_vec(nameset1)
-dm_2 <- double_metaphone_vec(nameset2)
-
-data.frame(nameset1, nameset2) %>%
-  mutate(match_level = case_when(
-    dm_1$primary == dm_2$primary ~ "strong",
-    dm_1$secondary == dm_2$primary | dm_1$primary == dm_2$secondary ~ "normal",
-    dm_1$secondary == dm_2$secondary ~ "weak",
+dm_match <- function(a, b) {
+  dm_a <- double_metaphone_vec(a)
+  dm_b <- double_metaphone_vec(b)
+  case_when(
+    dm_a$primary == dm_b$primary ~ "strong",
+    dm_a$secondary == dm_b$primary | dm_a$primary == dm_b$secondary ~ "normal",
+    dm_a$secondary == dm_b$secondary ~ "weak",
     TRUE ~ "no match"
-  ))
+  )
+}
+
+nameset1 <- c("Geeta", "Susheel", "Ram", "Dr. Suchitra")
+nameset2 <- c("Gita", "Sushil", "Rama", "Suchitra")
+
+tibble(nameset1, nameset2,
+       raw     = dm_match(nameset1, nameset2),
+       cleaned = dm_match(clean_name(nameset1), clean_name(nameset2)))
 ```
 
-Notice that *Dr. Suchitra* does not match *Suchitra*.  The title "Dr." changes the beginning of the code, and phonetic codes depend heavily on how a name begins.  So, before comparing names, it is a good practice to remove titles and honorifics like Dr., Shri, Smt., Mr. and M/s.
+On the raw names, *Dr. Suchitra* does not match *Suchitra*. The title "Dr." changes the beginning of the code, and phonetic codes depend heavily on how a name begins. After cleaning with our `clean_name()` function, the title is gone and the two match. This shows, once again, why cleaning comes first.
 
-We will use this package again to find look-alike vendor names in @sec-dup-fuzzy.
+## Comparing the methods
+
+Let us now put all the methods side by side, on pairs of names that show typical Indian variations. We use similarities, so that all methods are on the same 0 to 1 scale.
+
+```{r}
+pairs <- tribble(
+  ~name_1,                ~name_2,                 ~variation,
+  "geeta",                "gita",                  "Spelling (ee/i)",
+  "lakshmi devi",         "laxmi devi",            "Spelling (ksh/x)",
+  "atharv",               "ahtarv",                "Typing (swap)",
+  "suresh chandra",       "suresh chander",        "Spelling (ending)",
+  "rajesh kumar sharma",  "sharma rajesh kumar",   "Word order",
+  "r k gupta",            "ram kishan gupta",      "Initials",
+  "anil kumar",           "sunil kumar",           "Different person"
+)
+
+pairs |>
+  mutate(osa    = stringsim(name_1, name_2, method = "osa"),
+         jw     = stringsim(name_1, name_2, method = "jw", p = 0.1),
+         qgram  = stringsim(name_1, name_2, method = "qgram", q = 2),
+         dmeta  = dm_match(name_1, name_2)) |>
+  mutate(across(where(is.double), \(x) round(x, 2))) |>
+  knitr::kable()
+```
+
+Some lessons stand out from this table.
+
+-   **No single method wins everywhere.** Jaro-Winkler handles spelling and typing well. Q-grams handle word order. The phonetic code handles *Geeta* and *Gita*, but not *Lakshmi* and *Laxmi*, which need a cleaning rule.
+-   **Initials are hard for every method.** *R K Gupta* and *Ram Kishan Gupta* may well be the same person, but no method sees them as very similar. Matching on the surname, and checking initials separately, works better.
+-   **Similar is not the same.** *Anil Kumar* and *Sunil Kumar* get high scores from all the lexical methods, yet they are different people. Here the phonetic code correctly says "no match", which shows the value of using two kinds of method together. A high score is a lead, not proof.
+
+@tbl-strsimguide gives a rough guide.
+
+| Situation | Suggested method |
+|-------------------------------|-------------------------------|
+| Typing mistakes in names | Jaro-Winkler (`jw`, with `p = 0.1`), or OSA |
+| Codes of fixed length (PAN, IFSC) | Hamming, or OSA |
+| Words in a different order | Q-grams or cosine, or sort the words first |
+| Different spellings of the same sounding name | Double Metaphone (`cagmetaphone`) |
+| Long text, like addresses | Q-grams or cosine |
+
+: Choosing a string similarity method {#tbl-strsimguide}
+
+## Matching two lists, an audit use case
+
+So far we have compared names in pairs. In audit, we usually have two **lists**, and want to find which names in one list resemble names in the other. Let us take a common example, a check for **conflict of interest**. We have a list of employees of an office, and a list of proprietors of firms that supplied goods to it. Both lists are made up.
+
+```{r}
+employees <- tibble(
+  emp_id   = c("E01", "E02", "E03", "E04", "E05", "E06", "E07"),
+  emp_name = c("Rakesh Kumar Verma", "Smt. Sunita Devi", "Mohd. Iqbal Khan",
+               "Pradeep Singh", "Kavita Sharma", "Anand Prakash", "Neha Gupta")
+)
+
+proprietors <- tibble(
+  firm      = c("Verma Enterprises", "Sunrise Traders", "Iqbal & Sons",
+                "Singh Suppliers", "Kavya Stationers", "Gupta Agencies"),
+  proprietor = c("Rakesh Kr. Verma", "Arvind Mehta", "Mohammad Iqbal Khan",
+                 "Pradip Singh", "Kavya Sharma", "Neeraj Gupta")
+)
+```
+
+### Method 1, compare every pair
+
+With small lists, we can simply compare every employee with every proprietor. `cross_join()`, which we used in @sec-dup-fuzzy, makes all the pairs. We compare the *cleaned* names, keep the pairs above a chosen similarity, and add the Double Metaphone match level as a second opinion.
+
+```{r}
+candidates <- employees |>
+  cross_join(proprietors) |>
+  mutate(jw = stringsim(clean_name(emp_name), clean_name(proprietor),
+                        method = "jw", p = 0.1),
+         sound = dm_match(clean_name(emp_name), clean_name(proprietor))) |>
+  filter(jw >= 0.85) |>
+  arrange(desc(jw))
+
+candidates |>
+  mutate(jw = round(jw, 2)) |>
+  select(emp_name, proprietor, firm, jw, sound)
+```
+
+Let us read the result.
+
+-   *Rakesh Kumar Verma* and *Rakesh Kr. Verma* are almost certainly the same person, written with a short form. The phonetic code misses this pair, because *Kr* sounds nothing like *Kumar*. Adding a rule to our cleaning function, to expand *kr* to *kumar*, would fix it. So a "no match" from one method does not prove that two names are different.
+-   *Mohd. Iqbal Khan* and *Mohammad Iqbal Khan* become identical after cleaning, since our `clean_name()` function expands *Mohd*.
+-   *Pradeep Singh* and *Pradip Singh* are very close, and sound the same. A strong lead.
+-   *Kavita Sharma* and *Kavya Sharma*, and *Neha Gupta* and *Neeraj Gupta*, are close in spelling, but are probably different people. Note that the phonetic code does not match them. Such pairs show why every match must be checked against other details.
+
+### Method 2, `amatch()`
+
+`stringdist` has a ready function for finding, for each string, the closest match in another list. `amatch(x, table, maxDist)` returns, for each element of `x`, the position of the closest element in `table`, if it is within `maxDist`. Otherwise it returns `NA`.
+
+```{r}
+pos <- amatch(clean_name(employees$emp_name), clean_name(proprietors$proprietor),
+              method = "jw", p = 0.1, maxDist = 0.15)
+
+employees |>
+  mutate(matched_proprietor = proprietors$proprietor[pos],
+         matched_firm       = proprietors$firm[pos])
+```
+
+A Jaro-Winkler distance of 0.15 is the same as a similarity of 0.85, the cut-off we used above. `amatch()` is fast and convenient, but it returns only the *single* closest match for each name. When there may be more than one candidate, the pairwise method is safer.
+
+::: callout-tip
+## Audit tip
+
+A name match alone is weak evidence, especially for common names. For every candidate pair, compare a second detail, such as father's name, date of birth, address, mobile number, PAN or bank account. In a conflict-of-interest check, a matching *bank account* or *address* between an employee and a vendor is often stronger evidence than the name itself.
+:::
+
+## Choosing a cut-off
+
+Every fuzzy match needs a cut-off, and every cut-off is a trade-off.
+
+-   A **strict** cut-off, say a Jaro-Winkler similarity of 0.95, finds few false matches, but misses many true ones.
+-   A **loose** cut-off, say 0.80, finds most true matches, but also many false ones, which must then be checked by hand.
+
+A practical approach is to start loose, sort the pairs by score, and read down the list. You will usually see that above a certain score most pairs are real, and below another score most are not. Set the cut-off between the two, keeping in mind how many pairs your team can actually check.
+
+## Large lists
+
+Comparing every pair becomes slow when the lists are large. Two lists of 10,000 names each give ten crore pairs. Three ideas help.
+
+-   **Blocking.** Compare names only within smaller groups that must match anyway, such as the same district, the same year of birth, or the same first letter of the surname. Blocks can also be formed by phonetic codes.
+-   **Inequality joins.** When comparing a list with itself, compare each pair only once, as we did with `inner_join(..., join_by(id < id))` in @sec-dup-fuzzy.
+-   **`stringdistmatrix()`.** It calculates all distances between two vectors in one call, and uses several processor cores. The argument `nthread` controls how many.
+
+::: callout-warning
+## Privacy
+
+Names, addresses and identity numbers are personal data. Do fuzzy matching only on secure systems approved for such data. Never paste such lists into online tools or AI chatbots.
+:::
+
+## A suggested workflow
+
+1.  **Define the question.** Which two lists, or which one list, and what would a match mean?
+2.  **Clean the names.** Case, punctuation, titles, common short forms and, where useful, word order.
+3.  **Choose a method** suited to the kind of variation you expect, and a second method as a check.
+4.  **Block** if the lists are large.
+5.  **Compare and score**, with `stringsim()`, `cross_join()` or `amatch()`.
+6.  **Choose a cut-off** by reading down the sorted list of pairs.
+7.  **Confirm each candidate** with a second identifier, like date of birth, address or bank account.
+8.  **Report the original names**, with the evidence for each match.
+
+::: callout-important
+## Remember
+
+Fuzzy matching finds names that *look* or *sound* alike. It cannot tell whether they belong to the same person. Two different people can have very similar names, and one person can be written in very different ways. Treat every match as a question to be answered from other evidence.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `str_to_lower()`, `str_replace_all()`, `str_squish()` | stringr | Clean names before matching |
+| `stringdist(a, b, method)` | stringdist | Distance between strings, 0 for identical |
+| `stringsim(a, b, method)` | stringdist | Similarity between strings, from 0 to 1 |
+| `amatch(x, table, maxDist)` | stringdist | Closest match for each string in another list |
+| `stringdistmatrix()` | stringdist | All distances between two vectors at once |
+| `metaphone()` | phonics | Metaphone code of a single word |
+| `DoubleMetaphone()` | PGRdup | Double Metaphone codes, cut to four characters |
+| `double_metaphone_vec()` | cagmetaphone | Full length Double Metaphone codes |
+| `cross_join()` | dplyr | All pairs of rows from two tables |
+
+: Functions used in this chapter {#tbl-strsimfunctions}
