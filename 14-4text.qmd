@@ -3,24 +3,380 @@
 source("_common.R")
 ```
 
-# Text Analytics in R
+# Text Analytics in R {#sec-text}
 
-*The content is under development/finalisation*  
+Text analytics is crucial in data analytics, as text data is becoming increasingly important in almost every field. A large part of the information in any organisation is in the form of text, not numbers. To make full use of it, we need to know how to clean, process, summarise and analyse text. In this chapter, we will learn the basic tools for working with text in R. In the next chapter, we will use them for sentiment analysis, and in the one after that, for visualising text.
 
-Text analytics is crucial in data analytics, as text data is becoming increasingly significant across various applications, including marketing analytics. Text is often replacing other forms of unstructured data because it is cost-effective and up-to-date. To fully leverage the potential of text data, we need to understand how to process, clean, summarize, and model it. In this chapter, we will use the R workhorse tools to efficiently begin working with text. We will gain skills in wrangling and visualizing text, so that we are able to perform sentiment analysis in next chapter.  We will also discuss a little about running and interpreting topic models, thereby highlighting the indispensable role of text analytics in modern data analysis.
+Text brings its own challenges. Unlike a table of numbers, text has no fixed structure. The same thing can be written in many ways, with different spellings, abbreviations, cases and punctuation. People mix languages, as in "camp ke baad hospital le gaye". Words can mean different things in different contexts. So, before analysing text, we must first clean it and bring it into a form that a computer can count.
 
-Text data processing faces unique challenges due to the complexity and variability of human language. Unlike structured data, text is unstructured and highly diverse, encompassing different languages, dialects, slang, and abbreviations. This variability complicates standardization and requires sophisticated preprocessing techniques to clean and prepare the data. Additionally, the context-dependent nature of language makes accurate interpretation difficult, as words and phrases can have varying meanings based on their usage. 
+## Where does an auditor meet text?
 
-## Text pre-processing {-}
+Auditors deal with text far more often than they may realise.
+
+-   **Public grievances.** Complaints received through portals like CPGRAMS, or through scheme helplines. They often describe problems long before these show up in accounts.
+-   **Narrations in accounts.** Every voucher and journal entry has a description, like "being payment for..." or "adjustment as per instructions". Unusual narrations are a standard red flag in fraud risk assessment.
+-   **Audit reports and inspection reports.** Past observations, which can be searched for recurring issues.
+-   **Contract and tender documents.** Specifications, terms and conditions, and correspondence.
+-   **Feedback and survey responses.** Comments from beneficiaries, patients or citizens.
+-   **Free-text fields in databases.** Remarks columns, reasons for rejection, descriptions of goods.
+
+In each case, reading every document is impossible when there are thousands of them. Text analytics helps the auditor see what is being said, how often, and where.
+
+## Prerequisites
+
+We will mainly use the package `tidytext`, which brings text analysis into the familiar `tidyverse` way of working. We will also use `SnowballC` for stemming.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(tidytext)
+library(SnowballC)
+```
+
+## Our data, grievances under a health scheme
+
+We continue with the imaginary *Sarvajan Swasthya Yojana* (SSY) health insurance scheme of the previous chapters (@sec-pca, @sec-kmeans and @sec-apriori). This time we look at **grievances** filed by the public against empanelled hospitals during 2024-25. The data is made up, and is created by `tools/make_ssy_text_data.R` in the book's repository.
+
+```{r}
+grievances <- read_csv("Data/ssy_grievances.csv", show_col_types = FALSE)
+glimpse(grievances)
+```
+
+Each row is a grievance. The `category` is chosen by the person filing the complaint, from a fixed list. The `text` is what they wrote in their own words. Let us look at a few.
+
+```{r}
+grievances |>
+  slice(c(3, 17, 42, 88, 120)) |>
+  pull(text)
+```
+
+This is what real complaint text looks like. Some is in capitals, some in lower case. There are spelling mistakes, extra spaces and full stops in odd places. There are amounts and phone numbers. Some words are in Hindi. All of this must be dealt with before analysis.
+
+Let us also see how the complaints are spread across categories.
+
+```{r}
+grievances |>
+  count(category, sort = TRUE)
+```
+
+The biggest category is *Other*. This is common in real grievance data. People often cannot find a category that fits, or do not bother to choose. So the categories alone do not tell us what the complaints are about. We have to read the text. Let us see how R can help us do that.
+
+## Cleaning text
+
+### Masking personal information
+
+Before anything else, remember that grievances contain **personal information**, like phone numbers. Before analysing, sharing or quoting such text, mask it. A mobile number in India has ten digits and starts with 6, 7, 8 or 9. The regular expression `\\b[6-9][0-9]{9}\\b` matches exactly such a number. We learnt regular expressions in @sec-regex.
+
+```{r}
+grievances <- grievances |>
+  mutate(text = str_replace_all(text, "\\b[6-9][0-9]{9}\\b", "[PHONE]"))
+
+grievances |>
+  filter(str_detect(text, "PHONE")) |>
+  slice_head(n = 3) |>
+  pull(text)
+```
+
+::: callout-warning
+## Caution
+
+Audit teams must handle personal data with great care. Mask phone numbers, Aadhaar numbers, bank account numbers and names before the data leaves the secure environment. Never put such data into online tools, including AI chatbots, unless your organisation explicitly permits it.
+:::
+
+### Basic cleaning
+
+Next, we make the text uniform. We convert it to lower case, remove the masked phone tags and other numbers, and squeeze extra spaces. All these functions come from `stringr`, which we learnt in @sec-strng.
+
+```{r}
+grievances <- grievances |>
+  mutate(clean_text = text |>
+           str_to_lower() |>
+           str_remove_all("\\[phone\\]") |>
+           str_remove_all("[0-9]+") |>
+           str_squish())
+
+grievances |>
+  select(text, clean_text) |>
+  slice(17)
+```
+
+We have kept the original `text` column untouched, and created a new `clean_text` column. This is a good habit. We can always go back to the original to read the full complaint.
+
+Should we remove numbers? It depends on the question. Here we only want words. But if we wanted to know *how much money* was demanded, the numbers would be the most important part. We could extract them first with `str_extract()`.
 
 ## Tokenisation
 
+Computers cannot understand sentences, but they can count. So we break the text into small units, usually single words, called **tokens**. This step is called **tokenisation**.
+
+`unnest_tokens()` from `tidytext` does this. It takes a column of text, and produces a new data frame with **one row per token**. All other columns, like the grievance ID and category, are repeated for each word. This is called the **tidy text** format.
+
+```{r}
+tokens <- grievances |>
+  select(grievance_id, hospital_id, category, clean_text) |>
+  unnest_tokens(output = word, input = clean_text)
+
+tokens |> head(12)
+```
+
+`output = word` names the new column, and `input = clean_text` tells which column to split. By default, `unnest_tokens()` also converts to lower case and removes punctuation. So even if we had not cleaned the text ourselves, much of the cleaning would have been done here.
+
+```{r}
+nrow(tokens)
+```
+
+The 800 grievances have been broken into `r format(nrow(tokens), big.mark = ",")` words. Let us count the most common ones.
+
+```{r}
+tokens |>
+  count(word, sort = TRUE) |>
+  head(15)
+```
+
+Not very informative. The top words are *the*, *to*, *and*, *was* and the like. These are needed for grammar, but tell us nothing about the complaints.
+
 ## Stop words
+
+Words like *the*, *is*, *and* and *was* are called **stop words**. They appear in almost every text, and we usually remove them before analysis. `tidytext` comes with a ready list in the data frame `stop_words`.
+
+```{r}
+stop_words |> head()
+nrow(stop_words)
+```
+
+To remove them, we use `anti_join()`. It keeps only those rows of the first table that have no match in the second. We have used it before to remove accounted gaps in @sec-gaps.
+
+```{r}
+tokens_clean <- tokens |>
+  anti_join(stop_words, by = "word")
+
+tokens_clean |>
+  count(word, sort = TRUE) |>
+  head(15)
+```
+
+Much better. But some words are still not useful for our purpose. *Sir*, *ji*, *respected* and *dear* are just polite forms of address. *Mobile*, *contact*, *matter*, *urgently*, *action*, *poor* and *people* come from the closing lines that many people add, like "please look into the matter urgently" or "we are poor people". *Hospital* and *scheme* appear everywhere in this data, because of what the data is about. Such words are called **domain stop words**. We make our own list and remove them too.
+
+```{r}
+my_stop_words <- tibble(word = c("sir", "ji", "madam", "respected", "dear", "officer",
+                                 "kindly", "please", "help", "action", "matter", "urgently",
+                                 "look", "contact", "mobile", "poor", "people",
+                                 "hospital", "hospitl", "scheme", "ssy", "patient",
+                                 "rs", "rupees", "ke", "le", "kar"))
+
+tokens_clean <- tokens_clean |>
+  anti_join(my_stop_words, by = "word")
+
+tokens_clean |>
+  count(word, sort = TRUE) |>
+  head(15)
+```
+
+Now the top words tell us what the complaints are about. Cards, operations, treatment, staff, pending approvals, refusals and discharge.
+
+::: callout-tip
+## Building a list of domain stop words
+
+There is no ready list of domain stop words. Look at the top words, remove the ones that carry no meaning for your question, and look again. Two or three rounds are usually enough. But be careful not to remove a word only because it is common. In our data, *operation* is common, and it is very important.
+:::
 
 ## Stemming
 
-## Text Cleaning vy removing punctuation and other unwanted characters/text
+The same word appears in different forms. *Operation*, *operations* and *operated*. *Demand*, *demanded* and *demanding*. For counting, we may want to treat these as one. **Stemming** cuts words down to their root, called the **stem**. `wordStem()` from the package `SnowballC` does this.
 
+```{r}
+wordStem(c("operation", "operations", "operated", "demand", "demanded",
+           "removed", "removal", "discharged", "discharge"))
+```
 
+The stems are not always proper words. *Operation* becomes *oper*. But all forms of a word now look the same, and will be counted together.
 
+```{r}
+tokens_clean |>
+  mutate(stem = wordStem(word)) |>
+  count(stem, sort = TRUE) |>
+  head(10)
+```
 
+::: callout-note
+## Stemming or not?
+
+Stemming helps when the exact form of a word does not matter, for example when counting themes. It is not helpful when we want to read and present the words, because stems like *oper* look odd in a report. A more refined method, called *lemmatisation*, reduces words to proper dictionary forms. For most audit work, simple stemming or no stemming at all is enough.
+:::
+
+## Pairs of words, n-grams
+
+Single words lose their context. *Removed* alone tells little, but *uterus removed* tells a lot. A sequence of `n` words is called an **n-gram**. Two words together are a **bigram**. `unnest_tokens()` can produce these too, with `token = "ngrams"` and `n = 2`.
+
+```{r}
+bigrams <- grievances |>
+  select(grievance_id, hospital_id, category, clean_text) |>
+  unnest_tokens(bigram, clean_text, token = "ngrams", n = 2)
+
+bigrams |> head(8)
+```
+
+Each bigram overlaps with the next one. To remove stop words from bigrams, we separate the two words into two columns, and keep only bigrams in which *neither* word is a stop word.
+
+```{r}
+all_stops <- c(stop_words$word, my_stop_words$word)
+
+bigrams_clean <- bigrams |>
+  separate_wider_delim(bigram, delim = " ", names = c("word1", "word2")) |>
+  filter(!word1 %in% all_stops, !word2 %in% all_stops) |>
+  unite(bigram, word1, word2, sep = " ")
+
+bigrams_clean |>
+  count(bigram, sort = TRUE) |>
+  head(15)
+```
+
+Bigrams tell a much clearer story than single words. *Pre authorisation* and *package list* point to delays and denials. *Staff demanded* and *card amount* point to money being asked for. And *health camp*, *told villagers*, *free operation* and *feel weak* point to something quite different, patients being brought in from villages for operations. Such problems do not fit neatly into any category.
+
+## Finding themes with a keyword dictionary
+
+So far we have looked at what words are common. For audit, we usually have a sharper question. *How many complaints are about money being demanded? About camps? About unnecessary surgery?* A simple and very effective way to answer this is a **keyword dictionary**. We list a few words or patterns for each theme, and tag every grievance that matches.
+
+```{r}
+themes <- tribble(
+  ~theme,              ~pattern,
+  "Money demanded",    "demand|paid|pay |took money|took rs|cash|extra|receipt",
+  "Camp or agent",     "camp|vehicle|van |agent|village",
+  "Surgery concerns",  "uterus|without any test|second operation|wound|in a hurry|operation kar",
+  "Denial or card",    "refused|not valid|not accepted|sent us away|server",
+  "Delay",             "pending|delayed|not discharged|wait",
+  "Poor facilities",   "dirty|rude|toilet|food|drinking water|visited only"
+)
+
+themes
+```
+
+The patterns are regular expressions, so `|` means "or". Now we check each grievance against each pattern. `str_detect()` returns `TRUE` where the pattern is found. A grievance can belong to more than one theme.
+
+```{r}
+tagged <- grievances |>
+  select(grievance_id, hospital_id, category, clean_text) |>
+  cross_join(themes) |>
+  filter(str_detect(clean_text, pattern)) |>
+  select(-pattern)
+
+tagged |>
+  count(theme, sort = TRUE)
+```
+
+`cross_join()` pairs every grievance with every theme. `filter()` then keeps only the pairs where the grievance text matches the theme's pattern.
+
+### What is hiding in "Other"?
+
+Now let us compare the themes we found with the categories that people chose.
+
+```{r}
+tagged |>
+  count(category, theme) |>
+  pivot_wider(names_from = theme, values_from = n, values_fill = 0) |>
+  knitr::kable()
+```
+
+The *Other* category hides every kind of complaint, including many about money being demanded and about delays. More importantly, it holds most of the complaints about **camps and agents** (56 of 80) and about **surgery concerns** (63 of 99). The rest of these are filed under *Quality of care*. None of the fixed categories describes them properly. These are serious matters, and someone looking only at the category-wise count would never notice them.
+
+### Which hospitals?
+
+Let us see which hospitals these serious complaints are about.
+
+```{r}
+tagged |>
+  filter(theme %in% c("Camp or agent", "Surgery concerns")) |>
+  distinct(grievance_id, hospital_id) |>
+  count(hospital_id, sort = TRUE, name = "serious_grievances") |>
+  head(8)
+```
+
+A handful of hospitals account for most of these complaints. These are the same hospitals that showed unusual claims behaviour in the chapters on PCA, clustering and association rules. Patterns in the claims data and patterns in the complaints point to the same places. When two very different sources of evidence agree, the case for a detailed audit becomes strong.
+
+::: callout-tip
+## Audit tip
+
+A keyword dictionary is simple, transparent and easy to explain in an audit report. Build it by reading a sample of the text, test it on another sample, and refine it. Keep the patterns specific. A pattern like `pay` alone would also match "payment pending" and "salary paid". That is why we used `pay ` with a space, and `took money`.
+:::
+
+## Words that set a group apart, tf-idf
+
+Counting words shows what is *common*. But often we want to know what is *distinctive* about one group compared with others. For this, text analysts use a measure called **tf-idf**, short for *term frequency, inverse document frequency*.
+
+-   **Term frequency (tf)** is how often a word appears in a group, as a share of all words in that group.
+-   **Inverse document frequency (idf)** is high for words that appear in only a few groups, and zero for words that appear in all groups.
+-   **tf-idf** multiplies the two. So it is high for words that are frequent in one group *and* rare in others.
+
+`bind_tf_idf()` from `tidytext` calculates it. We need the word counts by group. Here, a "group" is a grievance category.
+
+```{r}
+category_tfidf <- tokens_clean |>
+  count(category, word) |>
+  bind_tf_idf(word, category, n)
+
+category_tfidf |>
+  slice_max(tf_idf, n = 5, by = category, with_ties = FALSE) |>
+  select(category, word, tf_idf) |>
+  print(n = 30)
+```
+
+The distinctive words of each category make sense. *Refused*, *beds* and *emergency* for denial and card problems. *Pending*, *approval* and *insurance* for delays. *Medicines* and *counter* for money demanded. *Nurses*, *night* and *rude* for quality of care. And the most distinctive words of *Other* are *camp* and *operation*. tf-idf has found, on its own, the same hidden theme that our dictionary found.
+
+## A note on journal entry narrations
+
+The same tools can be used on the narration of accounting entries. Standards on auditing ask auditors to test journal entries for signs of fraud, and unusual descriptions are one of the signs. A very simple check is shown below, on a few made-up narrations.
+
+```{r}
+narrations <- tibble(
+  entry_no = 1:8,
+  narration = c("Being payment of electricity bill for March",
+                "Adjustment as per instructions of the director",
+                "Being salary for the month of April",
+                "Misc. expenses, details to follow",
+                "Reversal of earlier entry, to be regularised",
+                "Being purchase of stationery",
+                "Transfer to suspense account pending clarification",
+                "Being payment to contractor, RA bill 3")
+)
+
+red_flags <- "adjust|as per instruction|misc|details to follow|reversal|regularis|suspense|pending clarification"
+
+narrations |>
+  mutate(flag = str_detect(str_to_lower(narration), red_flags)) |>
+  filter(flag)
+```
+
+In real data, with lakhs of entries, such a filter quickly picks out the entries whose descriptions deserve a second look.
+
+## A suggested workflow
+
+1.  **Understand the text and the question.** Read a sample of the documents before writing any code.
+2.  **Protect personal data.** Mask phone numbers, IDs and names.
+3.  **Clean the text.** Lower case, remove numbers or punctuation if not needed, squeeze spaces. Keep the original column.
+4.  **Tokenise**, into words and, where useful, into bigrams.
+5.  **Remove stop words**, both the standard list and your own domain list.
+6.  **Count and compare.** Look at top words and bigrams, and use tf-idf to see what sets groups apart.
+7.  **Build a keyword dictionary** for the themes that matter to the audit, and tag every document.
+8.  **Link back to structured data.** Count themes by unit, period or category, and compare with other evidence.
+9.  **Read the actual documents** behind every finding before reporting.
+
+::: callout-important
+## Remember
+
+Text analytics counts words. It does not understand them. A complaint saying "they did *not* demand any money" contains the word *demand*. Always read a sample of the documents behind every count, before treating the count as evidence.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `str_replace_all()`, `str_remove_all()` | stringr | Mask or remove patterns, like phone numbers |
+| `str_to_lower()`, `str_squish()` | stringr | Lower case, and remove extra spaces |
+| `unnest_tokens()` | tidytext | Splits text into words or n-grams, one per row |
+| `stop_words` | tidytext | A ready list of common English stop words |
+| `anti_join()` | dplyr | Removes stop words |
+| `wordStem()` | SnowballC | Reduces words to their stems |
+| `separate_wider_delim()`, `unite()` | tidyr | Splits a bigram into two words and joins them back |
+| `cross_join()` with `str_detect()` | dplyr, stringr | Tags each document with themes from a keyword dictionary |
+| `bind_tf_idf()` | tidytext | Words that are distinctive of each group |
+
+: Functions used in this chapter {#tbl-textfunctions}

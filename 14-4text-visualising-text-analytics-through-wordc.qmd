@@ -3,89 +3,309 @@
 source("_common.R")
 ```
 
-# Visualising Text analytics through Wordcloud, etc.
-*The content is under development is following is not finalised.*
+# Visualising Text {#sec-textviz}
+
+In the last two chapters, we learnt to clean text, count words and measure sentiment. The results were tables of words and numbers. In this chapter, we will turn such results into pictures. A good picture of text can show, at a glance, what a long document or a large set of documents is about. It is also very useful in audit reports and presentations, where readers want the main message quickly.
+
+We will learn four kinds of charts.
+
+-   **Frequency plots**, bar charts of the most common words.
+-   **Word clouds**, where the size of each word shows how often it appears.
+-   **Comparison charts and clouds**, showing how the words of one group differ from another.
+-   **Word networks**, showing which words appear next to each other.
+
+## Prerequisites
+
+```{r}
+#| message: false
+library(tidyverse)
+library(tidytext)
+library(wordcloud)   # install.packages("wordcloud")
+```
+
+## Example 1, the Union Budget speech
+
+As our first example, we will look at the Budget speech made by the Finance Minister for the year 2022-23^[Data Source: [Indian Budget Portal](https://www.indiabudget.gov.in/)]. The full text of the speech is available in the file `budget.txt` in the `Data` folder.
+
+### Step-1: Read the text
+
+The file is a plain text file, with one paragraph on each line. `readLines()` reads such a file, giving one element for each line. We then put the lines into a data frame, one row per paragraph.
+
+```{r}
+speech <- readLines("Data/budget.txt", encoding = "UTF-8", warn = FALSE)
+
+speech_df <- tibble(paragraph = seq_along(speech), text = speech)
+
+speech_df |>
+  slice(1:4)
+```
+
+The speech has `r length(speech)` lines, from the opening "Hon'ble Speaker" to the last paragraph.
+
+### Step-2: Tokenise and count words
+
+As in @sec-text, we break the text into words with `unnest_tokens()`, and count them.
+
+```{r}
+speech_words <- speech_df |>
+  unnest_tokens(word, text) |>
+  count(word, sort = TRUE)
+
+speech_words |>
+  head(10)
+```
+
+### Step-3: Remove stop words
+
+The top words are stop words, as expected. We remove them with the standard list. We also remove numbers, which the speech has in plenty, like paragraph numbers, years and amounts.
+
+```{r}
+speech_clean <- speech_words |>
+  anti_join(stop_words, by = "word") |>
+  filter(!str_detect(word, "^[0-9]"))
+```
+
+We may also remove some words specific to this document. To know which ones, we can first skip this step and make the chart directly. After a first look, we identify the words that carry no meaning here, and remove them. *Cent* comes from "per cent", *crore* and *lakh* from amounts, and *sir* from addressing the Speaker.
+
+```{r}
+speech_stop_words <- tibble(word = c("cent", "pm", "crore", "lakh",
+                                     "set", "level", "sir"))
+
+speech_clean <- speech_clean |>
+  anti_join(speech_stop_words, by = "word")
+
+speech_clean |>
+  head(10)
+```
 
 ## Frequency plots
 
-## Wordclouds
+The simplest and most accurate picture of word counts is a **bar chart**. We take the top words, and draw one bar for each (@fig-speechbar).
 
-### Step-1:Prepare data and load libraries
-
-As an example we will create a word cloud with Budget Speech made by Finance Minister during her Budget speech^[Data Source: [Indian Budget Portal](https://www.indiabudget.gov.in/)] 2022-23.  All of the budget speech is available in file called `budget.txt`.
-
-Load Libraries
-
-```{r message=FALSE, warning=FALSE}
-library(tidyverse)
-library(tidytext) #install.packages("tidytext")
-library(wordcloud) #install.packages("wordcloud")
-library(ggtext)
-library(ggalt)
-library(ggthemes)
-library(ggpubr)
-library(conflicted)
-conflicts_prefer(dplyr::filter)
+```{r}
+#| label: fig-speechbar
+#| fig-cap: "Most frequent words in the Budget speech 2022-23"
+speech_clean |>
+  slice_max(n, n = 20) |>
+  ggplot(aes(n, fct_reorder(word, n))) +
+  geom_col(fill = "steelblue") +
+  labs(x = "Number of times used", y = NULL) +
+  theme_bw()
 ```
 
+`fct_reorder(word, n)` orders the words by their count, so that the longest bar is at the top. Without it, the words would appear in alphabetical order. We learnt about ordering factors in @sec-factors.
 
-Load data
-```{r warning=FALSE,message=FALSE}
-dat <- read.table('data/budget.txt', header = FALSE, fill = TRUE)
+The chart tells us at once what the speech emphasised. Digital, capital, government, development, tax, infrastructure, investment, and so on. Each bar can be read and compared exactly.
+
+## Word clouds
+
+A **word cloud** draws the words themselves, with more frequent words in larger letters. It is less precise than a bar chart, but it is striking, and it can show many more words in the same space. This makes it popular in presentations.
+
+The function `wordcloud()` from the package `wordcloud` draws it. Its main arguments are these.
+
+-   `words` and `freq` are the words and their counts.
+-   `max.words` is the maximum number of words to draw.
+-   `random.order = FALSE` puts the most frequent words in the centre.
+-   `colors` gives the colours to use. We take a palette from `RColorBrewer`, which we discussed in @sec-COLORR.
+-   `scale` gives the range of letter sizes, from the largest to the smallest.
+
+The output of the following code can be seen in @fig-wordcloud.
+
+```{r}
+#| label: fig-wordcloud
+#| fig-cap: "Word Cloud of FM's Budget Speech 2022"
+#| warning: false
+pal <- RColorBrewer::brewer.pal(8, "Dark2")
+
+set.seed(123)
+speech_clean |>
+  with(wordcloud(words = word,
+                 freq = n,
+                 random.order = FALSE,
+                 max.words = 40,
+                 colors = pal,
+                 scale = c(2.5, 0.5)))
 ```
 
-### Step-2: Reshape the .txt data frame into one column
+The positions of words in a cloud are partly random. We used `set.seed()` so that the cloud looks the same every time the code is run.
 
-Above steps will create one row per line.  Let's create a tidy data frame out of this data.
+::: callout-warning
+## Word clouds look good, but read poorly
 
-```{r echo=TRUE}
-tidy_dat <- dat %>% 
-  pivot_longer(everything(), values_to = 'word', names_to = NULL)
+The human eye is not good at comparing the sizes of words. A long word looks more important than a short one of the same count. And the colours usually carry no meaning. So use word clouds to give a quick impression, especially in presentations. For analysis, and for any comparison that matters, use a bar chart.
+:::
+
+## Example 2, comparing groups of documents
+
+In audit, we usually want to *compare*. What do complaints about one set of hospitals say, compared with complaints about others? Let us return to the grievances of the imaginary *Sarvajan Swasthya Yojana* from @sec-text.
+
+```{r}
+grievances <- read_csv("Data/ssy_grievances.csv", show_col_types = FALSE)
+
+griev_stop_words <- tibble(word = c("sir", "ji", "madam", "respected", "dear", "officer",
+                                    "kindly", "please", "help", "action", "matter",
+                                    "urgently", "look", "contact", "mobile", "poor",
+                                    "people", "hospital", "hospitl", "scheme", "ssy",
+                                    "patient", "rs", "rupees", "ke", "le", "kar"))
+
+griev_words <- grievances |>
+  unnest_tokens(word, text) |>
+  anti_join(stop_words, by = "word") |>
+  anti_join(griev_stop_words, by = "word") |>
+  filter(!str_detect(word, "[0-9]"))
 ```
 
-### Step-3: Tokenize the data/words
-To tokenize the words we will use function `unnest_tokens()` from `tidytext` library.  As a further step we will have a count of each word, using `dplyr::count` which will create a column `n` against each word.
-```{r echo=TRUE}
-tokens <- tidy_dat %>% 
-  unnest_tokens(word, word) %>% 
-  count(word, sort = TRUE) 
-```
-### Step-4: Clean stop words
-The library `tidytext` has a default database which can eliminate stop words from above data.  Let's load this default stop words data.
-```{r echo=TRUE}
-data("stop_words")
-```
-We may then remove stop words using `dplyr::anti_join`.
-```{r echo=TRUE}
-tokens_clean <- tokens %>%
-  anti_join(stop_words, by='word') %>% 
-  # remove numbers
-  filter(!str_detect(word, "^[0-9]"))
-```
-We may remove additional stop words those specific to this data/input.  To have an idea of these stop words, we may at firt, skip this step altogether and proceed to generate word cloud in next step directly.  After having a first look, we can identify and then remove these additional stop words seen in first round(s).
-```{r echo=TRUE}
-uni_sw <- data.frame(word = c("cent", "pm", "crore", 
-                              "lakh", "set",
-                              "level", "sir"))
+These are the same cleaning steps as in @sec-text.
 
-tokens_clean <- tokens_clean %>% 
-  anti_join(uni_sw, by = "word")
+### Top words in each category, side by side
+
+To compare the top words of several groups, we draw one small bar chart for each group, side by side, with `facet_wrap()`. There is one problem. Each group has its own order of words. `fct_reorder()` can only give one order for the whole chart. `tidytext` solves this with two helper functions. `reorder_within()` orders the words separately within each group, and `scale_y_reordered()` cleans up the labels (@fig-griefacet).
+
+```{r}
+#| label: fig-griefacet
+#| fig-cap: "Most frequent words in each category of grievance"
+#| fig-height: 7
+griev_words |>
+  count(category, word) |>
+  slice_max(n, n = 6, by = category, with_ties = FALSE) |>
+  ggplot(aes(n, reorder_within(word, n, category))) +
+  geom_col(fill = "steelblue") +
+  scale_y_reordered() +
+  facet_wrap(~category, scales = "free_y", ncol = 2) +
+  labs(x = "Number of times used", y = NULL) +
+  theme_bw()
 ```
 
-### Step-5: Plot/generate word cloud
-Output/Word cloud of following code can be seen in @fig-wordcloud.
+Each panel shows the top words of one category. The panel for *Other* stands out. Its top word is *operation*, by a wide margin, followed by words like *free* and *camp*. These do not belong to any of the fixed categories. This is the same finding as in @sec-text, now visible in one picture.
 
-```{r fig-wordcloud, fig.cap= "Word Cloud of FM's Budget Speech 2022", fig.align='center',fig.align='center', message=FALSE, warning=FALSE}
-pal <- RColorBrewer::brewer.pal(8,"Dark2")
+### A comparison cloud
 
-# plot the 40 most common words
-tokens_clean %>% 
-  with(wordcloud(word, 
-                 n, 
-                 random.order = FALSE, 
-                 max.words = 40, 
-                 colors=pal,
-                 scale=c(2.5, .5)))
+A **comparison cloud** shows two or more groups in one cloud. Each word is placed in the part of the cloud belonging to the group in which it is *relatively* more frequent. Let us compare grievances about the six hospitals flagged in earlier chapters with grievances about all other hospitals.
+
+The function `comparison.cloud()` needs the counts in a matrix, with words as rows and groups as columns. We prepare it with `pivot_wider()`, and convert it with `column_to_rownames()` and `as.matrix()`.
+
+```{r}
+camp_hospitals <- c("H063", "H066", "H070", "H071", "H098", "H116")  # from the k-means chapter
+
+compare_matrix <- griev_words |>
+  mutate(group = if_else(hospital_id %in% camp_hospitals,
+                         "Six flagged hospitals", "Other hospitals")) |>
+  count(word, group) |>
+  pivot_wider(names_from = group, values_from = n, values_fill = 0) |>
+  column_to_rownames("word") |>
+  as.matrix()
+
+head(compare_matrix)
 ```
 
+Now we draw it (@fig-compcloud).
 
+```{r}
+#| label: fig-compcloud
+#| fig-cap: "Words relatively more frequent in grievances about each group of hospitals"
+#| warning: false
+set.seed(123)
+comparison.cloud(compare_matrix,
+                 max.words = 60,
+                 colors = c("grey40", "firebrick"),
+                 title.size = 1.2,
+                 scale = c(2.5, 0.5))
+```
+
+The two halves tell two different stories. Grievances about other hospitals are mostly about cards, refusals, pending approvals and the ward. Grievances about the six flagged hospitals are about operations, camps, agents, villages, pain and the uterus being removed. For an audit presentation, this one picture can make the case for a closer look at those six hospitals.
+
+## Example 3, word networks
+
+Bar charts and clouds show single words. To see how words are *connected*, we can draw a **network** of bigrams. Each word is a point (a *node*), and an arrow (an *edge*) joins two words that appear one after the other. We learnt about networks in the chapter on network analytics, where we used the package `igraph`. Here we will also use `ggraph`, which draws networks in the style of `ggplot2`.
+
+```{r}
+#| message: false
+library(igraph)
+library(ggraph)
+```
+
+First, we count bigrams, after removing stop words from both words, as in @sec-text. We keep only the more frequent ones, so that the picture is readable.
+
+```{r}
+all_stops <- c(stop_words$word, griev_stop_words$word)
+
+bigram_counts <- grievances |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) |>
+  separate_wider_delim(bigram, delim = " ", names = c("word1", "word2")) |>
+  filter(!word1 %in% all_stops, !word2 %in% all_stops,
+         !str_detect(word1, "[0-9]"), !str_detect(word2, "[0-9]")) |>
+  count(word1, word2, sort = TRUE) |>
+  filter(n >= 15)
+
+bigram_counts
+```
+
+`graph_from_data_frame()` from `igraph` turns this table into a network. The first two columns become the two ends of each edge, and `n` becomes an edge attribute.
+
+```{r}
+#| label: fig-bigramnet
+#| fig-cap: "Network of frequent word pairs in grievances"
+#| fig-height: 6
+bigram_graph <- graph_from_data_frame(bigram_counts)
+
+set.seed(2024)
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n),
+                 arrow = grid::arrow(length = unit(2, "mm")),
+                 end_cap = circle(2, "mm"), show.legend = FALSE) +
+  geom_node_point(colour = "steelblue", size = 3) +
+  geom_node_text(aes(label = name), vjust = 1.5, size = 3.5) +
+  theme_void()
+```
+
+In @fig-bigramnet, the arrows follow the order of words, and darker arrows mean more frequent pairs. `layout = "fr"` places strongly connected words near each other. We can now read short phrases straight from the picture, like *health camp*, *told villagers*, *free operation* and *staff demanded*.
+
+::: callout-note
+## Pairs across punctuation
+
+Look at the pair *accepted → staff*. It comes from sentences like "card is not accepted, staff says server is down". `unnest_tokens()` removes the comma before forming pairs, so the last word of one phrase gets joined to the first word of the next. Such pairs are artefacts, not real phrases. If they matter, split the text into sentences or phrases first, for example with `unnest_tokens(token = "sentences")`, and then form bigrams within each.
+:::
+
+## Choosing the right chart
+
+| Purpose | Suggested chart |
+|------------------------------------|----------------------------|
+| Exact comparison of word counts | Bar chart |
+| Quick impression for a presentation | Word cloud |
+| Comparing top words across several groups | Faceted bar chart with `reorder_within()` |
+| Showing what sets two groups apart | Comparison cloud, or a bar chart of tf-idf |
+| Showing phrases and connections | Bigram network |
+
+: Choosing a chart for text {#tbl-textcharts}
+
+## A suggested workflow
+
+1.  **Clean and count** the text, as in @sec-text.
+2.  **Start with a bar chart** of the top words. It is the most honest picture.
+3.  **Refine the stop words** after the first look, and redraw.
+4.  **Compare groups** with faceted bar charts or comparison clouds.
+5.  **Use bigram networks** when phrases matter more than single words.
+6.  **Use word clouds for presentation**, and set a seed so they can be reproduced.
+7.  **Check every striking picture against the documents** behind it.
+
+::: callout-important
+## Remember
+
+A picture of text is a summary, and every summary leaves things out. The most frequent words are not always the most important ones. A single grievance about a death in a hospital matters more than a hundred about dirty toilets. Use the pictures to see the broad picture, and the documents to see what really happened.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `readLines()` | base R | Reads a text file, one element per line |
+| `unnest_tokens()` | tidytext | Splits text into words or bigrams |
+| `fct_reorder()` | forcats | Orders words by count in a bar chart |
+| `wordcloud()` | wordcloud | Draws a word cloud |
+| `reorder_within()`, `scale_y_reordered()` | tidytext | Orders words separately within each facet |
+| `comparison.cloud()` | wordcloud | Word cloud comparing two or more groups |
+| `column_to_rownames()` | tibble | Moves a column into row names, before making a matrix |
+| `graph_from_data_frame()` | igraph | Builds a network from a table of word pairs |
+| `ggraph()`, `geom_edge_link()`, `geom_node_text()` | ggraph | Draws the network |
+
+: Functions used in this chapter {#tbl-textvizfunctions}

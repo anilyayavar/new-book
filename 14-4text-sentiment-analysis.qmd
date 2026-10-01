@@ -3,6 +3,360 @@
 source("_common.R")
 ```
 
-# Sentiment Analysis
-*The content is under development*
+# Sentiment Analysis {#sec-sentiment}
 
+When we read a comment like "Doctors were very good and caring", we know at once that the writer is happy. "Staff was rude and the ward was dirty" tells us the opposite. **Sentiment analysis** tries to make a computer do the same. It measures whether a piece of text expresses a positive or a negative feeling, and how strongly.
+
+For an auditor, sentiment is a quick way to sense where things may be going wrong. Thousands of feedback comments, survey responses or grievances cannot all be read. But if the comments about one hospital, one office or one scheme are much more negative than about others, that is where to look first.
+
+## Where can sentiment analysis help an auditor?
+
+-   **Beneficiary feedback** on schemes, hospitals, schools or ration shops. Units with unusually negative feedback deserve attention.
+-   **Grievances**, to find which ones express the strongest distress, so that serious cases are not lost in the volume.
+-   **Survey responses** collected during performance audits, where hundreds of beneficiaries answer open questions.
+-   **Trends over time.** A sudden fall in sentiment about a service may show the effect of a policy change or a breakdown.
+-   **Testing what people say against what records show.** A hospital whose records look perfect, but whose patients are unhappy, raises questions.
+
+## How does it work?
+
+The simplest and most transparent method uses a **sentiment dictionary**, also called a *lexicon*. It is a list of words, each marked as positive or negative. To score a comment, we break it into words, look up each word in the dictionary, and count the positive and negative words. The difference gives a sentiment score.
+
+This is called the *dictionary-based* or *lexicon-based* approach. It is easy to understand and explain, which matters in audit. Its weaknesses, which we will see shortly, are also easy to understand and partly fix.
+
+## Prerequisites
+
+We will use `tidytext`, introduced in @sec-text.
+
+```{r}
+#| message: false
+library(tidyverse)
+library(tidytext)
+```
+
+## Our data, patient feedback
+
+We again use the imaginary *Sarvajan Swasthya Yojana* (SSY). After discharge, patients can leave a short comment and a star rating from 1 to 5. The data is made up, and is created by `tools/make_ssy_text_data.R` in the book's repository.
+
+```{r}
+feedback <- read_csv("Data/ssy_feedback.csv", show_col_types = FALSE)
+
+feedback |>
+  slice(c(1, 5, 9, 14, 22, 31)) |>
+  select(hospital_id, comment, rating)
+```
+
+There are `r format(nrow(feedback), big.mark = ",")` comments about `r n_distinct(feedback$hospital_id)` hospitals. The star rating gives us a useful check. If our sentiment score is any good, it should broadly agree with the stars that patients gave.
+
+## The Bing dictionary
+
+`tidytext` comes with a ready dictionary called **Bing**, compiled by Bing Liu and colleagues. `get_sentiments("bing")` returns it as a data frame.
+
+```{r}
+bing <- get_sentiments("bing")
+bing
+
+bing |> count(sentiment)
+```
+
+It has about `r format(nrow(bing), big.mark = ",")` words, each marked `positive` or `negative`.
+
+::: callout-note
+## Other dictionaries
+
+`tidytext` can also fetch other dictionaries, like **AFINN**, which gives each word a score from -5 to +5, and **NRC**, which tags words with emotions like anger, fear and trust. These are downloaded through the `textdata` package the first time they are used, and have their own licence terms. The Bing dictionary needs no download, so we use it here.
+:::
+
+## Scoring each comment
+
+We follow the steps of the last chapter. Break the comments into words, and then keep only the words found in the dictionary. `inner_join()` does this. It keeps only rows that have a match in both tables.
+
+```{r}
+feedback_words <- feedback |>
+  unnest_tokens(word, comment) |>
+  inner_join(bing, by = "word")
+
+feedback_words |>
+  count(word, sentiment, sort = TRUE) |>
+  head(12)
+```
+
+Now we count the positive and negative words in each comment. The score of a comment is the number of positive words minus the number of negative words.
+
+```{r}
+scores <- feedback_words |>
+  count(feedback_id, sentiment) |>
+  pivot_wider(names_from = sentiment, values_from = n, values_fill = 0)
+
+feedback_scored <- feedback |>
+  left_join(scores, by = "feedback_id") |>
+  mutate(across(c(positive, negative), \(x) replace_na(x, 0)),
+         score = positive - negative)
+
+feedback_scored |>
+  select(comment, positive, negative, score, rating) |>
+  head(8)
+```
+
+We used `left_join()` here, not `inner_join()`, so that comments without any dictionary word are kept, with a score of zero.
+
+### Does the score agree with the stars?
+
+Let us check how well the score agrees with the rating given by the patient. The correlation, which we met in the PCA chapter, is a single number for this.
+
+```{r}
+cor(feedback_scored$score, feedback_scored$rating)
+```
+
+A correlation of about `r round(cor(feedback_scored$score, feedback_scored$rating), 2)` means the two agree fairly well, but far from perfectly. Let us see where the method goes wrong.
+
+## Problem 1, negation
+
+Look at these comments, and the scores they got.
+
+```{r}
+feedback_scored |>
+  filter(str_detect(comment, "\\bnot\\b")) |>
+  distinct(comment, score) |>
+  head(6)
+```
+
+"Food was not good" got a *positive* score. The method saw the word *good*, found it in the dictionary as positive, and ignored the *not* before it. This is the biggest weakness of simple word counting. Let us see how often it happens. We use bigrams, from the last chapter, and look for a negative word followed by a dictionary word.
+
+```{r}
+negations <- c("not", "no", "never", "without")
+
+feedback |>
+  unnest_tokens(bigram, comment, token = "ngrams", n = 2) |>
+  separate_wider_delim(bigram, delim = " ", names = c("word1", "word2")) |>
+  filter(word1 %in% negations) |>
+  inner_join(bing, by = c(word2 = "word")) |>
+  count(word1, word2, sentiment, sort = TRUE)
+```
+
+Hundreds of positive words were really used in a negative sense. *Not available*, *not happy*, *not free*, *not good*, *not clean*, *not helpful*.
+
+### Fixing negation
+
+A simple fix is to look at the word just before each dictionary word. If it is a negation, we flip the sign. `lag()` gives the previous word within each comment.
+
+```{r}
+feedback_words_fixed <- feedback |>
+  unnest_tokens(word, comment) |>
+  mutate(previous = lag(word), .by = feedback_id) |>
+  inner_join(bing, by = "word") |>
+  mutate(value = if_else(sentiment == "positive", 1, -1),
+         value = if_else(previous %in% negations, -value, value))
+
+feedback_words_fixed |>
+  filter(previous %in% negations) |>
+  select(feedback_id, previous, word, sentiment, value) |>
+  head(5)
+```
+
+Note that we added the `previous` column *before* joining with the dictionary. If we joined first, the words not in the dictionary, like *not* itself, would already have been dropped.
+
+Now the score of a comment is simply the sum of these values.
+
+```{r}
+score_comments <- function(word_values) {
+  feedback |>
+    left_join(word_values |> summarise(score = sum(value), .by = feedback_id),
+              by = "feedback_id") |>
+    mutate(score = replace_na(score, 0))
+}
+
+feedback_fixed <- score_comments(feedback_words_fixed)
+
+cor(feedback_fixed$score, feedback_fixed$rating)
+```
+
+We wrote a small function, `score_comments()`, because we will use the same steps again. Custom functions were covered in @sec-cust. The correlation with the star rating has improved to `r round(cor(feedback_fixed$score, feedback_fixed$rating), 2)`.
+
+## Problem 2, words the dictionary does not know
+
+A general dictionary is built from product reviews, news and the like. It does not know the language of every field. Let us see which common words in our comments are *not* in the dictionary.
+
+```{r}
+feedback |>
+  unnest_tokens(word, comment) |>
+  anti_join(stop_words, by = "word") |>
+  anti_join(bing, by = "word") |>
+  count(word, sort = TRUE) |>
+  head(25)
+```
+
+Most of these are neutral, like *treatment*, *staff* and *ward*. But some clearly carry feeling in this context. *Caring*, *recovered* and *experienced* are positive. *Forced*, *pay* and *wait* are negative. In a free health scheme, *pay* is a strongly negative word, because patients should not have to pay at all.
+
+So we add our own words to the dictionary. `bind_rows()` adds them below the Bing words.
+
+```{r}
+my_words <- tribble(
+  ~word,         ~sentiment,
+  "caring",      "positive",
+  "recovered",   "positive",
+  "experienced", "positive",
+  "explained",   "positive",
+  "forced",      "negative",
+  "pay",         "negative",
+  "wait",        "negative",
+  "nobody",      "negative"
+)
+
+my_dictionary <- bind_rows(bing, my_words)
+```
+
+Let us score the comments again, with negation handling *and* the extended dictionary.
+
+```{r}
+feedback_final <- feedback |>
+  unnest_tokens(word, comment) |>
+  mutate(previous = lag(word), .by = feedback_id) |>
+  inner_join(my_dictionary, by = "word") |>
+  mutate(value = if_else(sentiment == "positive", 1, -1),
+         value = if_else(previous %in% negations, -value, value)) |>
+  score_comments()
+
+cor(feedback_final$score, feedback_final$rating)
+```
+
+The agreement with the star rating has improved again, to `r round(cor(feedback_final$score, feedback_final$rating), 2)`. Each improvement came from understanding *why* the method went wrong, and fixing that specific problem.
+
+::: callout-tip
+## Audit tip
+
+Always check a sentiment method against something you trust, before relying on it. Here we had star ratings. Elsewhere, you can read and score 50 to 100 comments yourself, and compare with the method. If the method disagrees often, find out why, as we did, rather than accepting its numbers.
+:::
+
+## Comparing hospitals
+
+Now let us use the scores. The simplest summary is the average score of each hospital, and the share of its comments that are negative.
+
+```{r}
+hospital_sentiment <- feedback_final |>
+  summarise(comments     = n(),
+            avg_score    = mean(score),
+            pct_negative = 100 * mean(score < 0),
+            .by = hospital_id) |>
+  arrange(avg_score)
+
+hospital_sentiment |>
+  head(10) |>
+  mutate(across(where(is.double), \(x) round(x, 2)))
+```
+
+The five hospitals with the most negative feedback are all among the six "camp" hospitals that stood out in @sec-kmeans and @sec-text. But look at the `comments` column. Each hospital has only `r min(hospital_sentiment$comments)` to `r max(hospital_sentiment$comments)` comments. With so few comments, an average can swing a lot because of one or two unhappy patients.
+
+::: callout-warning
+## Caution, small numbers
+
+An average built on ten comments is not reliable. Two hospitals with very different true quality can easily swap places by chance. Before ranking units by sentiment, either set a minimum number of comments, or compare *groups* of units, which gives larger numbers, as we do next.
+:::
+
+### Comparing groups
+
+The earlier chapters gave us a group of six hospitals with unusual claims. Let us compare their feedback with that of all other hospitals together.
+
+```{r}
+camp_hospitals <- c("H063", "H066", "H070", "H071", "H098", "H116")  # from the k-means chapter
+
+feedback_final |>
+  mutate(group = if_else(hospital_id %in% camp_hospitals,
+                         "Six flagged hospitals", "All other hospitals")) |>
+  summarise(comments     = n(),
+            avg_score    = mean(score),
+            pct_negative = 100 * mean(score < 0),
+            avg_rating   = mean(rating),
+            .by = group) |>
+  mutate(across(where(is.double), \(x) round(x, 2)))
+```
+
+With the comments pooled, the difference is clear. Patients of the six flagged hospitals are far more often negative, and give lower star ratings. This is a third, independent source of evidence, after the claims data and the grievances, pointing to the same hospitals.
+
+## Beyond positive and negative, a red-flag dictionary
+
+Sentiment tells us *how* people feel. For audit, it is often more useful to know *what specific problems* they mention. We can use the same dictionary method with our own list of **red-flag words**, which point to possible wrongdoing rather than just unhappiness.
+
+```{r}
+red_flags <- c("forced", "pay", "paid", "money", "cash")
+
+feedback |>
+  unnest_tokens(word, comment) |>
+  filter(word %in% red_flags) |>
+  mutate(group = if_else(hospital_id %in% camp_hospitals,
+                         "Six flagged hospitals", "All other hospitals")) |>
+  count(group, word) |>
+  pivot_wider(names_from = word, values_from = n, values_fill = 0)
+```
+
+At first sight, the other hospitals seem to have *more* such comments. But this is a trap. There are many more comments about the other hospitals, so they will have more of almost everything. A fair comparison needs a **rate**, for example red-flag comments per 100 comments.
+
+```{r}
+feedback |>
+  mutate(group = if_else(hospital_id %in% camp_hospitals,
+                         "Six flagged hospitals", "All other hospitals"),
+         has_red_flag = str_detect(str_to_lower(comment),
+                                   paste0("\\b(", paste(red_flags, collapse = "|"), ")\\b"))) |>
+  summarise(comments = n(),
+            red_flag_comments = sum(has_red_flag),
+            per_100_comments = round(100 * mean(has_red_flag), 1),
+            .by = group)
+```
+
+Now the picture is the right way round. Comments about the six flagged hospitals mention being forced or having to pay at about four times the rate of comments about other hospitals. Words like *forced* are much more important for an auditor than a general negative word like *bad*.
+
+::: callout-warning
+## Compare rates, not counts
+
+Whenever groups differ in size, compare rates or percentages, not raw counts. A large district will have more complaints than a small one, simply because it is large. This simple point is behind many wrong conclusions.
+:::
+
+::: callout-tip
+## Audit tip
+
+Build a red-flag dictionary for each audit, with the help of people who know the sector. In a health scheme, it may include words about forced or unnecessary surgery, payments, and agents. In a PDS audit, it may include words about short weighing, refusal of ration, or poor quality grain. Such a dictionary is easy to explain in an audit report, and easy for the auditee to verify.
+:::
+
+## Limitations
+
+::: callout-warning
+## What dictionary methods cannot do
+
+-   **Sarcasm and irony.** "Great service, waited only six hours!" will be scored as positive.
+-   **Context.** *Free* is positive in "treatment was free", but has nothing to do with sentiment in "free health camp".
+-   **Mixed comments.** A comment praising the doctor and complaining about the food gets a score near zero, which hides both points.
+-   **Other languages.** Words in Hindi or other languages, and mixed-language text, are not in English dictionaries.
+-   **Longer negations.** Our fix handles "not good", but not "not at all good" or "I would not say it was good".
+
+More advanced methods, based on machine learning and large language models, handle some of these better. But they are harder to explain, and their errors are harder to spot. For audit work, a simple, transparent method that you have checked carefully is often the better choice.
+:::
+
+## A suggested workflow
+
+1.  **Read a sample of the text** to understand how people write about the subject.
+2.  **Choose a dictionary.** Start with Bing, which needs no download.
+3.  **Tokenise, join with the dictionary, and score** each document.
+4.  **Check the scores against something you trust**, such as ratings or your own reading of a sample.
+5.  **Fix the main problems**, especially negation and missing domain words.
+6.  **Summarise by unit or group**, with enough documents behind each number.
+7.  **Add a red-flag dictionary** for the specific risks of the audit.
+8.  **Read the actual comments** behind every unit you flag.
+
+::: callout-important
+## Remember
+
+A sentiment score is a summary of many opinions, not a fact. Use it to decide *where to look*. The actual comments, read in full, are the evidence.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `get_sentiments("bing")` | tidytext | The Bing sentiment dictionary |
+| `unnest_tokens()` | tidytext | Splits text into words or bigrams |
+| `inner_join()` | dplyr | Keeps only words found in the dictionary |
+| `left_join()` with `replace_na()` | dplyr, tidyr | Keeps all documents, scoring those with no dictionary words as zero |
+| `lag()` with `.by` | dplyr | The previous word in the same comment, for negation |
+| `bind_rows()` | dplyr | Adds our own words to the dictionary |
+| `cor()` | stats | Agreement between sentiment scores and star ratings |
+
+: Functions used in this chapter {#tbl-sentfunctions}
