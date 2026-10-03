@@ -5,116 +5,127 @@ source("_common.R")
 
 # Time Series Analysis {#sec-ts}
 
-Time series analysis is an essential technique for forecasting and analyzing trends in data over time. It is commonly used in various fields like finance, economics, and engineering.
+Time series analysis is an essential technique for analysing and forecasting data over time. It is commonly used in fields like finance, economics and engineering.
 
-So a question arises, what is a time series? A time series is a sequence of data points collected over time, where the observations are recorded in chronological order. Time series analysis involves analyzing and modeling these data points to understand patterns, trends, and make predictions about future values.  It is therefore used in predictive as well as descriptive analysis.
+So what is a time series? A time series is a sequence of data points recorded over time, in chronological order. Monthly expenditure of an office, daily cash balance, quarterly GST collections and yearly rainfall are all time series. Time series analysis means studying such data to understand its patterns and trends, and to predict its future values. It is therefore used for descriptive as well as predictive analysis.
 
-Time Series Analysis plays an important role in audit analytics as well.  A few of the use cases can be-
+Time series analysis plays an important role in audit analytics as well. A few of the use cases are
 
-- **Revenue Analysis:** An auditor may analyze revenue data over time to identify irregularities or suspicious patterns that could indicate potential fraud or misstatement. By examining the revenue time series, the auditor can look for unexpected fluctuations, unusual growth or decline trends, or abnormal seasonality. Deviations from historical patterns or industry benchmarks may indicate fraudulent activities, such as revenue manipulation, fictitious transactions, or irregular recognition practices.
-- **Inventory Analysis:** Auditors often analyze inventory data to assess the adequacy of inventory levels, identify potential inventory obsolescence or shrinkage, and evaluate the efficiency of inventory management. Time series analysis can be valuable in understanding inventory patterns and identifying potential risks or anomalies.
+- **Revenue analysis.** An auditor may examine revenue data over time to find irregular or suspicious patterns. Unexpected fluctuations, unusual growth or decline, or a change in the usual seasonal pattern may indicate misstatement, leakage or fraud. We will see a complete example of this at the end of the chapter, in @sec-ts-audit.
+- **Expenditure analysis.** Government offices are known to spend much more in March, to use up the budget before the financial year ends. Time series methods let us see this *March rush* clearly, and find months which are unusual even after allowing for it. We discuss this in @sec-ano-ts.
+- **Inventory analysis.** Auditors examine inventory data to assess whether stock levels are adequate, to identify obsolescence or shrinkage, and to evaluate inventory management. Time series analysis helps in understanding inventory patterns and identifying risks.
 
-There are several time series data which are loaded by default in R; a few of these are listed below.  We will use these datasets to understand the various concepts related to time series analysis.
+Several time series datasets are loaded by default in R. A few of these are listed below. We will use them to understand the various concepts of time series analysis.
 
-- `AirPassengers` containing monthly airline passenger numbers from 1949-1960. See @fig-tsex (a)
-- `Nile` contains flow of Nile river data. See @fig-tsex (b)
-- `sunspots` containing monthly sunspot numbers from 1749-1983. See @fig-tsex (c)
-- `JohnsonJohnson` which contains quarterly earnings per Johnson & Johnson share. See @fig-tsex (d)
+- `AirPassengers` contains monthly airline passenger numbers from 1949-1960. See @fig-tsex (a)
+- `Nile` contains the yearly flow of the river Nile from 1871 to 1970. See @fig-tsex (b)
+- `sunspots` contains monthly sunspot numbers from 1749-1983. See @fig-tsex (c)
+- `JohnsonJohnson` contains quarterly earnings per Johnson & Johnson share from 1960 to 1980. See @fig-tsex (d)
 
 ```{r fig-tsex, echo=FALSE, fig.cap="Few time series data sets in R", fig.align='center', fig.show='hold'}
 par(mfrow = c(2,2))
 plot(AirPassengers, main= "(a) Airline Passengers from 1949-1960")
 plot(Nile, main = "(b) Nile flow 1871-1970")
 plot(sunspots, main = "(c) Sunspots")
-plot(JohnsonJohnson, main = "(d) Earnings of Johnson&Jonson")
+plot(JohnsonJohnson, main = "(d) Earnings of Johnson & Johnson")
 ```
 
 To analyse any time series, we have to understand its different components.
 
 ## Components of Time series
-A time series can be decomposed into several components:
 
-- **Level:** The baseline value or average of the series over time. It represents the long-term behavior of the series. This is basic component, and is always present in a time series object.  E.g. In a straight horizontal line only level is there which is equal to the value of y intercept.
-- **Trend:** The overall direction of the series. It indicates whether the series is increasing, decreasing, or staying relatively constant over time.  E.g. A clear increasing trend can be seen in Johnson & Johnson earnings, in @fig-tsex (d).
-- **Seasonality:** The repetitive and predictable patterns within the series that occur at regular intervals. Seasonality can be daily, weekly, monthly, quarterly, or yearly, etc. E.g. In @fig-tsex (d) we may see seasonal patterns in earnings of Johnson&Johnson share.
-- **Errors (Residuals):** The random fluctuations or noise in the series that cannot be explained by the level, trend, or seasonality.  E.g. See @fig-tsex (c). The error component is an important aspect of time series analysis because it provides information about the uncertainty and variability of the data.
+A time series can be broken down into several components.
+
+- **Level.** The baseline value or average of the series. If a series were a straight horizontal line, it would have only a level, equal to the value where the line cuts the y-axis.
+- **Trend.** The long-term direction of the series. It shows whether the series is increasing, decreasing or staying about constant over time. For example, a clear increasing trend can be seen in Johnson & Johnson earnings in @fig-tsex (d).
+- **Seasonality.** A pattern which repeats at a *fixed and known* interval, like every year, every quarter or every week. For example, in @fig-tsex (d) the earnings of Johnson & Johnson go up and down in the same way every year. Monthly government expenditure peaks every March.
+- **Cycle.** Rises and falls which are *not* of a fixed length. Business cycles, which last a few years each, are an example. The sunspots in @fig-tsex (c) show cycles of roughly 11 years, but the length varies from one cycle to the next. That is why they are a cycle and not a season.
+- **Errors (Residuals).** The random fluctuations or noise that cannot be explained by the level, trend, seasonality or cycle. The year-to-year ups and downs of the Nile flow in @fig-tsex (b) are mostly of this kind. The error component tells us how uncertain and variable the data is, and so how much we can trust a forecast.
 
 ## Additive or multiplicative components
-In time series analysis, the trend, seasonal, and residual components can be modeled as either additive or multiplicative. The choice of the model depends on how the components combine to create the observed values of the series.
 
-An **additive model** assumes that the components of the time series are added together to create the observed values. In other words, the value of the time series at any point in time is equal to the sum of the trend, seasonal, and residual components at that point in time. This is expressed mathematically as:
+The trend, seasonal and error components can combine with each other in two ways, additive or multiplicative. Which one fits depends on the data.
+
+An **additive model** assumes that the components are *added* together. The value of the series at any time is the sum of the trend, seasonal and error components at that time.
 
 $$
 y_t = T_t + S_t + e_t
-$$
+$$ {#eq-ts-add}
 
-where $y_t$, $T_t$, $S_t$ and $e_t$ are the values of the series, trend component, seasonal component and  residuals, respectively at time $t$.
+where $y_t$, $T_t$, $S_t$ and $e_t$ are the values of the series, trend component, seasonal component and residuals, respectively, at time $t$. In an additive series, the seasonal ups and downs stay about the same size, whatever the level of the series.
 
-A **multiplicative model**, on the other hand, assumes that the components of the time series are multiplied together to create the observed values. In other words, the value of the time series at any point in time is equal to the product of the trend, seasonal, and residual components at that point in time. This is expressed mathematically as:
+A **multiplicative model** assumes that the components are *multiplied* together.
 
 $$
 y_t = T_t \times S_t \times e_t
-$$
+$$ {#eq-ts-mult}
 
-where $y_t$, $T_t$, $S_t$ and $e_t$ are defined as before.  We can convert multiplicative time series into additive time series by taking $log$.  Note that seasonal component in `AirPassengers` time series depicted in @fig-tsex (a) is multiplicative. See @fig-logts.
+where $y_t$, $T_t$, $S_t$ and $e_t$ are defined as before. In a multiplicative series, the seasonal ups and downs grow as the series grows. The seasonal component is then a *percentage* of the trend, like "March is 40% above an average month". Note that the seasonal swings in `AirPassengers`, @fig-tsex (a), become wider every year. So its seasonality is multiplicative.
+
+We can convert a multiplicative series into an additive one by taking its logarithm, because $\log(T \times S \times e) = \log T + \log S + \log e$. See @fig-logts. On the log scale, the seasonal swings of `AirPassengers` are about the same size every year.
 
 ::: {#fig-logts}
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="49%"}
 library(ggplot2)
-library(ggfortify)
+library(forecast)
 autoplot(AirPassengers) +
   theme_bw() +
   labs(title = "AirPassengers Time series")
 autoplot(log(AirPassengers)) +
   theme_bw() +
-  labs(title = "Logirithmic transformation")
+  labs(title = "Logarithmic transformation")
 ```
 
 Transforming Time Series
 :::
 
-We will learn about decomposing time series components in next sections.
+We will learn how to separate these components in later sections.
 
-**Damped Trends:** Gardner and Mckenzie, in 1985 [@mcke] observed that most time series methods assume that any trend will continue unabated, regardless of the forecast lead time. They, based on empirical findings, suggested that forecast accuracy can be improved by either damping or ignoring altogether trends which have a low probability of persistence. We will learn about this concept, as well in next sections.
+**Damped Trends:** Gardner and McKenzie [@mcke] observed in 1985 that most forecasting methods assume a trend will continue forever, however far ahead we forecast. Based on their empirical findings, they suggested that forecasts become more accurate if trends are *damped*, that is, made to flatten out gradually. We will learn about this concept as well in later sections.
 
 ## Practical examples in R
-Before analysing time series, in R let's see how time series objects are dealt in R.
 
-### Pre-requisites {-}
-Though most of the time we will be using base R, yet `forecast` is a fabulous package in R, developed by **Rob Hyndman**, which we will be using for predicting.  Predicting values help us understand how well we have captured the hidden trends and patterns in any time series. 
+Let us first see how time series objects are handled in R.
+
+### Prerequisites {.unnumbered}
+
+Most of the time we will use base R. For forecasting, we will use `forecast`, a fabulous package developed by **Rob Hyndman**. Forecasting future values also tells us how well we have captured the trends and patterns in a series. We will also use `zoo` for rolling averages, `patchwork` for combining plots, and `tidyverse` for the audit example.
 
 ```{r message=FALSE, warning=FALSE}
 library(forecast)
-library(ggplot2)
+library(zoo)
+library(patchwork)
+library(tidyverse)
 ```
 
 ### Creating a time series object in R
 
-R provides us a simple function `ts()` to convert a series of observations (basically a vector) into a specific time series object.  The syntax is -
+R provides a simple function `ts()` to convert a series of observations (basically a vector) into a time series object. The main arguments are
 
 ```
-ts(data, 
-  start = 1, 
-  end = numeric(length(data)), 
-  frequency = 1, 
+ts(data,
+  start = 1,
+  end = numeric(),
+  frequency = 1,
   ...)
 ```
-where:
 
-- `data`: a numeric vector or matrix containing the data for the time series
-- `start`: the start time of the time series, represented as either a numeric or a Date or POSIXct object
-- `end`: the end time of the time series, represented as either a numeric or a Date or POSIXct object
-- `frequency`: the number of observations per unit time for the time series. For example, if the data is recorded monthly, the frequency would be 12
-- `...`: additional arguments that can be passed to the function, such as `names`, `delim`, or `tsp` (time series start and end points)
+where
 
-Example-1: Let's create a time series.  
+- `data` is a numeric vector or matrix containing the observations.
+- `start` is the time of the first observation. It is a single number, like `1871` for yearly data, or a pair of numbers, like `c(2022, 4)` for April 2022 in monthly data.
+- `end` is the time of the last observation, written the same way. We usually give only `start`, and R works out `end` from the length of the data.
+- `frequency` is the number of observations per unit of time. Monthly data has a frequency of 12, quarterly data 4, and yearly data 1.
+- `...` are other, rarely needed arguments, like `names` for the columns of a matrix of series.
+
+Example-1: Let us create a time series.
 
 ```{r}
-# Create a numeric vector representing monthly sales data for a year
+# Monthly sales of a year, for the financial year 2022-23
 sales <- c(10, 20, 30, 25, 35, 40, 45, 50, 55, 60, 65, 70)
 
-# Create a time series object with monthly frequency starting from January
+# A monthly time series starting from April 2022
 sales_ts <- ts(sales, start = c(2022, 4), frequency = 12)
 
 # Print the time series object
@@ -122,139 +133,160 @@ sales_ts
 
 ```
 
-We can check its class.
+Notice that R has placed the 12 values from April 2022 to March 2023 in a calendar layout. We can check its class.
+
 ```{r}
 class(sales_ts)
 ```
 
-Let's also check `Nile`, which is already available in base R.
+Let us also check `Nile`, which is already available in base R. It is a yearly series, so it has a frequency of 1.
+
 ```{r}
 Nile
 ```
 
-### Plotting Time Series Objects
-To plot `ts` object we can simply use `plot()` command or alternatively we can use `ggplot2` as well.
+We can take out a part of a time series with `window()`. For example, the Nile flow from 1950 onwards is
 
-```{r fig-tsex2, fig.cap="Example of time series plotting in R; Base R (Left) and ggplot2 (Right)", fig.align='center', fig.show='hold', fig.align='center', out.width="48%", warning=FALSE, message=FALSE}
+```{r}
+window(Nile, start = 1950)
+```
+
+### Plotting Time Series Objects
+
+To plot a `ts` object we can simply use `plot()`. Alternatively we can use `autoplot()`, which draws the series with `ggplot2`.
+
+```{r fig-tsex2, fig.cap="Example of time series plotting in R; Base R (Left) and ggplot2 (Right)", fig.align='center', fig.show='hold', out.width="48%", warning=FALSE, message=FALSE}
 # Plotting in base R
 plot(sales_ts, main = "Sales during FY 2022-23\nDummy Data by author")
 
-forecast::autoplot(AirPassengers) +
-  scale_y_log10('Logrithmic values') +
+autoplot(AirPassengers) +
+  scale_y_log10('Logarithmic values') +
   ggtitle('AirPassengers converted to additive') +
   theme_bw()
 ```
 
-*Note: Library `forecast` in R also provides us a function `autoplot()` which plots a time series object, similar to plot(), but the plot returned here is a `ggplot2` object which can be modified/fine-tuned using `ggplot2` functions.*
+*Note: `autoplot()` is a function of `ggplot2`. The library `forecast` teaches it how to draw time series and forecasts. The plot is a `ggplot2` object, so it can be fine-tuned with the usual `ggplot2` functions, as we did with `scale_y_log10()` above.*
 
 ## Time series modelling and forecasting
-As we have already discussed, forecasting future plays an important part of time series analysis; an important prerequisite is to model our data.  In fact, the forecasting/modelling techniques can be broadly classified into two categories, data based techniques and model-based techniques.
 
-### Data-based techniques {-}
-Data-based techniques, also known as statistical or empirical techniques, focus on analyzing the patterns and characteristics of the observed time series data directly. These techniques do not explicitly assume a specific underlying model structure. Instead, they rely on statistical properties and patterns present in the data. Examples of data-based techniques include:
+Forecasting the future is an important part of time series analysis. To forecast, we first need to *model* the data, that is, describe its pattern. Forecasting techniques can be broadly divided into two groups. *Data-based techniques*, like averaging, smoothing and decomposition, work directly on the observed values. *Model-based techniques*, like ARIMA, assume a particular statistical structure for the data and estimate its parameters. In practice the line between the two is not sharp. We will start with the simplest ones.
 
 ### Naive method
-This method assumes that the future value will be the same as the last observed value. This is the simplest and most basic forecasting method and hence named *naive*. The formula for the naive method is:
+
+This method assumes that the future value will be the same as the last observed value. It is the simplest and most basic forecasting method, and hence named *naive*. The formula is
 
 $$
 \text{Naive method: }\hat{Y}_{T+1} = Y_T
-$$
+$$ {#eq-ts-naive}
 
-Here, $\hat{Y}_{T+1}$ is the forecast value for the next time period and $Y_T$ is the last observed value i.e. for a series of $T$ observations.  Thus, predicting future values using naive method require no special skill. 
+Here, $\hat{Y}_{T+1}$ is the forecast for the next period and $Y_T$ is the last observed value, in a series of $T$ observations. So predicting with the naive method requires no special skill. Yet it is useful. Any better method should at least beat the naive forecast.
 
-**Problem Statement-1:** Let's predict say 5, future values of Nile flow data.  In `forecast` there is a function `naive` which will do the job, once we give the value of parameter `h` which is short for forecasting **h**orizon. In @fig-naive, we can see forecast values, in red, which are exactly same as previous/last value.
+**Problem Statement-1:** Let us forecast the Nile flow for 5 future years. In `forecast` there is a function `naive()` which does this, once we give the value of the parameter `h`, short for forecasting **h**orizon. In @fig-naive, the forecast values (the blue line) are exactly the same as the last observed value. The shaded bands show the range in which the actual values are likely to fall.
 
-```{r fig-naive, fig.show='hold', fig.align='center', fig.cap="Naive Forecasting using R", out.width="98%", fig.cap="Naive forecasting"}
+```{r fig-naive, fig.show='hold', fig.align='center', fig.cap="Naive forecasting", out.width="98%"}
 
-forecast::naive(Nile, h = 5) %>% 
+forecast::naive(Nile, h = 5) %>%
   autoplot() +
   theme_bw() +
   labs(title = "Nile flow - forecast by Naive method",
        x = "Year")
 
-
 ```
 
-If we aren't interested in visualising confidence values (by default 80% and 95% confidence values are shown in bands), we can tune parameter `level` accordingly.
+By default, 80% and 95% prediction intervals are shown as bands. We can choose other levels with the parameter `level`, for example `level = 90`. If we do not want the bands at all, we can use `autoplot(..., PI = FALSE)`.
+
+For seasonal data, there is a variant called the *seasonal naive* method, `snaive()`. It forecasts each month as the value of the same month last year. Auditors use this idea all the time, when they compare this March with last March.
 
 ### Moving averages
-In this technique, the forecast value is computed as the average of the most recent observations within a sliding window of fixed length, say $n$..  It is a technique to smooth out a time series by averaging neighboring values. It helps in reducing noise and revealing underlying trends. 
 
-The formula for the moving average method is:
+In this technique, the forecast is the average of the most recent $n$ observations. As new data comes in, the window of $n$ observations slides forward. A moving average smooths a time series by averaging neighbouring values. It reduces noise and reveals the underlying trend.
+
+The formula for forecasting with a moving average is
 
 $$
 \hat{Y}_{t+1} = \frac{1}{n}(Y_t + Y_{t-1} + ... + Y_{t-n+1})
-$$
+$$ {#eq-ts-ma}
 
-Here, $\hat{Y}_{t+1}$ is the forecast value for the next time period and $Y_t$, $Y_{t-1}$, ..., $Y_{t-n+1}$ are the past $n$ observations. 
+Here, $\hat{Y}_{t+1}$ is the forecast for the next period and $Y_t$, $Y_{t-1}$, ..., $Y_{t-n+1}$ are the past $n$ observations.
 
-Smoothing through moving average can either be **centre-weighted** or **tailed-weighted**.  In former, $k$ i.e. `order` of the moving average, should be an odd number because each data point is replaced with the mean of that observation and $(k-1)/2$ observations before and $(k-1)/2$ observations after it.  Smoothed time series `Nile` for different `k` can be seen in @fig-ma.
+A moving average can be *centred* or *trailing*.
 
-```{r fig-ma, echo=FALSE,fig.align='center', fig.cap="Simple Moving Averages", fig.align='center', fig.show='hold'}
-library(patchwork)
+- In a **centred** moving average of order $k$, each value is replaced by the mean of itself, the $(k-1)/2$ values before it and the $(k-1)/2$ values after it. So $k$ is naturally an odd number. For an even $k$, like 12 for monthly data, `ma()` from `forecast` takes care of centring automatically. Centred averages are used to *see* the trend in past data.
+- In a **trailing** moving average, each value is replaced by the mean of itself and the $k-1$ values *before* it. It uses only past data, so it is the one we use for *forecasting*. The function `rollmeanr()` from `zoo` calculates it.
+
+Smoothed versions of `AirPassengers` for different $k$ can be seen in @fig-ma. Notice that the trailing average lags behind the data, since it uses only the past.
+
+```{r fig-ma, echo=FALSE, fig.align='center', fig.cap="Simple Moving Averages", fig.show='hold', warning=FALSE}
 lims <- c(min(AirPassengers), max(AirPassengers))
 
 p1 <- autoplot(AirPassengers) +
   scale_y_continuous(limits = lims)+
-  labs(title = 'AirPassengers - original') +
+  labs(title = 'AirPassengers - original', x = NULL, y = 'Passengers') +
   theme_bw()
 
-p2 <- autoplot(ma(AirPassengers,7)) +
+p2 <- autoplot(ma(AirPassengers, 7)) +
   scale_y_continuous(limits = lims)+
-  labs(title = 'Moving average k=7') +
+  labs(title = 'Moving average k=7', x = NULL, y = 'Passengers') +
   theme_bw()
 
-p3 <- autoplot(ma(AirPassengers,15, centre = FALSE)) +
+p3 <- autoplot(rollmeanr(AirPassengers, 15, fill = NA)) +
   scale_y_continuous(limits = lims)+
-  labs(title = 'Moving average k=15, tailed') +
+  labs(title = 'Moving average k=15, trailing', x = NULL, y = 'Passengers') +
   theme_bw()
 
-p4 <- autoplot(ma(AirPassengers,15)) +
+p4 <- autoplot(ma(AirPassengers, 15)) +
   scale_y_continuous(limits = lims)+
-  labs(title = 'Moving average k=15') +
+  labs(title = 'Moving average k=15, centred', x = NULL, y = 'Passengers') +
   theme_bw()
 
 (p1 + p2)/(p4 + p3)
 ```
 
-**Problem Statement-2:** Let's try to visualise moving average trend in Nile data.  We will use `ma` function from `forecast` for this.  In left side Figure of @fig-ma1 we have a smoother (with k = 7) time series and 10 forecast  values using last value of moving average.  
+**Problem Statement-2:** Let us forecast the Nile flow using a moving average. We take a trailing moving average of the last 7 years with `rollmeanr()`. The forecast for every future year is then simply the last value of this moving average. Applying `naive()` to the moving average gives exactly that, as in the left side of @fig-ma1.
 
-We can also use `rollmean` function from `zoo` library, which is another package to analyse time series objects. Refer right-side figure in @fig-ma1.  In this example, we have used `wineind` data/time series which shows *Australian total wine sales by wine makers in bottles <= 1 litre. Jan 1980 – Aug 1994.*  One of the advantage using this method, is that we can see both original and smoothed time series. 
+In the right side of @fig-ma1, we have done the same with the `wineind` data, which shows *Australian total wine sales by wine makers in bottles <= 1 litre. Jan 1980 – Aug 1994.* This is monthly data with a strong seasonal pattern. So we have used a 12-month moving average. An average over exactly one full year contains every month once, so the seasonal ups and downs cancel out and only the trend remains. We have also drawn the original series in black, so we can see both the original and the smoothed series.
 
 ::: {#fig-ma1}
 
-```{r warning=FALSE, message=FALSE, echo=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
-# USING FORECAST
-ma_nile <- ma(Nile, order = 7, centre = FALSE)
-future_nile <- forecast(ma_nile, h = 10)
-plot(future_nile, main = "Forecasting\nNile Flow")
+```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
+# Nile flow, 7 year trailing moving average
+nile_ma <- rollmeanr(Nile, k = 7)
+naive(nile_ma, h = 10) |>
+  plot(ylim = range(Nile), col = "red",
+       main = "Forecasting\nNile Flow")
+lines(Nile)
 
-# Using zoo
-library(zoo)
-naive(zoo::rollmean(wineind, k = 9, align = "right")) |> 
-  plot(ylim=c(min(wineind), max(wineind)), 
-       xlim=c(1980, 1995),
-       col="red", 
+# Wine sales, 12 month trailing moving average
+naive(rollmeanr(wineind, k = 12), h = 12) |>
+  plot(ylim = range(wineind),
+       xlim = c(1980, 1996),
+       col = "red",
        main = "Forecasting\nAustralian Wine sales")
-
 lines(wineind)
 ```
 
 Simple Moving averages
 :::
 
-### Exponential smoothing 
-Exponential smoothing techniques update forecasts based on weighted averages of past observations, giving more weight to recent observations. Examples include simple exponential smoothing, Holt's method, and Holt-Winters' method.
+::: callout-warning
+## Caution
 
-As the name suggests simple exponential smoothing or SES is simplest of these.  **Simple exponential smoothing (SES)** is actually a moving weighted average where recent observations are given more weights while calculating averages.  *This method is suitable for forecasting data with no clear trend or seasonal pattern.* 
+A moving average forecast is flat. It cannot follow a trend or a seasonal pattern into the future. Look at the wine sales forecast in @fig-ma1. It gives the average month, not the peaks and dips we can clearly expect. For such data we need the methods discussed next.
+:::
+
+### Exponential smoothing
+
+Exponential smoothing methods forecast with weighted averages of past observations, giving more weight to recent observations. Examples are simple exponential smoothing, Holt's method and the Holt-Winters method.
+
+**Simple exponential smoothing (SES)** is the simplest of these. It is a weighted moving average in which the weights fall *exponentially* as the observations get older. *This method is suitable for data with no clear trend or seasonal pattern.*
 
 $$
 \hat{y}_{T+1} = \alpha{y_T} + \alpha(1- \alpha){y_{T-1}} + \alpha(1 - \alpha)^2{y_{T-2}} + ...
-$$
+$$ {#eq-ts-ses}
 
-The value of $\alpha$, the smoothing parameter, in above equation should follow $0 \le \alpha \le 1$.  Clearly different values of $\alpha$ will give different smoothing and we will have to adopt most suitable one, one such example with $\alpha = 0.1$ is shown in the @fig-ses1 (Left). 
+The smoothing parameter $\alpha$ lies between $0$ and $1$. A value close to 1 gives almost all the weight to the latest observation, so the forecast follows the data closely. A value close to 0 spreads the weight over many past observations, so the forecast is very smooth. An example with $\alpha = 0.1$ is shown in @fig-ses1 (Left).
 
-Holt extended SES by introducing trend component and thus a new smoothing parameter for trend $\beta$. The method is also named after him as **Holt's Linear Method** of exponential smoothing. Now there are are two equations, mathematically.
+Holt extended SES by adding a trend component, with its own smoothing parameter $\beta$. The method is named after him as **Holt's Linear Method**. Mathematically, there are now three equations.
 
 $$
 \begin{aligned}
@@ -262,11 +294,11 @@ $$
 l_t &= \alpha y_t + (1-\alpha)(l_{t-1} + b_{t-1}) \\
 b_t &= \beta(l_t - l_{t-1}) + (1-\beta)b_{t-1}
 \end{aligned}
-$$
+$$ {#eq-ts-holt}
 
-$\alpha$ and $\beta$ (again $0 \le \beta \le 1$) in above equations are smoothing parameters for level and trend components, respectively; and $h$ is forecast horizon. Also, $y_t$ is the actual value, $l_t$ is the level (or intercept), $b_t$ is the trend (or slope) of the time series at time $t$.  Refer @fig-ses1 (Right).
+Here $\alpha$ and $\beta$ (again $0 \le \beta \le 1$) are the smoothing parameters for level and trend respectively, and $h$ is the forecast horizon. Also, $y_t$ is the actual value, $l_t$ is the level (or intercept) and $b_t$ is the trend (or slope) of the series at time $t$. The first equation says that the forecast $h$ periods ahead is the latest level plus $h$ times the latest slope. Refer @fig-ses1 (Right).
 
-To apply *SES*, in R, we can use function `ses` and for applying *Holt's* smoothing, we can use `holt`; both from `forecast` library.  Example usages are as follows.
+To apply *SES* in R, we use the function `ses()`, and for *Holt's* method, `holt()`, both from `forecast`. If we do not give the values of $\alpha$ and $\beta$, R chooses the best values itself. Here we have fixed them, to see their effect.
 
 ::: {#fig-ses1}
 
@@ -293,24 +325,23 @@ autoplot(holtfit) +
 Simple Exponential Smoothing (Left) Vs. Holt's Linear Method (Right)
 :::
 
-As we have discussed earlier, damped trends work better many times.  So based on Mckenzie and gardner work, an additional dampening paramater $\phi$ was introduced.  The equations were modified as -
+As discussed earlier, damped trends often work better. Based on the work of Gardner and McKenzie, a damping parameter $\phi$ was added. The equations become
+
 $$
 \begin{aligned}
 \hat{y}_{t+h|t} &= l_t + (\phi + \phi^2 + ... + \phi^h)b_t \\
 l_t &= \alpha y_t + (1-\alpha)(l_{t-1} + \phi b_{t-1}) \\
 b_t &= \beta(l_t - l_{t-1}) + (1-\beta)\phi b_{t-1}
 \end{aligned}
-$$
+$$ {#eq-ts-damped}
 
-Clearly, if $\phi = 1$, the above equations are equivalent to Holt's Linear Method. $\phi$ for values $0 < \phi < 1$, dampens the trend, as shown in @fig-hl2 (Left). A comparison of both can be seen in the @fig-hl2 (Right).
+If $\phi = 1$, these are the same as Holt's Linear Method. A value $0 < \phi < 1$ damps the trend, so the forecast line gradually flattens, as shown in @fig-hl2 (Left). The two methods are compared in @fig-hl2 (Right).
 
-To extend holt's linear method with *damped trends* in R, we can set parameter `damped = TRUE` in `holt` function discussed above.  Example code can be seen below.
+To use *damped trends* in R, we set `damped = TRUE` in the `holt()` function. Example code is below.
 
 ::: {#fig-hl2}
 
 ```{r fig.align='center', fig.show='hold', out.width="49%"}
-library(ggplot2)
-
 holtfit <- holt(airmiles, h = 10, alpha = 0.3, beta = 0.1, damped = TRUE, phi = 0.8)
 autoplot(holtfit) +
   autolayer(holtfit$fitted) +
@@ -344,24 +375,23 @@ autoplot(airmiles)+
   theme(legend.position = "bottom")
 ```
 
-Linear methos Vs. Damped trends
+Linear method Vs. Damped trends
 :::
 
-Now to incorporate `seasonality` (with say $m$ periods) along with trend and level, Holt and Winters suggested to incorporate additional parameter $\gamma$ in above equations.  
+To include *seasonality* with $m$ periods in a year (12 for monthly data) along with trend and level, Holt and Winters added a seasonal component $s_t$ with its own smoothing parameter $\gamma$. The equations of the **Holt-Winters additive method** are
 
 $$
-\text{Holt-Winters method:}
-$$
-$$
 \begin{aligned}
-\hat{y}_{t+h|t} &= l_t + hb_t + s_{t+m-(m-1 \bmod m)} \\
+\hat{y}_{t+h|t} &= l_t + hb_t + s_{t+h-m(k+1)} \\
 l_t &= \alpha(y_t - s_{t-m}) + (1-\alpha)(l_{t-1} + b_{t-1}) \\
 b_t &= \beta(l_t - l_{t-1}) + (1-\beta)b_{t-1} \\
 s_t &= \gamma(y_t - l_{t-1} - b_{t-1}) + (1-\gamma)s_{t-m}
 \end{aligned}
-$$
+$$ {#eq-ts-hw}
 
-An example can be seen in @fig-hw1.  To apply *Holt-Winters* method in R, we can use `hw` function with desired values of parameters.  An example code may be as follows, where we have tried to extend `AirPassengers` time series with this method with both `additive` and `multiplicative` trends.
+where $k$ is the whole number part of $(h-1)/m$. The term $s_{t+h-m(k+1)}$ looks complicated, but it only means "the seasonal value of the same month in the latest year of data". So a forecast for next March uses the seasonal effect estimated for the latest March. In the *multiplicative* version, the seasonal effect multiplies the level and trend instead of being added.
+
+To apply the *Holt-Winters* method in R, we use the function `hw()`. In the code below, we forecast `AirPassengers` with both `additive` and `multiplicative` seasonality. See @fig-hw1.
 
 ::: {#fig-hw1}
 
@@ -371,99 +401,154 @@ hw2 <- hw(AirPassengers, seasonal = "multiplicative")
 
 
 autoplot(hw1) +
-  ggtitle("Additive Model")
+  ggtitle("Additive Model") +
+  theme_bw()
 
 autoplot(hw2) +
-  ggtitle("Multiplicative Method")
+  ggtitle("Multiplicative Method") +
+  theme_bw()
 ```
 
 Holt-Winter's Method of Forecasting
 :::
 
-### Seasonal decomposition methods {-}
+The multiplicative forecast (right) keeps the seasonal swings growing, as in the data. The additive one (left) keeps them at a fixed size. As we saw, the seasonality of `AirPassengers` is multiplicative, so the right one is more believable.
 
-Seasonal decomposition techniques decompose a time series into its different components, such as trend, seasonality, and noise. This allows for a better understanding of the individual components and their impact on the overall series.  There are several methods to decompose a time series into its different components.  We will however, discuss two of these.
+We do not always have to choose between SES, Holt and Holt-Winters ourselves. The function `ets()` (short for Error, Trend, Seasonal) tries all these methods, with and without damping, additive and multiplicative. It picks the best one automatically. We will use it in the audit example.
+
+### Seasonal decomposition methods {.unnumbered}
+
+Seasonal decomposition separates a time series into its components, like trend, seasonality and noise. This lets us study each component and its effect on the series separately. There are several methods. We will discuss two of them.
 
 ### Classical seasonal decomposition
-First of these methods is **classical decomposition method** which decomposes a time series into its trend, seasonal, and residual components. It assumes that the seasonal component repeats identically from year to year, and the trend component changes linearly over time. The steps involved in the classical decomposition method are as follows:
 
-- **Trend Component:** The trend component is estimated using a moving average or regression method.
-- **Seasonal Component:** The seasonal component is estimated by averaging the values across the same seasonal periods in different years.
-- **Residual Component:** The residual component is obtained by subtracting the trend and seasonal components from the original time series.
+The first is the **classical decomposition method**. It assumes that the seasonal pattern repeats *identically* every year. Its steps are
 
-**Problem Statement:** Let's try to decompose a time series say `AirPassengers` to see its components.  To decompose a time series in R, we will use function `decompose` as shown in the following code.  Decomposing time series in R gives us four different plots each for (i) Observed i.e. original values, (ii) trend, (iii) seasonality and (iv) random noise available. 
+- **Trend component.** The trend is estimated with a centred moving average over one full season, a 12-month average for monthly data. As we saw in the moving averages section, such an average cancels out the seasonal ups and downs.
+- **Seasonal component.** The trend is removed from the series. What is left is averaged for each month (or quarter) across all the years. This gives one seasonal value for each month.
+- **Residual component.** The trend and seasonal components are removed from the original series. What remains is the residual.
 
-Case-1: Additive decomposition
-
-```{r}
-decomposed_air_passengers <- decompose(AirPassengers)
-summary(decomposed_air_passengers)
-```
-
-Case-2: Multiplicative decomposition.  In this case we can use argument `type`.
+**Problem Statement:** Let us decompose `AirPassengers` to see its components. In R, we use the function `decompose()`. Since we know the seasonality of `AirPassengers` is multiplicative, we set `type = "multiplicative"` (the default is additive).
 
 ```{r}
-decomposed_air_passengers2 <- decompose(AirPassengers, type = "multiplicative")
-summary(decomposed_air_passengers2)
+decomposed_air_passengers <- decompose(AirPassengers, type = "multiplicative")
 ```
 
-A plot of decomposed `AirPassengers`, using classical approach is shown in @fig-stl1.
+The result is a list. Its element `figure` gives the seasonal value of each month. In a multiplicative decomposition, these are seasonal *indices*. An index of 1.10 means that the month is usually 10% above the trend.
 
-```{r fig-stl1, fig.cap="Seasonal Decomposition Techniques", fig.align='center', fig.show='hold'}
-AirPassengers |>
-  decompose() |>
+```{r}
+round(decomposed_air_passengers$figure, 3) |>
+  setNames(month.abb)
+```
+
+July and August are the peak months, about 22% above the trend, and November is the lowest, about 20% below it. Such seasonal indices are useful in audit as well. For example, we can measure how far March expenditure usually exceeds an average month.
+
+A plot of the decomposed `AirPassengers` is shown in @fig-stl1. It has four panels, (i) the observed, that is, original values, (ii) the trend, (iii) the seasonal pattern and (iv) the random noise.
+
+```{r fig-stl1, fig.cap="Classical decomposition of AirPassengers (multiplicative)", fig.align='center', fig.show='hold'}
+decomposed_air_passengers |>
   plot()
 ```
 
-### Seasonal and Trend decomposition using Loess^[Loess is a method for estimating nonlinear relationships]. 
+Notice that the trend is missing for the first six and last six months. A centred 12-month average needs six months on each side, which are not available at the ends of the series.
 
-STL (Seasonal and Trend decomposition using Loess) is a robust and flexible method for decomposing a time series into its trend, seasonal, and residual components. It uses local regression (Loess) to estimate the trend and seasonal components. The STL algorithm is as follows:
+### Seasonal and Trend decomposition using Loess^[Loess is a method for fitting a smooth curve through data, by fitting many small regressions on nearby points.]
 
-- Seasonal Component: The seasonal component is estimated using Loess, which fits a smooth curve to the seasonal patterns.
-- Trend Component: The trend component is estimated by removing the estimated seasonal component from the original time series.
-- Residual Component: The residual component is obtained by subtracting the estimated trend and seasonal components from the original time series.
+STL (Seasonal and Trend decomposition using Loess) is a robust and flexible method for decomposing a time series into trend, seasonal and residual components. Instead of simple averages, it uses Loess, a method of fitting smooth curves, to estimate both the trend and the seasonal component. It repeats the two steps a few times, each time improving both estimates. It has some advantages over classical decomposition.
 
-To decompose time series in R, using STL, we will use function `stl` as shown below.  A plot of STL decomposed `AirPassengers` is shown in @fig-stl2.
+- It gives a trend for the whole series, including the first and last months.
+- The seasonal pattern may be allowed to change slowly over the years.
+- It is *robust*, meaning a few unusual values do not spoil the estimates much.
 
-```{r fig-stl2, fig.cap="STL Decomposition", fig.align='center', fig.show='hold'}
-stl(AirPassengers, s.window = "periodic") %>% 
+STL works only with additive components. So for a multiplicative series like `AirPassengers`, we first take its logarithm. In R, we use the function `stl()`. Setting `s.window = "periodic"` tells it to keep the seasonal pattern the same every year. A plot of the STL decomposed `AirPassengers` is shown in @fig-stl2.
+
+```{r fig-stl2, fig.cap="STL Decomposition of log(AirPassengers)", fig.align='center', fig.show='hold'}
+stl(log(AirPassengers), s.window = "periodic") %>%
   plot()
 ```
 
-### Model-based techniques{-}
+### Model-based techniques {.unnumbered}
 
-Model-based techniques involve fitting a specific mathematical or statistical model to the observed time series data. These techniques assume a particular structure for the data and estimate model parameters based on that. Model-based techniques typically require more assumptions but can provide a more detailed understanding of the underlying dynamics. Examples of model-based techniques include:
+Model-based techniques fit a specific statistical model to the time series, and estimate its parameters from the data. They need more assumptions, but can give a more detailed understanding of the series. The most widely used are
 
-1. **Autoregressive Integrated Moving Average (ARIMA)**: ARIMA models capture the linear dependencies between lagged observations and differences of the time series. They are commonly used for modeling stationary time series.
+1. **Autoregressive Integrated Moving Average (ARIMA)** models. These explain each value from the previous values of the series (the *autoregressive* part, of order $p$) and from the previous forecast errors (the *moving average* part, of order $q$). Many series, like those with a trend, do not have a constant level. ARIMA handles them by working on the *differences* between consecutive values (the *integrated* part, of order $d$). An ARIMA model is written as ARIMA($p$,$d$,$q$).
+2. **Seasonal ARIMA (SARIMA)** models. These extend ARIMA to include seasonality, by also relating each value to the values of the same month in earlier years. They are written as ARIMA($p$,$d$,$q$)($P$,$D$,$Q$)$_m$, where the second set of orders is for the seasonal part, and $m$ is the number of periods in a season.
 
-2. **Seasonal ARIMA (SARIMA)**: SARIMA models extend the ARIMA framework to incorporate seasonality in the data. They are suitable for time series exhibiting both trend and seasonality.
+Choosing $p$, $d$, $q$ and their seasonal versions by hand needs experience. Fortunately, the function `auto.arima()` from `forecast` tries many combinations and picks the best one. The argument `lambda = 0` asks it to work on the logarithm of the series, as `AirPassengers` is multiplicative. The forecasts are converted back to the original scale automatically.
 
-In future version of the book, we will discuss these methods.
+```{r}
+air_arima <- auto.arima(AirPassengers, lambda = 0)
+air_arima
+```
+
+`auto.arima()` has chosen an ARIMA(0,1,1)(0,1,1)$_{12}$ model. This model works so well for such data that it is famously known as the *airline model*, after this very dataset. Its forecast is shown in @fig-arima.
+
+```{r fig-arima, fig.cap="Forecast of AirPassengers with a seasonal ARIMA model", fig.align='center'}
+forecast(air_arima, h = 24) |>
+  autoplot() +
+  theme_bw()
+```
+
+### Which method to choose?
+
+We have seen many methods. Which one forecasts best? The honest way to find out is to *test* them. We hide the last part of the data, forecast it with each method using only the earlier data, and compare the forecasts with what actually happened. The earlier part is called the *training* data, and the hidden part the *test* data.
+
+Let us keep 1949 to 1958 of `AirPassengers` for training, and the last two years, 1959 and 1960, for testing. The function `accuracy()` compares a forecast with the actual values. It gives the error measures we met in the regression chapter (@sec-regression), like RMSE, MAE and MAPE.
+
+```{r}
+train <- window(AirPassengers, end = c(1958, 12))
+test  <- window(AirPassengers, start = c(1959, 1))
+
+forecasts <- list(
+  "Naive"                 = naive(train, h = 24),
+  "Seasonal naive"        = snaive(train, h = 24),
+  "Holt-Winters (mult.)"  = hw(train, h = 24, seasonal = "multiplicative"),
+  "ETS (automatic)"       = forecast(ets(train), h = 24),
+  "ARIMA (automatic)"     = forecast(auto.arima(train, lambda = 0), h = 24)
+)
+
+sapply(forecasts, \(f) accuracy(f, test)["Test set", c("RMSE", "MAE", "MAPE")]) |>
+  t() |>
+  round(1)
+```
+
+```{r}
+#| include: false
+acc <- sapply(forecasts, \(f) accuracy(f, test)["Test set", "MAPE"])
+```
+
+The naive forecast is off by `r round(acc["Naive"], 1)`% on average. The seasonal naive forecast does better, at `r round(acc["Seasonal naive"], 1)`%. The multiplicative Holt-Winters method is the best here, at `r round(acc["Holt-Winters (mult.)"], 1)`%, closely followed by ARIMA at `r round(acc["ARIMA (automatic)"], 1)`%.
+
+::: callout-note
+## No method is always best
+
+The automatic choices of `ets()` and `auto.arima()` are made on the *training* data. They are good starting points, but they do not always win on the test data. Here `ets()` chose a damped trend, which turned out to be too cautious for these fast growing numbers. On another series, the order may change. So it is good practice to try a few methods and compare them on test data, as we did here.
+:::
 
 ## Plotting different elements of time series
-In R, we can use functions such as -
 
-- `ggseasonplot()`: to create a seasonal plot
-- `ggsubseriesplot()`: to create mini plots for each season and show seasonal means
-- `gglagplot()`: Plot the time series against lags of itself
-- `ggAcf()`: Plot the autocorrelation function (ACF)
+`forecast` has some more plots which help us see the elements of a time series.
 
-Example-1:
-```{r, fig.show='hold', fig.align='center', fig.cap="Seasonalilty"}
-theme_set(theme(axis.text.x = element_text(angle = 90, 
-                                           vjust = 0.5, 
-                                           hjust=1)))
-library(patchwork)
+- `ggseasonplot()` draws each year as a separate line against the months. It shows the seasonal pattern and how it changes over the years.
+- `ggsubseriesplot()` draws a mini plot for each month across the years, with the mean of that month as a horizontal line.
+- `gglagplot()` plots the series against *lagged* (earlier) values of itself.
+- `ggAcf()` plots the *autocorrelation function* (ACF), that is, the correlation of the series with its own lagged values.
+
+Example-1: The seasonal plot and sub-series plot of `AirPassengers` are in @fig-seasplots. Both show that July and August are the peak months every year. The seasonal plot also shows that each year is above the previous one, which is the trend.
+
+```{r fig-seasplots, fig.show='hold', fig.align='center', fig.cap="Seasonality through seasonal and sub-series plots", fig.height=8}
 g1 <- ggseasonplot(AirPassengers) +
   theme_bw()
 g2 <- ggsubseriesplot(AirPassengers) +
   ggtitle('Sub-Series Plot') +
-  theme_bw()
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
 (g1 / g2)
 ```
 
-Example-2: Lag Plot of `AirPassengers` may be seen at @fig-lagp.  In the figure notice that plot at lag=12 suggest that series has seasonality with 12 periods.
-```{r, fig-lagp, fig.show='hold', fig.align='center', fig.cap="Seasonalilty through Lagplots"}
+Example-2: The lag plots of `AirPassengers` can be seen in @fig-lagp. Each panel plots the series against itself a certain number of months earlier. Notice the panel for lag 12. The points lie very close to the diagonal line. So each month is very similar to the same month a year earlier, which tells us that the series has a seasonality of 12 periods.
+
+```{r fig-lagp, fig.show='hold', fig.align='center', fig.cap="Seasonality through lag plots"}
 gglagplot(AirPassengers) +
   ggtitle('Lag Plots') +
   theme_bw() +
@@ -473,5 +558,182 @@ gglagplot(AirPassengers) +
 
 ```
 
-------------------------------
+Example-3: The same information appears as numbers in the ACF plot of @fig-acf. Each bar is the correlation of the series with itself at that lag. The bars fall slowly, because of the trend, and peak again at lag 12 and 24, because of the seasonality. Bars crossing the blue dashed lines are significantly different from zero.
 
+```{r fig-acf, fig.show='hold', fig.align='center', fig.cap="Autocorrelation of AirPassengers", out.height="35%"}
+ggAcf(AirPassengers, lag.max = 36) +
+  ggtitle('Autocorrelation function') +
+  theme_bw()
+```
+
+## An audit example: is this year's revenue believable? {#sec-ts-audit}
+
+Let us now use forecasting the way an auditor would. Revenue collected by a government office usually follows a steady pattern of growth and seasonality. If we forecast this year's revenue from the past years, and the actual revenue falls well below the forecast, we have a lead. There may be leakage of revenue, like undervaluation, short levy, or receipts not accounted for.
+
+### Our sample data
+
+We create monthly stamp duty receipts of an imaginary sub-registrar office, in ₹ lakh, from April 2017 to March 2024. Receipts grow by about 8% every year. They dip in the monsoon months, rise in the festive months of October and November, and peak in March. We have built two events into the data.
+
+- In April and May 2020, receipts nearly stopped because of the COVID-19 lockdown. This is a genuine, known event.
+- From September 2023, receipts are about 22% lower than they should be. This is our planted case of leakage.
+
+As usual, new readers may skip the code which creates the data.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the stamp duty receipts"
+set.seed(2024)
+n <- 84  # April 2017 to March 2024
+
+# Seasonal pattern from April to March
+season <- c(0.95, 0.95, 0.85, 0.80, 0.85, 0.90, 1.10, 1.15, 1.00, 1.00, 1.05, 1.40)
+
+receipts <- 250 * 1.08^((0:(n - 1)) / 12) * rep(season, 7) * exp(rnorm(n, 0, 0.05))
+
+# Lockdown in April and May 2020
+receipts[37:38] <- receipts[37:38] * c(0.08, 0.35)
+
+# Planted case. Receipts about 22% lower from September 2023
+receipts[78:84] <- receipts[78:84] * 0.78
+
+stamp <- ts(round(receipts, 1), start = c(2017, 4), frequency = 12)
+```
+
+```{r}
+stamp
+```
+
+Let us plot the data in @fig-stamp. The lockdown dip in 2020 is obvious. The fall after September 2023 is harder to see by eye.
+
+```{r fig-stamp, fig.cap="Monthly stamp duty receipts of the sub-registrar office", fig.align='center', out.height="35%"}
+autoplot(stamp) +
+  labs(x = NULL, y = "Receipts (₹ lakh)") +
+  theme_bw()
+```
+
+### Forecasting the year under audit
+
+The year under audit is 2023-24. So we take the data up to March 2023 as training data, and keep 2023-24 aside to compare with the forecast.
+
+```{r}
+train_stamp  <- window(stamp, end = c(2023, 3))
+actual_stamp <- window(stamp, start = c(2023, 4))
+```
+
+We fit a model with `ets()` on the training data and forecast the 12 months of 2023-24, with a 95% prediction interval. Let us also write a small function to put the forecast and actual values side by side.
+
+```{r}
+compare_with_actual <- function(fc, actual) {
+  tibble(month    = as.yearmon(time(actual)),
+         actual   = as.numeric(actual),
+         forecast = as.numeric(fc$mean),
+         lower    = as.numeric(fc$lower),
+         upper    = as.numeric(fc$upper)) |>
+    mutate(gap   = actual - forecast,
+           below = actual < lower)
+}
+
+fc1 <- forecast(ets(train_stamp), h = 12, level = 95)
+compare_with_actual(fc1, actual_stamp)
+```
+
+```{r}
+#| include: false
+cmp1 <- compare_with_actual(fc1, actual_stamp)
+w1 <- mean(cmp1$upper - cmp1$lower)
+```
+
+Not a single month is below the lower limit. The intervals are very wide. On average, the range from the lower to the upper limit is about ₹`r round(w1)` lakh, almost as large as a month's receipts. With such wide limits, almost nothing can look unusual. Why?
+
+The reason is the lockdown. The model has seen receipts fall to nearly zero in April 2020, and so it believes that such falls can happen any time. A single extraordinary event in the past has made the model very unsure about the future.
+
+### Cleaning a known event
+
+The lockdown was a known, one-time event. It is not part of the normal behaviour of this office. So it is fair to replace those two months with values the series would normally have had. The function `tsclean()` from `forecast` finds such outliers and replaces them with values estimated from the rest of the series.
+
+```{r}
+train_clean <- tsclean(train_stamp)
+
+# Compare the original and cleaned values for March to June 2020
+cbind(original = train_stamp, cleaned = train_clean) |>
+  window(start = c(2020, 3), end = c(2020, 6))
+```
+
+Only April and May 2020 have changed. Now let us forecast again from the cleaned data.
+
+```{r}
+fc2 <- forecast(ets(train_clean), h = 12, level = 95)
+cmp2 <- compare_with_actual(fc2, actual_stamp)
+cmp2
+```
+
+```{r}
+#| include: false
+w2 <- mean(cmp2$upper - cmp2$lower)
+short <- cmp2 |> filter(below)
+```
+
+The intervals are now much narrower, about ₹`r round(w2)` lakh on average. And the picture is clear. From April to August 2023, the actual receipts are close to the forecast. From `r format(min(short$month))` onwards, *every* month is below the lower limit. Together, the receipts in these `r nrow(short)` months are ₹`r round(-sum(short$gap))` lakh, or about ₹`r round(-sum(short$gap) / 100, 1)` crore, less than forecast. @fig-stampfc shows this.
+
+```{r fig-stampfc, fig.cap="Forecast (blue, with 95% interval) and actual receipts (red) for 2023-24", fig.align='center'}
+autoplot(fc2) +
+  autolayer(actual_stamp, series = "Actual", linewidth = 0.8) +
+  scale_colour_manual(values = c(Actual = "red")) +
+  coord_cartesian(xlim = c(2021, 2024.25)) +
+  labs(x = NULL, y = "Receipts (₹ lakh)", title = NULL, colour = NULL) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+::: callout-tip
+## Audit tip
+
+A *sustained* shortfall, month after month from a clear starting point, is a much stronger lead than a single bad month. Find out what changed at that point. It could be a new officer, a change in the guideline values of property, a new software, or a change in the procedure of registration. Then examine the documents registered after that point, for example for undervaluation of property.
+:::
+
+::: callout-warning
+## Caution
+
+Clean only those past events which are known, genuine and one-time, like a lockdown, a strike or a system failure. Record what was cleaned and why. Never clean the period under audit itself. That would hide the very problem we are looking for.
+:::
+
+## A suggested workflow
+
+For any time series analysis in audit, we may follow these steps.
+
+1. **Create the time series.** Arrange the data by month or quarter, without gaps, and convert it with `ts()`, giving the correct `start` and `frequency`.
+2. **Plot it.** Look at the trend, the seasonality and any unusual events with `autoplot()`, `ggseasonplot()` and `ggsubseriesplot()`.
+3. **Decide additive or multiplicative.** If the seasonal swings grow with the level of the series, take the logarithm, or use multiplicative methods.
+4. **Decompose** the series with `decompose()` or `stl()`, to measure the seasonal pattern and see the trend clearly.
+5. **Clean known one-time events** in the past with `tsclean()`, and record what was cleaned.
+6. **Forecast** the period under audit from the earlier data, with `ets()`, `hw()` or `auto.arima()`. Where possible, compare methods on test data with `accuracy()`.
+7. **Compare the actual values with the forecast** and its prediction interval. Quantify the gap in rupees.
+8. **Verify with records.** Find out what changed, and examine the documents of the period.
+
+::: callout-important
+## Remember
+
+A forecast is the auditor's *expectation*, not the truth. A gap between the actual and the forecast is a *lead*, not a *finding*. There may be a genuine reason, like a change in tax rates, a court order or a slowdown in the market. Always find out the reason and examine the records before reporting.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `ts()` | base R (stats) | Creates a time series object |
+| `window()` | base R (stats) | Takes out a part of a time series between two times |
+| `plot()`, `autoplot()` | base R, ggplot2 with forecast | Plots a time series or a forecast |
+| `naive()`, `snaive()` | forecast | Naive and seasonal naive forecasts |
+| `ma()` | forecast | Centred moving average |
+| `rollmeanr()` | zoo | Trailing moving average |
+| `ses()`, `holt()`, `hw()` | forecast | Simple exponential smoothing, Holt's method and Holt-Winters method |
+| `ets()` | forecast | Chooses and fits the best exponential smoothing model automatically |
+| `auto.arima()` | forecast | Chooses and fits the best ARIMA model automatically |
+| `forecast()` | forecast | Forecasts from a fitted model, with prediction intervals |
+| `accuracy()` | forecast | Compares forecasts with actual values (RMSE, MAE, MAPE etc.) |
+| `decompose()`, `stl()` | base R (stats) | Classical and STL decomposition into trend, season and remainder |
+| `tsclean()` | forecast | Replaces outliers and missing values in a time series |
+| `ggseasonplot()`, `ggsubseriesplot()` | forecast | Seasonal and sub-series plots |
+| `gglagplot()`, `ggAcf()` | forecast | Lag plots and autocorrelation plot |
+
+: Functions used in this chapter {#tbl-tsfunctions}
