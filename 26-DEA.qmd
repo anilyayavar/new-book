@@ -370,6 +370,123 @@ DEA compares each unit with the *best reported* performance, and it has no way t
 DEA only knows the inputs and outputs we give it. A CHC in a remote hilly block may treat fewer patients because fewer people live near it, not because it is poorly run. Quality is also missing. Treating more patients is not better if the care is worse. Discuss the results with the department, and add such factors to the analysis where data is available.
 :::
 
+## Another audit example: excess diesel and staff in bus depots {#sec-dea-depots}
+
+In the health centres, the question was about *outputs*. Now let us take a case where the question is about *inputs*, and the answer is in rupees. Audits of State Road Transport Undertakings regularly examine the consumption of diesel and the deployment of staff in bus depots. Both are big items of cost. A depot that uses more diesel than others for the same kilometres may have poor maintenance, or pilferage. A depot with more staff than others for the same work is overstaffed.
+
+### Our sample data
+
+An imaginary State transport undertaking has 25 depots. For each depot we have two inputs for the year, the number of staff and the diesel consumed (in kilolitres), and one output, the effective kilometres operated (in lakh km). We have planted two problems.
+
+- `Depot-05` and `Depot-22` consumed 20% more diesel than they should have, as if fuel was being pilfered.
+- `Depot-02` had 30% more staff than it needed.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the depot data"
+set.seed(404)
+n <- 25
+depots <- tibble(depot   = sprintf("Depot-%02d", 1:n),
+                 km_lakh = round(runif(n, 45, 115), 1)) |>
+  mutate(staff   = round(km_lakh * 5.9 * runif(n, 0.94, 1.06)),        # about 5.9 staff per lakh km
+         fuel_kl = round(km_lakh * 100 / 4.8 * runif(n, 0.97, 1.05)))  # about 4.8 km per litre
+
+# Planted. Excess diesel in two depots
+depots$fuel_kl[c(5, 22)] <- round(depots$fuel_kl[c(5, 22)] * 1.20)
+
+# Planted. Excess staff in one depot
+depots$staff[2] <- round(depots$staff[2] * 1.30)
+
+# Inputs first, then the output
+depots <- depots |>
+  select(depot, staff, fuel_kl, km_lakh) |>
+  as.data.frame()
+```
+
+```{r}
+head(depots)
+```
+
+Here the outputs are given by the routes and schedules, and the question is how much of the inputs was really needed. So we use an **input oriented** model. All depots do the same kind of work, and more kilometres need proportionally more staff and diesel, so we assume **constant returns to scale**.
+
+```{r}
+depot_dea <- make_deadata(depots, inputs = 2:3, outputs = 4, dmus = 1)
+depot_model <- model_basic(depot_dea, orientation = "io", rts = "crs")
+```
+
+With two inputs and one output, we can actually *see* the frontier. Let us plot the staff and the diesel used by each depot *per lakh km*. A depot closer to the bottom left uses less of both for the same work. The efficient depots form the frontier, the blue line in @fig-depotfrontier. Every other depot is compared with the point where the line from the origin to it crosses the frontier.
+
+```{r fig-depotfrontier, fig.cap="Staff and diesel per lakh km. The blue line is the efficient frontier.", fig.align='center', out.width="85%"}
+depot_ratio <- depots |>
+  mutate(staff_per_km = staff / km_lakh,
+         fuel_per_km  = fuel_kl / km_lakh,
+         efficient    = efficiencies(depot_model) > 0.9999)
+
+front <- depot_ratio |> filter(efficient) |> arrange(staff_per_km)
+
+ggplot(depot_ratio, aes(staff_per_km, fuel_per_km)) +
+  # the frontier, extended vertically and horizontally from its ends
+  annotate("segment", x = min(front$staff_per_km), xend = min(front$staff_per_km),
+           y = max(front$fuel_per_km), yend = 26, colour = "steelblue", linewidth = 1) +
+  geom_line(data = front, colour = "steelblue", linewidth = 1) +
+  annotate("segment", x = max(front$staff_per_km), xend = 8,
+           y = min(front$fuel_per_km), yend = min(front$fuel_per_km),
+           colour = "steelblue", linewidth = 1) +
+  geom_point(aes(colour = depot %in% c("Depot-02", "Depot-05", "Depot-22")),
+             size = 2.5, show.legend = FALSE) +
+  geom_text(data = \(d) filter(d, efficient | depot %in% c("Depot-02", "Depot-05", "Depot-22")),
+            aes(label = depot), size = 3, vjust = -0.9) +
+  scale_colour_manual(values = c("grey40", "red")) +
+  labs(x = "Staff per lakh km", y = "Diesel (kl) per lakh km") +
+  theme_bw()
+```
+
+Now let us look at the efficiency scores, and the excess staff and diesel, which is the actual minus the target.
+
+```{r}
+#| warning: false
+depot_targets <- targets(depot_model)$target_input
+
+depot_excess <- tibble(depot          = depots$depot,
+                       efficiency     = round(efficiencies(depot_model), 3),
+                       excess_staff   = round(depots$staff - depot_targets[, "staff"]),
+                       excess_fuel_kl = round(depots$fuel_kl - depot_targets[, "fuel_kl"]))
+
+depot_excess |> arrange(desc(excess_fuel_kl)) |> head(5)
+```
+
+```{r}
+#| include: false
+ex_fuel <- depot_excess |> filter(depot %in% c("Depot-05", "Depot-22"))
+ex_staff <- depot_excess |> filter(depot == "Depot-02")
+```
+
+`Depot-22` and `Depot-05` have the lowest efficiency, and by far the largest excess diesel, `r sum(ex_fuel$excess_fuel_kl)` kilolitres between them. At ₹90 a litre, that is about ₹`r round(sum(ex_fuel$excess_fuel_kl) * 1000 * 90 / 1e7, 1)` crore in a year. Now let us sort the depots by excess staff.
+
+```{r}
+depot_excess |> arrange(desc(excess_staff)) |> head(5)
+```
+
+`Depot-02` has `r ex_staff$excess_staff` more staff than its target. Yet its efficiency score is `r ex_staff$efficiency`, which looks almost perfect! How is that possible? In @fig-depotfrontier, `Depot-02` uses very little diesel per km, so it lies close to the flat part of the frontier. Reducing *both* its inputs in the same proportion takes it to the frontier quickly, and gives a high score. But even there, it still has far more staff than the efficient depot next to it. This extra reduction in one input, beyond the proportional reduction, is the *slack*.
+
+```{r}
+round(slacks(depot_model)$slack_input[c("Depot-02", "Depot-05", "Depot-22"), ], 1)
+```
+
+Nearly all of `Depot-02`'s excess staff is slack. At an average cost of, say, ₹6 lakh per employee per year, its `r ex_staff$excess_staff` excess staff cost about ₹`r round(ex_staff$excess_staff * 6 / 100, 1)` crore a year.
+
+::: callout-tip
+## Audit tip
+
+Never judge a unit by its efficiency score alone. The score measures only the *proportional* reduction of all inputs. A unit can score close to 1 and still waste a lot of one particular input. Always look at the targets and slacks, input by input, and convert the excess into rupees.
+:::
+
+::: callout-warning
+## Caution
+
+The targets of almost every depot show *some* excess, because the frontier is made of the best depots, and normal variation puts everyone else a little behind them. Report only the large and clear gaps, as with `Depot-02`, `Depot-05` and `Depot-22` here. Confirm them with the records, like the fuel issue registers, log books, kilometre-per-litre statements and sanctioned staff strength, before calling them excess.
+:::
+
 ## A suggested workflow
 
 1. **Choose comparable units.** The DMUs must do the same kind of work, like CHCs of a district or branches of a bank.
