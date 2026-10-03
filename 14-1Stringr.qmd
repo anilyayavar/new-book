@@ -6,14 +6,16 @@ source("_common.R")
 
 # String manipulation in `stringr` {#sec-strng}
 
-In earlier sections we have covered essential tools for data mining which help us in reading data, data cleaning, reshaping data as per our requirements, deriving insights and getting inferences from.  However, analyzing text is a bit different as usually text data is unstructured. In data science projects, we often find data-sets with text in the form of strings. These strings often have important information, and we can get the most out of them by effectively working with and analyzing them. String manipulation techniques are essential for preparing data, creating features, text mining, and tasks in natural language processing (NLP).
+In earlier chapters we covered the essential tools for reading, cleaning and reshaping data, and for deriving insights from it. Text is a little different. It is usually unstructured, and the same thing can be written in many ways. Yet audit data is full of text. Names of vendors and beneficiaries, addresses, narrations of vouchers, remarks, descriptions of goods. Before we can match, count or analyse such data, we must clean and standardise it. String manipulation is the toolkit for this.
 
-In Chapter related to functions, we saw some functions from base R for string manipulation.  However, `stringr` which is a part of tidyverse has a plethora of functions designed to make working with strings as easy as possible.  We will learn a few of those in this chapter.
+In the chapter on functions, we saw some functions of base R for strings. The package `stringr`, part of `tidyverse`, has a consistent set of functions designed to make working with strings as easy as possible. All of them start with `str_`, take the string as their first argument, and work well with the pipe. We will learn the most useful of them in this chapter, and apply them to audit problems at the end.
 
-First of all, let's load it.  Readers may note that we will use a special function namely `str_view()` which is used to print the underlying representation of a string and to see how a pattern matches.  In actual code this code may rarely be used.
+First of all, let us load it. We will often use the function `str_view()`, which shows the underlying content of a string, and highlights the matches of a pattern between `<` and `>`. It is very useful while learning and checking, though rarely needed in final code.
 
 ```{r}
-library(stringr)
+#| message: false
+#| warning: false
+library(tidyverse)   # loads stringr, along with dplyr and others
 ```
 
 Let us also create a few example strings.
@@ -25,35 +27,45 @@ line3 <- "You've got to ask yourself one question: \"Do I feel lucky?\""
 
 ```
 
-## Printing strings the way we want.
-Let us try printing above strings
+## Printing strings the way we want
+
+Let us try printing the above strings.
+
 ```{r}
 ex_lines <- c(line1, line2, line3)
 print(ex_lines)
 ```
-Not pretty! In earlier chapter we learnt of the function `cat` which helps us printing the strings in a way we want i.e. avoiding escape characters and other unwanted things. So let's use that.
+
+Not pretty! `print()` shows the strings as R stores them, with the escape characters, like `\n` for a new line and `\"` for a quote. In an earlier chapter we learnt the function `cat()`, which prints the content itself. So let us use that.
+
 ```{r}
 cat(line1, line2, line3)
 ```
-Prettier!  Still there's a problem.  Actually, `cat()` accepts a `sep` argument by which the lines/strings will be separated.  So let's use that.
+
+Prettier! But there is still a problem. The strings run into each other. `cat()` has a `sep` argument, which is placed between the strings.
+
 ```{r}
 cat(line1, line2, line3, sep = "\n")
 ```
-Base R has another function `writeLines()` which has also been designed to print the _strings_ in the way we usually want, as against `cat()` which is general purpose and designed for concatenating _objects_ and printing them.
+
+Base R has another function, `writeLines()`, designed especially to print *strings* the way we usually want them. `cat()`, on the other hand, is a general purpose function for joining and printing any *objects*.
+
 ```{r}
 writeLines(ex_lines)
 # Let's also print some Unicode and special characters.
-writeLines("\u0928\u092e\u0938\u094d\u0924\u0947 
-         \u0926\u0941\u0928\u093f\u092f\u093e")
-writeLines("He owes me \U20b9 15 lakh.")
+writeLines("नमस्ते दुनिया")
+writeLines("He owes me ₹ 15 lakh.")
 ```
-In this reference, let's also discuss a bit about `str_view` from `stringr` which has been designed to view the strings and matching, as we will see in next sub-sections.
+
+In this context, let us also see `str_view()` from `stringr`, which we will use in the coming sections.
+
 ```{r}
 str_view(ex_lines)
 ```
 
 ## Unicode
-Unicode in R, precedes with`\U`.  Some examples of [emoticons](https://en.wikipedia.org/wiki/Emoticons_(Unicode_block)).
+
+Every character, in every script, has a number in the **Unicode** standard. In R, we can write a character by its number. `\u` is followed by up to four hexadecimal digits, as for the Devanagari letters and the rupee sign `₹` above. `\U` is followed by up to eight, which is needed for characters with bigger numbers, like these [emoticons](https://en.wikipedia.org/wiki/Emoticons_(Unicode_block)).
 
 ```{r}
 writeLines("\U1f600")
@@ -61,14 +73,17 @@ writeLines("\U1f634")
 ```
 
 ## Cleaning whitespaces
-We may often encounter text strings with extra whitespaces on either end of the strings which may make comparision of two strings difficult.  Example
+
+We often meet strings with extra spaces at either end. They are invisible, but they make two strings unequal. Example
+
 ```{r}
 "anil goyal" == "anil goyal "
 ```
-We may also encounter extra whitespaces in between two different words which ideally be separated with a single white-space.  To deal with such situations and to remove all such extra white-spaces programatically, `stringr` provides us two functions -
 
-- `str_trim(string, side = c("both", "left", "right"))` to remove whitespaces from both or start or end of the string respectively (using `side` argument having `both` as default).
-- `str_squish(string)` to remove all internal whitespaces with a single white-space.
+We may also meet extra spaces between words, which should be separated by a single space. `stringr` provides two functions for this.
+
+- `str_trim(string, side = c("both", "left", "right"))` removes spaces from both ends, or only the start or end, of the string. `both` is the default.
+- `str_squish(string)` removes the spaces at both ends *and* replaces every run of spaces inside the string with a single space.
 
 Examples-
 ```{r}
@@ -76,12 +91,14 @@ str_squish("anil     goyal ")
 str_trim("anil    goyal  ")
 ```
 
+`str_trim()` has left the inner spaces as they were. For cleaning names and addresses before matching, `str_squish()` is nearly always the one we want.
 
 ## String concatenation with `str_c()`
-We have already seen two functions `paste` and `paste0` from base R in earlier chapter.  However `stringr` package has a function `str_c` (`c` is short for concatenation) for similar purposes.  But there a couple of differences. 
 
-1. The default `sep` is `""` here as opposed to `" "` in `paste()` and absence of `sep` argument in `paste0()` altogether.
-2. Function `paste()` turns missing values into the string `“NA”`, whereas `str_c()` propagates missing values. That means combining any strings with a missing value will result in another missing value.
+We have already seen two functions, `paste()` and `paste0()`, from base R. `stringr` has the function `str_c()` (`c` is short for concatenation) for the same purpose. But there are a couple of differences.
+
+1. The default `sep` is `""`, as in `paste0()`, as opposed to `" "` in `paste()`.
+2. `paste()` turns missing values into the string `"NA"`, whereas `str_c()` *propagates* missing values. Combining any string with a missing value gives a missing value.
 
 ```{r}
 company <- c("Microsoft", "Salesforce", NA)
@@ -89,18 +106,26 @@ product <- c("Excel", "Tableau", "R")
 paste(company, product)
 str_c(company, product, sep = " ")
 ```
-This also ensures returning same length output as of given vectors making it especially useful while working in `dplyr::mutate`.  However, if we want to flatten the given vector of strings using some separator, we use `collapse` argument of `paste` or `paste0`.  Stringr has a function `str_flatten()` designed specifically for this purpose, making it useful while working with `dplyr::summarise`.  Not only that, it has an extra argument `last` which is extremely useful in flattening last piece of the vector.
+
+The second behaviour is safer. A vendor code like `"NA-Excel"` can easily pass unnoticed through later steps, while an `NA` will be noticed.
+
+`str_c()` returns a vector of the same length as its inputs, which makes it useful inside `mutate()`. To *flatten* a vector of strings into one string, we use the `collapse` argument of `paste()`, or better, `str_flatten()` from `stringr`. This is useful inside `summarise()`. It also has an argument `last`, for the separator before the last piece.
+
 ```{r}
 fruits <- c("apple", "banana", "pineapple")
 
 str_flatten(fruits, collapse = ", ")
 str_flatten(fruits, collapse = ", ", last = " and ")
 ```
-There is a special variant `str_flatten_comma()` wherein "comma" is default `collapse` argument.  So we have type a bit lesser in that case.
+
+There is a special variant `str_flatten_comma()`, where a comma is the default `collapse` argument, so we have to type a little less.
+
 ```{r}
 str_flatten_comma(fruits)
 ```
-In this context, we may also discuss one more function `str_glue` which provides us a powerful and elegant syntax for interpolating strings with `{}`.  See the following example.
+
+In this context, let us also see `str_glue()`, which gives an elegant way to insert values into a string, by writing their names inside `{}`.
+
 ```{r}
 # Note that output will be of same length as given variable/string vector.
 str_glue("I like {fruits}")
@@ -109,14 +134,18 @@ my_fruits <- str_flatten_comma(fruits, last = " and ")
 str_glue("I like {my_fruits} in fruits.")
 ```
 
+`str_glue()` is very handy for writing standard sentences in audit reports, from the results of an analysis, like `str_glue("{n_cases} payments worth Rs {amount} lakh were made twice.")`.
 
 ## String length with `str_length()`
-For counting number of characters in a string we use `nchar()` from base R.  However, `str_length()` is designed for similar purpose.
+
+To count the number of characters in a string, base R has `nchar()`. `str_length()` does the same.
 
 ```{r}
 str_length(ex_lines)
 ```
-However, it has been designed to handle factors in a better sense than `nchar()`.
+
+But it handles factors better than `nchar()`.
+
 ```{r}
 # nchar(unique(iris$Species))
 # Returns an error
@@ -124,34 +153,53 @@ However, it has been designed to handle factors in a better sense than `nchar()`
 # This will work
 str_length(unique(iris$Species))
 ```
+
+String length is a quick validity check in audit. A PAN must have 10 characters, an IFSC 11, and a mobile number 10 digits.
+
 ## String extraction with `str_sub()`
-Function `str_sub()` extracts parts of strings based on their location.  It takes three arguments, first argument, string, is a vector of strings.  Other arguments `start` and `end` specify the boundaries of the piece to extract in characters.
+
+`str_sub()` extracts parts of strings by position. Its first argument is a vector of strings. The other arguments, `start` and `end`, give the positions of the first and last characters of the piece to extract.
 
 ```{r}
 # Extracting first two characters
 str_sub(fruits, 1, 2)
 ```
-If you are wondering that this works similarly than `substr` then it is worthwhile to mention here that unlike `substr` from base R, it can accept negative position integers wherein the counting will be done backwards.
+
+It works like `substr()` of base R. But unlike `substr()`, it accepts *negative* positions, which count backwards from the end of the string.
+
 ```{r}
 ## Note the difference
 substr(fruits, -2, -1)
 str_sub(fruits, -2, -1)
 ```
-Not only that it won't fail if string falls short for the given positions.
+
+And it does not fail if a string is shorter than the positions given.
+
 ```{r}
 str_sub(fruits, 5, 6)
 str_sub(fruits, -6, -5)
 ```
+
+Fixed positions carry meaning in many Indian codes. The first two characters of a GSTIN are the State code, the first four of an IFSC are the bank, and the last four digits of an account number are often all that may be shown. `str_sub()` takes them out.
+
+```{r}
+str_sub("27AAPFU0939F1ZV", 1, 2)    # State code of a GSTIN
+str_sub("SBIN0001234", 1, 4)        # Bank code of an IFSC
+```
+
 ## String matching based on regex with `str_detect()`, `str_subset()` and `str_count()`
-Let's search `"apple"` in all three `fruits` strings.
+
+Let us search for `"apple"` in all three `fruits` strings.
+
 ```{r}
 str_view(fruits, "apple", match = NA)
 ```
-There are three functions in `stringr` to do the job.
 
-1. `str_detect()` works like `grepl` and returns a logical vector.
-2. `str_subset()` works like `grep` with `value = TRUE` argument.
-3. `str_count()` will return the count of matches in each of the element of given string.
+There are three functions in `stringr` for this job.
+
+1. `str_detect()` works like `grepl()`, and returns a logical vector.
+2. `str_subset()` works like `grep()` with `value = TRUE`, and returns the matching strings.
+3. `str_count()` returns the number of matches in each string.
 
 ```{r}
 str_detect(fruits, "apple")
@@ -161,15 +209,27 @@ str_count(fruits, "apple")
 # Let's count character "a" in each of `fruits`
 str_count(fruits, "a")
 ```
+
+Two convenient relatives are `str_starts()` and `str_ends()`, which check only the beginning or the end of the strings.
+
+```{r}
+str_starts(fruits, "pine")
+str_ends(fruits, "apple")
+```
+
+The patterns used in these functions are *regular expressions*, which we will learn in detail in the next chapter (@sec-regex).
+
 ## Changing case in stringr
-There are four functions in `stringr` to make our life easier while changing case of the given strings.
+
+There are four functions in `stringr` to change the case of strings.
 
 1. `str_to_lower()` converts the string to lower case.
 2. `str_to_upper()` converts the string to UPPER CASE.
-3. `str_to_title()` make the given string in Title Case, wherein first alphabet of all characters is in upper case.
-4. `str_to_sentence()` convert to sentence case, where only the first letter of sentence is capitalized.
+3. `str_to_title()` converts the string to Title Case, where the first letter of every *word* is in upper case.
+4. `str_to_sentence()` converts to sentence case, where only the first letter of the string is capitalised.
 
 Examples.
+
 ```{r}
 # lower case
 str_view(str_to_lower(ex_lines))
@@ -181,11 +241,15 @@ str_view(str_to_title(ex_lines))
 str_view(str_to_sentence(ex_lines))
 ```
 
-## Controlling matching behaviour with modifier functions in stringr
-Usually ans specifically while working with English language text, we may require two type of modifier functions in detecting/extracting matches.
+Notice that `str_to_sentence()` turns every other letter into lower case, even the *I* in "Do I feel lucky?". Title and sentence case are fine for display, but for *matching*, always convert both sides to the same case, usually upper or lower.
 
-1. One is `fixed()`, which compares literal bytes.  But this has an extra argument `ignore_case` which can be used to ignore/not ignore the cases while matching/extracting pattern from string vectors.
-2. Second is `regex` which has several other arguments apart from `ignore_case`.
+## Controlling matching behaviour with modifier functions in stringr
+
+By default, the pattern in a `stringr` function is a regular expression. We can change how the pattern is treated by wrapping it in a *modifier* function.
+
+1. `fixed()` treats the pattern as plain text, character by character. Special characters like `.` lose their special meaning. It is also faster. It has an argument `ignore_case`.
+2. `regex()` is the default. Wrapping a pattern in it lets us set options, like `ignore_case`, which we will use in the next chapter.
+3. `coll()` compares text using the rules of a human language. It matters for scripts and accented letters, where the same letter can be stored in more than one way.
 
 See these examples.
 
@@ -198,7 +262,9 @@ str_view(ex_str, regex("\\b.{2}\\b"))
 
 ```
 
-3. There is one more control function `boundary()` which matches boundary between strings.  It has an argument `type` which accepts one of the values `c("character", "line_break", "sentence", "word")`.
+`fixed(".")` matched only the full stop. As a regex, `.` means "any character", so it matched every character. The last pattern matched two-letter words.
+
+4. One more modifier, `boundary()`, matches the boundaries between characters, lines, sentences or words. Its argument `type` takes one of `"character"`, `"line_break"`, `"sentence"` or `"word"`.
 
 ```{r}
 str_view(ex_str, boundary("word"))
@@ -206,7 +272,9 @@ str_view(ex_lines, boundary("sentence"))
 ```
 
 ## Extracting text from strings
-In above parts, we learnt about the function `str_subset()` which returns the strings where the matching text/pattern is found.  But what about the cases where we want those specific matching text/patterns to be returned.  For such cases, stringr has `str_extract` and `str_extract_all()` in its powerhouse.  It will be clear from the following example, wherein we will extract PAN numbers from the given text string(s).
+
+We learnt above that `str_subset()` returns the strings in which the pattern is found. But often we want the *matching text itself*. For this, `stringr` has `str_extract()` and `str_extract_all()`. Let us extract PAN numbers from some text.
+
 ```{r}
 ex_text <- c("My PAN number is TEMPZ9999Z.",
              "He has mentioned TEMP9999Z as his PAN number, incorrectly.",
@@ -218,66 +286,80 @@ str_subset(ex_text, pattern = regex(pan))
 # str_extract will however, extract those.
 str_extract(ex_text, pattern = regex(pan))
 ```
-This function will return first of the match if found.  Its variant `str_extract_all()` will return all the matches, as expected, in a list.
+
+The second string has a PAN with only four letters at the start, so nothing was extracted. `str_extract()` returns the *first* match in each string. Its variant `str_extract_all()` returns all the matches, in a list.
 
 ```{r}
 text_2 <- str_flatten(ex_text, collapse = "\n")
 str_extract(text_2, regex(pan))
 str_extract_all(text_2, regex(pan))
 ```
-This latter function has an additional argument to simplify the output in form of a matrix, if `TRUE`.
+
+`str_extract_all()` has an argument `simplify`. If `TRUE`, the output is a matrix instead of a list.
+
 ```{r}
 str_extract_all(text_2, regex(pan), simplify = TRUE)
 ```
-So, if we have to find out how many PAN numbers are stored in `text_2` above.
+
+And to find how many PAN numbers are there in `text_2`,
+
 ```{r}
 str_count(text_2, regex(pan))
 ```
 
-
 ## Splitting strings
-In its kitty, stringr has another powerful function `str_split()` which is used to split strings into meaningful fragments using a `pattern`.  The output format, as expected would be a list. 
+
+`str_split()` splits strings into pieces, at a `pattern`. Since each string may give a different number of pieces, the output is a list.
 
 Example-
 ```{r}
 str_split(ex_text, boundary("word"))
 ```
-It has an argument `n` which is used to specify the maximum pieces to return. Default is `Inf`.  Extra results will however be flattened.
+
+It has an argument `n`, the maximum number of pieces to return. The default is `Inf`. The last piece then holds the rest of the string, unsplit.
+
 ```{r}
-# Extract first two words from each string.
+# Split each string into at most two pieces
 str_split(ex_text, boundary("word"), n = 2)
 ```
-This function has three more variants. First is `str_split_fixed()` which splits each string in a character vector into a fixed number of pieces, returning a character matrix.  Example -
+
+`str_split()` has three useful variants. `str_split_fixed()` splits each string into a fixed number of pieces, and returns a character matrix. Here `n` is required.
+
 ```{r}
-# Here value of `n` is required
 str_split_fixed(ex_text, boundary("word"), n = 3)
 ```
-Another variant is `str_split_1()` which takes a single string and splits it into pieces, returning a single character vector.
+
+`str_split_1()` takes a single string, and returns its pieces as a simple character vector.
+
 ```{r}
 # Note that vector with one element should be passed.
 str_split_1(ex_text[1], boundary("word"))
 ```
-Last one is `str_split_i()` which splits each string in a character vector into pieces and extracts the `i`th value, returning a character vector.
+
+`str_split_i()` splits each string and returns only the `i`th piece of each. This is very handy for fields separated by a fixed character, as we will see in the audit use cases.
+
 ```{r}
 str_split_i(ex_text, boundary("word"), i = 1)
 ```
 
 ## Replacing values with `str_replace()`, `str_replace_all()`
-So the matched text strings/values if required to be replaced with some other values, we can use `str_replace()` and/or `str_replace_all()`.
 
-As expected these functions require additional argument `replacement`.
+To replace the matched text with something else, we use `str_replace()`, which replaces the first match, or `str_replace_all()`, which replaces all matches. They need one more argument, `replacement`.
+
 ```{r}
 # Example Task: mask all PAN numbers from `text_2`
 # Let's view the string
 str_view(text_2)
 # Replace first match only
-str_replace(text_2, regex(pan), replacement = "XXXXX0000X") %>% 
+str_replace(text_2, regex(pan), replacement = "XXXXX0000X") |>
   str_view()
 # Replace all matches
-str_replace_all(text_2, regex(pan), replacement = "XXXXX0000X") %>% 
+str_replace_all(text_2, regex(pan), replacement = "XXXXX0000X") |>
   str_view()
 ```
-For `replacement` of multiple matches, vectors of same length in both `pattern` and `replacement` can be provided.  This may be understood from the following example.
+
+To make several replacements at once, we can give vectors of the same length for `pattern` and `replacement`. Let us see an example.
+
 ```{r}
 # Create a new string vector
 fruits <- c("one apple",
@@ -292,25 +374,29 @@ str_replace_all(
   replacement = c("1", "2", "3")
 )
 ```
-Alternatively, a named vector `(c(pattern1 = replacement1, ...))`, may be supplied to `pattern` argument, in order to perform multiple replacements in each element of string more effectively.
+
+Here the first pattern is applied to the first string, the second to the second, and so on. To apply *all* the replacements to *every* string, we give a named vector `c(pattern1 = replacement1, ...)` as the `pattern`.
+
 ```{r}
 str_replace_all(
   fruits,
   pattern = c(one = "1", two = "2", three = "3")
 )
 ```
-Note: In a named vector, names need not be quoted.
 
-Back-references: References of the form `⁠\`1⁠`, `⁠\2⁠, etc will be replaced with the contents of the respective matched group (created by `⁠(`..) 
+Note: In a named vector, the names need not be quoted, unless they contain spaces or special characters. This is the most convenient way to apply a list of standard replacements, as we will do while cleaning vendor names.
+
+**Back-references.** In `replacement`, `\\1`, `\\2` and so on stand for the text matched by the first, second, and later groups in parentheses in the pattern. We will learn groups in @sec-regex.
+
 ```{r}
 # If any consonant is repeated, make it single
-str_replace_all(fruits, 
+str_replace_all(fruits,
                 pattern = regex("([^aeiou])\\1", ignore_case = TRUE),
                 replacement = "\\1")
 ```
-In `replacement` argument of these functions, we may also supply a function, which will be called once for each match (from right to left) and its return value will be used to replace the match.
 
-Another example.
+We may also give a *function* as the `replacement`. It is called for each match, and its result replaces the match.
+
 ```{r}
 # Change case of all PAN numbers which are in lower case.
 text_3 <- str_to_lower(text_2)
@@ -318,103 +404,144 @@ text_3 <- str_to_lower(text_2)
 str_view(text_3)
 
 # Change case of all lower case PAN numbers
-str_replace_all(text_3, 
-                pattern = regex(pan, ignore_case = TRUE), 
-                replacement = str_to_upper) %>% 
+str_replace_all(text_3,
+                pattern = regex(pan, ignore_case = TRUE),
+                replacement = str_to_upper) |>
   str_view()
 ```
+
+Only the PAN numbers have been changed to upper case. The rest of the text is still in lower case.
+
 ## Removing text/pattern using `str_remove` and `str_remove_all`
-Removing text or pattern from the strings is similar to replacing matches with empty text `""`.  See example where we are removing numbers(digits) from a valid PAN number, if any, in the given text.
+
+Removing a pattern is the same as replacing it with the empty text `""`. In the example below, we remove the four digits from the middle of each valid PAN in the text. The pattern uses *look-arounds*, which we will learn in @sec-regex. It matches four digits only if they come after five letters and before one letter.
+
 ```{r}
 str_remove_all(ex_text,
-               pattern = regex("(?<=[A-Z]{5})(\\d{4})(?=[A-Z])", ignore_case = TRUE)) %>% 
+               pattern = regex("(?<=[A-Z]{5})(\\d{4})(?=[A-Z])", ignore_case = TRUE)) |>
   str_view()
 ```
 
 ## Formatting numbers with `format` and `formatC`
-Sometimes numbers may be required to format in special types like preceding with currency symbol, thousand separator or scientific format to fixed format (or vice versa).  In such case `format` function from base R comes handy. The `scientific` argument to `format()` controls whether the numbers are displayed in *fixed* (`scientific = FALSE`) or *scientific* (`scientific = TRUE`) format.  When the representation is `scientific`, the `digits` argument is the number of digits before the exponent.  Whereas, when the representation is `fixed`, `digits` controls the significant digits used for the smallest (in magnitude) number.
 
-Each other number will be formatted to match the number of decimal places in the smallest number. This means the number of decimal places we get in our output depends on all the values we are formatting.
+Numbers often have to be shown in a particular way, with a currency symbol, thousand separators, or in fixed rather than scientific notation. The base R function `format()` does this. Its argument `scientific` controls whether the numbers are shown in *fixed* (`scientific = FALSE`) or *scientific* (`scientific = TRUE`) notation. The argument `digits` sets the minimum number of *significant* digits.
+
+Each number is then formatted with the same number of decimal places, enough to show the significant digits of the smallest number. So the number of decimal places we get depends on all the values being formatted.
+
 ```{r}
 # Some example numbers
 numbers <- c(0.00123, 123, 1.2356)
-# Scientific (default)
-format(numbers, digits = 1) %>% 
+# Default
+format(numbers, digits = 1) |>
   writeLines()
 # Fixed format
-format(numbers, digits = 1, scientific = FALSE) %>% 
+format(numbers, digits = 1, scientific = FALSE) |>
   writeLines()
 ```
-Explanation above:  In above the smallest number is `0.00123` which is controlling the number of decimals in all other numbers.  Significant digit in this number is `1` which require three decimal places.
 
-We may also note in the above output that it is nicely aligned with decimal.  To stop this behavior we may set `trim = TRUE` in above.
+In the output above, the smallest number is `0.00123`. To show it with one significant digit, three decimal places are needed. So all the numbers get three decimal places.
+
+Notice also that the output is aligned at the decimal point, by adding spaces at the start. To stop this, we set `trim = TRUE`.
+
 ```{r}
-format(numbers, 
-       digits = 1, 
+format(numbers,
+       digits = 1,
        scientific = FALSE,
-       trim = TRUE) %>% 
+       trim = TRUE) |>
   writeLines()
 ```
-The function `formatC()` provides an alternative way to format numbers based on `C` style syntax.
 
-Rather than a `scientific` argument, `formatC()` has a `format` argument that takes a code representing the required format. The most useful are:
+The function `formatC()` gives another way to format numbers, using the style of the `C` language. Instead of `scientific`, it has an argument `format`, which takes a code. The most useful are
 
-- `"f"` for fixed format. In this case, `digits` is the number of digits after the decimal point. This is more predictable than `format()`, because the number of places after the decimal is fixed regardless of the values being formatted.
-- `"e"` for scientific.  Here, `digits` argument behaves like it does in `format()`; it specifies the number of significant digits.
-- `"g"` for fixed unless scientific saves space.
+- `"f"` for fixed format. Here, `digits` is the number of digits *after the decimal point*. This is more predictable than `format()`, because the number of decimal places does not depend on the other values.
+- `"e"` for scientific notation. Here, `digits` is the number of digits after the decimal point of the mantissa.
+- `"g"` for fixed, unless scientific saves space. Here, `digits` is the number of significant digits.
 
-Function `formatC()` also formats numbers individually, which means you always get the same output regardless of other numbers in the vector.
+`formatC()` also formats each number on its own, so we always get the same output for a number, whatever the other numbers in the vector.
 
 ```{r}
 formatC(numbers,
         format = "f",
-        digits = 2) %>% 
+        digits = 2) |>
   writeLines()
 ```
 
 ```{r}
 formatC(numbers,
         format = "g",
-        digits = 2) %>% 
+        digits = 2) |>
   writeLines()
 ```
-Lastly there is one more package `scales` which also does pretty job of formatting numbers.
 
-1. `scales::percent()`:  It forces decimal display of numbers (i.e. don't use scientific notation)
-2. `scales::comma()` : It inserts a comma every three digit.
-3. `scales::dollar` : Used to format numbers with currency symbol.
+Lastly, the package `scales` has handy functions for formatting numbers, especially in charts.
+
+1. `scales::percent()` multiplies a proportion by 100 and adds a `%` sign. The `accuracy` argument sets the rounding.
+2. `scales::comma()` inserts a comma every three digits.
+3. `scales::dollar()` adds a currency symbol, which need not be the dollar.
+
 ```{r}
+#| message: false
 library(scales)
 # In per cent up to two digits after decimal
-percent(c(0.001, 0.1234, 0.002), accuracy = 0.01) %>% 
+percent(c(0.001, 0.1234, 0.002), accuracy = 0.01) |>
   writeLines()
 ```
+
 ```{r}
 # With thousand separator
-comma(numbers*1000) %>% 
+comma(numbers*1000) |>
   writeLines()
 ```
 
 ```{r}
 # With rupee symbol
 set.seed(123)
-runif(3, 1000, 90000) %>% 
-  dollar(prefix = "\U20b9") %>% 
+runif(3, 1000, 90000) |>
+  dollar(prefix = "₹") |>
   writeLines()
 ```
 
+### Indian style of numbers
+
+All the above functions put a comma every three digits, as in 1,234,567. In India, we write the same number as 12,34,567. After the last three digits, the commas come every *two* digits. None of the common functions does this, but a short regular expression does. We will understand the pattern fully after @sec-regex. For now, it is enough to know that it puts a comma after any digit which is followed by some pairs of digits and then the last three digits.
+
+```{r}
+format_inr <- function(x, digits = 0) {
+  s <- formatC(abs(x), format = "f", digits = digits)
+  whole   <- str_extract(s, "^\\d+")
+  decimal <- str_extract(s, "\\.\\d+$")
+  # comma after a digit followed by pairs of digits and then the last three digits
+  whole <- str_replace_all(whole, "(\\d)(?=(\\d{2})+\\d{3}$)", "\\1,")
+  # comma before the last three digits
+  whole <- str_replace(whole, "(\\d)(?=\\d{3}$)", "\\1,")
+  str_c(if_else(x < 0, "-", ""), whole, coalesce(decimal, ""))
+}
+
+format_inr(c(999, 12345, 1234567, 123456789, -5432100.5), digits = 0)
+```
+
+In audit reports, large amounts are usually shown in lakh or crore. That only needs a division.
+
+```{r}
+amounts <- c(4567890, 123456789, 98765)
+str_glue("Rs {format_inr(amounts / 1e5, digits = 2)} lakh")
+str_glue("Rs {format_inr(amounts / 1e7, digits = 2)} crore")
+```
+
 ## Padding strings
-We dealt with removing extra white-spaces from the strings using `str_trim`.  Sometimes requirements are on the contrary i.e. to add white-space or any other character to the left or right or both sides of the string (vector usually) so that its length can be made uniform.  We may use `str_pad()` in such scenarios.  Its syntax is -
+
+We removed extra spaces with `str_trim()`. Sometimes we need the opposite, to *add* spaces or some other character to the left, right or both sides of strings, so that all of them have the same length. `str_pad()` does this. Its syntax is
 
 ```
 str_pad(
-  string, 
+  string,
   width,
   side = c("left", "right", "both"),
   pad = " ",
   use_width = TRUE
 )
 ```
+
 Example -
 ```{r}
 str_view(
@@ -424,14 +551,21 @@ str_view(
 )
 ```
 
+Padding with zeros is very useful for codes and account numbers, as we will see in the audit use cases.
+
+```{r}
+str_pad(c("7", "45", "123"), width = 5, pad = "0")
+```
+
 ## Sorting strings
-To sort the strings, we have three powerful functions in the kitty of stringr.
+
+To sort strings, `stringr` has three functions.
 
 - `str_sort()` returns the sorted vector.
-- `str_order()` returns an integer vector that returns the desired order when used for sub-setting, i.e. `x[str_order(x)]` is the same as `str_sort()`
-- `str_rank()` returns the ranks of the values, i.e. `arrange(df, str_rank(x))` is the same as `str_sort(df$x)`
+- `str_order()` returns the positions of the strings in sorted order, so that `x[str_order(x)]` is the same as `str_sort(x)`.
+- `str_rank()` returns the rank of each string.
 
-Besides doing sorting for us, these functions have an argument `numeric` which if set to `TRUE` will sort digits numerically, instead of as strings. The following example will clarify the purpose.
+All of them have an argument `numeric`. If set to `TRUE`, digits are sorted as numbers, instead of as text. The following example makes this clear.
 
 ```{r}
 str_view(fruits)
@@ -454,5 +588,181 @@ str_rank(ex_text)
 str_sort(ex_text, numeric = TRUE)
 ```
 
+As text, `"₹1000"` comes before `"₹200"`, because the character `1` comes before `2`. With `numeric = TRUE`, the amounts are sorted by value. The same problem arises with file names like `bill_2`, `bill_10` and voucher numbers like `PV-9`, `PV-10`.
 
----------------------------------------------------
+## Audit use case 1, standardising names before matching {#sec-strng-names}
+
+Duplicate checks (@sec-dup) and string similarity (@sec-strsim) work much better on *clean* names. The same vendor can be written as "M/s Sharma Traders Pvt. Ltd.", "SHARMA TRADERS PRIVATE LIMITED" and "Sharma  Traders (P) Ltd". Exact matching treats these as three vendors. Let us build a small cleaning function, using what we have learnt.
+
+```{r}
+vendors <- tibble(
+  vendor_id = sprintf("V%02d", 1:8),
+  name = c("M/s Sharma Traders Pvt. Ltd.", "SHARMA TRADERS PRIVATE LIMITED",
+           "Sharma  Traders (P) Ltd", "Shri Ganesh Enterprises",
+           "Sri Ganesh Enterprises ", "M/S. GUPTA & SONS",
+           "Gupta and Sons", "Kaveri Infra Projects Ltd.")
+)
+
+clean_name <- function(x) {
+  x |>
+    str_to_upper() |>
+    # common forms of legal suffixes and honorifics, written one way
+    str_replace_all(c("\\bPRIVATE\\b"  = "PVT",
+                      "\\(P\\)"        = "PVT",
+                      "\\bLIMITED\\b"  = "LTD",
+                      "&"              = " AND ",
+                      "\\bSRI\\b"      = "SHRI")) |>
+    # remove M/s at the start
+    str_remove("^M\\s*/\\s*S\\.?\\s*") |>
+    # punctuation to space, then squish spaces
+    str_replace_all("[[:punct:]]", " ") |>
+    str_squish()
+}
+
+vendors |>
+  mutate(clean = clean_name(name))
+```
+
+```{r}
+#| include: false
+n_before <- n_distinct(vendors$name)
+n_after  <- n_distinct(clean_name(vendors$name))
+```
+
+The `r n_before` names have become `r n_after` distinct clean names. The three forms of Sharma Traders are now identical, and so are the Ganesh and Gupta pairs. Now an exact duplicate check, or a similarity check, can find them.
+
+::: callout-tip
+## Audit tip
+
+Keep the original name, and add the clean name as a new column, as we did. Report findings with the original names, so that the auditee recognises the records. Build the list of replacements from your own data. Look at the most frequent words with `str_split()` and `count()`, and add their variants to the list.
+:::
+
+## Audit use case 2, reading bank statement narrations {#sec-strng-bank}
+
+Bank statements describe each transaction in a single narration column, with fields separated by a character like `/`. For example, a NEFT payment may read `NEFT/ICIC0001234/SHARMA TRADERS/INV-2231`. To analyse the payments, we need these fields in separate columns. Amounts written in text also need converting into numbers.
+
+```{r}
+statement <- tibble(
+  txn_date = as.Date(c("2024-06-03", "2024-06-03", "2024-06-05", "2024-06-07", "2024-06-09")),
+  narration = c("NEFT/ICIC0001234/SHARMA TRADERS/INV-2231",
+                "RTGS/HDFC0000456/KAVERI INFRA PROJECTS/RA BILL 4",
+                "NEFT/SBIN0004567/SHARMA TRADERS/INV-2231",
+                "CHQ 004512 CLEARED SELF",
+                "NEFT/PUNB0123400/GUPTA AND SONS/INV-88"),
+  amount_text = c("Rs. 1,25,000/-", "Rs 12,40,500.00", "Rs. 1,25,000/-", "Rs. 50,000/-", "INR 9,800")
+)
+```
+
+`str_split_i()` takes out each field by its position. Only the narrations starting with NEFT or RTGS have this structure, so we take the first word of each narration as the mode, and split only those.
+
+```{r}
+statement_parsed <- statement |>
+  mutate(
+    mode      = str_extract(narration, "^[A-Z]+"),     # the first word, like NEFT or CHQ
+    is_eft    = mode %in% c("NEFT", "RTGS"),
+    ifsc      = if_else(is_eft, str_split_i(narration, "/", 2), NA),
+    party     = if_else(is_eft, str_split_i(narration, "/", 3), NA),
+    reference = if_else(is_eft, str_split_i(narration, "/", 4), NA),
+    cheque_no = str_extract(narration, "(?<=CHQ )\\d+"),
+    # first remove the currency prefix, then everything except digits and the decimal point
+    amount    = amount_text |>
+                  str_remove("^(Rs\\.?|INR)\\s*") |>
+                  str_remove_all("[^0-9.]") |>
+                  as.numeric()
+  )
+
+statement_parsed |>
+  select(txn_date, mode, ifsc, party, reference, cheque_no, amount) |>
+  print(width = Inf)
+```
+
+Notice the two steps in the amount. First we remove the currency prefix, `Rs`, `Rs.` or `INR`. Then we remove every character which is not a digit or a decimal point, which takes away the spaces, the commas and the `/-` at the end. The order matters. If we skipped the first step, the dot of `Rs.` would survive the second step, as it looks like a decimal point. `"Rs. 1,25,000/-"` would become `".125000"`, which R reads as 0.125! Always check a few converted amounts against the original text.
+
+```{r}
+# The trap, without removing the prefix first
+as.numeric(str_remove_all("Rs. 1,25,000/-", "[^0-9.]"))
+```
+
+Now the fields can be analysed like any other data. For example, the same party and reference paid twice is a possible duplicate payment. Here, the same invoice of Sharma Traders was paid twice, two days apart, and to accounts in two different bank branches (IFSC). A second account for the same payee makes it even more worth checking.
+
+```{r}
+statement_parsed |>
+  filter(is_eft) |>
+  filter(n() > 1, .by = c(party, reference, amount)) |>
+  select(txn_date, ifsc, party, reference, amount)
+```
+
+::: callout-warning
+## Caution
+
+Bank narrations are not standard. Different banks, and even different branches, write them differently, and they are often cut short. Look at a sample of narrations of each kind before writing the patterns, and count how many rows each pattern could *not* parse. Those rows must be checked separately.
+:::
+
+## Audit use case 3, lost leading zeros {#sec-strng-zeros}
+
+Codes like employee numbers, account numbers and PIN codes often start with zeros. When such data passes through a spreadsheet, the codes are often read as numbers, and the leading zeros are lost. Then `"00123"` in one table becomes `"123"` in another, and a join between the two silently fails.
+
+```{r}
+payroll  <- tibble(emp_code = c("00123", "00456", "01789", "12001"),
+                   salary   = c(52000, 61000, 48000, 75000))
+# The same codes, after passing through a spreadsheet
+bank_upload <- tibble(emp_code = c("123", "456", "1789", "12001"),
+                      account  = c("XXXX4521", "XXXX8890", "XXXX1102", "XXXX7731"))
+
+# A plain join matches only one employee
+payroll |> inner_join(bank_upload, by = "emp_code")
+```
+
+Only one of the four employees matched. Padding the codes back to their full length fixes the join.
+
+```{r}
+bank_upload <- bank_upload |>
+  mutate(emp_code = str_pad(emp_code, width = 5, pad = "0"))
+
+payroll |> inner_join(bank_upload, by = "emp_code")
+```
+
+::: callout-tip
+## Audit tip
+
+Before joining two tables, compare the length and format of the key columns with `str_length()` and `count()`. A key which has different lengths in two tables is a warning. While reading data, read code columns as text, for example with `col_types = cols(emp_code = col_character())` in `read_csv()`, so that leading zeros are never lost in the first place.
+:::
+
+## A suggested workflow
+
+1.  **Look at the raw text first.** View a sample with `str_view()`, and count the distinct values.
+2.  **Keep the original column** and create cleaned columns next to it.
+3.  **Standardise** case, spaces and punctuation with `str_to_upper()`, `str_squish()` and `str_replace_all()`.
+4.  **Apply a list of standard replacements** for abbreviations and honorifics, as a named vector.
+5.  **Split and extract** fields with `str_split_i()`, `str_sub()` and `str_extract()`.
+6.  **Convert** text amounts and dates into numbers and dates, and check a sample by hand.
+7.  **Pad codes** to a fixed length before joining tables.
+8.  **Count what could not be cleaned or parsed**, and examine those rows separately.
+
+::: callout-important
+## Remember
+
+Cleaning changes the data. Every replacement rule can merge two things that are really different, like two genuinely different firms with similar names. Keep the original values, apply cleaning rules you can explain, and verify the matches that matter before reporting them.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `writeLines()`, `cat()` | base R | Print strings without escape characters |
+| `str_view()` | stringr | Shows strings and highlights matches |
+| `str_trim()`, `str_squish()` | stringr | Remove extra spaces |
+| `str_c()`, `str_flatten()`, `str_glue()` | stringr | Join strings, flatten a vector, insert values into text |
+| `str_length()`, `str_sub()` | stringr | Length of strings, and parts by position |
+| `str_detect()`, `str_subset()`, `str_count()`, `str_starts()`, `str_ends()` | stringr | Find patterns |
+| `str_to_lower()`, `str_to_upper()`, `str_to_title()`, `str_to_sentence()` | stringr | Change case |
+| `fixed()`, `regex()`, `coll()`, `boundary()` | stringr | Control how a pattern is matched |
+| `str_extract()`, `str_extract_all()` | stringr | Extract matching text |
+| `str_split()`, `str_split_fixed()`, `str_split_1()`, `str_split_i()` | stringr | Split strings into pieces |
+| `str_replace()`, `str_replace_all()`, `str_remove()`, `str_remove_all()` | stringr | Replace or remove matches |
+| `format()`, `formatC()`, `percent()`, `comma()`, `dollar()` | base R, scales | Format numbers |
+| `format_inr()` | written in this chapter | Indian style of numbers, like 12,34,567 |
+| `str_pad()` | stringr | Pad strings to a fixed width, like leading zeros |
+| `str_sort()`, `str_order()`, `str_rank()` | stringr | Sort strings, optionally treating digits as numbers |
+
+: Functions used in this chapter {#tbl-stringrfunctions}

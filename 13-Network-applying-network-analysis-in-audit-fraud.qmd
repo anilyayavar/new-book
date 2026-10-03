@@ -121,6 +121,12 @@ __Step-2__: Pivot all the ID columns into a longer format, so that each row link
 
 __Step-3__: Prefix each ID value with its type, like `Mobile:9111111111`. This is important. Without it, a value appearing in two different columns would become one vertex. For example, a record number `"12"` and a ward number `"12"` would wrongly link two records. Then we keep only the two columns we need, the record `ID` and the prefixed `id_node`. Up to this step, our data looks like this.
 
+::: callout-note
+## Normalise the IDs first
+
+In real data, the same ID is written in many ways, and each way would become a separate vertex. Before Step-2, standardise every ID column. Mobile numbers lose their `+91` or `0` prefix with `clean_mobile()`, and email IDs are normalised with `normalise_email()`, both from @sec-regex-validate. The second is especially important. Gmail ignores dots and `+tags` in the user name, so `r.kumar@gmail.com` and `rkumar+scheme@gmail.com` reach the same mailbox. Someone registering several times may use exactly this trick, and without normalising, the network would never connect those registrations.
+:::
+
 ```{r echo=FALSE}
 id_edges <- dummy_data |>
   mutate(across(all_of(id_cols), as.character)) |>
@@ -215,7 +221,7 @@ ben_long |>
   head(5)
 ```
 
-Two values stand out at once. `9999999999` is obviously a placeholder, not a real number. If we keep it, it will link 45 unrelated beneficiaries into one false group. `9876543210` is linked with 30 beneficiaries. It looks genuine, and is exactly the kind of *hub* an auditor wants to find. It may be the number of an agent or a middleman, who registered and perhaps controls these beneficiaries. We drop the placeholder and keep the rest.
+Two values stand out at once. `9999999999` is obviously a placeholder, not a real number. If we keep it, it will link 45 unrelated beneficiaries into one false group. `9876543210` is linked with 30 beneficiaries. It looks genuine, and is exactly the kind of *hub* an auditor wants to find. It may be the number of an agent or a middleman, who registered and perhaps controls these beneficiaries. We drop the placeholder and keep the rest. In larger data, such junk values can be found systematically, before building any graph. A number made of one repeated digit is matched by the regex `^(\\d)\\1{9}$`, and IDs which fail their format or check digit can be listed, as explained in @sec-regex-validate and @sec-checkdigits.
 
 ```{r}
 ben_long <- ben_long |>
@@ -540,7 +546,7 @@ ven$mobile[64]  <- ven$mobile[12]
 ven$address[12] <- emp$address[88]
 ```
 
-We stack both masters together, pivot them longer, prefix the IDs, and keep only the shared IDs, exactly as in use case 1. In real data, addresses must first be cleaned and standardised, as discussed in @sec-dup.
+We stack both masters together, pivot them longer, prefix the IDs, and keep only the shared IDs, exactly as in use case 1. In real data, addresses must first be cleaned and standardised, as discussed in @sec-dup and @sec-strng-names. Two more links are worth adding where the data has them. Email IDs, after normalising Gmail dot and plus aliases, and the PAN embedded in each vendor's GSTIN (characters 3 to 12), which may match the PAN of an employee or a relative. Both are explained in @sec-regex-validate, where three "different" vendors turned out to share one Gmail box.
 
 ```{r}
 ev_long <- bind_rows(
@@ -625,7 +631,9 @@ In a directed graph where we look for cycles, we drop sources and sinks repeated
 
 **3. Look at the most connected IDs first, and remove junk values.** Placeholder values like `9999999999`, `0000000000`, `NA`, `test@gmail.com`, `XXXXX0000X`, or the address of the office itself, link hundreds of unrelated records into one giant group. Always run `count(id_node, sort = TRUE)` before building the graph. Remove the junk values, and keep the genuine hubs aside for separate examination.
 
-**4. Clean before you connect.** `9876543210`, `+91 98765 43210` and `09876543210` are the same mobile number. Standardise IDs, as discussed in @sec-dup, before building the graph. Otherwise real links are missed.
+**4. Clean before you connect.** `9876543210`, `+91 98765 43210` and `09876543210` are the same mobile number. `r.kumar@gmail.com` and `rkumar+bids@gmail.com` are the same Gmail box. Standardise IDs before building the graph, with the functions of @sec-strng and @sec-regex-validate, like `clean_mobile()` and `normalise_email()`. Otherwise real links are missed.
+
+**4a. Validate before you connect.** An ID in the wrong format, or with a wrong check digit, cannot be a genuine shared ID. A mistyped Aadhaar or GSTIN may by chance equal someone else's, and create a false link. Run the format and check digit tests of @sec-regex-validate and @sec-checkdigits first. Keep the invalid IDs out of the graph, and report them separately as data quality findings.
 
 **5. Work with components, not with the whole graph.** Use `components()` to split the graph, and then study the components of interest one at a time with `induced_subgraph()`. Sort them by size. Groups of 2 are usually families or genuine. Very large groups usually mean a junk value is still present.
 
@@ -644,7 +652,7 @@ In a directed graph where we look for cycles, we drop sources and sinks repeated
 ## A suggested workflow
 
 1. **Decide the vertices and edges.** What are the entities (persons, firms, accounts), and what links them (shared IDs, bids, invoices)? Is the graph directed?
-2. **Prepare the data.** Clean and standardise the IDs, prefix them with their type, and pivot to one row per link.
+2. **Prepare the data.** Clean, standardise and validate the IDs (@sec-regex-validate), prefix them with their type, and pivot to one row per link.
 3. **Look at the most connected IDs.** Remove junk values. Note the genuine hubs.
 4. **Reduce the graph.** Drop leaves, sources and sinks, or take the k-core, depending on the question.
 5. **Find the structure.** Components for related entities, communities for groups, cycles for circular flows, shortest paths to explain a link, centrality for key players.

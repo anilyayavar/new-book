@@ -3,9 +3,9 @@
 source("_common.R")
 ```
 
-# Regex in human readable format using `rebus`
+# Regex in human readable format using `rebus` {#sec-rebus}
 
-Regular expressions, as explained in earlier chapter, are very powerful. However they are often difficult to interpret. There is a package called `rebus` in R, which allows us to build complex regular expressions from human readable expressions. So instead of writing `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}` and later trying to decipher what this expression actually meant, we can use a more human-readable format -
+Regular expressions, as explained in the previous chapter (@sec-regex), are very powerful. However they are often difficult to read, even for the person who wrote them, a few months later. There is a package called `rebus` in R, which allows us to build complex regular expressions from human readable expressions. So instead of writing `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}` and later trying to decipher what this expression actually meant, we can use a more human-readable format -
 
 ```
 one_or_more(char_class(ASCII_ALNUM %R% "._%+-")) %R%
@@ -14,16 +14,17 @@ one_or_more(char_class(ASCII_ALNUM %R% "._%+-")) %R%
   DOT %R%
   ascii_alpha(2, 4)
 ```
-Many of us could have by now correctly guessed that these both are regular expressions to detect email addresses from the given text strings.  Rebus actually contains functions like `char_class()` or `one_or_more()` to make building regular expressions easier.  So let's dive in to learn the package.
+Many of us could have guessed by now that both are regular expressions to detect email addresses. `rebus` contains functions like `char_class()` and `one_or_more()`, with names that say what they do. The result is an ordinary regular expression, which can be used in any `stringr` function. So let's dive in to learn the package.
 
-First of all let's load the library.  Alongside let's also load `stringr` so that we can use its function `str_view` to understand the examples. **Readers may note here that this library `rebus` also contains a function `regex` which creates a conflict with `stringr::regex`.  So to avoid that conflict we may use library `conflicted` here which may set our preferential library in case of conflicts.**
+First of all let's load the library. Alongside, let's also load `stringr`, so that we can use its function `str_view()` to understand the examples. **Note that `rebus` also has a function named `regex()`, which conflicts with `stringr::regex()`. To avoid confusion, we use the package `conflicted` to state which one we prefer.**
 
 ```{r}
+#| message: false
+#| warning: false
 library(rebus)
 library(stringr)
 library(conflicted)
-conflict_prefer("regex", "stringr")
-conflicts_prefer(rebus::or)
+conflicts_prefer(stringr::regex, rebus::or)
 ```
 
 ## Operators for concatenation and alternation
@@ -38,6 +39,15 @@ str_view(my_colors, "gr" %R% or("a" , "e") %R% "y")
 # This actually means either "gra" or "ey"
 str_view(my_colors, "gr" %R% "a" %|% "e" %R% "y")
 ```
+
+Printing a `rebus` expression shows the regular expression it builds. This is the best way to check that it means what we intended.
+
+```{r}
+"gr" %R% or("a" , "e") %R% "y"
+"gr" %R% "a" %|% "e" %R% "y"
+```
+
+The first is `gr(?:a|e)y`, "gr, then a or e, then y", as intended. The second is `gra|ey`. It matched both *grey* and *gray* above, but for the wrong reasons, *ey* in one and *gra* in the other. Use `or()` to keep alternatives together.
 
 ## Literal Characters, special characters and case sensitivity
 The literal characters may, as we learnt earlier, may be given in the string as they mean. Literals are case sensitive too.  So if we want a case insensitive match, there is a function `case_insensitive` here which will take care of the requirement.
@@ -90,7 +100,7 @@ To **match a range of characters/numbers** we separate these by hyphen in square
 Example-5:
 ```{r}
 ex_text <- "The quick brown fox jumps over the lazy dog."
-# Match a, b or c in lower case
+# Match a, b, c or d in lower case
 str_view(ex_text, char_class("a-d"))
 ```
 
@@ -187,7 +197,7 @@ str_view(ip_add, digit(1, 3))
 str_view(ip_add, digit(3))
 str_view(ip_add, not_dgt(5))
 # Note this will match none
-str_view(ip_add, space(2))
+str_view(ip_add, space(2), match = NA)
 ```
 
 ### Word Boundaries
@@ -248,7 +258,7 @@ Example-11:
 string <- "The quick brown fox jumps over the lazy dog. The fox is brown."
 str_view(string, START %R% case_insensitive("the"))
 ```
-In the above example, we are matching word `the` which is at the beginning of a sentence only.  There is one more function `exactly(x)` in rebus which makes the regular expression match the whole string, from start to end, in fact a shortcut of `START %R% x %R% END`.
+In the above example, only the `The` at the beginning of the *string* is matched, not the one beginning the second sentence. There is one more function `exactly(x)` in rebus which makes the regular expression match the whole string, from start to end, in fact a shortcut of `START %R% x %R% END`.
 
 Example-12:
 ```{r}
@@ -259,7 +269,7 @@ str_view(ex_vec, exactly("apple"))
 ## Capture Groups
 We have seen that a capture group is a way to group a part of a regular expression and capture it as a separate substring. This is useful when we want to extract or replace a specific part of a string.  In R, capture groups are denoted by parentheses `()`. Anything inside the parentheses is captured and can be referenced later in the regular expression or in the replacement string.  We also learnt that capturing groups are useful to refer back to it within a match with back reference: `\1` refers to the match contained in the first parenthesis, `\2` in the second parenthesis, and so on. 
 
-In rebus, there are two functions `capture(x)` and `group(x)` for capturing regex.  Former is good with match functions while latter is mostly used with alternations.
+In rebus, there are two functions for this, `capture(x)` and `group(x)`. `capture()` makes a capturing group, `(x)`, whose match can be referred back to. `group()` makes a *non-capturing* group, `(?:x)`, which only keeps its contents together, as we need with alternations. It does not remember its match.
 
 Example-13:
 ```{r}
@@ -410,9 +420,78 @@ Example-20:
 ```{r}
 # Some Roman numerals, both valid and invalid
 some_numbers <- c("MMMDCCCXLVIII", "MMMCMDCCCXLVIIV", "MCD", "XIL", "LIX", "XL")
-# Find valid roam numerals
+# Find valid Roman numerals
 str_view(some_numbers, exactly(roman()))
 ```
 
+## Audit use case, readable validation patterns {#sec-rebus-audit}
 
+In @sec-regex-validate we wrote patterns for Indian identifiers. Written with `rebus`, they can be read almost like the official description of the format. Let us build three of them, and print the regular expressions they produce.
 
+```{r}
+# PAN: five letters, four digits, one letter
+pan_rx  <- exactly(ascii_upper(5) %R% ascii_digit(4) %R% ascii_upper(1))
+
+# IFSC: four letters for the bank, a zero, six letters or digits for the branch
+ifsc_rx <- exactly(ascii_upper(4) %R% "0" %R% repeated(char_class("A-Z0-9"), 6))
+
+# GSTIN: State code, PAN, entity number, Z, check character
+gstin_rx <- exactly(ascii_digit(2) %R%
+                    ascii_upper(5) %R% ascii_digit(4) %R% ascii_upper(1) %R%
+                    char_class("1-9A-Z") %R% "Z" %R% char_class("0-9A-Z"))
+
+pan_rx
+ifsc_rx
+gstin_rx
+```
+
+These are exactly the patterns we wrote by hand in the previous chapter. Notice that for the IFSC we used `char_class("A-Z0-9")` and not `ascii_alnum()`, because `ascii_alnum()` would also allow lower case letters. Printing the pattern is how we catch such differences.
+
+```{r}
+str_detect(c("ABCPK1234D", "ABCP1234D"), pan_rx)
+str_detect(c("SBIN0001234", "SBIN1001234"), ifsc_rx)
+str_detect(c("27AAPFU0939F1ZV", "27AAPFU0939F1Z"), gstin_rx)
+```
+
+A pattern only checks the format. The check character of a GSTIN still needs the function `gstin_valid()` of @sec-checkdigits.
+
+### Dates in vouchers
+
+Dates in Indian records are usually written day first, like `15/04/2024`. The `rebus` constant `DMY` matches such dates. Let us check a few dates typed in a voucher register.
+
+```{r}
+#| message: false
+library(lubridate)
+
+voucher_dates <- c("15/04/2024", "31/02/2024", "29/02/2023", "29/02/2024",
+                   "4/7/2024", "2024/07/04", "31-12-2024")
+
+tibble::tibble(date_text   = voucher_dates,
+               shape_ok    = str_detect(voucher_dates, exactly(DMY)),
+               parsed_date = dmy(voucher_dates, quiet = TRUE))
+```
+
+The regex checks only the *shape* of a date. It accepts `31/02/2024` and `29/02/2023`, because 31 is a possible day and 02 a possible month. But there is no 31st of February, and 2023 was not a leap year. The function `dmy()` from `lubridate`, which we met in the chapter on dates, knows the calendar, and returns `NA` for both. On the other hand, `dmy()` reads `4/7/2024` correctly, which the `DMY` pattern rejects for lack of leading zeros.
+
+::: callout-tip
+## Audit tip
+
+Use regex to find dates written in the wrong *format*, and a date parser like `dmy()` to find dates that do not *exist*. A voucher dated 31 February, or a bill dated after the date of its payment, is worth a closer look. Impossible dates are sometimes typing errors, and sometimes a sign that the document was prepared later, in a hurry.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `%R%`, `or()`, `%|%` | rebus | Join patterns, and alternatives |
+| `exactly()`, `START`, `END` | rebus | Anchor a pattern to the whole string, or to its start or end |
+| `char_class()`, `negated_char_class()` | rebus | Sets of characters to match, or not to match |
+| `ascii_upper()`, `ascii_digit()`, `digit()` and others | rebus | Built-in character classes, with optional repetition |
+| `one_or_more()`, `zero_or_more()`, `optional()`, `repeated()` | rebus | Quantifiers |
+| `whole_word()`, `BOUNDARY` | rebus | Word boundaries |
+| `capture()`, `group()`, `REF1` | rebus | Capturing and non-capturing groups, and back references |
+| `lookahead()`, `lookbehind()` and their negative forms | rebus | Look-arounds |
+| `ISO_DATE`, `DMY`, `roman()` | rebus | Ready patterns for dates and Roman numerals |
+| `dmy()` | lubridate | Converts day-month-year text to dates, `NA` for impossible dates |
+
+: Functions used in this chapter {#tbl-rebusfunctions}
