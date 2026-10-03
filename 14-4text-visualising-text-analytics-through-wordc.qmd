@@ -18,6 +18,7 @@ We will learn four kinds of charts.
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(tidytext)
 library(wordcloud)   # install.packages("wordcloud")
@@ -214,6 +215,45 @@ comparison.cloud(compare_matrix,
 
 The two halves tell two different stories. Grievances about other hospitals are mostly about cards, refusals, pending approvals and the ward. Grievances about the six flagged hospitals are about operations, camps, agents, villages, pain and the uterus being removed. For an audit presentation, this one picture can make the case for a closer look at those six hospitals.
 
+### A more precise comparison, the log ratio
+
+A comparison cloud gives an impression, but it does not tell us *how much* more common a word is in one group. For an audit report, a bar chart of the **log ratio** is better. For each word, we take its share among all the words of each group, and compare the two shares.
+
+$$
+\text{log ratio} = \log_2 \left( \frac{\text{share of the word in flagged hospitals}}{\text{share of the word in other hospitals}} \right)
+$$ {#eq-logratio}
+
+A log ratio of 1 means the word is twice as common, relatively, in grievances about the flagged hospitals. A log ratio of -1 means it is twice as common about the other hospitals. Zero means no difference. We add 1 to every count before dividing, so that a word missing from one group does not give a division by zero. We also keep only words used at least 10 times, since ratios of very small counts are unreliable.
+
+```{r}
+#| label: fig-logratio
+#| fig-cap: "Words that set the two groups of hospitals apart"
+log_ratios <- as_tibble(compare_matrix, rownames = "word") |>
+  rename(flagged = `Six flagged hospitals`, other = `Other hospitals`) |>
+  filter(flagged + other >= 10) |>
+  mutate(log_ratio = log2(((flagged + 1) / sum(flagged + 1)) /
+                          ((other + 1) / sum(other + 1))))
+
+# Top 10 words on each side
+bind_rows(slice_max(log_ratios, log_ratio, n = 10, with_ties = FALSE),
+          slice_min(log_ratios, log_ratio, n = 10, with_ties = FALSE)) |>
+  mutate(group = if_else(log_ratio > 0, "More common, flagged hospitals",
+                         "More common, other hospitals")) |>
+  ggplot(aes(log_ratio, fct_reorder(word, log_ratio), fill = group)) +
+  geom_col() +
+  scale_fill_manual(values = c("firebrick", "grey50")) +
+  labs(x = "Log ratio (base 2)", y = NULL, fill = NULL) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+#| include: false
+top_word <- log_ratios |> filter(word == "camp")
+```
+
+Each bar can be read exactly. For example, *`r top_word$word`* has a log ratio of `r round(top_word$log_ratio, 1)`, so it is about `r round(2^top_word$log_ratio)` times as common, relatively, in grievances about the flagged hospitals. The other words at the top, like *vehicle*, *panchayat*, *bhawan*, *village* and *healed*, describe the same story of camps held in villages and wounds that have not healed. At the other end, *pre*, *authorisation*, *delayed*, *pending* and *approval* are typical of the routine complaints about other hospitals.
+
 ## Example 3, word networks
 
 Bar charts and clouds show single words. To see how words are *connected*, we can draw a **network** of bigrams. Each word is a point (a *node*), and an arrow (an *edge*) joins two words that appear one after the other. We learnt about networks in the chapter on network analytics, where we used the package `igraph`. Here we will also use `ggraph`, which draws networks in the style of `ggplot2`.
@@ -260,6 +300,26 @@ ggraph(bigram_graph, layout = "fr") +
 
 In @fig-bigramnet, the arrows follow the order of words, and darker arrows mean more frequent pairs. `layout = "fr"` places strongly connected words near each other. We can now read short phrases straight from the picture, like *health camp*, *told villagers*, *free operation* and *staff demanded*.
 
+### An interactive word network
+
+For exploring, an interactive network is often more useful than a static one. We can drag the words apart, zoom in, and click a word to highlight the words joined to it. The package `visNetwork`, which we used in @sec-graph and @sec-netaudit, draws one directly from the `igraph` object (@fig-bigramvis).
+
+```{r}
+#| label: fig-bigramvis
+#| fig-cap: "Interactive network of frequent word pairs. Click a word to highlight its neighbours."
+library(visNetwork)
+
+bigram_vis <- toVisNetworkData(bigram_graph)
+bigram_vis$edges <- bigram_vis$edges |>
+  mutate(value = n, title = paste(from, to, "-", n, "times"))
+
+visNetwork(bigram_vis$nodes, bigram_vis$edges, width = "100%", height = "450px") |>
+  visEdges(arrows = "to", color = list(color = "grey")) |>
+  visNodes(color = "steelblue", font = list(size = 18)) |>
+  visIgraphLayout(layout = "layout_with_fr", randomSeed = 2024) |>
+  visOptions(highlightNearest = TRUE)
+```
+
 ::: callout-note
 ## Pairs across punctuation
 
@@ -273,8 +333,8 @@ Look at the pair *accepted → staff*. It comes from sentences like "card is not
 | Exact comparison of word counts | Bar chart |
 | Quick impression for a presentation | Word cloud |
 | Comparing top words across several groups | Faceted bar chart with `reorder_within()` |
-| Showing what sets two groups apart | Comparison cloud, or a bar chart of tf-idf |
-| Showing phrases and connections | Bigram network |
+| Showing what sets two groups apart | Comparison cloud, or better, a bar chart of log ratios |
+| Showing phrases and connections | Bigram network, interactive with `visNetwork` for exploring |
 
 : Choosing a chart for text {#tbl-textcharts}
 
@@ -307,5 +367,6 @@ A picture of text is a summary, and every summary leaves things out. The most fr
 | `column_to_rownames()` | tibble | Moves a column into row names, before making a matrix |
 | `graph_from_data_frame()` | igraph | Builds a network from a table of word pairs |
 | `ggraph()`, `geom_edge_link()`, `geom_node_text()` | ggraph | Draws the network |
+| `toVisNetworkData()`, `visNetwork()` | visNetwork | Draws an interactive network |
 
 : Functions used in this chapter {#tbl-textvizfunctions}

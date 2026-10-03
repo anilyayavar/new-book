@@ -29,6 +29,7 @@ We will use `tidytext`, introduced in @sec-text.
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(tidytext)
 ```
@@ -314,6 +315,110 @@ Whenever groups differ in size, compare rates or percentages, not raw counts. A 
 ## Audit tip
 
 Build a red-flag dictionary for each audit, with the help of people who know the sector. In a health scheme, it may include words about forced or unnecessary surgery, payments, and agents. In a PDS audit, it may include words about short weighing, refusal of ration, or poor quality grain. Such a dictionary is easy to explain in an audit report, and easy for the auditee to verify.
+:::
+
+## Audit use case, feedback that is too good to be true {#sec-sent-fake}
+
+So far we looked for units with *bad* feedback. But very *good* feedback can also be a warning sign. When feedback is collected by the staff of the unit being assessed, some of it may be written by the staff themselves. Such feedback tends to be glowing, uniform, and copied from a few sentences.
+
+Let us take feedback collected through a mobile app from beneficiaries of 25 Fair Price Shops under the Public Distribution System. Each beneficiary writes a short comment and gives a rating. Genuine comments vary. Some praise the shop, many complain about short weighing, poor quality grain, or the shop being closed. In two shops, `FPS-07` and `FPS-19`, we have planted feedback filled in by the shop staff, mostly copies of three sentences with 5 stars.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the ration shop feedback"
+set.seed(909)
+positive_bits <- c("Ration received on time.", "Dealer behaviour is good.", "Grain quality was fine.",
+                   "Full quantity given.", "Shop opens regularly.")
+negative_bits <- c("Less quantity given than entitled.", "Shop was closed on the notified day.",
+                   "Grain was of poor quality with stones.", "Dealer asked extra money.",
+                   "Told to come again next week.", "Weighing machine is not working.")
+neutral_bits  <- c("Took ration for the family.", "Came with my ration card.", "Collected wheat and rice.")
+
+genuine_comment <- function() {
+  k <- sample(1:2, 1)
+  mood <- sample(c("pos", "neg", "mix"), 1, prob = c(0.4, 0.35, 0.25))
+  bits <- switch(mood,
+                 pos = sample(positive_bits, k),
+                 neg = sample(negative_bits, k),
+                 mix = c(sample(positive_bits, 1), sample(negative_bits, 1)))
+  rating <- switch(mood, pos = sample(4:5, 1), neg = sample(1:2, 1), mix = sample(2:4, 1))
+  # Each beneficiary also mentions what they collected, in their own way
+  detail <- sprintf(sample(c("Got %d kg wheat and %d kg rice.", "Collected %d kg wheat, %d kg rice.",
+                             "Family of %d, got rice %d kg."), 1),
+                    sample(3:35, 1), sample(3:35, 1))
+  tibble(comment = paste(c(sample(neutral_bits, 1), detail, bits), collapse = " "), rating = rating)
+}
+
+shops <- sprintf("FPS-%02d", 1:25)
+fps_feedback <- map_dfr(shops, function(s) {
+  map_dfr(1:sample(35:60, 1), \(i) genuine_comment()) |> mutate(shop = s, .before = 1)
+})
+
+# Planted. Staff-written feedback in two shops
+templates <- c("Very good service, ration received on time, thank you.",
+               "Excellent dealer, full quantity given, very happy.",
+               "Good quality grain and very good behaviour, thank you.")
+staff_written <- which(fps_feedback$shop %in% c("FPS-07", "FPS-19"))
+staff_written <- sample(staff_written, round(0.65 * length(staff_written)))
+fps_feedback$comment[staff_written] <- sample(templates, length(staff_written), TRUE)
+fps_feedback$rating[staff_written]  <- 5
+
+fps_feedback <- fps_feedback |> mutate(feedback_id = row_number(), .before = 1)
+```
+
+```{r}
+fps_feedback |> slice_sample(n = 5)
+```
+
+First, let us score the comments with the Bing dictionary, handling negation as before, and rank the shops by their average score.
+
+```{r}
+fps_scores <- fps_feedback |>
+  unnest_tokens(word, comment, drop = FALSE) |>
+  mutate(previous = lag(word), .by = feedback_id) |>
+  inner_join(bing, by = "word") |>
+  mutate(value = if_else(sentiment == "positive", 1, -1),
+         value = if_else(previous %in% negations, -value, value)) |>
+  summarise(score = sum(value), .by = feedback_id)
+
+fps_scored <- fps_feedback |>
+  left_join(fps_scores, by = "feedback_id") |>
+  mutate(score = replace_na(score, 0))
+
+fps_scored |>
+  summarise(comments = n(), avg_score = round(mean(score), 2), avg_rating = round(mean(rating), 2),
+            .by = shop) |>
+  arrange(desc(avg_score)) |>
+  head(5)
+```
+
+The two shops come out as the *best* in the district. If we stopped here, we would praise them. Now let us look at how many of each shop's comments are word-for-word copies of another comment of the same shop. We first standardise the text, so that differences of case and spacing do not hide a copy.
+
+```{r}
+fps_dupes <- fps_scored |>
+  mutate(std_comment = str_squish(str_to_lower(comment))) |>
+  add_count(shop, std_comment, name = "copies") |>
+  summarise(comments       = n(),
+            pct_duplicated = round(100 * mean(copies > 1), 1),
+            pct_five_star  = round(100 * mean(rating == 5), 1),
+            avg_score      = round(mean(score), 2),
+            .by = shop) |>
+  arrange(desc(pct_duplicated))
+
+head(fps_dupes, 5)
+```
+
+```{r}
+#| include: false
+other_dup <- fps_dupes |> filter(!shop %in% c("FPS-07", "FPS-19"))
+```
+
+In the two shops, most of the comments are copies of each other, and most ratings are 5 stars. In the other shops, `r if (max(other_dup$pct_duplicated) == 0) "not a single comment is a copy of another" else paste0("at most ", max(other_dup$pct_duplicated), "% of comments are copies")`. Genuine beneficiaries write in their own words, mention their own quantities, and complain about different things. In real data, very short comments like "good" or "ok" will repeat by chance, so compare a unit with its peers rather than expecting zero duplicates.
+
+::: callout-tip
+## Audit tip
+
+Look at *how* people write, not only *what* they write. Many identical comments, uniform top ratings, and unusually high sentiment in one unit together suggest that the feedback was not written by the beneficiaries. Verify by contacting a sample of the beneficiaries whose names appear against those comments. The same check works for inspection reports, monitoring notes, and site visit remarks copied from one report to the next.
 :::
 
 ## Limitations

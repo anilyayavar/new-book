@@ -28,6 +28,7 @@ We will mainly use the package `tidytext`, which brings text analysis into the f
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(tidytext)
 library(SnowballC)
@@ -319,33 +320,189 @@ category_tfidf |>
   print(n = 30)
 ```
 
-The distinctive words of each category make sense. *Refused*, *beds* and *emergency* for denial and card problems. *Pending*, *approval* and *insurance* for delays. *Medicines* and *counter* for money demanded. *Nurses*, *night* and *rude* for quality of care. And the most distinctive words of *Other* are *camp* and *operation*. tf-idf has found, on its own, the same hidden theme that our dictionary found.
+The distinctive words of each category make sense. *Refused*, *beds* and *emergency* for denial and card problems. *Pending*, *approval* and *insurance* for delays. *Medicines* and *counter* for money demanded. *Nurses*, *night* and *rude* for quality of care. And among the most distinctive words of *Other* are *camp* and *operation*. tf-idf has found, on its own, the same hidden theme that our dictionary found.
 
-## A note on journal entry narrations
+## Audit use case, narrations of journal entries {#sec-text-je}
 
-The same tools can be used on the narration of accounting entries. Standards on auditing ask auditors to test journal entries for signs of fraud, and unusual descriptions are one of the signs. A very simple check is shown below, on a few made-up narrations.
+The same tools can be used on the narrations of accounting entries. Standards on auditing ask auditors to test journal entries for signs of fraud, especially entries made by senior staff, at the end of the year, for round amounts, or with vague descriptions. Let us create the journal entries of an imaginary organisation for 2024-25. Most of them are routine. We have planted 20 suspicious entries, with vague narrations, round amounts and mostly posted by the finance manager, many in the last days of March.
 
 ```{r}
-narrations <- tibble(
-  entry_no = 1:8,
-  narration = c("Being payment of electricity bill for March",
-                "Adjustment as per instructions of the director",
-                "Being salary for the month of April",
-                "Misc. expenses, details to follow",
-                "Reversal of earlier entry, to be regularised",
-                "Being purchase of stationery",
-                "Transfer to suspense account pending clarification",
-                "Being payment to contractor, RA bill 3")
-)
+#| code-fold: true
+#| code-summary: "Code to create the journal entries"
+set.seed(2402)
+n <- 3000
+templates <- c("Being payment of electricity bill for MONTH", "Being salary for the month of MONTH",
+               "Being purchase of stationery vide bill no NUM", "Being payment to contractor, RA bill NUM",
+               "Being advance to staff for tour, adjusted against TA bill NUM", "Being depreciation for MONTH",
+               "Being interest accrued on deposits for MONTH", "Being transfer of grant received to project account",
+               "Being rent for office building for MONTH", "Being provision for audit fee",
+               "Being reversal of duplicate entry no NUM, approved vide note no NUM")
 
-red_flags <- "adjust|as per instruction|misc|details to follow|reversal|regularis|suspense|pending clarification"
+journal <- tibble(
+  entry_no  = sprintf("JE%05d", 1:n),
+  date      = as.Date("2024-04-01") + sample(0:364, n, TRUE),
+  posted_by = sample(c("acct01", "acct02", "acct03", "acct04", "fin_mgr"), n, TRUE,
+                     prob = c(.3, .3, .2, .15, .05)),
+  amount    = round(rlnorm(n, log(45000), 1.1), 2),
+  narration = sample(templates, n, TRUE, prob = c(rep(1, 10), 0.3))
+) |>
+  mutate(narration = str_replace(narration, "MONTH", month.name[month(date)]),
+         narration = str_replace_all(narration, "NUM", as.character(sample(100:999, n, TRUE))))
 
-narrations |>
-  mutate(flag = str_detect(str_to_lower(narration), red_flags)) |>
-  filter(flag)
+# Planted. 20 suspicious entries
+sus <- sample(1:n, 20)
+journal$narration[sus] <- sample(c("Adjustment as per instructions of the director",
+                                   "Misc. expenses, details to follow",
+                                   "Transfer to suspense account pending clarification",
+                                   "Adjusted as discussed", "To be regularised later",
+                                   "As per verbal orders", "Write off of old balance",
+                                   "Rectification entry"), 20, TRUE)
+journal$posted_by[sus] <- sample(c("fin_mgr", "acct04"), 20, TRUE, prob = c(.7, .3))
+journal$amount[sus]    <- sample(c(250000, 500000, 750000, 1000000, 1500000), 20, TRUE)
+journal$date[sus[1:12]] <- as.Date("2025-03-29") + sample(0:2, 12, TRUE)
 ```
 
-In real data, with lakhs of entries, such a filter quickly picks out the entries whose descriptions deserve a second look.
+```{r}
+head(journal)
+```
+
+**Step 1, red-flag words.** We list words and phrases which often appear in irregular entries. `\\b` makes sure that, for example, `misc` is matched only at the beginning of a word.
+
+```{r}
+red_flags <- paste(c("\\badjust", "as per (the )?(instruction|direction|verbal)", "\\bverbal",
+                     "\\bmisc", "details? to follow", "\\breversal", "regularis", "suspense",
+                     "pending clarification", "\\bwrite.?off", "rectif", "as discussed"),
+                   collapse = "|")
+
+journal |>
+  filter(str_detect(str_to_lower(narration), red_flags)) |>
+  count(narration_start = str_trunc(narration, 45), sort = TRUE)
+```
+
+```{r}
+#| include: false
+n_flag1 <- sum(str_detect(str_to_lower(journal$narration), red_flags))
+```
+
+`r n_flag1` entries are flagged. But most of them are routine. Tour advances *adjusted* against TA bills, and *reversals* of duplicate entries approved by a note, are normal book-keeping. A good red-flag list also needs a list of known routine phrases, to be excluded.
+
+```{r}
+routine <- "adjusted against ta bill|reversal of duplicate entry no \\d+, approved vide"
+
+journal <- journal |>
+  mutate(f_narration = str_detect(str_to_lower(narration), red_flags) &
+                       !str_detect(str_to_lower(narration), routine))
+
+sum(journal$f_narration)
+```
+
+Now only `r sum(journal$f_narration)` entries have a red-flag narration.
+
+**Step 2, combine with other signals.** A vague narration alone is weak evidence. Together with other risk factors, it becomes much stronger. Let us add four more flags, and add them up into a simple score.
+
+```{r}
+journal_scored <- journal |>
+  mutate(f_weekend = wday(date, week_start = 1) >= 6,
+         f_round   = amount >= 100000 & amount %% 50000 == 0,
+         f_yearend = date >= as.Date("2025-03-25"),
+         f_senior  = posted_by == "fin_mgr",
+         score     = f_narration + f_weekend + f_round + f_yearend + f_senior)
+
+journal_scored |> count(score)
+```
+
+```{r}
+#| include: false
+high <- journal_scored |> filter(score >= 3)
+high_planted <- sum(high$entry_no %in% journal$entry_no[sus])
+```
+
+Only `r nrow(high)` of the `r format(n, big.mark = ",")` entries score 3 or more. `r high_planted` of them are among the 20 we planted. Let us see the top of the list.
+
+```{r}
+journal_scored |>
+  filter(score >= 3) |>
+  arrange(desc(score), desc(amount)) |>
+  select(entry_no, date, posted_by, amount, narration, score) |>
+  head(8)
+```
+
+::: callout-tip
+## Audit tip
+
+Each flag on its own catches many innocent entries. The *combination* of flags is what separates the few entries worth examining. Keep the scoring simple and explainable, as here, so that the selection of entries for detailed checking can be justified in the working papers.
+:::
+
+## Audit use case, brand names in tender specifications {#sec-text-brands}
+
+Specifications in a tender should describe *what* is needed, not *whose* product. The General Financial Rules require specifications to be generic, and where a brand has to be mentioned as a reference, it should be followed by the words "or equivalent". Specifications written around one brand, or with phrases like "only" and "exclusively", keep competitors out and may favour a particular supplier.
+
+Let us create 240 item specifications from the tenders of four sections of an imaginary department. The brand names are made up. In the Electrical section, we have planted specifications which name the brand *Voltix* without "or equivalent".
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the specifications"
+set.seed(77)
+brands <- c("Zentrix", "Corvalon", "Medisure", "Aquaflo", "Voltix")
+generic <- c("LED lamp, 20 W, BIS certified, warranty 2 years",
+             "Water purifier, RO and UV, 10 litre storage",
+             "Desktop computer, 16 GB RAM, 512 GB SSD, 24 inch monitor",
+             "Copper cable, 4 sq mm, ISI marked, 90 m coil",
+             "Office chair, high back, adjustable height",
+             "MCB, 32 A, double pole, ISI marked",
+             "Pulse oximeter, fingertip, with display")
+
+specs <- tibble(
+  spec_id = sprintf("S%03d", 1:240),
+  section = sample(c("Electrical", "IT", "Health", "General"), 240, TRUE),
+  text    = sample(generic, 240, TRUE)
+)
+# About 15% mention a brand correctly, as a reference with "or equivalent"
+ref <- sample(1:240, 36)
+specs$text[ref] <- paste0(specs$text[ref], ", make ", sample(brands, 36, TRUE), " or equivalent")
+
+# Planted. Brand-specific specifications in the Electrical section
+elec <- setdiff(which(specs$section == "Electrical"), ref)
+planted <- sample(elec, 14)
+specs$text[planted] <- paste0(specs$text[planted],
+                              sample(c(", make Voltix only", ", Voltix make",
+                                       ", exclusively of Voltix brand"), 14, TRUE))
+```
+
+```{r}
+specs |> slice(c(1, ref[1], planted[1]))
+```
+
+To find a brand name *not* followed by "or equivalent", we use a **negative look-ahead**, which we learnt in @sec-regex. The pattern `(?![^.]*or equivalent)` means "not followed, anywhere later in the sentence, by *or equivalent*".
+
+```{r}
+brand_pattern   <- paste0("\\b(", paste(brands, collapse = "|"), ")\\b")
+no_equivalent   <- paste0(brand_pattern, "(?![^.]*or equivalent)")
+restrictive     <- "\\bonly\\b|\\bexclusively\\b|\\bsole\\b"
+
+specs_flagged <- specs |>
+  mutate(brand           = str_extract(text, regex(brand_pattern, ignore_case = TRUE)),
+         brand_specific  = str_detect(text, regex(no_equivalent, ignore_case = TRUE)),
+         restrictive_use = str_detect(text, regex(restrictive, ignore_case = TRUE)))
+
+specs_flagged |>
+  count(section, brand_specific) |>
+  pivot_wider(names_from = brand_specific, values_from = n, values_fill = 0)
+```
+
+All the brand-specific specifications are in the Electrical section, and they all name the same brand.
+
+```{r}
+specs_flagged |>
+  filter(brand_specific) |>
+  count(section, brand, restrictive_use)
+```
+
+::: callout-tip
+## Audit tip
+
+A pattern like this across many tenders of one section is a lead. Find out who drafted the specifications, whether the named brand's dealer won the tenders, and how the prices compared with the market. Brand names in the specifications of goods available from many makers are especially worth questioning.
+:::
 
 ## A suggested workflow
 
