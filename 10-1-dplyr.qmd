@@ -16,7 +16,7 @@ library(knitr)
 The package `dplyr` (@fig-dplyrr) calls its functions as 'verbs' because these are actually doing some action.  So `dplyr verbs` can be divided in three classifications depending upon where they operate -
 
 - 'Row' verbs that operate on Rows
-- 'Column' verbs 
+- 'Column' verbs
 - 'group' verbs that operate on table split into different groups.
 
 ```{r fig-dplyrr, echo=FALSE, fig.cap="Package Dplyr", fig.show='hold', out.width="99%", fig.align='center'}
@@ -28,52 +28,52 @@ Let's learn each of these -
 ## Column verb `select()`
 In real world data sets we will often come across with data frames having numerous columns.  However for many of the data analysis tasks, most of these columns are not needed.  As already stated `select` (@fig-selectr) operates on columns.  Like `SELECT` in `SQL`, it just _select_ the column(s) from the given data frame.  The basic syntax is - `select(data_frame, column_names, ...)`.  So with pipes the same syntax goes like this
 ```
-data_frame %>% 
+data_frame %>%
   select(column_name)
 ```
 ```{r fig-selectr, echo=FALSE, fig.cap="Illustration of dplyr::select()", fig.show='hold', out.width="99%", fig.align='center'}
 knitr::include_graphics("images/select_dplyr.png")
 ```
 
-For example, let's try our hands on `mtcars` dataset.  
+For example, let's try our hands on `mtcars` dataset.
 Example-1
 ```{r}
-mtcars %>% 
+mtcars %>%
   select(mpg)
 ```
 
 **Note** that output is still a data frame unlike the `mtcars[['mpg']]` which returns a vector.  We can subset multiple columns here.  Example-2
 ```{r}
-mtcars %>% 
-  select(mpg, qsec) %>% 
+mtcars %>%
+  select(mpg, qsec) %>%
   head()
 ```
 
 We can also provide column numbers instead of names. Example-3
 ```{r}
-mtcars %>% 
-  select(4, 6) %>% 
+mtcars %>%
+  select(4, 6) %>%
   tail()
 ```
 
 We can also use `select` to reorder the columns in output, by using a `dplyr` _helping verb_ `everything()` which is basically _everything else._  See this example-
 ```{r}
-mtcars %>% 
-  select(qsec, mpg, everything()) %>% 
+mtcars %>%
+  select(qsec, mpg, everything()) %>%
   names()
 ```
 
 We may also use mix and match of _column names_ and _column numbers_.  See
 ```{r}
-mtcars %>% 
-  select(5, 7, mpg, everything()) %>% 
+mtcars %>%
+  select(5, 7, mpg, everything()) %>%
   names()
 ```
 
 Operator `:` can also be used with column names.  Ex-
 ```{r}
-mtcars %>% 
-  select(mpg:drat) %>% 
+mtcars %>%
+  select(mpg:drat) %>%
   head(n=4)
 ```
 
@@ -90,20 +90,20 @@ Some Examples.
 
 1.  This syntax will select all columns which ends with `"color"` in column names.
 ```{r}
-starwars %>% 
+starwars %>%
   select(ends_with('color'))
 ```
 Example-2:  This syntax will select all columns contains characters `"or"` in column names.
 ```{r}
-starwars %>% 
+starwars %>%
   select(contains('or'))
 ```
 
-**Using `where()`**:  This selection helper selects the variables for which a _function_ when applied to column names, returns `TRUE`.  
+**Using `where()`**:  This selection helper selects the variables for which a _function_ when applied to column names, returns `TRUE`.
 
 Example-3:  This syntax will select all numeric columns from the dataset.
 ```{r}
-starwars %>% 
+starwars %>%
   select(where(is.numeric))
 ```
 
@@ -118,36 +118,36 @@ knitr::include_graphics("images/mutate_dplyr.png")
 
 More than one column can be added simultaneously.  Newly created column may also be used for creation of another new column.  See example.
 ```{r}
-starwars %>% 
-  select(name:mass) %>% 
+starwars %>%
+  select(name:mass) %>%
   mutate(name_upper = toupper(name),
          BMI = mass/(height/100)^2)
 ```
 
 By default the new column will be added to the last of data frame.  As shown in above example, more operations can be combined in one using `%>%`.  There is a cousin `transmute()` of _mutate_ which drops all the old columns and keeps only newly created columns.  Example
 ```{r}
-starwars %>% 
+starwars %>%
   transmute(name_upper = toupper(name))
 ```
 
 **Other useful dplyr functions**  Another good use of `mutate` is to generate summarised result and display it corresponding to each row in data.  For example if the requirement is to calculate proportion of say `wt` column in `mtcars` data.
 ```{r}
-mtcars %>% 
-  head() %>% 
-  select(wt) %>% 
+mtcars %>%
+  head() %>%
+  select(wt) %>%
   mutate(total_wt = sum(wt),
-         wt_proportion = wt*100/total_wt) 
+         wt_proportion = wt*100/total_wt)
 ```
 
 1. `n()` is used to count number of rows
 2. `n_distinct()` is used to count number of distinct values for the given variable
 
 ```{r}
-mtcars %>% 
-  select(1:5) %>% 
-  mutate(total_cars = n()) %>% 
+mtcars %>%
+  select(1:5) %>%
+  mutate(total_cars = n()) %>%
   head()
-  
+
 ```
 
 ## Column verb `rename()`
@@ -159,23 +159,23 @@ knitr::include_graphics("images/rename_dplyr.png")
 
 See this example
 ```{r}
-mtcars %>% 
-  rename(miles_per_gallon = mpg) %>% 
+mtcars %>%
+  rename(miles_per_gallon = mpg) %>%
   head(3)
 ```
 
 **Note** that `select` can also rename the columns but will drop all unselected columns.  Check this
 ```{r}
-mtcars %>% 
-  select(miles_per_gallon = mpg) %>% 
+mtcars %>%
+  select(miles_per_gallon = mpg) %>%
   head(3)
 ```
 
 ## Column verb `relocate()`
 It _relocates_ column or block of columns simultaneosly either before the column mentioned in argument `.before` or after mentioned in `.after`.  See the example-
 ```{r}
-starwars %>% 
-  relocate(ends_with('color'), .after = name) %>% 
+starwars %>%
+  relocate(ends_with('color'), .after = name) %>%
   head(5)
 ```
 
@@ -189,27 +189,55 @@ knitr::include_graphics("images/filter_dplyr.png")
 
 See this example-
 ```{r}
-starwars %>% 
+starwars %>%
   filter(eye_color %in% c('red', 'yellow'))
 ```
 
 Multiple conditions can be passed simultaneously. Example
 ```{r}
-starwars %>% 
+starwars %>%
   filter(skin_color == 'white',
          height >= 150)
 ```
 **Note** that these conditions act simultaneously as in operator `AND` is used.  So if `OR` is to be used, use `|` explicitly
 ```{r}
-starwars %>% 
-  filter(skin_color == 'white' | height >= 150) %>% 
+starwars %>%
+  filter(skin_color == 'white' | height >= 150) %>%
   nrow()
+```
+
+### Dropping rows with `filter_out()`, and missing values {-}
+
+`filter()` *keeps* the rows for which the condition is `TRUE`. It drops the rows where the condition is `FALSE`, and also those where it is `NA`. This matters a lot when we want to *drop* some rows. Suppose we want to drop the cancelled vouchers from a list of payments, and one voucher has no status recorded.
+
+```{r}
+payments <- tibble(voucher = 1:6,
+                   amount  = c(500, 25000, NA, 120000, 80000, NA),
+                   status  = c("Paid", "Paid", "Cancelled", "Paid", NA, "Paid"))
+
+# Drop the cancelled vouchers, the usual way
+payments |> filter(!(status == "Cancelled"))
+```
+
+Voucher 5, a payment of 80,000, has silently disappeared, though it was not cancelled. For it, `status == "Cancelled"` is `NA`, and so is its negation, and `filter()` drops rows with `NA`. From version 1.2, dplyr has `filter_out()`, which *drops* the rows for which the condition is `TRUE`, and keeps everything else, including the rows where the condition is `NA`.
+
+```{r}
+payments |> filter_out(status == "Cancelled")
+```
+
+Now voucher 5 is kept, for us to examine. In audit, a record that quietly drops out of an analysis is a serious error, since the excluded records are often the very ones which need attention. So, to *remove* rows, prefer `filter_out()`, and to *select* rows, use `filter()`.
+
+dplyr 1.2 also added `when_any()` and `when_all()`, which combine several conditions with OR and AND respectively. They read more clearly than long chains of `|` and `&`, especially when each condition is itself complex.
+
+```{r}
+# Vouchers which are large OR have no amount recorded
+payments |> filter(when_any(amount > 100000, is.na(amount)))
 ```
 
 ## Row verbs `slice()` / `slice_*()` {#sec-slice_func}
 `slice()` and its cousins also filters rows but based on rows placement.  So, `data_fr %>% slice(1:5)` will filter out first five rows of the `data_fr`.  See example
 ```{r}
-starwars %>% 
+starwars %>%
   slice(4:10) # filter 4 to 10th row
 ```
 Other `slice()` cousins -
@@ -221,13 +249,13 @@ Other `slice()` cousins -
 
 Example-1:
 ```{r}
-starwars %>% 
+starwars %>%
   slice_min(height, n=3)
 ```
 Example-2:
 ```{r}
 set.seed(2022)
-starwars %>% 
+starwars %>%
   slice_sample(prop = 0.1) #sample 10% rows
 ```
 
@@ -240,8 +268,8 @@ knitr::include_graphics("images/arrange_dplyr.png")
 
 Example-
 ```{r}
-starwars %>% 
-  arrange(height) %>% 
+starwars %>%
+  arrange(height) %>%
   slice(1:5)
 ```
 
@@ -255,7 +283,7 @@ knitr::include_graphics("images/groupby_dplyr.png")
 
 Note the output of this simple example
 ```{r}
-starwars %>% 
+starwars %>%
   group_by(sex)
 ```
 **Note** that output now has 5 groups, though nothing different is seen in the displayed data.
@@ -264,40 +292,40 @@ This operation/verb is thus more useful if used in combination with other verbs.
 
 Example-1:  How many total characters are with same skin_color?
 ```{r}
-starwars %>% 
-  select(name, skin_color) %>% 
-  group_by(skin_color) %>% 
+starwars %>%
+  select(name, skin_color) %>%
+  group_by(skin_color) %>%
   mutate(total_with_s_c = n())
 ```
 
 Example- 2: Sample 2 rows of each `cyl` size from `mtcars`?
 ```{r}
 set.seed(123)
-mtcars %>% 
-  group_by(cyl) %>% 
+mtcars %>%
+  group_by(cyl) %>%
   slice_sample(n=2)
 ```
 Also note that `grouped` varaible(s) will always be available in the output.
 ```{r}
-mtcars %>% 
-  group_by(cyl) %>% 
+mtcars %>%
+  group_by(cyl) %>%
   select(drat) %>% # despite not selecting cyl
   head() # it is available in output
 ```
 
 
 ## Group verb `summarise()`
-This verb creates a summary row for each group if grouped data frame is in input, otherwise one single for complete operation.  
+This verb creates a summary row for each group if grouped data frame is in input, otherwise one single for complete operation.
 Example-1:
 ```{r}
-mtcars %>% 
+mtcars %>%
   summarise(total_wt = sum(wt))
 ```
 
 Example-2:
 ```{r}
-mtcars %>% 
-  group_by(cyl) %>% 
+mtcars %>%
+  group_by(cyl) %>%
   summarise(total_wt = sum(wt))
 ```
 
@@ -306,9 +334,9 @@ But now, it may have been noticed that grouping the data with `group_by` and the
 
 ```{r}
 set.seed(123)
-mtcars %>% 
-  group_by(cyl) %>% 
-  slice_sample(n=2) %>% 
+mtcars %>%
+  group_by(cyl) %>%
+  slice_sample(n=2) %>%
   ungroup()
 ```
 
@@ -318,14 +346,14 @@ Since grouping the data in one step, then performing required step and then agai
 ```{r}
 # Syntax - 1 (old style)
 
-mtcars %>% 
-  group_by(cyl) %>% 
-  slice(2) %>% 
+mtcars %>%
+  group_by(cyl) %>%
+  slice(2) %>%
   ungroup()
 
 # Syntax 2 (Dplyr 1.1.0 +)
 
-mtcars %>% 
+mtcars %>%
   slice(2, .by = cyl)
 ```
 
@@ -386,25 +414,26 @@ data.frame(
 )
 ```
 
-### `case_match()` {-}
-This function is somewhat similar to `case_when`.  While `case_when()` uses logical expressions on the left-hand side of the formula, `case_match()` uses values to match with. Syntax is like
+### `recode_values()` and `replace_values()` {-}
+
+`case_when()` uses logical conditions on the left-hand side of each formula. Often, we only want to match *values*. For this, dplyr 1.2 introduced `recode_values()`, which replaces the earlier `case_match()`. (`case_match()` is deprecated, and you may see it in older code.) Its syntax is like
 
 ```
-case_match(
-  .x,  # A vector whose values are to be matched
-  ..., # Basically for a condition like .x %in% Y, only Y has to be specified
-  .default = NULL, # Default values to be specified for if no match is found
+recode_values(
+  x,             # A vector whose values are to be matched
+  ...,           # value(s) ~ new value
+  default = NULL # Value if no match is found
 )
 ```
 
-So, above example could be rewritten as 
+So, the above example could be rewritten as
 ```{r}
-tax_slab <- case_match(
+tax_slab <- recode_values(
   floor(income), # Vector to be checked
   0:200000 ~ 0, # slab 1
   200001:500000 ~ 10, # slab 2
   500001:750000 ~ 20, # slab 3
-  .default = 30 # Slab 4
+  default = 30 # Slab 4
 )
 
 # check tax_slab
@@ -413,6 +442,25 @@ data.frame(
   tax_slab = tax_slab
 )
 
+```
+
+`recode_values()` also accepts a lookup table, through the arguments `from` and `to`. With `unmatched = "error"`, it stops if any value is not found in the table, instead of quietly returning `NA`. This is a safe way to convert codes into names.
+
+```{r error=TRUE}
+dept_codes <- tibble(code = c("PW", "HE", "ED"),
+                     name = c("Public Works", "Health", "Education"))
+
+recode_values(c("HE", "PW", "XX"), from = dept_codes$code, to = dept_codes$name,
+              unmatched = "error")
+```
+
+The unknown code `XX` is reported at once. Its sister function, `replace_values()`, changes only the matched values and keeps the rest as they are. It is handy for standardising a few variants in otherwise clean data.
+
+```{r}
+heads <- c("PWD", "P.W.D.", "Public Works", "Health", "Hlth", "Education")
+replace_values(heads,
+               c("PWD", "P.W.D.") ~ "Public Works",
+               "Hlth" ~ "Health")
 ```
 
 ## Functional programming in dplyr through `across()` {#sec-across}
@@ -428,10 +476,10 @@ Dplyr provides us with some useful window functions which will operate on these 
 1. `row_number()` can be used to generate row number
 2. `dense_rank` / `min_rank` / `percent_rank()` / `ntile()` / `cume_dist()` are other windowed functions in dplyr.  Check `?dplyr::ranking` for complete reference.
 3. `lead()` and `lag()` will give leading/lagging value in that window.
-4. `consecutive_id()` generates a unique identifier that increments every time a variable (or combination of variables) changes.  
- 
+4. `consecutive_id()` generates a unique identifier that increments every time a variable (or combination of variables) changes.
 
-These functions can be very helpful while analyzing time series data. 
+
+These functions can be very helpful while analyzing time series data.
 
 Example-1: Generating row numbers and ranks
 ```{r}
@@ -440,7 +488,7 @@ df <- data.frame(
   val = c(10, 2, 3, 2, NA)
 )
 
-df %>% 
+df %>%
   mutate(
     row = row_number(),
     min_rank = min_rank(val),
@@ -453,8 +501,8 @@ df %>%
 Example-2: Using previous and next values
 
 ```{r}
-Orange %>% 
-  group_by(Tree) %>% 
+Orange %>%
+  group_by(Tree) %>%
   mutate(prev_circ = lag(circumference),
          next_circ = lead(circumference))
 ```
@@ -467,7 +515,7 @@ df <- data.frame(
   value = c(1, 2, 3 , 4, 5, 6)
 )
 
-df %>% 
+df %>%
   mutate(RLE = consecutive_id(grp))
 ```
 
