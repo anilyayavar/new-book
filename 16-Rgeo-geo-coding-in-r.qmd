@@ -37,6 +37,7 @@ We will use `tidygeocoder` for geocoding, and `sf` for distances.
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(tidygeocoder)
 library(sf)
@@ -239,6 +240,123 @@ So the analysis finds two vendors at one spot, and a careful reading of the matc
 Rounding to three decimal places groups points within about 100 metres. Rounding to four places, about 10 metres, is stricter. Choose according to the quality of your addresses. With precise addresses, use four places. With addresses that only give a locality, three or even two places may be better.
 :::
 
+## Audit use case 3, excess lead charges in works {#sec-geocode-lead}
+
+In road and building works, contractors are paid for carrying materials like stone aggregate from a quarry to the work site. This carriage charge is called **lead**, and it is paid per cubic metre per kilometre. So the longer the claimed lead, the bigger the payment. Two common irregularities are,
+
+-   claiming carriage from a *distant* quarry, when an approved quarry is much nearer, and
+-   claiming a lead much longer than the actual distance to the quarry named.
+
+Excess payment on lead is a frequent finding in audits of works. Let us check six works in Rajasthan. The work sites are real towns. The quarries, quantities and claims are made up, and the carriage rate is imaginary.
+
+```{r}
+works <- tribble(
+  ~work_id, ~site,       ~quantity_cum, ~claimed_quarry,  ~claimed_lead_km,
+  "W-01",   "Churu",      12000,        "Bikaner",         175,
+  "W-02",   "Sikar",      15000,        "Kotputli",        150,
+  "W-03",   "Nagaur",      9000,        "Jodhpur",         135,
+  "W-04",   "Jhunjhunu",  18000,        "Jodhpur",         410,
+  "W-05",   "Tonk",       10000,        "Sawai Madhopur",   85,
+  "W-06",   "Bhilwara",   14000,        "Kishangarh",      290
+)
+
+approved_quarries <- c("Kishangarh", "Bikaner", "Jodhpur", "Kotputli", "Sawai Madhopur")
+rate_per_cum_km <- 4.5   # rupees, imaginary
+```
+
+We geocode each town once, sites and quarries together.
+
+```{r}
+#| message: false
+rj_towns <- tibble(town = unique(c(works$site, approved_quarries))) |>
+  mutate(address = paste0(town, ", Rajasthan, India")) |>
+  geocode(address = address, method = "osm")
+
+rj_sf <- rj_towns |> st_as_sf(coords = c("long", "lat"), crs = 4326)
+quarry_sf <- rj_sf |> filter(town %in% approved_quarries)
+```
+
+For each work, we need two distances. First, the straight-line distance to the quarry it *claims*. Second, the straight-line distance to the *nearest* approved quarry. `st_nearest_feature()` gives, for each point, the row number of the nearest feature in another layer.
+
+```{r}
+site_sf <- works |>
+  left_join(rj_towns, by = c("site" = "town")) |>
+  st_as_sf(coords = c("long", "lat"), crs = 4326)
+
+claimed_sf <- quarry_sf[match(works$claimed_quarry, quarry_sf$town), ]
+nearest_sf <- quarry_sf[st_nearest_feature(site_sf, quarry_sf), ]
+
+lead_check <- works |>
+  mutate(km_to_claimed  = round(as.numeric(st_distance(site_sf, claimed_sf, by_element = TRUE)) / 1000),
+         nearest_quarry = nearest_sf$town,
+         km_to_nearest  = round(as.numeric(st_distance(site_sf, nearest_sf, by_element = TRUE)) / 1000),
+         lead_ratio     = round(claimed_lead_km / km_to_claimed, 2))
+
+lead_check |>
+  select(work_id, site, claimed_quarry, claimed_lead_km, km_to_claimed, lead_ratio,
+         nearest_quarry, km_to_nearest) |>
+  print(width = Inf)
+```
+
+Two works stand out.
+
+-   `W-04` at Jhunjhunu claims stone from Jodhpur, although the approved quarry at Kotputli is much nearer. Its lead ratio is normal. The distance claimed is genuine, but the quarry choice is not.
+-   `W-06` at Bhilwara names the nearest quarry, Kishangarh, but claims a lead of more than twice the straight-line distance.
+
+To estimate the excess payment, we take a *reasonable* lead as 1.3 times the straight-line distance to the nearest approved quarry, as discussed in use case 1. Any lead claimed beyond this is excess.
+
+```{r}
+lead_excess <- lead_check |>
+  mutate(reasonable_lead_km = round(1.3 * km_to_nearest),
+         excess_km          = pmax(claimed_lead_km - reasonable_lead_km, 0),
+         excess_rupees      = excess_km * quantity_cum * rate_per_cum_km) |>
+  filter(excess_km > 0.2 * reasonable_lead_km) |>
+  select(work_id, site, claimed_lead_km, reasonable_lead_km, excess_km, quantity_cum, excess_rupees)
+
+lead_excess |> print(width = Inf)
+```
+
+```{r}
+#| include: false
+total_excess <- sum(lead_excess$excess_rupees)
+```
+
+We keep only works whose claimed lead exceeds the reasonable lead by more than 20%, to allow for genuinely longer roads. The two works together involve an estimated excess payment of about ₹`r round(total_excess / 1e7, 2)` crore.
+
+### An interactive map
+
+For presenting such findings, and for exploring them, an interactive map helps. The package `leaflet` draws maps which can be zoomed and clicked, with OpenStreetMap as the background. Unlike our imaginary state in @sec-maps, these are real places with latitude and longitude, so `leaflet` can place them on a real map (@fig-leadmap). Click a line to see the claim.
+
+```{r}
+#| label: fig-leadmap
+#| fig-cap: "Claimed carriage routes. Red lines are works with excess lead."
+#| warning: false
+library(leaflet)
+
+# One straight line from each work site to its claimed quarry
+route_lines <- map2(st_geometry(site_sf), st_geometry(claimed_sf),
+                    \(a, b) st_linestring(rbind(st_coordinates(a), st_coordinates(b)))) |>
+  st_sfc(crs = 4326) |>
+  st_sf(geometry = _) |>
+  mutate(work_id = works$work_id,
+         flagged = work_id %in% lead_excess$work_id,
+         popup   = paste0(work_id, ": ", works$site, " to ", works$claimed_quarry,
+                          "<br>Claimed lead ", works$claimed_lead_km, " km"))
+
+leaflet(width = "100%", height = 450) |>
+  addTiles() |>
+  addPolylines(data = route_lines, color = ~if_else(flagged, "red", "grey"),
+               weight = 3, popup = ~popup) |>
+  addCircleMarkers(data = site_sf, radius = 5, color = "steelblue", label = ~site) |>
+  addCircleMarkers(data = quarry_sf, radius = 6, color = "darkgreen", label = ~town)
+```
+
+::: callout-tip
+## Audit tip
+
+When a work claims material from a distant quarry, ask why the nearer approved quarry was not used. Sometimes there is a good reason, like the quality of stone or the nearer quarry being closed. That reason must be on record, with the approval of the competent authority, *before* the work was done. Also compare the claimed lead with the lead chart approved for the district, if one exists.
+:::
+
 ## A suggested workflow
 
 1.  **Use an approved service.** Never send personal addresses to a public geocoder.
@@ -266,5 +384,7 @@ Geocoding gives the location of the *address as written*, not necessarily the lo
 | `st_distance()` | sf | Distances between points, in metres |
 | `units::drop_units()` | units | Removes units from distances |
 | `round()` with `filter(n() > 1, .by = )` | base R, dplyr | Finds records sharing a location |
+| `st_nearest_feature()` | sf | The nearest feature in another layer, like the nearest approved quarry |
+| `leaflet()`, `addTiles()`, `addPolylines()`, `addCircleMarkers()` | leaflet | Interactive maps on an OpenStreetMap background |
 
 : Functions used in this chapter {#tbl-geocodefunctions}

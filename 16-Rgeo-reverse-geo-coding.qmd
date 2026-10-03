@@ -33,6 +33,7 @@ Coordinates of a beneficiary's home are personal data, just like the address. Do
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(tidygeocoder)
 ```
@@ -100,7 +101,7 @@ results |>
 
 With `full_results = TRUE`, the result has many more columns, one for each part of the address. Which columns appear depends on the place. A monument in a city and a spot in a village give different parts. `any_of()` selects only those of the listed columns which actually exist, so that the code does not fail if one is missing.
 
-## An audit example, checking geotagged photos
+## Audit use case 1, checking geotagged photos
 
 Many government schemes ask field staff to upload a geotagged photo of each completed work, such as a house, a pond or a road. The work is claimed to be at a particular place. Reverse geocoding the photo's coordinates tells us where the photo was *actually* taken.
 
@@ -135,10 +136,98 @@ Photo PH-103 was claimed to show a work in Mathura. But its geotag is in Agra, m
 Comparing text in this way is a rough first check. Place names are spelt in many ways, such as *Gurgaon* and *Gurugram*, and the address returned by the service may use a different name, or a larger or smaller unit, than the claim. Treat a mismatch as a question to be checked, not as a finding. For large data, it is better to compare codes, such as district codes, or to use the map-based checks of @sec-maps, where we measured the distance between a geotag and the site directly.
 :::
 
+## Audit use case 2, checking geotags without sending them anywhere {#sec-revgeo-offline}
+
+Reverse geocoding needs an online service, and we cannot send the coordinates of beneficiaries' homes or works to a public one. But many problems in geotags can be found without any service at all, using only the numbers themselves. Let us take the geotags of 1,000 works completed under a scheme in a district of Rajasthan. We have planted five common problems.
+
+-   15 geotags with **latitude and longitude swapped**, a frequent error when data passes between systems.
+-   8 geotags of **0, 0**, which is what some devices record when the GPS has failed.
+-   20 geotags with only **two decimal places**, which suggests they were typed by hand, not captured by the phone.
+-   3 geotags **outside India** altogether.
+-   40 works in different villages, all geotagged at **exactly the same spot**. This is the block office, from where the photos were actually uploaded.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the geotags"
+set.seed(7)
+n <- 1000
+geotags <- tibble(work_id = sprintf("WK%04d", 1:n),
+                  village = sprintf("Village-%02d", sample(1:60, n, TRUE)),
+                  lat  = round(runif(n, 26.60, 27.20), 6),
+                  long = round(runif(n, 75.50, 76.10), 6))
+
+problem_rows <- sample(1:n, 86)
+swapped <- problem_rows[1:15]
+zeros   <- problem_rows[16:23]
+typed   <- problem_rows[24:43]
+office  <- problem_rows[44:83]
+abroad  <- problem_rows[84:86]
+
+geotags <- geotags |>
+  mutate(
+    tmp  = lat,
+    lat  = if_else(row_number() %in% swapped, long, lat),
+    long = if_else(row_number() %in% swapped, tmp, long),
+    lat  = if_else(row_number() %in% zeros, 0, lat),
+    long = if_else(row_number() %in% zeros, 0, long),
+    lat  = if_else(row_number() %in% typed, round(lat, 2), lat),
+    long = if_else(row_number() %in% typed, round(long, 2), long),
+    lat  = if_else(row_number() %in% office, 26.912437, lat),
+    long = if_else(row_number() %in% office, 75.787271, long),
+    lat  = if_else(row_number() %in% abroad, lat - 30, lat)
+  ) |>
+  select(-tmp)
+```
+
+Let us add one column for each check. India lies roughly between latitudes 6° and 38° north, and longitudes 68° and 98° east. A swapped point has its latitude in the range of India's longitudes, and the other way round.
+
+```{r}
+count_decimals <- function(x) {
+  str_length(coalesce(str_extract(as.character(x), "(?<=\\.)\\d+"), ""))
+}
+
+geotag_checks <- geotags |>
+  add_count(lat, long, name = "same_spot") |>
+  mutate(
+    zero_point    = lat == 0 & long == 0,
+    swapped       = between(lat, 68, 98) & between(long, 6, 38),
+    outside_india = !zero_point & !swapped &
+                    !(between(lat, 6, 38) & between(long, 68, 98)),
+    low_precision = !zero_point & (count_decimals(lat) <= 2 | count_decimals(long) <= 2),
+    shared_spot   = same_spot >= 5 & !zero_point
+  )
+
+geotag_checks |>
+  summarise(across(zero_point:shared_spot, sum))
+```
+
+`count_decimals()` uses a look-behind, `(?<=\\.)`, which we learnt in @sec-regex, to take the digits after the decimal point and count them. A phone usually gives five or six decimals. Two decimals mean an accuracy of only about a kilometre.
+
+Every planted problem has been found. The most serious is the shared spot. Let us look at it.
+
+```{r}
+geotag_checks |>
+  filter(shared_spot) |>
+  summarise(works = n(), villages = n_distinct(village), .by = c(lat, long))
+```
+
+```{r}
+#| include: false
+spot <- geotag_checks |> filter(shared_spot) |> summarise(works = n(), villages = n_distinct(village))
+```
+
+`r spot$works` works, in `r spot$villages` different villages, have *exactly* the same geotag, to the sixth decimal place. No two houses or ponds can be at the same spot. These photos were taken, or at least uploaded, at one place. This one location, unlike a beneficiary's home, is an office, so it can be reverse geocoded to confirm what it is.
+
+::: callout-tip
+## Audit tip
+
+Run these checks first, on the whole data, before any mapping or reverse geocoding. They need no internet, raise no privacy concern, and often find the most important problems. Swapped and zero coordinates are data errors to be corrected. Typed coordinates and shared spots suggest that the photo was not taken at the site, and need verification in the field.
+:::
+
 ## A suggested workflow
 
 1.  **Use an approved service** for any coordinates that relate to people.
-2.  **Check the coordinates** for obvious errors, such as swapped latitude and longitude, or points outside India.
+2.  **Check the coordinates offline first**, for swapped, zero, typed, outside-India and shared values, as in the second use case.
 3.  **Reverse geocode each unique location once**, using `reverse_geocode()` on a data frame, and save the results.
 4.  **Compare** the returned place with the claimed place, by name or preferably by code.
 5.  **Measure the distance** between the geotag and the claimed site, where the site's coordinates are known.
@@ -159,5 +248,6 @@ A geotag tells us where the *phone* was, not necessarily where the *work* is. An
 | `full_results = TRUE` | tidygeocoder | Returns each part of the address in a separate column |
 | `any_of()` | dplyr | Selects the listed columns which exist |
 | `str_detect()`, `str_to_lower()` | stringr | Checks whether the claimed place appears in the address |
+| `between()`, `add_count()` | dplyr | Range checks on coordinates, and counting records at the same spot |
 
 : Functions used in this chapter {#tbl-revgeofunctions}

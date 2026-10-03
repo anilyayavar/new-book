@@ -58,6 +58,7 @@ The package **`sf`**, short for *simple features*, is the standard tool for vect
 
 ```{r}
 #| message: false
+#| warning: false
 library(tidyverse)
 library(sf)
 ```
@@ -319,6 +320,134 @@ These photos were taken tens of kilometres from the hospitals they claim to show
 ## Caution
 
 GPS locations on phones can be off by a few metres, sometimes by a few hundred metres in crowded areas or indoors. So never flag a photo for being 50 metres away. Use a sensible threshold, like one kilometre in our case, and look at how far beyond it each case lies. Also remember that geotags can be faked with special apps. A correct geotag does not prove a visit, but a wrong one is a strong sign of trouble.
+:::
+
+## Audit use case 3, one house, many beneficiaries {#sec-maps-samehouse}
+
+Under rural housing schemes, the final instalment is released when a geotagged photo of the completed house is uploaded. A known fraud is to photograph one completed house again and again, and upload it for several beneficiaries whose houses were never built. Each photo looks genuine, and each has a valid geotag. The trick shows only when we notice that photos of *different* beneficiaries were taken at almost the *same* spot.
+
+Let us create the data of 500 beneficiaries in 25 villages of the district Amarpur. For each beneficiary, we have the location of the house site, recorded at the time of sanction, and the geotag of the completion photo. Genuine photos are taken at the house, with a GPS error of about 10 metres. We have planted a group of 10 beneficiaries, from different villages, whose completion photos were all taken at one house. That house belongs to one of the ten. For the other nine, the photo shows someone else's house.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the housing data"
+set.seed(55)
+amarpur <- districts |> filter(district == "Amarpur")
+
+# 25 villages inside the district
+villages <- st_sample(amarpur, 25) |>
+  st_coordinates() |>
+  as_tibble() |>
+  mutate(village = sprintf("Village-%02d", 1:25))
+
+n <- 500
+houses <- tibble(ben_id  = sprintf("PH%04d", 1:n),
+                 village = sample(villages$village, n, TRUE)) |>
+  left_join(villages, by = "village") |>
+  # houses clustered within about 100 metres of the village centre
+  mutate(site_x  = X + rnorm(n, 0, 0.1),
+         site_y  = Y + rnorm(n, 0, 0.1),
+         # genuine photos, at the house, with about 10 metres of GPS error
+         photo_x = site_x + rnorm(n, 0, 0.010),
+         photo_y = site_y + rnorm(n, 0, 0.010)) |>
+  select(ben_id, village, site_x, site_y, photo_x, photo_y)
+
+# Planted. Ten beneficiaries of different villages, all photographed at one house
+fake <- houses |> distinct(village, .keep_all = TRUE) |> slice(2:11) |> pull(ben_id)
+spot <- houses |> filter(ben_id == fake[1])
+houses <- houses |>
+  mutate(photo_x = if_else(ben_id %in% fake, spot$site_x + rnorm(n, 0, 0.004), photo_x),
+         photo_y = if_else(ben_id %in% fake, spot$site_y + rnorm(n, 0, 0.004), photo_y))
+```
+
+```{r}
+head(houses, 3)
+```
+
+Let us turn the photo geotags into points.
+
+```{r}
+photos <- houses |>
+  st_as_sf(coords = c("photo_x", "photo_y"), crs = st_crs(districts), remove = FALSE)
+```
+
+`st_is_within_distance()` finds, for each photo, all photos taken within a given distance of it. Our distances are in kilometres, so 15 metres is `0.015`. The result is a list, with one element for each photo, holding the row numbers of the photos near it.
+
+```{r}
+near <- st_is_within_distance(photos, dist = 0.015)
+near[1:3]
+```
+
+Every photo is near itself, so most elements hold just their own row number. To form groups of photos taken at the same spot, we treat each pair of nearby photos as an edge of a network, and find the connected components, as we did in @sec-netaudit. If photo A is near B, and B is near C, all three fall in one group.
+
+```{r}
+#| message: false
+library(igraph)
+
+near_pairs <- tibble(from = rep(seq_along(near), lengths(near)),
+                     to   = unlist(near)) |>
+  filter(from < to)
+
+photo_graph <- graph_from_data_frame(near_pairs, directed = FALSE,
+                                     vertices = tibble(id = seq_len(nrow(photos))))
+
+photos$group <- components(photo_graph)$membership
+
+photo_groups <- photos |>
+  st_drop_geometry() |>
+  summarise(beneficiaries = n(),
+            villages      = n_distinct(village),
+            .by = group) |>
+  filter(beneficiaries > 1) |>
+  arrange(desc(beneficiaries))
+
+photo_groups
+```
+
+```{r}
+#| include: false
+n_one_village <- sum(photo_groups$villages == 1)
+big_one_village <- max(photo_groups$beneficiaries[photo_groups$villages == 1])
+big <- photo_groups |> slice_max(villages, n = 1)
+```
+
+There are `r nrow(photo_groups)` groups of photos taken within 15 metres of each other. `r n_one_village` of them lie entirely within one village, with up to `r big_one_village` beneficiaries each. These are most likely neighbours, whose houses stand next to each other, which is common in villages. In a crowded lane, house A may be within 15 metres of B, and B of C, so that a whole row of houses forms one group. So the *size* of a group alone is not the signal. The signal is a group that spans *several villages*, since houses in different villages cannot be next to each other. One group stands apart. `r big$beneficiaries` beneficiaries, from `r big$villages` different villages, have completion photos taken at the same spot. @fig-samehouse shows where their houses were supposed to be, and where the photos were taken.
+
+```{r}
+#| label: fig-samehouse
+#| fig-cap: "Sanctioned house sites (blue) of ten beneficiaries, and the single spot where all their completion photos were taken (red)"
+same_spot <- photos |>
+  st_drop_geometry() |>
+  filter(group == big$group)
+
+ggplot() +
+  geom_sf(data = amarpur, fill = "grey95", colour = "grey60") +
+  geom_point(data = houses, aes(site_x, site_y), colour = "grey75", size = 0.6) +
+  geom_segment(data = same_spot, aes(x = site_x, y = site_y, xend = photo_x, yend = photo_y),
+               colour = "firebrick", alpha = 0.6) +
+  geom_point(data = same_spot, aes(site_x, site_y), colour = "steelblue", size = 2.5) +
+  geom_point(data = same_spot, aes(photo_x, photo_y), colour = "firebrick", size = 3) +
+  theme_void()
+```
+
+We can also measure, for each beneficiary, how far the photo was taken from the sanctioned site, as we did for the inspections.
+
+```{r}
+photos |>
+  st_drop_geometry() |>
+  mutate(site_to_photo_km = sqrt((photo_x - site_x)^2 + (photo_y - site_y)^2),
+         same_spot_group  = group == big$group) |>
+  summarise(beneficiaries = n(),
+            median_metres = round(1000 * median(site_to_photo_km)),
+            .by = same_spot_group)
+```
+
+Here, on our flat grid in kilometres, the distance is simply the length of the straight line between the two points. Genuine photos were taken a few metres from the house site. The photos of the suspicious group were taken kilometres away from the sites. Both checks point to the same ten beneficiaries.
+
+::: callout-tip
+## Audit tip
+
+Use both checks together. The distance from the sanctioned site catches a photo taken at the wrong place. The grouping of photos catches the same house shown for many beneficiaries, even when the sanctioned sites were recorded carelessly. In the field, visit the sites of a sample of the group, and check whether a house exists there at all.
 :::
 
 ## Buffers
