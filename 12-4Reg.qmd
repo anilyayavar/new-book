@@ -3,15 +3,31 @@
 source("_common.R")
 ```
 
-# Linear Regression
+# Linear Regression {#sec-regression}
 
-Regression models are a class of statistical models that let us explore the relationship between a response variable and one or more explanatory variables. If such a relationship exists and is detected, we can make predictions about the value of the response variable given some explanatory variables. As an example, if a relationship between number of employees in an office and its monthly expenses on salary is established, we can predict the monthly expenses incurred by that office on salary if we know the number of employees.  That lets us do thought of experiments like asking how much the a new company had to pay say 10 employees on salary expenses monthly.  
+Regression models are a class of statistical models that let us explore the relationship between a response variable and one or more explanatory variables. If such a relationship exists and we can find it, we can predict the value of the response variable from the explanatory variables.
 
-Explanatory variables are sometimes also referred to as *regressors* or *independent* or *predictor* variables whereas response variable is also called as *dependent* or *outcome* variable.  When the response variable is numeric and the relationship is linear, the regression is called as linear regression. Of course, there are certain other assumptions, which we will discuss later on in the chapter. 
+As an example, suppose we establish a relationship between the number of employees in an office and its monthly expenditure on salary. We can then predict the monthly salary expenditure of any office if we know its staff strength. That lets us ask useful questions. How much should an office with 10 employees spend on salary every month? And for the auditor, the more interesting question is the reverse one. Which offices are spending *much more* than their staff strength explains? We will answer exactly this question at the end of this chapter, in @sec-reg-audit.
+
+Explanatory variables are also called *regressors*, *independent* variables or *predictors*. The response variable is also called the *dependent* or *outcome* variable. When the response variable is numeric and its relationship with the predictors is linear, the regression is called *linear regression*. There are some other assumptions too, which we will discuss later in the chapter.
+
+## Prerequisites
+
+Besides `tidyverse`, we will use a few packages in this chapter. `broom` turns model results into tidy data frames. `performance` and `see` draw diagnostic plots. `car` calculates the variance inflation factor. `GGally` draws correlation plots and `moderndive` draws parallel slopes. `palmerpenguins` gives us a dataset for the last example.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(broom)
+library(performance)
+library(car)
+library(GGally)
+library(moderndive)
+library(palmerpenguins)
+```
 
 ```{r helpfun, echo=FALSE, warning=FALSE, message=FALSE}
-library(tidyverse)
-
 my_chart <- function(data, x_var, y_var){
   # Model
   lmod <- eval(substitute(lm(y_var ~ x_var , data = data)))
@@ -24,7 +40,7 @@ my_chart <- function(data, x_var, y_var){
     geom_segment(aes(xend = {{x_var}},  yend = pred), alpha = 0.2, linewidth = 0.9, color = 'seagreen') +
     geom_point(aes(color = abs(res), size = abs(res))) +
     scale_color_continuous(low = 'yellow', high = 'darkred') +
-    guides(color = FALSE, size = FALSE) +
+    guides(color = "none", size = "none") +
     geom_point(aes(y = pred), shape = 1) +
     theme(panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
@@ -33,16 +49,30 @@ my_chart <- function(data, x_var, y_var){
           )
 
 }
+
+# Correlation panel coloured by strength, used by ggpairs() later
+my_fn <- function(data, mapping, method = "p", use = "pairwise", ...){
+  x <- eval_data_col(data, mapping$x)
+  y <- eval_data_col(data, mapping$y)
+  corr <- cor(x, y, method = method, use = use)
+  # minus one is blue, zero is white and one is red
+  colFn <- colorRampPalette(c("blue", "white", "red"), interpolate = 'spline')
+  fill <- colFn(100)[findInterval(corr, seq(-1, 1, length = 100))]
+  ggally_cor(data = data, mapping = mapping, ...) +
+    theme_void() +
+    theme(panel.background = element_rect(fill = fill))
+}
 ```
 
 ## Basic concepts
-Before we start creating regression models, it's always a good practice to visualize the data. It will help us ascertaining the nature of relationship between the predictors and response variable, if any. To visualize the relationship between two numeric variables, we can use a scatter plot. See the two examples in @fig-concept. In the first example (plot) we can see a near perfect linear relationship between GNP and Population of the countries, whereas a moderate but negative relationship between two variables is seen in second example. 
+
+Before we build a regression model, it is always good practice to visualise the data. It helps us see the nature of the relationship between the predictors and the response variable, if there is one. To see the relationship between two numeric variables, we use a scatter plot. See the two examples in @fig-concept. In the first plot there is a near perfect linear relationship between GNP and population (correlation `r round(cor(longley$GNP, longley$Population), 2)`). In the second plot there is a strong but negative relationship between mileage and engine displacement (correlation `r round(cor(mtcars$disp, mtcars$mpg), 2)`). The points are more scattered around the line here.
 
 ::: {#fig-concept}
 
 ```{r echo=FALSE, fig.align='center', out.height="45%", out.width="47%", fig.show='hold'}
 
-longley |> 
+longley |>
   ggplot(aes(Population, GNP)) +
   geom_point(color = 'blue') +
   geom_smooth(method = 'lm', se = FALSE, color = 'red', formula = 'y ~ x') +
@@ -62,39 +92,40 @@ mtcars |>
 Linear Regression - Intuition
 :::
 
-Linear regression is a perfect model to predict outcome or response variable when it has linear relationship with explanatory variables.  In that case our predicted values will lie on the assumed line (in linear relationship) ideally.  Maths behind estimating or predicting outcomes is thus, finding the following algebraic @eq-lr1.
+When the outcome variable has a linear relationship with the explanatory variable, the best prediction lies on a straight line. So the maths behind the prediction is finding the equation of that line, @eq-lr1.
 
 $$
 y = mx + c
-$$ {#eq-lr1} 
+$$ {#eq-lr1}
 
-Where - 
+Where -
 
-- `m` is the slope of the line (in linear relationship)
-- `c` is the intercept of Y-axis. (value of $y$ when $x$ is `0` )
+- `m` is the slope of the line
+- `c` is the intercept on the Y-axis (value of $y$ when $x$ is `0`)
 
-Interpreting this equation in real world is like estimating the coefficients i.e. both $m$ and $c$ in above equation. The goal of our exercise will thus be to estimate the best values of $m$ and $c$.  These two parameters, $m$ and $c$ are sometimes also referred to as $\beta_1$ and $\beta_0$ respectively.  Those familiar with mathematics behind fitting the equation of a line (in two dimensional space), may know that we require only two variables (data points i.e. $x$ and $y$ value pairs) values to find these parameters.  So it means, that if we have a fair amount of data points available (which will in rarest of circumstances be collinear i.e. lying on one same line), we can actually get many such regression lines.  Our goal is thus, to find best of these lines.  But, how?
+Fitting a regression thus means estimating both $m$ and $c$. In statistics, these two are usually written as $\beta_1$ (slope) and $\beta_0$ (intercept). Those familiar with coordinate geometry know that two points are enough to draw a line. But real data has many points, and they rarely lie on one line. So we can draw many different lines through them. Our goal is to find the *best* of these lines. But how?
 
-To answer this question, let us also understand that the values of $x$ and $y$ pairs in actual practice, don't lie on the regression line because these points will rarely be collinear (See plots in @fig-concept and note that none of the data point actually lie on the line).  So for each data point of response variable, there is an actual value and one fitted value (the one falling on the regression line).  The difference between these values is called *error term* or *residual*. Technically these are not errors but random noise that the model is not able to explain. Mathematically, if $\hat{y}$ is fitted value, $y$ is actual value, the difference also called error (of prediction) term say $\epsilon$ can be denoted as -
+To answer this, note that in practice the points do not lie on the regression line. See the plots in @fig-concept again. Hardly any point lies exactly on the line. So for each point there is an *actual* value of $y$ and a *fitted* value, the one on the line. The difference between the two is called the *residual*. It is the part of $y$ that the model is not able to explain. If $\hat{y}$ is the fitted value and $y$ is the actual value, the residual $\epsilon$ is
 
 $$
 \epsilon = y - \hat{y}
-$$ {#eq-lr2} 
+$$ {#eq-lr2}
 
-OR, we can say that
+or, we can say that
 
 $$
 y = \beta_0 + \beta_1x + \epsilon
-$$ {#eq-lr3} 
+$$ {#eq-lr3}
 
-Now, one method to find best fit regression line is to minimize the error terms. Theoretically, it means to capture pattern/relationship between data points as much as possible so that what's left behind is true random noise. One way could be to minimise the mean of these error terms.  But these error terms can be both positive or negative.  See @fig-errors. So to ensure that these are not cancelled out while taking mean, we can minimise either the mean of their absolute values or their squares. Most commonly accepted method is to take mean of squares and minimise it.  One of the benefit of adopting it over another, is that while squaring errors or residuals, large residuals get higher weight than lower residuals.  That's why this linear regression technique is also sometimes referred to as **Ordinary Least Squares** or **OLS** regression.  
+The best line is the one which leaves the smallest residuals. We cannot simply add up the residuals, because some are positive and some negative, and they cancel out. See @fig-errors. So we either take their absolute values or their squares. The usual method is to minimise the *sum of squares* of residuals. Squaring gives more weight to large residuals than to small ones. It also gives a simple formula for the best line. That is why this technique is called **Ordinary Least Squares** or **OLS** regression.
 
 ```{r fig-errors, echo=FALSE, warning=FALSE, fig.align='center', fig.cap="Residuals - Intuition and Concept", out.height="35%"}
 my_chart(LifeCycleSavings, sr, pop75)
 ```
 
 ## Simple Linear Regression in R
-Don't worry, in R we do not have to do this minimisation job ourselves.  In fact, base R has a fantastic function `lm` which can fit a best regression line, for a given set of variables, for us.  The syntax is simple.
+
+We do not have to do this minimisation ourselves. Base R has a function `lm()` which fits the best regression line for a given set of variables. The syntax is simple.
 
 ```
 lm(formula, data, ...)
@@ -102,20 +133,20 @@ lm(formula, data, ...)
 
 where -
 
-- `formula` an object of class "formula" (or one that can be coerced to that class): a symbolic description of the model to be fitted.  For our example above, we can write `y ~ x`
-- `data` an optional data frame.
+- `formula` is a symbolic description of the model to be fitted. For our example above, we write `y ~ x`, read as "y is explained by x".
+- `data` is the data frame which contains the variables.
 
-It actually returns a special object, which can be printed directly like other R objects.  However, it is best printed with the `summary` function.  Firstly we will see an example of simple linear regression which is a linear regression with only one independent variable.  
+`lm()` returns a special object. We can print it directly like other R objects. But it is best printed with the `summary()` function. Let us first see an example of *simple* linear regression, which is linear regression with only one independent variable.
 
-Example-1:  **Problem Statement:** `iris` which is a famous (Fisher's or Anderson's) data set, loaded by default in R, gives the measurements in centimeters of the variables sepal length (`Sepal.Length`) and width (`Sepal.Width`) and petal length (`Petal.Length`) and width (`Petal.Width`), respectively, for 50 flowers from each of 3 species (`Species`) of iris. The species are Iris `setosa`, `versicolor`, and `virginica`.  Let us try to establish a relationship between `Sepal.Length` and `Sepal.Width` variables of `setosa` Species i.e. iris` data-set, (first 50 records only).
+**Problem Statement:** Example-1. `iris` is a famous (Fisher's or Anderson's) dataset, loaded by default in R. It gives the measurements in centimetres of sepal length (`Sepal.Length`), sepal width (`Sepal.Width`), petal length (`Petal.Length`) and petal width (`Petal.Width`) for 50 flowers from each of 3 species (`Species`) of iris. The species are *setosa*, *versicolor*, and *virginica*. Let us try to establish a relationship between `Sepal.Length` and `Sepal.Width` of the *setosa* species, which are the first 50 records of `iris`.
 
-As already stated above, it is always a good practice to visualize the data, if possible.  So let's make a scatter-plot, as seen in @fig-ex1plot.
+As already stated, it is good practice to visualise the data first. So let us make a scatter plot, as in @fig-ex1plot.
 
 ```{r fig-ex1plot, fig.align='center', fig.cap="Relationship between sepal widths and lengths in setosa species", out.height="30%"}
 
-iris %>% 
+iris %>%
   # Extract First 50 records
-  head(50) %>% 
+  head(50) %>%
   ggplot(aes(Sepal.Length, Sepal.Width)) +
   # Scatter plot
   geom_point() +
@@ -126,7 +157,7 @@ iris %>%
 
 ```
 
-The relationship seem fairly linear (@fig-ex1plot), so let's build the model.
+The relationship looks fairly linear (@fig-ex1plot), so let us build the model.
 
 ```{r ex1}
 lin_reg1 <- lm(formula = Sepal.Width ~ Sepal.Length, data = iris[1:50,])
@@ -138,19 +169,20 @@ lin_reg1
 summary(lin_reg1)
 ```
 
-Observing the outputs above, we can notice that simply printing the object returns coefficients whereas printing with `summary` gives us a lot of other information.  But how to interpret this information?  Before proceeding to interpret the output, let us understand a few more concepts which are essential here.  These concepts are basically some assumptions, which we have made while finding the best fit line or in other words estimating the parameters statistically.
+Simply printing the object gives us only the coefficients. Printing it with `summary()` gives us a lot of other information. But how do we read it? Before that, let us understand a few assumptions which we made, silently, while fitting the line.
 
 ## Assumptions of Linear Regression
-Linear regression makes several assumptions about the data, such as :
 
-- *Linearity of the data*. The relationship between the predictor ($x$) and the outcome ($y$) is assumed to be linear.  Obviously, the relationship should be linear.  If we would try to fit non-linear relationship through linear regression our results wouldn't be correct.  Also when we use multiple predictors, as we will see shortly, we make another assumption that the model is additive in nature besides being linear.  Refer @fig-linearity.  It is clear that if we try to establish a linear relationship (red line) when it is actually cubic (green dashed line) our model will give erroneous results.
+Linear regression makes several assumptions about the data.
+
+- **Linearity.** The relationship between the predictor ($x$) and the outcome ($y$) is assumed to be linear. If we fit a straight line to a curved relationship, our results will be wrong. See @fig-linearity. The relationship there is actually cubic (green dashed line), and the straight line (red) misses it badly. When we use many predictors, as we will shortly, we also assume that their effects *add up*.
 
 ```{r fig-linearity, echo=FALSE, fig.align='center', fig.cap="Is the relationship linear?", out.width="50%"}
 # Setting seed for reproducibility
 set.seed(1234)
 x <- 11:110
 y <- x^3 + rnorm(100, 0, 80000)
-data.frame(x = x, y = y) %>% 
+data.frame(x = x, y = y) %>%
   ggplot(aes(x, y)) +
   geom_point() +
   geom_smooth(method = "lm", color = "red", formula = 'y ~ x', linetype = "solid", se = FALSE) +
@@ -158,24 +190,22 @@ data.frame(x = x, y = y) %>%
   theme_bw()
 ```
 
-- *Normality of residuals*. The residuals are assumed to be normally distributed.  Actually, this assumption is followed by the assumption that our dependent variable is normally distributed and not concentrated anywhere.  Thus, if dependent variable is normally distributed, and if we have been able to capture the relationship available, then what has been left must be true noise and it should be normally distributed with a mean of $0$.  
+- **Normality of residuals.** The residuals are assumed to be normally distributed with a mean of $0$. Note that it is the *residuals* which should be normal, not the $y$ variable itself. If the model has captured the relationship well, what is left should be random noise. This assumption matters mainly for the p-values and confidence intervals. The line itself can be fitted without it.
 
-- *Homogeneity of residuals variance*. The residuals are assumed to have a constant variance, statistically known as homoscedasticity.  It shows that residuals that are left out of regression model are true noise and not related to fitted values, which in that case would have meant that the model was insufficient to capture the actual relationship.  Heteroscedasticity (the violation of homoskedasticity) is present when the size of the error term differs across values of an independent variable.  This can be best understood by plots in @fig-homod where residuals in left plot indicate equal variance and thus homoskedasticity whereas in the right plot heteroskedasticity is indicated clearly.
+- **Homogeneity of residual variance.** The residuals are assumed to have the same spread at all values of $x$. Statistically this is called *homoskedasticity*. If the spread changes with $x$, it is called *heteroskedasticity*. See @fig-homod. The residuals in the left plot have equal spread. In the right plot, the spread grows as $x$ grows, which shows heteroskedasticity clearly. In audit data this is very common. Big offices, big contracts and big claims vary more, in rupees, than small ones.
 
 ::: {#fig-homod}
 
 ```{r echo=FALSE, fig.align='center', out.width="47%", fig.show='hold'}
-library(tidyverse)
-
 set.seed(1234)
-data.frame(x = 1:100, y = rnorm(100, 5, 10)+(1:100)) %>% 
+data.frame(x = 1:100, y = rnorm(100, 5, 10)+(1:100)) %>%
   ggplot(aes(x, y)) +
   geom_point()+
   geom_smooth(method = 'lm', se = FALSE, formula = "y ~ x") +
   labs(title = "Homoskedasticity of Residuals") +
   theme_bw()
 
-data.frame(x = 1:100, y = rnorm(100, 0.5, 0.07)*(1:100)) %>% 
+data.frame(x = 1:100, y = rnorm(100, 0.5, 0.07)*(1:100)) %>%
   ggplot(aes(x, y)) +
   geom_point()+
   geom_smooth(method = 'lm', se = FALSE, formula = "y ~ x") +
@@ -189,26 +219,28 @@ Homoskedasticity (left) Vs. Heteroskedasticity (right)
 Sample data created by author for demonstration only
 :::
 
-- *Independence* of residuals error terms.  This assumption is also followed by original assumption that our dependent variable is independent in itself and any $y$ value is not dependent upon another set of $y$ values.  In our example, we can understand it like that Sepal width of one sample is not affecting width of another.
+- **Independence of residuals.** Each observation is assumed to be independent of the others. In our example, the sepal width of one flower does not affect the width of another. Monthly data of the same office, on the other hand, is usually *not* independent, because this month's expenditure is related to last month's. Such data needs time series methods (@sec-ts).
 
 ## Interpreting the output of `lm`
-Let us discuss each of the component or section of `lm` output, hereinafter referred to as model.
 
-### `call`
-The `call` section shows us the formula that we have used to fit the regression model.  So `Sepal.Width` is our dependent or response variable, `Sepal.Length` is predictor or independent variable.  These variables refer to our data-set which is, first 50 rows of `iris` or `iris[1:50,]`.
+Let us discuss each section of the `summary()` output, which we will call the model from here on.
+
+### `Call`
+
+The `Call` section shows the formula used to fit the model. `Sepal.Width` is our response variable and `Sepal.Length` is the predictor. The data is the first 50 rows of `iris`, or `iris[1:50,]`.
 
 ### `Residuals`
-This depicts the quantile or five point summary of error terms or the residuals, which also as discussed, are the difference between the actual values and the predicted values. We can generate these same values by taking the actual values of $y$ variable and subtracting these from its predicted values of the model.
+
+This is the five point summary of the residuals. As discussed, residuals are the actual values minus the fitted values. We can get the same numbers ourselves.
 
 ```{r resid}
 summary(iris$Sepal.Width[1:50] - lin_reg1$fitted.values)
 ```
 
-Ideally, the median of error values/residuals should be centered around `0` thus telling us that these are somewhat symmetrical and our model is predicting fairly at both positive/higher and negative/lower side.  Any skewness will thus show that errors are not normally distributed and our model may be biased towards that side.
+Ideally, the median of the residuals should be close to `0`, and the first and third quartiles should be about equally far from it. That tells us the residuals are roughly symmetrical, and the model is not consistently over-predicting or under-predicting. In our example the median is `r round(median(residuals(lin_reg1)), 3)`, practically zero. The quartiles are also nearly balanced. The histogram in @fig-ex1hist shows that the residuals look fairly normal, as we assumed.
 
-In our example, we can observe a slight left-skewed distribution of error terms which indicates that our model is not doing that well for higher sepal lengths as it is doing for lower ones.  This can also be seen in @fig-ex1hist i.e. histogram of residuals.
-```{r fig-ex1hist, echo=FALSE, fig.align='center', fig.cap="Histogram of Resuduals"}
-broom::augment(lin_reg1) %>% 
+```{r fig-ex1hist, echo=FALSE, fig.align='center', fig.cap="Histogram of Residuals"}
+broom::augment(lin_reg1) %>%
   ggplot(aes(.resid)) +
   geom_histogram(binwidth = 0.03) +
   geom_density(linewidth = 1, lty = 2) +
@@ -218,132 +250,151 @@ broom::augment(lin_reg1) %>%
 ```
 
 ### `Coefficients`
-Remember that these were our goals of the exercise.  Here coefficients will be written as coefficient for that predictor and an intercept term, i.e. our $\beta_1$ and $\beta_0$ respectively.  We can easily interpret that positive coefficients means positive relation and negative coefficient means value of outcome variable will decrease as corresponding independent variable increase.  So, in our example, we can deduce that -
 
-- for `0` sepal length, the sepal width will be `-0.5694` (Though mathematically only as physically having `0` and negative width and lengths are not possible).
-- for every unit i.e. `1` i.e. unit increase in sepal length, width increases by `0.7985`
+These were the goal of our exercise. There is one coefficient for the predictor (the slope, $\beta_1$) and one for the intercept ($\beta_0$). A positive slope means $y$ goes up when $x$ goes up. A negative slope means $y$ goes down when $x$ goes up. In our example,
 
-Thus our regression line equation is -
+- when sepal length is `0`, the sepal width would be `r round(coef(lin_reg1)[1], 4)`. This is only a mathematical value, since no flower has zero length or negative width. The intercept often has no practical meaning when $x = 0$ lies far outside the data.
+- for every `1` cm increase in sepal length, the width increases by `r round(coef(lin_reg1)[2], 4)` cm, on average.
+
+Thus our regression line is
 
 $$
 Sepal.Width = -0.5694 + 0.7985 * Sepal.Length
-$$ {#eq-lr4} 
+$$ {#eq-lr4}
 
-
-**Now one thing to note here that, since we are adopting OLS approach to find out the (estimated) equation of best line, the coefficients we have arrived at, are only the estimated values of mean of these coefficients.  Actually, we started (behind the scenes) with a null hypothesis that there is no linear relationship or, in other words, that the coefficients are zero.  Alternate hypothesis, in this case, as you may have guessed by now, was that these coefficients are not zero.  The coefficients may follow a statistical/ probabilistic distribution and thus, we may infer only its estimated (mean) value.**
-
-**We can see the confidence intervals of each of the coefficient using function `confint`.  By default, the 95% confidence intervals may be generated.  See the following.**
+We fitted the line on a sample of 50 flowers. Another sample of 50 setosa flowers would give slightly different coefficients. So the coefficients are only *estimates*, and each comes with some uncertainty. We can see a range of likely values for each coefficient, called the confidence interval, using the function `confint()`. By default, it gives 95% confidence intervals.
 
 ```{r}
 confint(lin_reg1)
 ```
 
-Now, these estimated distribution must also have some standard error, a probability statistic and a p-value.  
+The other columns of the coefficients table measure this uncertainty.
 
-- The *standard error* of the coefficient is an estimate of the standard deviation of the coefficient. It tells us how much uncertainty there is with our coefficient. We can build confidence intervals of coefficients using this statistic, as shown above. 
-- The t-statistic is simply the estimated coefficient divided by the standard error. By now you may have understood that we are applying student's t-distribution while estimating the parameters.
-- Finally `p value` i.e. **Pr(>|t|)** gives us the probability value and tells us how significant is our coefficient value.
+- The *standard error* (`Std. Error`) tells us how much the estimate would vary from sample to sample. The confidence intervals above are built from it.
+- The *t value* is simply the estimate divided by its standard error. A large t value (positive or negative) means the estimate is large compared to its uncertainty.
+- The *p-value* (`Pr(>|t|)`) tests the null hypothesis that the true coefficient is zero, that is, $x$ has no effect on $y$. A small p-value, say below 0.05, lets us reject this.
+
+In our example, the p-value of `Sepal.Length` is very small, so sepal length clearly affects width. The p-value of the intercept is `r round(summary(lin_reg1)$coefficients[1, 4], 3)`, so we cannot say the intercept is different from zero. That is fine. We are rarely interested in the intercept.
 
 ### `Signif. codes`
-These are nothing but code legends which are simply telling us how significant out p-value may be for each case.  Notice three asterisks in from of coefficient estimate of `Sepal.Length` which indicate that coefficient is extremely significant and we can reject null hypothesis that $\beta_1$ is $0$.
 
-These codes give us a quick way to visually see which coefficients are significant to the model. 
+These are just legends for the stars shown next to each p-value. Notice the three stars next to `Sepal.Length`. They mean its p-value is below 0.001, and we can safely reject the null hypothesis that $\beta_1$ is $0$. The stars give a quick visual sense of which coefficients matter.
 
 ### `Residual standard error`
-The residual standard error is a measure, and one of the metrics, telling us how well the model fits the data.  This is actually the standard deviation of all error terms with the difference that instead of taking `n` terms we are taking `degrees of freedom`.
+
+The residual standard error (RSE) is one of the measures of how well the model fits the data. It is the standard deviation of the residuals, except that we divide by the *degrees of freedom* instead of $n$.
 
 $$
 RSE = \sqrt{\frac{1}{(n-2)} \sum_{i=1}^n (y_i - \hat{y_i})^2}
-$$ {#eq-lr5} 
+$$ {#eq-lr5}
 
-Obviously $df$ is $n-2$, as there is one regressor and one intercept.  We can verify @eq-lr5 by calculation.
+Here the degrees of freedom are $n-2$, because we estimated two coefficients, one slope and one intercept. We can verify @eq-lr5 by calculation.
 
 ```{r rse}
 sqrt(sum((iris[1:50, "Sepal.Width"] - lin_reg1$fitted.values)^2)/48)
 ```
 
-### `R-Squared` both Multiple and Adjusted
-*Multiple R-Squared* is also called the coefficient of determination.  Often this is the most cited measurement of how well the model is fitting to the data. It tells us what percentage of the variation within our dependent variable that the independent variable is explaining through the model. By looking at output we can say that about 55% of variation is explained through the model. We will discuss it in detail, in the next section.
+The RSE is in the units of $y$. So we can say that the model's predictions of sepal width are typically off by about `r round(sigma(lin_reg1), 2)` cm.
 
-*Adjusted R squared* on the other hand, shows us what percentage of the variation within our dependent variable that all predictors are explaining.  Thus, it is helpful when there are multiple regressors i.e. in Multiple Linear Regression. The difference between these two metrics might be subtle where we adjust for the variance attributed by adding multiple variables.  
+### `R-Squared`, both Multiple and Adjusted
+
+*Multiple R-squared* is also called the coefficient of determination. It is the most cited measure of how well a model fits. It tells us what share of the variation in the response variable is explained by the model. In our example about `r round(summary(lin_reg1)$r.squared * 100)`% of the variation in sepal width is explained by sepal length. We will discuss it in detail in the next section.
+
+*Adjusted R-squared* is R-squared with a penalty for the number of predictors in the model. R-squared never goes down when we add a predictor, even a useless one. Adjusted R-squared goes up only if the new predictor improves the model more than would be expected by chance. So it is the better measure to compare models with different numbers of predictors.
 
 ### `F-Statistic` and `p-value`
-So why a p-value again?  Is there a hypothesis again?  Yes, When running a regression model, a hypothesis test is being run on the global model, that there is no relationship between the dependent variable and the independent variable(s).  The alternative hypothesis is that there is a relationship. In other words, alternate hypothesis means at least one coefficient of regression is non-zero.  This hypothesis is tested on F-statistic and hence the two values.  `p-value` in our example is very small which lead us to reject the null hypothesis and conclude that there is strong evidence that a relationship does exist between `Sepal.Length` and `Sepal.Width`.
 
-The reason for this test is based on the fact that if we run multiple hypothesis tests on our coefficients, it is likely that a variable is included which isn’t actually significant. 
+Why another p-value? Here the null hypothesis is about the *whole* model. It says that *none* of the predictors has any relationship with the response variable, or that all slopes are zero. The alternative is that at least one slope is not zero. This is tested with the F-statistic. In our example, the p-value is very small. So we reject the null hypothesis and conclude that there is a relationship between `Sepal.Length` and `Sepal.Width`.
+
+With one predictor, this test gives the same p-value as the t-test of the slope. With many predictors, the F-test is useful because it tests them all together. If we test twenty coefficients one by one, one or two may look significant just by chance.
 
 ## Model Evaluation Metrics
-To evaluate the model's performance and accuracy, evaluation metrics are needed.  There are several types of metrics which are used to evaluate the performance of model we have built.  We will discuss a few of them here -
+
+To judge how accurate a model is, we need evaluation metrics. There are several. We will discuss a few of them here.
 
 ### MAE - Mean Absolute Error
-As the name suggests it is mean of absolute values of errors or residuals.  The formula thus, can be written as @eq-lr6.
+
+As the name suggests, it is the mean of the absolute values of the residuals, @eq-lr6.
 
 $$
 {MAE} = \frac{1}{N}\sum_{i = 1}^{N}{\lvert}{y_i - \hat{y_i}}{\rvert}
-$$ {#eq-lr6} 
+$$ {#eq-lr6}
 
-Clearly, it is average value of residuals and a larger value denotes lesser accurate model.  In isolation, the MAE is not very useful, however, to compare performance of several models while fitting a best regression model, obviously we can use this metric to choose a better model.
+It is the average size of the error, in the units of $y$. A larger value means a less accurate model. On its own, MAE does not tell us much. But when we compare several models on the same data, we can choose the one with the lower MAE.
 
-Moreover, once we extract `$residuals` out of the model, calculating the metric is easy.  In our example-
+Once we extract `$residuals` from the model, calculating it is easy. In our example,
+
 ```{r ex1mae}
 # Mean Absolute Error
 lin_reg1$residuals |> abs() |> mean()
 ```
 
 ### MSE - Mean Square Error and RMSE - Root Mean Square Error
-Again as the name suggests, the mean of square of all residuals is mean square error or MSE.  The formula may be written as in @eq-lr7.
+
+The mean of the squares of the residuals is the mean square error or MSE, @eq-lr7.
 
 $$
 {MSE} = \frac{1}{N}\sum_{i = 1}^{N}({y_i - \hat{y_i}})^2
-$$ {#eq-lr7} 
+$$ {#eq-lr7}
 
-MSE penalizes the higher residuals by squaring them.  It may be thus thought as weighted average where more and more weight is allocated as the residual value rises.  Similar, to MAE, we can use this metric to choose a better model out of the several validating models. 
+MSE punishes large residuals more, by squaring them. Like MAE, we can use it to choose the better of several models. In fact, MSE is exactly what OLS minimises while finding the coefficients.
 
-Interestingly, by definition it is also cost function in regression, as while finding parameters, we are actually minimising MSE only.  Similar to MAE, calculating this require no special skills.
 ```{r}
 # Mean Square Error
 lin_reg1$residuals^2 |> mean()
 ```
 
-RMSE or root mean square error is square root of MSE. 
+RMSE or root mean square error is the square root of MSE. It brings the error back to the units of $y$.
 
 $$
 {RMSE} = \sqrt{\frac{1}{N}\sum_{i = 1}^{N}({y_i - \hat{y_i}})^2}
-$$ {#eq-lr8} 
+$$ {#eq-lr8}
 
-In our Example-
+In our example,
 
 ```{r}
 # Root Mean Square Error
 lin_reg1$residuals^2 |> mean() |> sqrt()
 ```
 
+Notice that RMSE is very close to the residual standard error we saw earlier. The only difference is that RMSE divides by $N$, and RSE divides by the degrees of freedom.
+
 ### MAPE - Mean Absolute Percentage Error
-This metric instead of taking residual value in isolation, takes residual value as percentage of actual values.  The formula is thus,
+
+This metric takes each residual as a percentage of the actual value, @eq-lr9.
 
 $$
 {MAPE} = \frac{1}{N}\sum_{i = 1}^{N}{\lvert}\frac{({y_i - \hat{y_i}})}{y_i}\cdot{100}\%{\rvert}
-$$ {#eq-lr9} 
+$$ {#eq-lr9}
 
-Clearly, MAPE is independent of the scale of the variables since its error estimates are in terms of percentage.  In our example, we can calculate MAPE-
+Since it is a percentage, MAPE does not depend on the scale of the data. We can compare a model on salaries in rupees with a model on salaries in lakh. In our example,
+
 ```{r}
 # Mean Absolute Percentage Error
-{lin_reg1$residuals/iris$Sepal.Width[1:50]} %>% 
-  {abs(.)*100} %>% 
-  mean(.) %>% 
+{lin_reg1$residuals/iris$Sepal.Width[1:50]} %>%
+  {abs(.)*100} %>%
+  mean(.) %>%
   sprintf("MAPE is %1.2f%%", .)
 ```
 
-### R - Squared and adjusted R-squared
-As already discussed, it is coefficient of determination or goodness of fit of regression.  The  can be written as @eq-lr10.
+::: callout-warning
+## Caution
+
+MAPE breaks down when some actual values are zero or close to zero, because we divide by them. A ₹10 error on a ₹20 bill is a 50% error. In audit data, which often has zero or tiny amounts, check for these before using MAPE.
+:::
+
+### R-Squared and adjusted R-squared
+
+As already discussed, R-squared is the coefficient of determination. Its formula is @eq-lr10.
 
 $$
-R^2 = 1 - \frac{\sum_{i=1}^{N}(y_i - \hat{y_i})^2}{\sum_{i=1}^{N}(y_i - \bar{y_i})^2}
-$$ {#eq-lr10} 
+R^2 = 1 - \frac{\sum_{i=1}^{N}(y_i - \hat{y_i})^2}{\sum_{i=1}^{N}(y_i - \bar{y})^2}
+$$ {#eq-lr10}
 
-The numerator in the fraction above, is also called as $SSE$ or Sum of Squares of Errors; and denominator is also called as $TSS$ or Total Sum of Squares.  Actually the ratio (or fraction in above formula) i.e. $\frac{SSE}{TSS}$ denotes ratio of variance in errors to the variance (about mean) in the actual values.  Thus $R^2$ actually denotes how much variance is explained by the model; and clearly as the variance errors or $SSE$ minimises and approaches $0$, $R^2$ increases and approaches $1$ i.e. a perfect model.
+The numerator in the fraction is called $SSE$ or Sum of Squares of Errors. The denominator is called $TSS$ or Total Sum of Squares, which measures how much $y$ varies around its own mean $\bar{y}$. So $\frac{SSE}{TSS}$ is the share of variation *left unexplained* by the model, and $R^2$ is the share *explained*. As $SSE$ gets closer to $0$, $R^2$ gets closer to $1$, a perfect model.
 
-We can easily verify the formula from the results obtained.
+We can verify the formula with the results we have.
+
 ```{r}
 ## Sum of Squares of Errors
 y_bar <- mean(iris[1:50,"Sepal.Width"])
@@ -352,73 +403,74 @@ y_bar <- mean(iris[1:50,"Sepal.Width"])
 (r_sq <- 1 - SSE/TSS)
 ```
 
-Now, we can think of this $R^2$ in one more way, as it is simply the square of the correlation between the actual and predicted values.  We can verify once again
+There is one more way to think of $R^2$. It is simply the square of the correlation between the actual and the fitted values. Let us verify.
 
 ```{r}
 (cor(iris[1:50, 'Sepal.Width'], lin_reg1$fitted.values))^2
 ```
 
-Usually, when we keep on adding independent variables to our regression model $R^2$ increases and it can easily incorporate over-fitting in itself. For this reason, sometimes adjusted r squared is used, which penalizes R squared for the number of predictors used in the model.
+As we keep adding predictors to a model, $R^2$ keeps going up, even when the new predictors are useless. The model then starts fitting the noise in our sample, which is called *over-fitting*. Adjusted R-squared corrects for this by penalising the number of predictors, @eq-lr11.
 
 $$
 {Adjusted}\;{ R^2} = 1 - \frac{(1-R^2)(N - 1)}{(N - p - 1)}
-$$ {#eq-lr11} 
+$$ {#eq-lr11}
 
-where $p$ is the number of predictors included in model.  The `summary` function returns both these metrics. We can verify the calculation-
+where $p$ is the number of predictors in the model. The `summary()` function gives both these metrics. We can verify the calculation.
+
 ```{r}
 1 - ((1-r_sq)*(50-1)/(50-1-1))
 ```
 
+## Plotting the results and their interpretation
 
-## Plotting the results and their interpretion
-The output of `lm` can be plotted with `plot` command to see six diagnostics plots, one by one, which can be chosen using `which` argument.  These six plots are -
+We can pass the output of `lm()` to `plot()` to see six diagnostic plots. We choose them with the `which` argument. By default, R shows plots 1, 2, 3 and 5. The six plots are
 
-- Residuals Vs. Fitted Values
-- Normal Q-Q
-- Scale-Location
-- Cook's distance
-- Residuals vs. leverage
-- Cook's distance vs. leverage
+1. Residuals Vs. Fitted Values
+2. Normal Q-Q
+3. Scale-Location
+4. Cook's distance
+5. Residuals vs. leverage
+6. Cook's distance vs. leverage
 
-Let us see these, for the example above.
+Let us see these for our example.
 
 ```{r fig-plots1, fig.align='center', fig.cap="First two diagnostic plots", out.height="40%"}
 par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
 plot(lin_reg1, which = 1:2, sub.caption = "")
 ```
 
-1. **Residuals Vs. Fitted Values**: This plot is used to determine if the residuals exhibit non-linear patterns. If the red line across the center of the plot is roughly horizontal then we can assume that the residuals follow a linear pattern.  In our example we can see that the red line deviates from a perfect horizontal line but not severely. We would likely declare that the residuals follow a roughly linear pattern and that a linear regression model is appropriate for this data-set. This plot is useful to check first assumption of linear regression i.e. linearity of the data.
-2. **Normal Q-Q**: This plot is used to determine if the residuals of the regression model are normally distributed, which was our another assumption. If the points in this plot fall roughly along a straight diagonal line, then we can assume the residuals are normally distributed.
+1. **Residuals Vs. Fitted Values.** This plot checks the first assumption, linearity. If the red line across the plot is roughly flat, the relationship is linear and a straight line is a fair choice. If the red line shows a clear curve, a straight line is missing some pattern. In our example the red line bends a little at the ends, where there are only a few points, but there is no clear curve. So linear regression is appropriate.
+2. **Normal Q-Q.** This plot checks whether the residuals are normally distributed. If the points fall roughly along the straight diagonal line, they are. In our example, they do.
 
-Moreover, notice that the extreme outlier values impacting our modelling will be labeled.  We can see that values from rows, 23, 33 and 42 are labeled.  
+Notice also that R labels the three most extreme residuals with their row numbers. Here rows `r paste(head(order(-abs(rstandard(lin_reg1))), 3), collapse = ", ")` are labelled.
 
 ```{r fig-plots2, fig.align='center', fig.cap="Next two diagnostic plots", out.height="40%"}
 par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
 plot(lin_reg1, which = 3:4, sub.caption = "")
 ```
 
-3. **Scale-Location**: This plot is used to check the assumption of equal variance, i.e. “homoskedasticity” among the residuals in our regression model. If the red line is roughly horizontal across the plot, then the assumption of equal variance is likely met.
-4. **Cook's Distance**: An influential value is a value, which inclusion or exclusion can alter the results of the regression analysis. Such a value is associated with a large residual. Not all outliers (or extreme data points) are influential in linear regression analysis. A metric called Cook’s distance, is used to determine the influence of a value. This metric defines influence as a combination of leverage and residual size.
+3. **Scale-Location.** This plot checks the assumption of equal variance or homoskedasticity. If the red line is roughly flat and the points are spread evenly around it, the assumption is met. A line going up from left to right is the usual sign of heteroskedasticity.
+4. **Cook's Distance.** An *influential* point is one which, if removed, would change the regression line noticeably. Not every outlier is influential. A point with a large residual but an ordinary $x$ value often moves the line very little. A point with an extreme $x$ value has more power to pull the line towards itself. This power is called *leverage*. Cook's distance combines the size of the residual and the leverage into one measure of influence. A common rule of thumb is to look closely at any point with Cook's distance above 0.5, or well above the others. In our example, row `r which.max(cooks.distance(lin_reg1))` has the largest Cook's distance, `r round(max(cooks.distance(lin_reg1)), 2)`, which is not alarming.
 
 ```{r fig-plots3, fig.align='center', fig.cap="Last two diagnostic plots", out.height="40%"}
 par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
 plot(lin_reg1, which = 5:6, sub.caption = "")
 ```
 
-5. **Residuals vs. leverage**: This plot is used to identify influential observations. If any points in this plot fall outside of Cook’s distance (the dashed lines) then it is an influential observation.  Actually, a data point has high leverage, if it has extreme predictor x values.
-6. **Sixth plot i.e. Cooks distance vs. leverage** is also used to identify extreme values that may be impacting our model.
+5. **Residuals vs. leverage.** This plot also finds influential points. Points with high leverage lie to the right. Any point outside the dashed red lines of Cook's distance is influential. In our example, no point is even close to these lines.
+6. **Cook's distance vs. leverage.** This shows the same information in another way. Points in the top right corner, with both high leverage and high Cook's distance, need attention.
 
-Though the base R's command `plot` can generate all the plots, we may make use of library `performance` to generate all the relevant diagnostic plots beautifully and with small interpretation.  See
+Base R's `plot()` can draw all these plots. The package `performance` draws all the relevant diagnostic plots together, nicely, and writes under each plot what to look for. See @fig-perf.
 
-```{r fig-perf, fig.align='center', fig.cap="Output from package-performance", fig.height=8.5}
-library(performance)
+```{r fig-perf, fig.align='center', fig.cap="Output from package-performance", fig.height=8.5, fig.width=10}
 check_model(lin_reg1)
 ```
 
-The warning is obvious, we cannot have `multi-collinearity` problem as there is only one regressor.  Actually multi-collinearity is about another assumption, we would have made in case there were more than one independent variables.  This assumption would have been that the independent variables are not mutually collinear.  We will see detailed explanation in case of multiple linear regression in the subsequent section.
+With only one predictor there is no question of *multi-collinearity*, so `check_model()` cannot draw that plot and may give a message about it. Multi-collinearity is about one more assumption, which applies only when there are two or more predictors. The predictors should not be strongly related to each other. We will discuss it with multiple linear regression below.
 
 ## Using `lm` for predictions
-The output of `lm` is actually a list which contains much more information than we saw above.  See which info is contained here -
+
+The output of `lm()` is actually a list. It contains much more information than we saw above. Let us see what it contains.
 
 ```{r objs}
 names(lin_reg1) |>
@@ -426,26 +478,24 @@ names(lin_reg1) |>
   setNames('Objects')
 ```
 
-We may extract any of the as per requirement. E.g.
+We may extract any of these as needed. For example,
 
 ```{r}
 lin_reg1$coefficients
 ```
 
-There is a package `broom` which uses `tidy` fundamentals to returns all the useful information by a single function `augment`.
+The package `broom` gives all this information as a tidy data frame. Its function `augment()` gives the fitted value, residual, leverage (`.hat`), Cook's distance (`.cooksd`) and standardised residual (`.std.resid`) for every row. We will use these columns a lot in the audit example at the end of the chapter.
 
 ```{r aug}
-library(broom)
 augment(lin_reg1)
 ```
 
-Let's also visualise the predicted values vis-a-vis actual values/residuals in @fig-predvsact.
+Let us also visualise the predicted values against the actual values and residuals, in @fig-predvsact.
 
 ::: {#fig-predvsact}
 
 ```{r echo=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 newdata <- iris[1:50, ]
-lin_reg1 <- lm(Sepal.Width ~ Sepal.Length, data =newdata)
 newdata$predictions <- predict(lin_reg1)
 ggplot(newdata, aes(predictions, y = Sepal.Width)) +
   geom_point() +
@@ -464,55 +514,66 @@ ggplot(newdata, aes(predictions, y = residuals)) +
        title = "Predicted Values Vs. Residuals") +
   theme_bw()
 
-  
+
 ```
 
 Predicted Vs. Actual Values (Left) and Residuals (Right)
 :::
 
-
-So if we have predict output from a new data, just ensure that data is in exactly same format as of regressor and we can use `predict` from base R directly.  See this example.
+To predict for new data, we use the base R function `predict()`. The new data must be a data frame with a column of the *same name* as the predictor. Let us predict sepal widths for three new flowers.
 
 ```{r preds}
-new_vals <- rnorm(10, 5, 1) |> 
-  as.data.frame() |>
-  setNames('Sepal.Length')
+new_vals <- data.frame(Sepal.Length = c(4.5, 5.0, 5.5))
 predict(lin_reg1, new_vals)
 ```
 
+A prediction is never exact. We can ask `predict()` for a *prediction interval*, the range in which the width of a new flower is likely to fall, 95 times out of 100.
+
+```{r}
+predict(lin_reg1, new_vals, interval = "prediction")
+```
+
+So a flower with a sepal length of 5 cm will most likely have a sepal width between about `r round(predict(lin_reg1, data.frame(Sepal.Length = 5), interval = "prediction")[2], 1)` cm and `r round(predict(lin_reg1, data.frame(Sepal.Length = 5), interval = "prediction")[3], 1)` cm.
+
+::: callout-warning
+## Caution
+
+Predict only within the range of the data used to build the model. Our setosa flowers have sepal lengths from `r min(iris$Sepal.Length[1:50])` to `r max(iris$Sepal.Length[1:50])` cm. The model knows nothing about a flower with a 7 cm sepal, and its prediction there may be nonsense. Predicting outside the range is called *extrapolation*. In audit, a model built on small offices should not be used to judge a very large one.
+:::
+
 ## Multiple Linear Regression
 
-As the name suggests, multiple linear regression is the model where multiple independent variables may have linear relationship with dependent variable.  In this case, the regression equation will be -
+In multiple linear regression, several independent variables together explain the dependent variable. The regression equation becomes
 
 $$
 y = \beta_0 + \beta_1x_1 + \beta_2x_2 + \beta_3x_3 + ... + \epsilon
-$$ {#eq-lr12} 
+$$ {#eq-lr12}
 
-where $x_1$, $x_2$, $x_3$ ..., $x_n$ will be $n$ independent variables and $y$ will be dependent variable as usual. 
+where $x_1$, $x_2$, $x_3$ ..., $x_n$ are the $n$ independent variables and $y$ is the dependent variable as usual.
 
-It may be clear that this equation represents an equation of a plane if there are two regressors.  If there are $n$ regressors, the equation will represent equation of a hyperplane of $n-1$ dimensions. However, visualizing the variables and relation between them can be a bit tricky if there are multiple variables.  We may decide about the type of the visualization will suit the requirement in that case. 
+With two predictors, this equation is no longer a line but a flat *plane* in three dimensions. With more predictors, it is a *hyperplane*, which we cannot draw. So we usually look at the predictors one at a time, or use correlation plots.
 
-Now, as already stated, there is an additional assumption, **that all the independent variables are mutually independent too i.e. do not have multi-collinearity between them.**  Let's build an example model again.  We have to just add the predictors (independent variables) using the `+` operator in the formula `call`.  
+As already stated, there is one more assumption now. **The independent variables should not be strongly related to each other, that is, there should be no multi-collinearity.** Let us build an example. We just add the predictors to the formula using the `+` operator.
 
-**Problem Statement:** Example-2. Let's try to establish the relationship between cars' mileage (`mpg` variable in `mtcars` data-set) with engine displacement `disp`, horse power `hp` and weight `wt`.  First of all let's visualise the individual relationships between the variables through three plots as in @fig-ex2vis.
+**Problem Statement:** Example-2. Let us try to explain cars' mileage (`mpg` in the `mtcars` dataset) using engine displacement `disp`, horse power `hp` and weight `wt`. First, let us visualise each relationship separately, in @fig-ex2vis.
 
 ::: {#fig-ex2vis}
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="31%", fig.show='hold'}
 
-mtcars %>% 
+mtcars %>%
   ggplot(aes(disp, mpg)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
   theme_bw()
 
-mtcars %>% 
+mtcars %>%
   ggplot(aes(hp, mpg)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
   theme_bw()
 
-mtcars %>% 
+mtcars %>%
   ggplot(aes(wt, mpg)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
@@ -524,121 +585,109 @@ mtcars %>%
 Relationship between regressors and outcome variables
 :::
 
-Let's also visualise the correlation between all these variables. See @fig-ex2vis2.
+Let us also visualise the correlation between all these variables. See @fig-ex2vis2.
 
 ```{r fig-ex2vis2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.cap="Correlation between the variables in Example-2"}
-library(GGally)
-my_fn <- function(data, mapping, method="p", use="pairwise", ...){
-  
-  # grab data
-  x <- eval_data_col(data, mapping$x)
-  y <- eval_data_col(data, mapping$y)
-  
-  # calculate correlation
-  corr <- cor(x, y, method=method, use=use)
-  
-  # calculate colour based on correlation value
-  # Here I have set a correlation of minus one to blue, 
-  # zero to white, and one to red 
-  # Change this to suit: possibly extend to add as an argument of `my_fn`
-  colFn <- colorRampPalette(c("blue", "white", "red"), interpolate ='spline')
-  fill <- colFn(100)[findInterval(corr, seq(-1, 1, length=100))]
-  
-  ggally_cor(data = data, mapping = mapping, ...) + 
-    theme_void() +
-    theme(panel.background = element_rect(fill=fill))
-}
-
-
 ggpairs(
   mtcars[, c("mpg", "disp", "hp", "wt")],
   upper = list(continuous = my_fn),
   lower = list(continuous = 'smooth', wrap=c(colour="blue")))
-
 ```
 
-Now let's build the model.
+Notice that the predictors are strongly correlated with each other too. Displacement and weight, for example, have a correlation of `r round(cor(mtcars$disp, mtcars$wt), 2)`. Heavy cars have big engines. Keep this in mind. Now let us build the model.
 
 ```{r mult}
 data <- mtcars[, c("mpg", "disp", "hp", "wt")]
-lin_reg2 <- lm(mpg ~ ., 
+lin_reg2 <- lm(mpg ~ .,
                data = data)
 summary(lin_reg2)
 ```
 
-In formula call, please note that I have used `.` instead of naming all the variables.  In fact `.` is a shorthand style of mentioning that all the variables except that mentioned as y variable will be our independent variables/predictors.  In results, there is one coefficient for slope for each predictors and one intercept term in the output.  The output equation can be written as @eq-lr13.
+In the formula, we used `.` instead of naming all the variables. The `.` is a shorthand for "all other columns of the data". There is now one slope for each predictor and one intercept. The equation can be written as @eq-lr13.
 
 $$
 {mpg} = -0.000937\cdot{disp} - 0.031157\cdot{hp} - 3.800891\cdot{wt} + 37.105505
-$$ {#eq-lr13} 
+$$ {#eq-lr13}
 
-**Interpretation:** Notice that all slopes are in negative meaning that mileage drops by increase in each of weight, displacement and horsepower.  Interpreting the equation would be on similar lines. We can now say that *keeping other variables constant*, the effect of change (increase) of 1 unit in `disp` will result in decrease of mileage by 0.000937 miles per gallon. Keeping other variables constant is important here.  Of course, by above equation we may deduce that if other factors change, the effect on response variable would be different.
+**Interpretation:** All the slopes are negative, so mileage drops as weight, displacement and horse power increase. Each slope is read *keeping the other variables constant*. For example, if two cars have the same horse power and weight, the one with 1 cubic inch more displacement gives 0.000937 miles per gallon less. "Keeping other variables constant" is important. If the other variables also change, the effect on mileage is different.
 
-**Results:** Analysing results, we may notice that our model is explains 83% of variance in data.  Of course, adjusted r-squared is lower which means that adding extra variables may have increased the r-squared. Global p-value is highly significant which means that at least of the coefficients is non-zero.  Of course, the least significant coefficient is that of `disp` which we can remove and re-run the model to check the parameters again.
+**Results:** The model explains about `r round(summary(lin_reg2)$r.squared * 100)`% of the variation in mileage (Multiple R-squared). Adjusted R-squared is a little lower, at `r round(summary(lin_reg2)$adj.r.squared * 100)`%, after the penalty for three predictors. The F-test p-value is very small, so at least one slope is not zero.
+
+Look at `disp`, however. On its own, displacement is strongly related to mileage (@fig-ex2vis, left). In this model, its slope is tiny and its p-value is `r round(summary(lin_reg2)$coefficients["disp", 4], 2)`, not significant at all. This is because `disp` carries almost the same information as `wt` and `hp`. Once they are in the model, `disp` has little new to say. We could remove `disp` and re-run the model. We will come back to this when we discuss multi-collinearity.
 
 ## Including categorical or factor variables in `lm`
-By now we  have seen that linear regression is useful for predicting numerical output and through the examples we have seen that our regressors were numerical too.  But what if there's an input variable which is categorical or nominal?
 
-In such case, we will have to ensure that categorical variable is of type `factor` before proceeding to build a model. 
+So far, both our response variable and our predictors were numeric. But what if a predictor is categorical, like the city class of an office, or the type of a contract?
 
-**Problem Statement:** Example-3.  Let's try to predict ${Sepal.Width}$ from ${Species}$ in the iris data-set. This time we will take complete data-set. Since, we know that `Species` is already of factor type we need not convert it into one.  Before moving on let's visualize the relation between the two variables using ggplot2.  Box-plots are best suited here.
+In such a case, we should make sure that the categorical variable is of type `factor` before building the model. We learnt about factors in @sec-factors.
+
+**Problem Statement:** Example-3. Let us try to explain `Sepal.Width` by `Species` in the `iris` dataset. This time we take the complete dataset. `Species` is already a factor, so we need not convert it. Before moving on, let us visualise the relationship. Box plots are best suited here.
 
 ```{r fig-fact1, echo=FALSE, fig.align='center', fig.cap="Species Vs. Sepal Width", warning=FALSE, fig.show='hold', out.height="30%"}
 ggplot(iris, aes(Species, Sepal.Width)) +
   geom_boxplot() +
   stat_summary(fun = mean, shape = 15) +
-  labs(x = "Species", 
+  labs(x = "Species",
        y = "Sepal.Width") +
   theme_bw()
 ```
 
-Now let's build the model.
+Now let us build the model.
 
 ```{r}
 lm_fact <- lm(Sepal.Width ~ Species, data = iris)
 summary(lm_fact)
 ```
 
-In results we now got one intercept and two slopes for single regressor `Species`.  So what happened now?  
+We now got one intercept and *two* slopes for a single predictor `Species`. What happened?
 
-**Interpretation:** Actually, factor data type requirement for categorical regressor was due to the fact that this factor variable is encoded as dummy variable for each of the category available in it. Dummy variable is numeric and we can now run linear regression as earlier. The first category available in it will be baseline level.  Since there were three levels included in `Species` it has been encoded into two dummy variables.  To see what happened behind the scenes, we may use `contrasts` function.
+**Interpretation:** R converts a factor into *dummy variables*. A dummy variable is 1 when a row belongs to a category and 0 otherwise. Being numeric, the dummies can be used in linear regression as before. The first level of the factor is taken as the *baseline*. It gets no dummy of its own. `Species` has three levels, so it is encoded as two dummy variables. To see this, we can use the `contrasts()` function.
 
 ```{r}
 contrasts(iris$Species)
 ```
 
-`model.matrix`
+We can also see the actual numbers that went into the model with `model.matrix()`. Let us look at one flower of each species.
 
-It is clear that when `versicolor` is `1` the other variable is `0` and vice versa.  Obviously when both are `0` it means that `Species` is `setosa` and that's why no separate slope for that is present in output.  Now we can write our regression line equation as @eq-lr14
+```{r}
+model.matrix(Sepal.Width ~ Species, data = iris)[c(1, 51, 101), ]
+```
+
+When the flower is *versicolor*, `Speciesversicolor` is `1` and `Speciesvirginica` is `0`, and the other way round for *virginica*. When both are `0`, the flower is *setosa*, the baseline. That is why there is no separate coefficient for *setosa*. Now we can write the regression equation as @eq-lr14.
 
 $$
 {Sepal.Width} = 3.428 + (-0.658)\cdot{Speciesversicolor} + (-0.454)\cdot{Speciesvirginica}
-$$ {#eq-lr14} 
+$$ {#eq-lr14}
 
-Interpreting above equation is now easy.  For each `versicolor` the `Sepal.Width` may be `3.428 - 0.658` or `r 3.428 - 0.658`. Obviously when two dummy variables are zero, the Sepal.Width would be equal to intercept; and thus, we can conclude that intercept is nothing but prediction for base-line level.  In fact we can subtract a `1` to obtain these interpreted results.
+Reading this equation is now easy. For *versicolor*, the predicted `Sepal.Width` is `3.428 - 0.658`, or `r 3.428 - 0.658`. When both dummy variables are zero, the predicted width is just the intercept. So the intercept is the prediction for the baseline level, *setosa*, and each slope is the *difference* from the baseline. If we remove the intercept by adding `- 1` to the formula, R gives us one coefficient for each level directly.
 
 ```{r}
-lm_fact <- lm(Sepal.Width ~ Species -1, data = iris)
-summary(lm_fact)
+lm_fact0 <- lm(Sepal.Width ~ Species -1, data = iris)
+summary(lm_fact0)
 ```
 
-**Notice that other two coefficients have now been adjusted automatically.**
-
-**Results:** Observing the @fig-fact1, we may notice that the coefficients are nothing but mean Sepal Widths for each Species, which is obvious and logical too.  Those, who are interested in seeing equation (without intercept) can also make one, as in @eq-lr15.
+**Results:** Compare these coefficients with @fig-fact1. They are nothing but the mean sepal width of each species, which is logical. The equation without intercept is @eq-lr15.
 
 $$
 {Sepal.Width} = 3.428\cdot{Speciessetosa} + (2.77)\cdot{Speciesversicolor} + (2.974)\cdot{Speciesvirginica}
-$$ {#eq-lr15} 
+$$ {#eq-lr15}
 
-Since, these coefficients are not slopes in true sense, we will refer these as intercepts, in next examples/sections.
+Since these coefficients are not slopes in the true sense, we will call them intercepts in the next examples.
+
+::: callout-warning
+## Caution
+
+Look at the R-squared of the two models. With an intercept it is `r round(summary(lm_fact)$r.squared, 3)`. Without an intercept it jumps to `r round(summary(lm_fact0)$r.squared, 3)`. The fit has not improved at all, since the predictions are exactly the same. Without an intercept, R measures R-squared against zero instead of against the mean, which makes it look much larger. So use `- 1` to *read* the coefficients easily, but compare models using the version with an intercept.
+:::
 
 ### Parallel slopes regression
-To understand how categorical response variable acts, when there are other numerical variables in regression model, let us build a model step by step.   
 
-**Problem statement:** Example-4. We are taking `mpg` data-set included by default with `ggplot2` package.  This data-set shows *Fuel economy data from 1999 to 2008 for 38 popular models of cars*.  Let us predict highway mileage `hwy` from engine displacement `displ` and year of the model `year`.  Let us visualize the variables.  From @fig-ex4vis it is clear that highway mileage is linearly associated with displacement.
+To understand how a categorical predictor works together with a numeric one, let us build a model step by step.
 
-```{r fig-ex4vis, fig.align='center', fig.cap="Highway Mileage Vs. Displacement over cars manufactured in 1998 Vs. 2008", fig.show='hold', out.height="35%"}
-ggplot(mpg, aes(hwy, displ)) +
+**Problem statement:** Example-4. We take the `mpg` dataset, which comes with the `ggplot2` package. It has *fuel economy data from 1999 to 2008 for 38 popular models of cars*. Let us explain highway mileage `hwy` by engine displacement `displ` and the year of the model `year`. Let us visualise the variables first. From @fig-ex4vis it is clear that highway mileage falls linearly as displacement increases, in both years.
+
+```{r fig-ex4vis, fig.align='center', fig.cap="Highway Mileage Vs. Displacement over cars manufactured in 1999 Vs. 2008", fig.show='hold', out.height="35%"}
+ggplot(mpg, aes(displ, hwy)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = "y ~ x") +
   facet_wrap(.~ year) +
@@ -646,23 +695,23 @@ ggplot(mpg, aes(hwy, displ)) +
 ```
 
 
-**Step-1:**  Let us first include a single numerical variable `displ` to predict highway mileage `hwy`; and examine the coefficients.
+**Step-1:** Let us first use only the numeric variable `displ` to explain highway mileage `hwy`, and look at the coefficients.
+
 ```{r}
 par_slop1 <- lm(hwy ~ displ, data = mpg)
 coef(par_slop1)
 ```
 
-We got one intercept and one slope coefficient.  We can even see related visualisation in @fig-parrslop (left).
+We got one intercept and one slope. We can see the line in @fig-parrslop (left).
 
-**Step-2:** Now let us try to predict mileage on the basis of `year` of manufacture only.  So as already stated, we have to convert it into factor.  We can do that directly in the formula.  *Also note that we are subtracting $1$ from the response variables, which actually replaces intercept with the baseline level explicitly.*  Now see the coefficients-
+**Step-2:** Now let us explain mileage by `year` of manufacture only. We need to convert it into a factor, which we can do directly in the formula. *We also add `- 1` to the formula, which removes the common intercept and gives one intercept for each year.* Now see the coefficients.
 
 ```{r}
-library(ggplot2)
 par_slop2 <- lm(hwy ~ factor(year) - 1, data = mpg)
 coef(par_slop2)
 ```
 
-Notice that we got intercept for each of the category available in factor variable.  By seeing plot in @fig-parrslop-(Right) that these intercepts are nothing but means for each category.
+We got one intercept for each year. As @fig-parrslop (right) shows, these are nothing but the mean mileage for each year. The two means are almost equal.
 
 ::: {#fig-parrslop}
 
@@ -671,7 +720,7 @@ Notice that we got intercept for each of the category available in factor variab
 ggplot(mpg, aes(displ, hwy)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = 'y ~ x') +
-  labs(x = "Engine Displacement in Litres", 
+  labs(x = "Engine Displacement in Litres",
        y = "Highway Mileage in Miles per Gallon") +
   theme_bw()
 
@@ -679,7 +728,7 @@ ggplot(mpg, aes(displ, hwy)) +
 ggplot(mpg, aes(factor(year), hwy)) +
   geom_boxplot() +
   stat_summary(fun = mean, shape = 15) +
-  labs(x = "Year of Manufacture", 
+  labs(x = "Year of Manufacture",
        y = "Highway Mileage in Miles per Gallon") +
   theme_bw()
 
@@ -689,107 +738,116 @@ ggplot(mpg, aes(factor(year), hwy)) +
 Mileage vs. Displacement (Left) and Year (right)
 :::
 
-**Step-3:**  Now we will build the complete model by including both variables together; and examine the coefficients.
+**Step-3:** Now we build the complete model with both variables together, and look at the coefficients.
 
 ```{r}
 par_slop <- lm(hwy ~ displ + factor(year) - 1, data = mpg)
 coef(par_slop)
 ```
 
-We can see one slope coefficient for numerical variable and two different intercepts for each of the Years.  Try visualising these.  In fact there are two different parallel lines (same slope). Refer @fig-parrslop2.
+There is one slope for the numeric variable and a separate intercept for each year. If we draw these, we get two *parallel* lines with the same slope. See @fig-parrslop2.
 
 ```{r fig-parrslop2, echo=FALSE, fig.align='center', fig.cap="Parallel Slopes", out.width="95%", out.height="35%", fig.show='hold'}
-library(moderndive)
 ggplot(mpg, aes(displ, hwy, color = factor(year))) +
   geom_point() +
   geom_parallel_slopes(se = FALSE) +
-  labs(x = "Engine Displacement in Litres", 
+  labs(x = "Engine Displacement in Litres",
        y = "Highway Mileage in Miles per Gallon",
        color = "Year Manufactured") +
-  theme(legend.position = "bottom") +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position = "bottom")
 ```
 
-This is also evident, if we write out the @eq-lr16.
+This is also clear from the equation, @eq-lr16.
 
 $$
 {hwy} = -3.610986\cdot{displ} + 35.275706\cdot{year1999} + 36.677842\cdot{year2008}
-$$ {#eq-lr16} 
+$$ {#eq-lr16}
 
-Either one of the dummy variables will be 0 and another 1, so that variable with `1` will act as intercept term, but the slope term will remain same. In other words, whatever be the year, the mileage will vary with displacement at the same rate.  This is in actual circumstances, rare.  Rate of change of response variable will change as per factor variables (regressor) change their values.  So how to incorporate these changes in our model?  The answer is `interaction` which has been discussed in next section.
+For any car, one of the two dummy variables is 1 and the other is 0. The one with `1` acts as the intercept, but the slope stays the same. In other words, whatever the year, mileage changes with displacement at the same rate.
+
+Notice something interesting. In Step-2, the two years had almost the same mean mileage. But now, for the *same* displacement, a 2008 car gives about `r round(diff(coef(par_slop)[2:3]), 1)` miles per gallon more than a 1999 car. The improvement was hidden because cars in 2008 had bigger engines on average (`r round(mean(mpg$displ[mpg$year == 2008]), 2)` litres against `r round(mean(mpg$displ[mpg$year == 1999]), 2)` litres). This is the power of multiple regression. It separates the effect of one variable from another.
+
+But is it right to force the same slope on both years? Perhaps engines of 2008 lose mileage at a different rate as they grow. How do we allow for that? The answer is `interaction`, discussed next.
 
 ### Extending multiple linear regression by including `interactions`
 
-The parallel slopes model, we saw in previous section enforced a common slope for each category. That's not always the best option. 
+The parallel slopes model forced a common slope on each category. That is not always the best option.
 
-**Problem Statement:**  In same example-4 (earlier section) we can introduce `interaction` between two predictors using special operator OR shorthand notation `:` in formula call.  See the following example-
+**Problem Statement:** In the same Example-4, we can allow an `interaction` between the two predictors using the operator `:` in the formula.
 
 ```{r interact}
 new_model <- lm(hwy ~ displ + factor(year) + displ:factor(year) -1 , data = mpg)
 coef(new_model)
 ```
 
-Now notice an extra coefficient, though small which is change in slope when moving from baseline category to category of year- 2008.  This, in fact represents that the model has a different slope for each category; refer @fig-parrslop3.
+Notice the extra coefficient. It is the *change* in slope when we move from the baseline year, 1999, to 2008. So the model now has a different slope for each year. See @fig-parrslop3.
 
 ```{r fig-parrslop3, echo=FALSE, fig.align='center', fig.cap="Changing Slopes with interaction", out.width="95%", fig.show='hold', out.height="35%"}
-library(moderndive)
 ggplot(mpg, aes(displ, hwy, color = factor(year))) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = "y~x") +
-  labs(x = "Engine Displacement in Litres", 
+  labs(x = "Engine Displacement in Litres",
        y = "Highway Mileage in Miles per Gallon",
        color = "Year Manufactured") +
-  theme(legend.position = "bottom") +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position = "bottom")
 ```
 
-Interpreting these models are now, not that difficult as it seem earlier. Let's generate summary first.
+Let us see the summary.
 
 ```{r}
 summary(new_model)
 ```
 
-We may write our equation now (@eq-lr17.
+We may write the equation now (@eq-lr17).
 
 $$
 {hwy} = -3.7684\cdot{displ} + 35.7922\cdot{year1999} + 36.1367\cdot{year2008} + 0.3052\cdot{displ}\cdot{year2008}
-$$ {#eq-lr17} 
+$$ {#eq-lr17}
 
-Clearly, when year is 2008, the slope for `displ` changes by `0.3052`.
+So for 2008 cars, the slope of `displ` is $-3.7684 + 0.3052$, or `r -3.7684 + 0.3052`. But look at the p-value of the interaction term, `r round(summary(new_model)$coefficients[4, 4], 2)`. It is far above 0.05. So the data does not give us any real evidence that the slopes differ between the two years. The two lines in @fig-parrslop3 are almost parallel too. Here the simpler parallel slopes model is good enough. Always check whether an interaction is significant before reading meaning into it. We will see an interaction which *does* matter in @sec-reg-audit.
 
-We can add as many interactions as we would like to, using the shorthand `:`; however, when there are many interactions we may make use of another shorthand operator `*`.  So `x*z` would mean `x + z + x:z` and `x*z*w` would mean `x + z + w + x:z + x:w + z:w`.  This obviously wouldn't make any difference but would save us a lot of typing.
+We can add as many interactions as we like using `:`. When there are many, we can use another shorthand, `*`. So `x*z` means `x + z + x:z`, and `x*z*w` means `x + z + w + x:z + x:w + z:w + x:z:w`. It does not change the model, but saves a lot of typing.
 
 ## Multi-collinearity and Variance Inflation Factor (VIF)
-Multi-collinearity indicates a strong linear relationship among the predictor variables. This can create challenges in the regression analysis because it becomes difficult to determine the individual effects of each independent variable on the dependent variable accurately.  Multi-collinearity can lead to unstable and unreliable coefficient estimates, making it harder to interpret the results and draw meaningful conclusions from the model. It is essential to detect and address multi-collinearity to ensure the validity and robustness of regression models.
 
-But why it poses a problem in regression analysis.  Actually, multi-collinearity means that one independent variable can be predicted from another and it in turn means that independent variables are no longer independent.  
+Multi-collinearity means that the predictor variables are strongly related to each other. This creates a problem. When two predictors move together, the model cannot tell which of them is really affecting $y$. The coefficient estimates become unstable. A small change in the data can change them a lot, sometimes even flip their sign. Their standard errors become large, so useful variables may look insignificant. We saw this with `disp` in Example-2.
 
-Multi-collinearity can be detected using many different methods.  One of the method can be to use correlation plots, which is explained in next section.  Another method is to use Variance Inflation Factor or VIF.  VIF determines the strength of the correlation between the independent variables. It is predicted by taking a variable and regressing it against every other variable. In other words, VIF score of an independent variable represents how well the variable is explained by other independent variables.  
+Note that multi-collinearity does not spoil the *predictions* of the model much. It spoils our ability to *interpret* the individual coefficients. For an auditor, who usually wants to explain a finding, that matters.
+
+There are many ways to detect multi-collinearity. One is to use correlation plots, as in @fig-ex2vis2. Another is the *Variance Inflation Factor* or VIF. To find the VIF of a predictor, we regress it on all the other predictors and note the $R^2$ of that regression. The VIF score thus tells us how well a predictor is explained by the other predictors.
 
 $$
 {VIF} = \frac{1}{1-R^2}
-$$ {#eq-lr18} 
+$$ {#eq-lr18}
 
-So the closer $R^2$ value to $1$ the higher the ${VIF}$.  
+So the closer this $R^2$ is to $1$, the higher the ${VIF}$.
 
-- $VIF$ starts at $1$ and has no upper limit
-- ${VIF} = 1$ means there is no correlation between the independent variable and the other variables
-- ${VIF}$ exceeding $5$ indicates high multi-collinearity between that independent variable and others.
+- $VIF$ starts at $1$ and has no upper limit.
+- ${VIF} = 1$ means the predictor is not related to the other predictors at all.
+- ${VIF}$ above $5$ is commonly taken to indicate a problem, and above $10$ a serious one.
 
-Again in R, we do not have to manually calculate ${VIF}$ for each variable.  Using `vif()` function, of library `car` we can calculate this.  Let's use it on another model built on `mtcars` data where `mpg` variable is predicted using all other variables.  For all other variables, instead of using names, we will use another shorthand operator `.`.
+In R, we do not have to calculate ${VIF}$ by hand. The function `vif()` from the package `car` does it. Let us first check our model of Example-2.
+
+```{r}
+car::vif(lin_reg2)
+```
+
+The VIF of `disp` is `r round(car::vif(lin_reg2)["disp"], 1)`, above 5. That confirms what we suspected. Now let us try a model on `mtcars` where `mpg` is explained by all the other variables. We again use the shorthand `.` for all other variables.
 
 ```{r}
 mod <- lm(mpg ~ . , data = mtcars)
-library(car)
 car::vif(mod)
 ```
 
-We may notice high collinearity among some of these predictors as also indicated in above output.
+Several predictors here have a VIF above 10. Such a model would be hard to interpret.
 
 ## One Complete Example
-**Problem Statement:** Example-5. The data pertains to inter-country Life-Cycle Savings 1960-1970.  Under the life-cycle savings hypothesis as developed by *Franco Modigliani*, the savings ratio (aggregate personal saving divided by disposable income) `sr` is explained by per-capita disposable income `dpi`, the percentage rate of change in per-capita disposable income `ddpi`, and two demographic variables: the percentage of population less than 15 years old `pop15` and the percentage of the population over 75 years old `pop75`. The data are averaged over the decade 1960–1970 to remove the business cycle or other short-term fluctuations.
 
-Let's try linear regression on `LifeCycleSavings` data.
+**Problem Statement:** Example-5. The data pertains to inter-country Life-Cycle Savings 1960-1970. Under the life-cycle savings hypothesis developed by *Franco Modigliani*, the savings ratio `sr` (aggregate personal saving divided by disposable income) is explained by per-capita disposable income `dpi`, the percentage rate of change in per-capita disposable income `ddpi`, and two demographic variables. These are the percentage of population less than 15 years old `pop15`, and the percentage of the population over 75 years old `pop75`. The data are averaged over the decade 1960–1970 to remove the business cycle or other short-term fluctuations.
+
+Let us try linear regression on the `LifeCycleSavings` data.
 
 ```{r ex2}
 # Visualise first 6 rows
@@ -799,121 +857,320 @@ head(LifeCycleSavings)
 ex1 <- lm(sr ~ . , data = LifeCycleSavings)
 ```
 
-In `call` formula above, notice the shorthand `.` operator which here means all variable other than y variable are treated as input variables.  See its output-
+In the formula, `.` again means all variables other than `sr`. Let us see the output.
 
 ```{r summ1}
 summary(ex1)
 ```
 
-Multiple R squared is about 34% which means nearly 34% variability is explained by linear model.  Let us see some diagnostics plots (@fig-perf2)
+Multiple R-squared is about `r round(summary(ex1)$r.squared * 100)`%, so the model explains about a third of the variation in savings ratios. Let us see some diagnostic plots (@fig-perf2).
 
-```{r fig-perf2, fig.align='center', fig.cap="Diagnostic Plots", fig.height=8.5}
+```{r fig-perf2, fig.align='center', fig.cap="Diagnostic Plots", fig.height=8.5, fig.width=10}
 performance::check_model(ex1)
 ```
 
-We may notice some multi-collinearity, between two population variables.  See figures and @fig-perf2 and @fig-multi2.
+We can notice some multi-collinearity between the two population variables in @fig-perf2. It is clearly visible in @fig-multi2. Countries with many children have few old people, and the other way round.
 
-```{r fig-multi2, fig.align='center', fig.cap="Are x and y correlated?", out.height="30%"}
-LifeCycleSavings %>% 
+```{r fig-multi2, fig.align='center', fig.cap="Are pop15 and pop75 correlated?", out.height="30%"}
+LifeCycleSavings %>%
   ggplot(aes(pop15, pop75)) +
   geom_point()+
   geom_smooth(method = 'lm', formula = 'y~x') +
   theme_bw()
 ```
 
-This can also be verified by corrplots in @fig-corrp.
+This can also be seen in the correlation plots in @fig-corrp.
 
 ```{r fig-corrp, echo=FALSE,fig.align='center', fig.cap="Correlation Plots", out.height="45%", message=FALSE}
-
 ggpairs(
   LifeCycleSavings,
   upper = list(continuous = my_fn),
   lower = list(continuous = 'smooth', wrap=c(colour="blue")))
-
 ```
 
-Let us see the VIF among the predictors.
+Let us see the VIF of the predictors.
 
 ```{r vifs}
 car::vif(ex1)
 ```
 
-Thus, the model should be tuned better by removing this multi-collinear variable.  Let us try to remove `pop75` and re-run the model.
+Both population variables have a VIF above 5. So let us remove one of them, `pop75`, and re-run the model.
 
 ```{r ex22}
 ex2 <- lm(sr ~ pop15 + dpi + ddpi, data = LifeCycleSavings)
 summary(ex2)
 ```
 
-Notice that multiple R-squared has now reduced to 30%.  Let us try to remove the variable `dpi` the coefficient of which is not that significant.
+Multiple R-squared has dropped a little, to `r round(summary(ex2)$r.squared * 100, 1)`%. That is expected, since R-squared always falls when we remove a variable. But look at what we gained. The standard error of `pop15` has fallen from `r round(summary(ex1)$coefficients["pop15", 2], 3)` to `r round(summary(ex2)$coefficients["pop15", 2], 3)`. Its estimate is now much more precise. Let us also remove `dpi`, whose coefficient is not significant.
 
 ```{r ex33}
 ex3 <- lm(sr ~ pop15 + ddpi, data = LifeCycleSavings)
 summary(ex3)
 ```
 
-Multiple R squared increased slightly i.e. now reached around 29%.  Let us try to visualise the relationship through a scatter plot.
+Multiple R-squared falls slightly again, to `r round(summary(ex3)$r.squared * 100, 1)`%. But adjusted R-squared stays almost the same (`r round(summary(ex2)$adj.r.squared, 4)` before, `r round(summary(ex3)$adj.r.squared, 4)` now). So `dpi` was adding nothing useful, and the simpler model with two predictors does as well as the one with three. Both of its coefficients are significant. When two models explain the data about equally well, we prefer the simpler one.
 
-```{r warning=FALSE, fig.align='center', fig.cap="Ascertaining linear relationship", out.height="30%"}
-LifeCycleSavings %>% 
+Let us visualise the main relationship through a scatter plot.
+
+```{r fig-ex5scatter, warning=FALSE, fig.align='center', fig.cap="Ascertaining linear relationship", out.height="30%"}
+LifeCycleSavings %>%
   ggplot(aes(pop15, sr)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x', se = FALSE) +
   theme_bw()
 ```
 
-Clearly the relationship between the predictor and response variable is not that strong and hence the results.
+The relationship between `pop15` and the savings ratio is real but not very strong. The points are widely scattered around the line. That is why the R-squared stays below 30%. Savings depend on many things this data does not have.
 
 ## Simpson's paradox
-Edward Hugh Simpson, a statistician and former cryptanalyst at Bletchley Park, described this statistical phenomenon in a paper in 1951.  It is classic example how regressions, without including necessary terms, can be misleading.  At its core, the paradox arises when a trend that appears in different subgroups of data is either *reversed* or *disappears* when the subgroups are combined. This seemingly counter-intuitive occurrence can lead to misleading conclusions and thus underscores the importance of careful analysis and interpretation of data.
 
-**Problem Statement:** Example-6.  Here is data of `palmerpenguins` where let's try to establish relationship between penguins bills' depth and lengths i.e. `bill_depth_mm` and `bill_length_mm`.  See the plot in @fig-ex3.
+Edward Hugh Simpson, a statistician and former cryptanalyst at Bletchley Park, described this phenomenon in a paper in 1951. It is a classic example of how a regression that leaves out an important variable can mislead. The paradox arises when a trend seen in each subgroup of the data *reverses* or *disappears* when the subgroups are combined.
+
+**Problem Statement:** Example-6. Let us take the `penguins` data from `palmerpenguins`, and try to establish a relationship between the depth and length of penguins' bills, `bill_depth_mm` and `bill_length_mm`. See the plots in @fig-ex3.
 
 ::: {#fig-ex3}
 
 ```{r echo=FALSE, fig.align='center', out.width="47%", fig.show='hold'}
-library(palmerpenguins)
-
-penguins %>% 
-  na.omit() %>% 
+penguins %>%
+  na.omit() %>%
   ggplot(aes(bill_length_mm, bill_depth_mm)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x') +
   theme_bw()
 
-penguins %>% 
-  na.omit() %>% 
+penguins %>%
+  na.omit() %>%
   ggplot(aes(bill_length_mm, bill_depth_mm, color = species)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x') +
-  theme(legend.position = 'bottom') +
-  theme_bw()
-
-
+  theme_bw() +
+  theme(legend.position = 'bottom')
 ```
 
 Regression having variable hidden (left) and exposed (right)
 :::
 
-In plot (left) a negative relationship is seen, but when the lurking variable is exposed (right), we can see a positive relationship for each of the species . Thus, species is a significant confounding variable to assess linear relationship here.  Thus before finalizing the model, we have to be sure that we are not missing any important variable.  To avoid incorrect results due to underlying Simpson's Paradox, we must ensure to:
+In the left plot, the relationship is negative. Longer bills seem to be shallower. But when the hidden variable `species` is exposed (right), we see a *positive* relationship within each species. Let us confirm this with two models.
 
-**Identify Confounding Variables:** Be vigilant in identifying potential confounding variables that could affect the relationship between the variables under study.
+```{r}
+peng <- na.omit(penguins)
+coef(lm(bill_depth_mm ~ bill_length_mm, data = peng))
+coef(lm(bill_depth_mm ~ bill_length_mm + species, data = peng))
+```
 
-**Consider All Levels:** Analyze data at different levels, including subgroup and aggregate levels, to gain a comprehensive understanding of the relationship.
+Without species, the slope of bill length is `r sprintf('%.2f', coef(lm(bill_depth_mm ~ bill_length_mm, data = peng))[2])`. Once species is in the model, it becomes `r sprintf('%.2f', coef(lm(bill_depth_mm ~ bill_length_mm + species, data = peng))[2])`. The sign has flipped. Species is a *confounding* variable here. So before finalising a model, we must make sure that we are not missing an important variable. To avoid being misled by Simpson's paradox, we should
 
-**Utilise Statistical Techniques:** such as regression analysis or propensity score matching, to control for confounding variables and obtain more accurate insights.
+- **Identify confounding variables.** Think about what else could affect both variables under study.
+- **Consider all levels.** Analyse the data at the subgroup level and at the combined level, and compare.
+- **Use statistical techniques** such as multiple regression, as we just did, to control for confounding variables.
+- **Report transparently.** Clearly state the method, assumptions and limitations of the analysis so that others can evaluate the findings.
 
-**Transparent Reporting:** Clearly report the methodology, assumptions, and limitations of the analysis to ensure that others can critically evaluate the findings.
+::: callout-tip
+## Audit tip
 
-Simpson's Paradox, thus, serves as a powerful reminder that data analysis is an intricate process that requires careful consideration of underlying factors. 
+Simpson's paradox is common in audit data. A scheme may show a falling rejection rate in every district, yet a rising rate for the state as a whole, because the mix of districts has changed. Before reporting a trend on combined data, always check it within the main subgroups, like districts, years, or types of contract.
+:::
 
-## Conclusion and Final thoughts
-In above sections, we learned techniques of regression analysis, which is a powerful and useful tool in data analytics while auditing.  We may use regression analysis, inter alia, for -
+## An audit example: offices that spend more than expected {#sec-reg-audit}
 
-**Detection of Anomalies and Outliers:** Regression analysis can help auditors in identifying anomalies, outliers, or unexpected patterns in financial data. Unusual relationships between variables can signal potential errors, fraud, or irregularities that require further investigation.  
+Let us now use regression the way an auditor would. Remember the question we started this chapter with. Salary expenditure of an office should depend mainly on its staff strength. If an office spends far more than its staff strength explains, it may have *ghost employees* on its pay roll, or other irregular payments. Regression gives us an *expected* expenditure for every office. The residual is then the *unexplained* part. Large positive residuals are our leads.
 
-**Risk Assessment:** By analyzing the relationships between various financial or operational variables, regression analysis can assist auditors in assessing the level of risk associated with different aspects of an organization's operations. This helps auditors prioritize their efforts and allocate resources effectively. 
+### Our sample data
 
-**Control Testing:** Regression analysis can aid us in testing the effectiveness of internal controls within an organization. By examining the relationship between control variables and outcomes, auditors can assess whether controls are functioning as intended.  We can also use regression analysis to compare an organization's financial performance against industry benchmarks or similar companies. Deviations from expected relationships can highlight areas that warrant closer examination.
+We create the data of 90 sub-divisional offices (SDOs) of an imaginary department. For each office we have its staff strength, the class of the city where it is located, and its monthly salary expenditure in ₹ lakh. House rent allowance (HRA) is 30%, 20% and 10% of pay in X, Y and Z class cities respectively. So, for the same staff, an office in an X class city spends more.
 
------------------------------------------
+We have planted a few cases.
+
+- Three offices have salary expenditure inflated by 16%, as if ghost employees were added.
+- In one office, the staff strength was keyed in with an extra zero.
+
+As in other chapters, new readers may skip the code which creates the data.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the sample office data"
+set.seed(2026)
+n <- 90
+offices <- tibble(
+  office_id  = sprintf("SDO-%02d", 1:n),
+  city_class = factor(sample(c("X", "Y", "Z"), n, replace = TRUE,
+                             prob = c(0.2, 0.4, 0.4)),
+                      levels = c("Z", "Y", "X")),
+  staff      = sample(8:60, n, replace = TRUE)
+) |>
+  mutate(hra    = c(Z = 0.10, Y = 0.20, X = 0.30)[as.character(city_class)],
+         # about ₹0.85 lakh basic cost per employee, plus HRA, plus noise
+         salary = round(staff * 0.85 * (1 + hra) + rnorm(n, 0, 1.2), 2)) |>
+  select(-hra)
+
+# Planted case 1. Ghost employees, salary inflated by 16%
+ghost <- c("SDO-17", "SDO-44", "SDO-63")
+offices <- offices |>
+  mutate(salary = if_else(office_id %in% ghost, round(salary * 1.16, 2), salary))
+
+# Planted case 2. Staff strength keyed in with an extra zero
+offices <- offices |>
+  mutate(staff = if_else(office_id == "SDO-81", staff * 10L, staff))
+```
+
+```{r}
+head(offices)
+```
+
+### First model, and a surprise
+
+Let us fit a model of salary on staff strength and city class.
+
+```{r}
+off_m1 <- lm(salary ~ staff + city_class, data = offices)
+summary(off_m1)
+```
+
+Something is wrong. Salary expenditure must surely rise steeply with staff strength. Yet the slope of `staff` is only `r round(coef(off_m1)["staff"], 3)` lakh per employee, and R-squared is only `r round(summary(off_m1)$r.squared * 100)`%. Let us look at the influence of each office, using `augment()` and Cook's distance.
+
+```{r}
+augment(off_m1, data = offices) |>
+  arrange(desc(.cooksd)) |>
+  select(office_id, staff, salary, .fitted, .hat, .cooksd) |>
+  head(4)
+```
+
+One office, `SDO-81`, has a Cook's distance of `r round(max(cooks.distance(off_m1)))`, where the rest are below 0.1. Its staff strength is shown as `r offices$staff[offices$office_id == "SDO-81"]`, while no other office has more than `r max(offices$staff[offices$office_id != "SDO-81"])`. Its leverage (`.hat`) is close to 1, the maximum possible. This single wrong entry has pulled the whole line towards itself. @fig-reg-lever shows this.
+
+```{r fig-reg-lever, fig.align='center', fig.cap="One wrong entry (red) pulls the whole line", out.height="35%"}
+ggplot(offices, aes(staff, salary)) +
+  geom_point(aes(color = office_id == "SDO-81"), show.legend = FALSE) +
+  geom_smooth(method = "lm", formula = "y ~ x", se = FALSE) +
+  scale_color_manual(values = c("grey40", "red")) +
+  labs(x = "Staff strength (as recorded)", y = "Monthly salary (₹ lakh)") +
+  theme_bw()
+```
+
+::: callout-tip
+## Audit tip
+
+Always check Cook's distance and leverage *before* reading the residuals. A single data entry error with an extreme value can spoil the whole model. It then makes genuine outliers look normal, and normal offices look odd. Such an entry is itself an audit finding about the quality of the data.
+:::
+
+On checking the records, suppose we find that the office actually has `r offices$staff[offices$office_id == "SDO-81"] / 10` staff. We should correct the entry. Here we simply keep it aside and re-fit.
+
+### A better model
+
+HRA is a *percentage* of pay. So each extra employee in an X class city costs more than an extra employee in a Z class city. In other words, the slope of `staff` should be different for each city class. This is exactly what an interaction does. Let us fit both the parallel slopes model and the interaction model on the clean data, and compare them.
+
+```{r}
+clean <- offices |> filter(office_id != "SDO-81")
+
+off_m2 <- lm(salary ~ staff + city_class, data = clean)
+off_m3 <- lm(salary ~ staff * city_class, data = clean)
+summary(off_m3)
+```
+
+Both interaction terms are significant. For every extra employee, the expected salary goes up by `r round(coef(off_m3)["staff"], 2)` lakh in a Z class city, and by `r round(coef(off_m3)["staff"] + coef(off_m3)["staff:city_classX"], 2)` lakh in an X class city. R-squared is now `r round(summary(off_m3)$r.squared * 100, 1)`%.
+
+To check formally whether the interaction model is better, we can compare the two models with `anova()`. It tests whether the extra terms reduce the residuals by more than chance would.
+
+```{r}
+anova(off_m2, off_m3)
+```
+
+The p-value is very small, so the interaction model is clearly better. Its residual standard error is `r round(sigma(off_m3), 2)` lakh, against `r round(sigma(off_m2), 2)` lakh for the parallel slopes model. The more accurate our expected values are, the easier it is to spot offices which do not fit.
+
+### Finding the offices
+
+Now let us look at the residuals. Raw residuals are in lakh. To judge how unusual each one is, we use the *standardised* residual (`.std.resid`). It is the residual divided by its standard error, so it is on a common scale. Under our assumptions, values beyond 3 are very rare, about 3 in 1,000. Let us also calculate the excess expenditure in rupees.
+
+```{r}
+flagged <- augment(off_m3, data = clean) |>
+  mutate(excess = salary - .fitted) |>
+  arrange(desc(.std.resid)) |>
+  select(office_id, staff, city_class, salary, .fitted, excess, .std.resid)
+
+head(flagged, 5)
+```
+
+```{r}
+#| include: false
+top2 <- flagged |> filter(.std.resid > 3)
+sdo17 <- flagged |> filter(office_id == "SDO-17")
+```
+
+Two offices, `r paste(top2$office_id, collapse = " and ")`, have standardised residuals above 3. Together they spend about ₹`r round(sum(top2$excess), 1)` lakh a month, or about ₹`r round(sum(top2$excess) * 12 / 100, 1)` crore a year, more than expected. Both are planted ghost employee cases. They are clearly our first leads.
+
+The third planted office, `SDO-17`, has a standardised residual of only `r round(sdo17$.std.resid, 2)`. Its excess of ₹`r round(sdo17$excess, 2)` lakh is within the normal variation between offices. Regression cannot separate it from genuine offices. Let us see all of this in @fig-reg-flags.
+
+```{r fig-reg-flags, fig.align='center', fig.cap="Standardised residuals of offices. Offices beyond 3 are leads."}
+augment(off_m3, data = clean) |>
+  ggplot(aes(.fitted, .std.resid)) +
+  geom_hline(yintercept = c(-3, 3), linetype = 2, color = "red") +
+  geom_hline(yintercept = 0, color = "grey50") +
+  geom_point(aes(color = office_id %in% ghost)) +
+  geom_text(data = \(d) filter(d, abs(.std.resid) > 3 | office_id %in% ghost),
+            aes(label = office_id), vjust = -0.8, size = 3) +
+  scale_color_manual(values = c("grey40", "red"),
+                     labels = c("Other offices", "Planted cases")) +
+  labs(x = "Expected salary (₹ lakh)", y = "Standardised residual", color = NULL) +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+::: callout-warning
+## Caution
+
+Regression finds only those deviations which are large compared to the normal variation between offices. A small office with a few ghost employees, like `SDO-17`, can hide in that variation. So a clean result from regression does not prove that there is no fraud. For individual offices, it must be followed by other tests, like matching the pay roll with the attendance and bank account data (see @sec-dup).
+:::
+
+::: callout-note
+## What about large negative residuals?
+
+Offices which spend much *less* than expected may also deserve a look. The reason may be vacant posts, salary not paid on time, or expenditure booked under the wrong head. Here no office has a standardised residual below -3.
+:::
+
+## Uses of regression in audit
+
+We have seen that regression analysis is a powerful tool for an auditor. It may be used, inter alia, for
+
+- **Detection of anomalies and outliers.** As in our office example, regression gives the *expected* value of an amount based on its drivers. Large residuals point to transactions or units which do not fit, and these may be errors, irregularities or fraud.
+- **Analytical procedures.** The auditor can estimate what an expenditure *should* be, say fuel cost from vehicle kilometres, or electricity charges from the connected load, and compare it with what was booked.
+- **Risk assessment.** Units with large unexplained deviations can be ranked and taken up first in the audit plan. This helps the auditor use limited time and staff well.
+- **Benchmarking.** Regression can compare the performance of an organisation with similar ones, after adjusting for size and other factors. Deviations from the expected relationship highlight areas that deserve a closer look.
+
+## A suggested workflow
+
+For any regression analysis in audit, we may follow these steps.
+
+1. **Understand the drivers.** Decide, from knowledge of the business, which variables should explain the amount under audit. Regression only confirms or rejects relationships which make sense.
+2. **Visualise first.** Draw scatter plots and box plots to see whether the relationships look linear, and to spot obvious errors.
+3. **Fit a simple model** with `lm()`, and read its `summary()`.
+4. **Check influence.** Look at Cook's distance and leverage. Investigate and correct data entry errors before going further.
+5. **Check the assumptions** with `plot()` or `check_model()`. Check multi-collinearity with `vif()` when there are several predictors.
+6. **Improve the model.** Add factors and interactions that make business sense. Compare models with adjusted R-squared or `anova()`.
+7. **Flag the residuals.** Use `augment()` and pick the units with large standardised residuals. Quantify the excess in rupees.
+8. **Verify with records.** Examine the documents of the flagged units before drawing any conclusion.
+
+::: callout-important
+## Remember
+
+A regression model shows association, not cause. A large residual means only that a unit does not fit the pattern of the others. It is a *lead*, not a *finding*. There may be a genuine reason which the model does not know about. Always examine the records before reporting.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `lm()` | base R (stats) | Fits a linear regression model |
+| `summary()` | base R | Shows coefficients, p-values, R-squared and F-test of a model |
+| `coef()`, `confint()` | base R (stats) | Gives the coefficients and their confidence intervals |
+| `residuals()`, `fitted()`, `sigma()` | base R (stats) | Gives the residuals, fitted values and residual standard error |
+| `predict()` | base R (stats) | Predicts for new data, optionally with prediction intervals |
+| `plot()` on a model | base R | Draws the six diagnostic plots, chosen with `which` |
+| `cooks.distance()`, `rstandard()` | base R (stats) | Gives Cook's distance and standardised residuals |
+| `contrasts()`, `model.matrix()` | base R (stats) | Shows how factors are converted to dummy variables |
+| `anova()` | base R (stats) | Compares two nested models |
+| `augment()` | broom | Gives fitted values, residuals, leverage and Cook's distance as a data frame |
+| `check_model()` | performance | Draws all diagnostic plots together, with guidance |
+| `vif()` | car | Calculates the variance inflation factor of each predictor |
+| `ggpairs()` | GGally | Draws a matrix of scatter plots and correlations |
+| `geom_parallel_slopes()` | moderndive | Draws a parallel slopes model in ggplot2 |
+
+: Functions used in this chapter {#tbl-regfunctions}
