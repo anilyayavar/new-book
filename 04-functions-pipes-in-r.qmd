@@ -3,48 +3,59 @@
 source("_common.R")
 ```
 
-# Pipes in R
+# Pipes in R {#sec-pipes}
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(magrittr)
 ```
 
-Now here I would like to introduce you with the concept of pipes\index{pipes} in R. There are two types of pipes used-
+Let us now meet *pipes*\index{pipes}, which make a chain of operations easy to write and to read. There are two pipes in R.
 
-- `|>` is native pipe of R.  It was introduced in R version 4.1
-- `%>%` pipe introduced in `magrittr` package[@R-magrittr], now part of `tidyverse` which we will use extensively in our data analysis tasks.
+- `|>` is the native pipe of R, built into R since version 4.1. We use it throughout this book.
+- `%>%` is the pipe from the package `magrittr`[@R-magrittr], loaded with the `tidyverse`. It came first, and is still common in code you will find in books and on the internet.
 
 ```{r fig-pipe2, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Magrittr, the R package, is named after the surrealist painter Rene' Magritte. His painting was self captioned, 'This is not a pipe.'", out.width="99%"}
 knitr::include_graphics('images/pipemag.png')
 ```
 
 
-Actually `%>%` is predecessor to native R's pipe `|>`.  The pipes are powerful tools for clearly expressing a sequence of operations that transform an object, without the need of actually creating that object in each step.  Let us understand this concept with the following example.  Suppose, we have to three functions say `FIRST` , `SECOND` and `THIRD` to an object `OBJ` in sequence.  So the order of operations would either be like-
+`%>%` was the forerunner of the native pipe `|>`. Pipes express a sequence of operations on an object clearly, without creating an object at each step. Suppose we have to apply three functions, `FIRST`, `SECOND` and `THIRD`, to an object `OBJ`, in that order. We could write either
 ```
 THIRD(SECOND(FIRST(OBJ)))
 ```
-or with creating intermediate objects, when instead we actually do not need those intermediate objects. 
+which has to be read from the inside out, or create intermediate objects which we do not really need,
 ```
 OBJ1 <- FIRST(OBJ)
 OBJ2 <- SECOND(OBJ1)
 OBJ3 <- THIRD(OBJ2)
 ```
-Here actually we do not require `OBJ1` and `OBJ2`.  So in these cases we either have to compromise with the readability of code i.e. inside out or have to create unwanted objects.  Pipes actually mitigate both these issues simultaneously.  With pipes we can write above operations as either of these -
+So we either give up readability, or clutter the workspace with objects like `OBJ1` and `OBJ2`. Pipes solve both problems at once. The pipe passes the result on its left as the *first argument* of the function on its right. With pipes we can write the above as either of these.
 ```
-OBJ1 |> FIRST() |> SECOND() |> THIRD()
-OBJ1 %>% FIRST() %>% SECOND() %>% THIRD()
+OBJ |> FIRST() |> SECOND() |> THIRD()
+OBJ %>% FIRST() %>% SECOND() %>% THIRD()
 ```
+Read `|>` as "and then". Take `OBJ`, *and then* apply `FIRST()`, *and then* `SECOND()`, *and then* `THIRD()`. A small example with amounts:
+
+```{r}
+amounts <- c(42000, 125000, 9800, 51000, 330000, 76000)
+# the three largest amounts, in lakh
+round(head(sort(amounts, decreasing = TRUE), 3) / 1e5, 2)
+# the same with pipes
+amounts |> sort(decreasing = TRUE) |> head(3) |> (\(x) round(x / 1e5, 2))()
+```
+
+The real power of pipes shows with the tidyverse, where a whole analysis, filtering, grouping and summarising, reads as one sentence. We will use them in every chapter from @sec-DPLYRR onward.
 A diagrammatic representation is given in @fig-pipe.
 
-```{r fig-pipe, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="A diagrammtic illustation of Pipe concept in base R and tidyverse", out.width="99%"}
+```{r fig-pipe, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="A diagrammatic illustration of the pipe in base R and tidyverse", out.width="99%"}
 knitr::include_graphics("images/pipe.png")
 ```
 
-Now two questions may arise here-
+Two questions may arise here.
 
-1. What if there are multiple arguments to be passed in any of the operations?
-2. Is there any difference between the two pipes?  If yes, which is better OR what are the pros and cons of each?
+1. What if the result on the left is needed in some argument other than the first?
+2. Is there any difference between the two pipes, and which is better?
 
-To answer these questions, we will discuss both pipes separately.
+To answer these, we discuss the two pipes separately.
 
 ```{r fig-pipe3, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Using pipes in R", out.width="99%"}
 knitr::include_graphics('images/pipes in R.png')
@@ -52,21 +63,22 @@ knitr::include_graphics('images/pipes in R.png')
 
 
 ## Magrittr/Dplyr pipe `%>%`
-Pipes usually pass result of previous operation silently into first argument of next/right expression.  So `data %>% filter(col == 'A')` means `filter(data, col=='A')`.  But there may be cases when result of previous (LHS) expression is required to be passed on second or other argument in RHS expression.  A simple example may be of function `lm`, where `data` argument is second argument. In such cases we can make use special placeholder `.` as result of LHS specifically.  In other words aforesaid filter example can be written with placeholder as `data %>% filter(. , col == 'A')`.  Now using this placeholder we can use result of LHS wherever we want.  See this example
+The pipe passes the result on its left into the first argument of the function on its right. So `data %>% filter(col == 'A')` means `filter(data, col == 'A')`. But sometimes the result is needed in another argument. A simple example is the function `lm()`, whose `data` argument is the second. For such cases, `%>%` has the *placeholder* `.`, which stands for the result on the left. The filter example could be written as `data %>% filter(., col == 'A')`. With the placeholder, we can put the result wherever we want. See this example
 ```{r}
 iris %>% lm(Sepal.Length ~ Sepal.Width, data = .)
 ```
 Thus `x %>% f(y)` is equivalent to `f(x, y)` but `x %>% f(y, .)` is equivalent to `f(y, x)`.
 
-## Base R pipe `|>` (Version 4.2.0 +)
-R version 4.2.0 introduced concept of placeholder `_` similar to dplyr/magrittr, but with a few differences.
+## Base R pipe `|>`
+R version 4.2.0 gave the native pipe a placeholder too, `_`, similar to the `.` of magrittr, but with a few differences.
 
-- The argument where `_` is to be used, must be named.  So `f(y, z = x)` can be written as `x |> f(y, z= _)`.
+- The argument where `_` is used must be *named*. So `f(y, z = x)` can be written as `x |> f(y, z = _)`.
+- `_` can be used only once on the right side.
 
 ```{r}
 iris |> lm(Sepal.Length ~ Sepal.Width, data = _) |> summary()
 ```
-The requirement of named argument is not there in dplyr pipe.  So essentially, `iris %>% lm(Sepal.Length ~ Sepal.Width, .)` will also work. But in base R `iris |> lm(Sepal.Length ~ Sepal.Width, _)` would not work and throw an error.  Thus, in cases where the argument of placeholder is not named, we have to use anonymous function. See these-
+The magrittr pipe does not need the argument to be named. So `iris %>% lm(Sepal.Length ~ Sepal.Width, .)` works. But `iris |> lm(Sepal.Length ~ Sepal.Width, _)` gives an error. In such cases, we can use an anonymous function, `\(x)`, which we learnt in @sec-func. See these
 
 ```
 # placeholder without named argument
@@ -74,6 +86,43 @@ iris |> lm(Sepal.Length ~ Sepal.Width, _)
 ```
 ```{r}
 # Correct way to use unnamed argument
-iris |> {\(.x) lm(Sepal.Length ~ Sepal.Width, .x)}() |> summary()
+iris |> (\(d) lm(Sepal.Length ~ Sepal.Width, d))() |> summary()
 ```
-Type ```` ?`|>` ```` in console and see help page for more details.
+The anonymous function is wrapped in parentheses and followed by `()`, so that the pipe sees a function call.
+
+Since R 4.3, `_` can also start a chain of extractions, like `mtcars |> _$mpg`, or `x |> _[[1]]`.
+
+Type ```` ?`|>` ```` in the console and see the help page for more details.
+
+## Which pipe to use?
+
+For most work, the two pipes are interchangeable. The differences are small.
+
+| | <code>&#124;&gt;</code> | `%>%` |
+|----------------------|------------------------|------------------------|
+| Needs a package | No, built into R 4.1 and later | Yes, magrittr (loaded with tidyverse) |
+| Placeholder | `_`, only with a named argument | `.`, anywhere |
+| Function without `()` | Not allowed, <code>x &#124;&gt; head()</code> | Allowed, `x %>% head` |
+| Speed | Slightly faster | Slightly slower |
+
+: The two pipes compared {#tbl-pipes}
+
+We use `|>` in this book, because it needs no package and is now the standard. In RStudio, the shortcut `Ctrl + Shift + M` types a pipe. To make it type `|>`, tick *Use native pipe operator* under *Tools > Global Options > Code*.
+
+::: callout-tip
+## Audit tip
+
+A pipe reads as a sequence of audit steps. Take the payments, *and then* keep those of 2024-25, *and then* group by vendor, *and then* total them. Write each step on its own line, with a comment where the reason is not obvious. Your reviewer can then check the logic line by line, just like a working paper.
+:::
+
+## Summary of functions used
+
+| Operator | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| <code>&#124;&gt;</code> | base R (4.1 and later) | Pass the result on the left as the first argument of the function on the right |
+| `_` | base R (4.2 and later) | Placeholder for the result, in a named argument |
+| `%>%` | magrittr | The tidyverse pipe |
+| `.` | magrittr | Placeholder for the result, in any argument |
+| `\(x)` | base R (4.1 and later) | Short form of `function(x)`, for anonymous functions |
+
+: Functions used in this chapter {#tbl-pipefunctions}

@@ -4,40 +4,34 @@ source("_common.R")
 ```
 
 # Existing and useful functions in base R {#sec-basefuns}
-R has a lot of inbuilt/existing functions that are useful and therefore it is good to know about them.  Let us discuss a few of these existing functions which are useful for data analytics and other allied jobs.
+R comes with a large number of built-in functions, and it pays to know the useful ones. In this chapter we go through those most used in data analysis. Treat it as a reference, to come back to. Later chapters use the tidyverse for most work, but these base R functions remain the everyday tools underneath.
 
-Firstly, let's learn logical operators that will be useful to check various conditions.  For those who doesn't know what operators are, they may simply think of operators being special kind of functions having exactly two arguments.
+First, the operators used to check conditions. An *operator* is just a special kind of function, usually with two arguments, written between them, like `5 > 2` instead of `greater(5, 2)`.
 
 ## Conditions and logical operators/operands
-Table: Conditions and logical operators/operands {#tbl-table2}
-
-```{r fig-table2, echo=FALSE, message=FALSE, warnings=FALSE, results='asis', fig.env="table", fig.cap="A dummy"}
-tabl <- "
-| Operator/ function      | Meaning             | Example                    |
+| Operator/ function | Meaning | Example |
 |:-------------:|:-----------------------------|:--------------------------------------------|
-|   `==`        | Is RHS equal to LHS?             | `5 == 2` will return FALSE |
-|               |                                  | `'Anil' == 'anil'` is FALSE |
-| `!=` | Is RHS not equal to LHS? | `'ABCD' != 'abcd'` is TRUE |
-|   `>=`        | Is LHS greater than or equal to RHS?      | `5 >= 2` will return TRUE  |
-| `<=`          | Is LHS less than or equal to RHS?      | `15 <= 2` will return FALSE|
-| `>`  | Is LHS strictly greater than RHS? | `2 > 2` will return FALSE |
-| `<`  | Is LHS strictly less than RHS? | `12 < 12` will return FALSE |
-| `is.na()` | Whether the argument passed is NA | `is.na(NA)` is TRUE |
-| `is.null()` | Whether the argument passed is null | `is.null(NA)` is FALSE |
-| `|` | Logical OR | `TRUE | FALSE ` will return `TRUE` |
-| `&` | Logical AND | `TRUE & FALSE ` will return `FALSE` |
-| `!` | Logical NOT | `!TRUE` will return `FALSE` |
-| `||` | Element wise Logical OR | Examines only the first element of the operands resulting into a single length logical vector |
-| `&&` | Element wise Logical AND | Examines only the first element of the operands resulting into a single length logical vector |
-| `%in%` | LHS __IN__ RHS |Checks whether LHS elements are present in RHS vector |
+| `==` | Is LHS equal to RHS? | `5 == 2` is `FALSE`; `'Anil' == 'anil'` is `FALSE` |
+| `!=` | Is LHS not equal to RHS? | `'ABCD' != 'abcd'` is `TRUE` |
+| `>=` | Is LHS greater than or equal to RHS? | `5 >= 2` is `TRUE` |
+| `<=` | Is LHS less than or equal to RHS? | `15 <= 2` is `FALSE` |
+| `>` | Is LHS strictly greater than RHS? | `2 > 2` is `FALSE` |
+| `<` | Is LHS strictly less than RHS? | `12 < 12` is `FALSE` |
+| `is.na()` | Is the value missing? | `is.na(NA)` is `TRUE` |
+| `is.null()` | Is the object `NULL`? | `is.null(NA)` is `FALSE` |
+| <code>&#124;</code> | Logical OR, element by element | <code>TRUE &#124; FALSE</code> is `TRUE` |
+| `&` | Logical AND, element by element | `TRUE & FALSE` is `FALSE` |
+| `!` | Logical NOT | `!TRUE` is `FALSE` |
+| `xor()` | Exclusive OR, one or the other but not both | `xor(TRUE, TRUE)` is `FALSE` |
+| <code>&#124;&#124;</code> | Logical OR for a *single* value | Used in `if()` conditions; gives an error if given a longer vector |
+| `&&` | Logical AND for a *single* value | Used in `if()` conditions; gives an error if given a longer vector |
+| `%in%` | Is LHS __in__ RHS? | Checks whether each element of LHS is present in the RHS vector |
 
-"
-cat(tabl) 
-```
+: Conditions and logical operators {#tbl-table2}
 
 ## Vectorisation of operations and functions {-}
 
-All the above mentioned operators are __vectorised__.  Except `||` and `&&` will return vector of same length as we are comparing.  Check
+All the above operators, except `||` and `&&`, are __vectorised__. They compare the vectors element by element, and return a vector of the same length. Check
 ```{r}
 LETTERS[1:4] == letters[1:4]
 10:1 >= 1:10
@@ -54,7 +48,7 @@ x | y
 ```
 
 ## Recycling
-__Recycling__ rules apply when two vectors are not of equal length.  See these examples.
+__Recycling__ rules apply when two vectors are not of equal length. The shorter one is repeated to match the longer. See these examples.
 ```{r}
 # Notice that results are displayed silently
 LETTERS[1:4] == 'A'
@@ -62,31 +56,36 @@ LETTERS[1:4] == 'A'
 LETTERS[1:5] == LETTERS[1:3]
 ```
 
-The __operator `%in%`__ behaves slightly different from above.  Each searches each element of LHS in RHS and gives result in a logical vector equal to length of LHS vector.  See these examples carefully.
+The __operator `%in%`__ behaves differently. It looks for each element of the LHS anywhere in the RHS, and returns a logical vector as long as the LHS. See these examples carefully.
 ```{r}
 'A' %in% LETTERS
 LETTERS %in% LETTERS[1:4]
 ```
 
+In audit, `%in%` checks membership of a list, like whether each vendor code is in the approved list. Its negation, `!(x %in% list)`, finds those *not* in the list.
+
 ## Handling Missing values `NA` in these operations
-While checking for any condition to be `TRUE` or `FALSE` missing values `NA` and/or `NaN` should be handled carefully or a bug may be introduced.  See these examples-
+When checking conditions, missing values `NA` (and `NaN`) need care, or they introduce bugs. Any comparison with `NA` gives `NA`. See these examples.
 ```{r}
 FALSE != NA
 TRUE != NA
 ```
-Thus, if any of the condition is evaluated on a vector, we can have `NA` in our output along with `TRUE` and `FALSE`.  See this example
+So a condition checked on a vector can give `NA` in the output, along with `TRUE` and `FALSE`. See this example
 ```{r}
 x <- c(1, 5, 15, NA, 2, 3)
 x <= 5
 ```
-These missing values however behaves slightly different with logical operators `&` `|`.  See these examples.
+Missing values behave slightly differently with `&` and `|`. If the answer is the same whatever the missing value might be, R gives it. `TRUE | anything` is `TRUE`, and `FALSE & anything` is `FALSE`. See these examples.
 ```{r}
 TRUE | NA
 FALSE & NA
+TRUE & NA
 ```
 
+Note also that `NA == NA` is `NA`, not `TRUE`. To check for missing values, always use `is.na()`, never `== NA`.
+
 ## Use of above logical operators for subsetting
-Since the logical operations on vectors gives a `logical` vector as output, these can be used for sub-setting as well.  See these examples.
+Since these operations give a `logical` vector, they can be used for subsetting, as we saw in @sec-subset. See these examples.
 ```{r}
 my_ages <- c(40, 45, 31, 51, 25, 27, 59, 45)
 # filter ages greater than or equal to 30
@@ -98,19 +97,23 @@ my_names[my_names <= "D"]
 ```
 
 ## Conditions with `ifelse`
-Syntax `ifelse(test, yes, no)` will be used to return value (of same shape as `test`) which is filled with elements selected from either `yes` or `no` depending on whether the elements of `test` are `TRUE` or `FALSE`.  See this example 
+`ifelse(test, yes, no)` returns a vector of the same length as `test`, taking each element from `yes` where `test` is `TRUE`, and from `no` where it is `FALSE`. See this example
 ```{r}
 x <- c(1:5, NA, 16:20)
 ifelse(x>5, 'Greater than 5', 'Upto 5')
 ```
 
-## Functions `all()` and `any()` 
-These are shortcut functions to tell us whether `all` or `any` of the elements of given object are `TRUE`.  See This example
+Notice that where `test` is `NA`, the result is `NA` too. The tidyverse version, `dplyr::if_else()`, has an argument `missing` to say what to return then, and is stricter about types. For more than two outcomes, `dplyr::case_when()` is used. Both are covered in @sec-DPLYRR.
+
+## Functions `all()` and `any()`
+These tell us whether `all` or `any` of the elements of a logical vector are `TRUE`. See this example
 ```{r}
 x <- 11:20
 all(x > 5)
 any(x > 20)
 ```
+
+They make quick checks on data. `any(duplicated(bill_no))` asks whether any bill number repeats, and `all(amount >= 0)` whether all the amounts are non-negative. Remember `na.rm = TRUE` if the data may have missing values.
 
 All of the above mentioned operators (along with those listed in @sec-calculator) are __vectorised__. Check these examples.
 ```{r}
@@ -126,7 +129,7 @@ x ^ y
 y %% 3
 y %/% 3
 ```
-__Recycling__ also applies on mathematical operators.  See these examples and notice when R gives results silently and when with a warning.
+__Recycling__ also applies to arithmetic operators. See these examples, and notice when R gives the result silently and when with a warning.
 ```{r}
 10:15 + 4
 100:110 - 50
@@ -138,34 +141,32 @@ x + y
 x + c(1, 2, 3)
 ```
 
-All the above-mentioned operators/functions may also be used on matrices, arrays of larger dimension, since we have already seen that matrices/arrays are actually vectors at the core.
+All these operators may also be used on matrices and arrays, since they are vectors at the core. The result keeps the dimensions.
 ```{r}
-mat1 <- matrix()
+mat1 <- matrix(1:6, nrow = 2)
+mat1 * 10
+mat1 + mat1
 ```
 
 ## Common arithmetical Functions
-Table: Common Arithmetical Functions {#tbl-table4}
-```{r table4, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
-tabl2 <- "
-| Function      | Meaning             | Input                    | Output   |
-|:-------------:|:----------------------|:-----------------------|:-------------------------------|
-| `sum()` | Adds all elements  | One or more Vector, matrix, array | Vector having 1 element only |
-| `prod()` | Returns product of all elements | One or more Vector, matrix, array | Vector having 1 element only |
-| `mean()` | Returns the arithmetic mean | One Vector, matrix, array | Vector having 1 element only |
-| `max()` | Returns maximum value | One or more Vector, matrix, array | Vector having 1 element only |
-| `min()` | Returns minimum value | One or more Vector, matrix, array | Vector having 1 element only |
-| `ceiling()` | Returns integer(s) not less than given values | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `floor()` | Returns largest integers not greater than given values | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `trunc()` | returns integers formed by truncating the values towards 0 | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `round(x, digits = 0)` | Rounds the given value(s) to number of decimal places provided | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `signif(x, digits = 6)` | Round to `significant` digits | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `factorial()` | Returns factorial | One Vector, matrix, array of `integer` type | Vector having 1 element |
-| `sqrt()` | Returns square root | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `log10()` or `log2()` | Logrithm with base 10 or 2 respectively | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-| `exp(x)` | returns exponential | One Vector, matrix, array | Vector, matrix, array having same `dim` |
-"
-cat(tabl2) 
-```
+| Function | Meaning | Output |
+|:-------------:|:----------------------|:-------------------------------|
+| `sum()` | Adds all the elements | A single value |
+| `prod()` | Product of all the elements | A single value |
+| `mean()` | Arithmetic mean | A single value |
+| `max()`, `min()` | Largest or smallest value | A single value |
+| `ceiling()` | Smallest integers not less than the values | Same shape as input |
+| `floor()` | Largest integers not greater than the values | Same shape as input |
+| `trunc()` | Integers formed by dropping the decimal part (towards 0) | Same shape as input |
+| `round(x, digits = 0)` | Round to the given number of decimal places | Same shape as input |
+| `signif(x, digits = 6)` | Round to the given number of significant digits | Same shape as input |
+| `abs()` | Absolute value, dropping the sign | Same shape as input |
+| `factorial()` | Factorial | Same shape as input |
+| `sqrt()` | Square root | Same shape as input |
+| `log()`, `log10()`, `log2()` | Natural logarithm, or with base 10 or 2 | Same shape as input |
+| `exp(x)` | Exponential | Same shape as input |
+
+: Common arithmetic functions {#tbl-table4}
 
 See these examples.
 ```{r}
@@ -180,8 +181,14 @@ log10(Mat1)
 factorial(10:1)
 ```
 
-### Missing values 
-If the vector on which we are calculating `sum` etc., has missing values, we will have to use argument `na.rm = TRUE` in these functions (Check documentation of these functions individually once).  See these examples -
+**Rounding.** R's `round()` rounds an exact half to the nearest *even* number, as the international standard (IEC 60559) requires. So `round(2.5)` is `2`, and `round(3.5)` is `4`. The rounding taught in school, and used in most accounts, always rounds a half up. Where this matters, use `janitor::round_half_up()`, as explained in @sec-DPLYRR.
+
+```{r}
+round(c(0.5, 1.5, 2.5, 3.5))
+```
+
+### Missing values
+If the vector has missing values, functions like `sum()` and `mean()` return `NA`, unless we use the argument `na.rm = TRUE`. (Check the help of each function, as a few work differently.) See these examples.
 ```{r}
 x <- c(1:50, NA)
 sum(x)
@@ -190,22 +197,18 @@ mean(x, na.rm = TRUE)
 ```
 
 ## Some Statistical functions
-Table: Some commonly used Statistical Functions {#tbl-table5}
-```{r table5, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
-tabl3 <- "
-| Function      | Meaning             | Input                    | Output   |
-|:-------------:|:----------------------|:-----------------------|:-------------------------------|
-| `sd()` | Returns standard deviation | One Vector, matrix, array | Vector having 1 element only |
-| `var()` | Returns variance | One or more Vector, matrix, array | Vector having 1 element only |
-| `median()` | Returns median value | One Vector, matrix, array | Vector having 1 element only |
-| `range()` | Returns range | One Vector, matrix, array | Vector having 2 elements |
-| `IQR()` | Computes interquartile range of the x values | One Vector, matrix, array | Vector having 1 element only |
-| `quantile()` | Computes percentile of given values for the given probabilities in `probs` argument | One Vector, matrix, array | Named Vector having 5 elements by default, OR equal to the length of `probs` vector given |
+| Function | Meaning | Output |
+|:-------------:|:----------------------|:-------------------------------|
+| `sd()` | Standard deviation | A single value |
+| `var()` | Variance (with two vectors, the covariance) | A single value |
+| `median()` | Median, the middle value | A single value |
+| `range()` | Smallest and largest values | Two values |
+| `IQR()` | Interquartile range | A single value |
+| `quantile()` | Percentiles, for the probabilities given in `probs` | Five values by default (0, 25, 50, 75 and 100 per cent), or one for each of `probs` |
 
-"
-cat(tabl3) 
-```
-Examples-
+: Some commonly used statistical functions {#tbl-table5}
+
+Examples:
 ```{r}
 median(1:100)
 range(1:100, 45, 789)
@@ -216,14 +219,14 @@ quantile(0:100, probs = 1:10 / 10)
 ## Functions related to sampling and probability distributions {#sec-prob}
 
 ### Set the random seed with `set.seed()`
-It is a way to specify the random seed which is an integer vector, containing the random number generator (RNG) state for random number generation in R.  It does not given any output but makes your code reproducible for further use.  
+Random numbers in a computer are not truly random. They come from a formula, which starts from a number called the *seed*. `set.seed()` fixes the seed, so that the same "random" numbers come out every time the code is run. It gives no output, but makes your code reproducible.
 
 ### Generate random numbers with `rnorm()` / `runif()` / `rpois()` etc.
-Used to generate random numbers from normal, uniform and poisson distributions respectively.  Of course there are numerous other functions not only to calculate random numbers but to calculate probability, density of these and other probability distributions (such as binomial, t), but those are beyond the scope of this book.  E.g.
+These generate random numbers from the normal, uniform and Poisson distributions respectively. There are similar functions for other distributions, and functions for their probabilities and quantiles, like `pnorm()` and `qnorm()`, which we use in the statistics chapters. E.g.
 ```{r}
 rnorm(n=10) #default mean is 0 and SD is 1
 rnorm(n=10) # notice these will produce different results each time.
-# If however seed is fixed as above, these will be reproducible.
+# If, however, the seed is fixed, the results are reproducible.
 set.seed(123)
 runif(10) # default min and max are 0 and 1 respectively
 set.seed(123)
@@ -231,28 +234,44 @@ runif(10)
 ```
 
 ### Random Sample with `sample()`
-Used to take a sample of the specified `size` from the elements of x using either with or without replacement. E.g.
+`sample()` takes a sample of the given `size` from the elements of a vector, with or without replacement. E.g.
 ```{r}
 set.seed(123)
 sample(LETTERS, 5, replace = FALSE)
 set.seed(111)
 sample(LETTERS, 15, replace = TRUE)
 ```
-If the sampling is proportionate to given `probabilities` the same can be provided in `prob` argument.
+If the elements are to be picked with unequal chances, the weights are given in the argument `prob`.
 ```{r}
 set.seed(12)
 sample(LETTERS, 5, replace = FALSE, prob = 1:26)
 ```
 
+To pick a random sample of rows from a table, we sample the row numbers.
+
+```{r}
+set.seed(2024)
+vouchers <- data.frame(voucher = sprintf("V-%03d", 1:200),
+                       amount  = round(runif(200, 1000, 90000)))
+picked <- sample(nrow(vouchers), 5)
+vouchers[picked, ]
+```
+
+::: callout-tip
+## Audit tip
+
+Always set a seed before drawing an audit sample, and record it in your working papers. Anyone can then re-run the code and get exactly the same sample, which shows that the selection was random and not chosen. Sampling methods for audit are covered in detail in the chapter on sampling.
+:::
+
 ## Other Mathematical functions
 
 ### Progressive calculations with `cumsum()` /`cumprod()`
-Used to calculate running total or product.  Output vector length will be equal to that of input vector.
+These give the running total or product. The output is as long as the input.
 ```{r}
 cumsum(1:10)
 cumprod(-5:5)
 ```
-Other similar functions like `cummax()` (cumulative maximum) and `cummin()` may also be useful.
+The similar functions `cummax()` (running maximum) and `cummin()` (running minimum) are also useful.
 ```{r}
 set.seed(1)
 x <- sample(1:100, 10)
@@ -260,8 +279,8 @@ cummin(x)
 cummax(x)
 ```
 
-### Progressive difference `diff()` 
-Used to calculate running difference (difference between two consecutive elements) in the given numeric vector. Output will be shorter by one element. E.g.
+### Progressive difference `diff()`
+`diff()` gives the difference between each element and the one before it. The output is shorter by one element. E.g.
 ```{r}
 set.seed(123)
 x <- rnorm(10)
@@ -270,21 +289,37 @@ diff(x)
 length(diff(x))
 ```
 
+A use in audit: if cheque numbers are issued in order, `diff()` of the sorted numbers should be all `1`. Any other value shows a gap, or a repeat.
+
+```{r}
+cheques <- c(500101, 500102, 500103, 500106, 500107, 500107, 500108)
+diff(cheques)
+cheques[which(diff(cheques) != 1)]   # the cheque after which the break occurs
+```
+
+Cheques 500104 and 500105 are missing after 500103, and 500107 appears twice. Both need explanation, as cancelled, spoilt, or misused cheques.
+
 ## String Manipulation functions
 
-### Concatenate strings with `paste()` and `paste0()` 
-R's inbuilt function `paste()` concatenates each element of one or more vectors given as argument.  Argument `sep` is used to provide separator is any, which by default is a space i.e. `" "`.  On the other `sep` argument is not available in `paste0` which thus concatenates elements without any separator.
+### Concatenate strings with `paste()` and `paste0()`
+The function `paste()` joins the elements of one or more vectors, element by element. The argument `sep` gives the separator, a space `" "` by default. `paste0()` joins them with no separator.
 ```{r}
 paste(LETTERS, letters)
 paste0(letters, '_', 1:26) # check replication here
 ```
-_Note:_ that both `paste` and `paste0` returns vector with length equal to length of larger vector.  __Thus if the requirement is to concatenate each of the element in the given vector(s), use another argument `collapse`.  See this example.__
+_Note_ that both `paste()` and `paste0()` return a vector as long as the longest input. __To join all the elements into a single string, use the argument `collapse`. See this example.__
 ```{r}
 paste0(letters, 1:26, collapse = '+')
 ```
 
-### Functions `startsWith()` / `endsWith()` 
-To check whether the given string vector say `x` start or end with string (entries of) `prefix` or `suffix` we can use `startsWith(x, prefix)` or `endsWith(x, suffix)` respectively.  E.g.
+Be careful with missing values. `paste()` turns `NA` into the text `"NA"`, which then looks like a real value.
+
+```{r}
+paste("Bill", c("101", NA))
+```
+
+### Functions `startsWith()` / `endsWith()`
+To check whether the strings in `x` start with a `prefix` or end with a `suffix`, we use `startsWith(x, prefix)` or `endsWith(x, suffix)` respectively. E.g.
 ```{r}
 x <- c('apples', 'oranges', 'apples and oranges', 'oranges and apples', 'apricots')
 startsWith(x, 'apples')
@@ -294,17 +329,17 @@ endsWith(x, 'oranges')
 ```
 Note that both these functions return logical vectors having same length as `x`.
 
-### Check number of characters in string vector using `nchar()` 
-To count the number of characters in each of the element in string vector, say `x`, we can use `nchar(x)` which will return a vector of integer types. E.g.
+### Check number of characters in string vector using `nchar()`
+`nchar(x)` counts the characters in each element of `x`. It is a quick validity check on codes of fixed length, like a 10-character PAN or a 6-digit PIN code. E.g.
 ```{r}
 nchar(x)
 y <- c('', ' ', '   ', NA)
 nchar(y)
 ```
 
-### Change case using `toupper()` / `tolower()` 
-Changes the case of given vector to all UPPER or lower case respectively.
-Example-
+### Change case using `toupper()` / `tolower()`
+These change text to all UPPER or all lower case. Converting both sides to one case before comparing names avoids false mismatches, like `"Sharma"` against `"SHARMA"`.
+Example:
 ```{r}
 x <- c('Andrew', 'Bob')
 tolower(x)
@@ -313,21 +348,23 @@ toupper(x)
 
 
 ### Extract a portion of string using `substr()` {-}
-To extract the characters from a given vector say `x` from a given `start` position to `stop` position (both being integers) we will use `substr(x, start, stop)`.  E.g.
+`substr(x, start, stop)` extracts the characters from position `start` to position `stop`. E.g.
 ```{r}
 substr(x, 2, 8)
+substr("27AAPFU0939F1ZV", 3, 12)   # the PAN inside a GSTIN
 ```
 
-### Split a character vector using `strsplit()` 
-To split the elements of a character vector `x` into sub-strings according to the matches to sub-string `split` within them.  E.g.
+### Split a character vector using `strsplit()`
+`strsplit()` splits each element of a character vector into pieces, wherever the `split` string occurs. E.g.
 ```{r}
+x <- c('Anand Kumar', 'Bob', 'Chandan Lal Sharma')
 strsplit(x, split = ' ')
 ```
 **Notice that output will be of `list` type.**
 
-### Replace portions of string vectors `sub()` / `gsub()` 
+### Replace portions of string vectors `sub()` / `gsub()`
 
-These two functions are used to perform replacement of the first and all matches respectively.  E.g.
+These two functions replace the first match, and all matches, respectively. E.g.
 ```{r}
 #Replace only first match
 sub(pattern = 'B', replacement = '12', x, ignore.case = TRUE)
@@ -335,38 +372,39 @@ sub(pattern = 'B', replacement = '12', x, ignore.case = TRUE)
 gsub(pattern = 'B', replacement = '12', x, ignore.case = TRUE)
 ```
 
-### Match patterns using `grep()` / `grepl()` / `regexpr()` / `gregexpr()` 
-These functions are used to match string passed as argument `pattern` under a string vector.  These four however, differ in output/results.  E.g.
+### Match patterns using `grep()` / `grepl()` / `regexpr()` / `gregexpr()`
+These functions look for the `pattern` in each element of a string vector. They differ in what they return. E.g.
 ```{r}
-grep(pattern = 'an', x) # will give indices.  
+grep(pattern = 'an', x) # will give indices.
 #                         Output will be integer vector and length may be shorter than that of `x`
 grepl(pattern = 'an', x) # will give a logical vector of same length as `x`
 regexpr(pattern = 'an', x) # output will have multiple attributes
 ```
-Note that `regexpr()` outputs the character position of first instance of pattern match within the elements of given vector.
-`gregexpr()` is same as `regexpr()` but finds all instances of pattern. Output will be in `list` format. E.g.
+Note that `regexpr()` gives the position of the first match in each element (`-1` if there is none). `gregexpr()` finds all the matches, and returns a list. E.g.
 ```{r}
 gregexpr(pattern = 'an', x)
 ```
 
+The `pattern` in these functions is a *regular expression*, a powerful way of describing text patterns, which has its own chapter later in the book. The package `stringr` offers the same functions with a more consistent design, also covered later.
+
 ## Other functions
 
-### Transpose a matrix using `t()` 
-Used to return transpose of given matrix. E.g.
+### Transpose a matrix using `t()`
+`t()` returns the transpose of a matrix, turning rows into columns. E.g.
 ```{r}
 mat <- outer(1:5, 1:5, FUN = \(x, y) paste0('A', x, y))
 mat
 t(mat)
 ```
 
-### Generate a frequency table using `table()` 
-Returns a frequency/contingency table of the counts at each combination of factor levels.  E.g.
+### Generate a frequency table using `table()`
+`table()` counts how many times each value occurs. With two vectors, it counts each combination, giving a cross-table. E.g.
 ```{r}
 set.seed(123)
 x <- sample(LETTERS[1:5], 100, replace = TRUE)
 table(x)
 ```
-If more than one argument is passed-
+If more than one argument is passed,
 ```{r}
 set.seed(1234)
 df <- data.frame(State_code = x,
@@ -375,40 +413,50 @@ my_table <- table(df$State_code, df$Code2)
 my_table
 ```
 
-### Generate proportion of frequencies using `prop.table()` 
-This function takes a table object as input and calculate the proportion of frequencies.
+### Generate proportion of frequencies using `prop.table()`
+This function takes a table and converts the counts into proportions of the total. With `margin = 1` the proportions are of each row's total, and with `margin = 2` of each column's.
 ```{r}
 prop.table(my_table)
+round(prop.table(my_table, margin = 1), 2)
 ```
 
+::: callout-caution
+`table()` leaves out missing values silently. In audit data, the number of records with a missing category is often the most interesting count. Use `useNA = "ifany"` to include them.
 
-### Column-wise or Row-wise sums using `colSums()` / `rowSums()` 
-Used to sum rows/columns in a matrix/data.frame.  E.g.
+```{r}
+table(c("Paid", "Pending", NA, "Paid", NA))
+table(c("Paid", "Pending", NA, "Paid", NA), useNA = "ifany")
+```
+:::
+
+
+### Column-wise or Row-wise sums using `colSums()` / `rowSums()`
+These sum the rows or the columns of a matrix or data frame. E.g.
 ```{r}
 # Row sums
 rowSums(my_table)
 # Col sums
 colSums(my_table)
 ```
-Note Similar to `colSums()`/ `rowSums()` we also have `colMeans()` and `rowMeans()`.
+Similarly, `colMeans()` and `rowMeans()` give the means.
 ```{r}
 rowMeans(my_table)
 ```
 
-### Extract unique values using `unique()` 
-Used to extract only unique values/elements from the given vector. E.g.
+### Extract unique values using `unique()`
+`unique()` returns the distinct values, in the order they first appear. E.g.
 ```{r}
 unique(x) # note the output
 ```
 
-### Check if two vectors are identical using `identical()` 
-Used to check whether two given vectors/objects are identical.
+### Check if two vectors are identical using `identical()`
+`identical()` checks whether two objects are exactly the same.
 ```{r}
 identical(unique(x), LETTERS)
 ```
 
-### Retreive duplicate items in a vector using `duplicated()` 
-Used to check which elements have already appeared in the vector and are thus duplicate.
+### Retrieve duplicate items in a vector using `duplicated()`
+`duplicated()` marks each element which has already appeared *earlier* in the vector.
 ```{r}
 set.seed(123)
 x <- sample(LETTERS[1:5], 8, replace = TRUE)
@@ -416,16 +464,29 @@ x
 duplicated(x)
 ```
 
-### Generate sequences using other objects with `seq_len()` / `seq_along()` 
-Used to generate sequence of given integer length starting with 1, or with length equal to given vector, respectively.  E.g.
+Notice that the *first* occurrence of each value is not marked. To pick out *all* the copies of the duplicated values, which is what an auditor usually wants to see, combine it with a search from the end, `fromLast = TRUE`.
+
+```{r}
+bill_no <- c("B-101", "B-102", "B-103", "B-102", "B-104", "B-102")
+duplicated(bill_no)
+duplicated(bill_no) | duplicated(bill_no, fromLast = TRUE)
+bill_no[duplicated(bill_no) | duplicated(bill_no, fromLast = TRUE)]
+```
+
+The chapter on finding duplicates takes this much further.
+
+### Generate sequences using other objects with `seq_len()` / `seq_along()`
+These generate the sequence `1, 2, ...` up to a given length, or up to the length of a given vector, respectively. E.g.
 ```{r}
 seq_len(5)
 x <- c('Andrew', 'Bob')
 seq_along(x)
 ```
 
+They are safer than `1:length(x)` in loops. If `x` is empty, `1:length(x)` gives `1 0`, a sequence of two numbers, while `seq_along(x)` correctly gives nothing.
+
 ### Divide a vector into categories (factor) using `cut()` {#sec-cutt}
-The function divides the range of `x` into intervals and codes the values in `x` according to which interval they fall. The leftmost interval corresponds to level one, the next leftmost to level two and so on.  The output vector will be of type `factor.`  
+`cut()` divides the range of `x` into intervals, and tells which interval each value falls in. The lowest interval is the first level, the next the second, and so on. The output is a `factor`.
 
 Example-1:
 ```{r}
@@ -436,77 +497,106 @@ Example-2:
 ```{r}
 cut(x, 3, dig.lab = 1, ordered_result = TRUE)
 ```
-**Note:** that the output `factor` above is ordered.
+**Note** that the output `factor` above is ordered.
 
-### Scale the columns of a matrix using `scale()` 
-Used to scale the columns of a numeric matrix.
+In practice we usually give our own `breaks`, and `labels` for the groups. Let us group bills into value slabs. By default, intervals include their right end, so `(10000, 50000]` covers amounts above ₹10,000 up to and including ₹50,000. Values exactly on the lowest break, or outside all the breaks, become `NA`, so use `-Inf` and `Inf` at the ends.
+
+```{r}
+amounts <- c(4500, 10000, 10001, 48000, 50000, 125000, 2500000)
+cut(amounts,
+    breaks = c(-Inf, 10000, 50000, 500000, Inf),
+    labels = c("Up to 10,000", "10,001 to 50,000", "50,001 to 5 lakh", "Above 5 lakh"))
+```
+
+With `right = FALSE`, the intervals include their left end instead, as in "₹10,000 and above". Check which is needed, because a value exactly on a limit, like a bill of exactly ₹50,000, is the one that matters most when the limit is a financial power.
+
+### Scale the columns of a matrix using `scale()`
+`scale()` standardises each column of a numeric matrix, by subtracting its mean and dividing by its standard deviation. The results, called *z-scores*, tell how many standard deviations a value is from the mean.
 ```{r}
 x <- matrix(1:10, ncol = 2)
 x
 scale(x)
 ```
-**Note:** The output will always be of a matrix type with two more attributes.  See this example
+**Note:** The output is always a matrix, with two extra attributes, the means and standard deviations used. See this example
 ```{r}
 scale(1:5)
 ```
 
 ### Output the results using `cat()` {#sec-cat}
-Outputs the objects, concatenating the representations. `cat` performs much less conversion than `print`.
+`cat()` prints its arguments joined together, without quotes or the index `[1]`. It does much less formatting than `print()`.
 ```{r}
 cat('ABCD')
 ```
-**Note:** that indices are now _not printed._  `cat` may print objects also.  Example-2:
+**Note** that the index `[1]` is _not printed_. `cat()` can print vectors too. Example-2:
 ```{r}
 cat(month.name)
 ```
 
-`cat` is useful to print _special characters._  Example-3:
+`cat()` is useful for printing _special characters_, written with escape codes. Example-3:
 ```{r}
 cat('Budget Allocation is \u20b91.5 crore')
 ```
 
-### Sort a vector using `sort()` 
-Used to **sort** the given vector.  Example-1:
+### Sort a vector using `sort()`
+`sort()` **sorts** a vector. Example-1:
 ```{r}
 vec <- c(5, 8, 4, 1, 6)
 sort(vec)
 ```
-Argumemt `decreasing = TRUE` is used to sort the vector in descending order instead of default ascending order.
+The argument `decreasing = TRUE` sorts in descending order, instead of the default ascending order.
 Example-2:
 ```{r}
 sort(vec, decreasing =  TRUE)
 ```
 
 
-### Arrange the elements of a vector using `order()` 
-In contrast to `sort()` explained above, `order()` returns the indices of given vector in ascending order.  Example
+### Arrange the elements of a vector using `order()`
+Unlike `sort()`, `order()` returns the *positions* of the elements in sorted order. Example
 ```{r}
 order(vec)
 ```
-Thus, `sort(vec)` will essentially perform the same operations as `vec[order(vec)]`.  We may check-
+Thus, `sort(vec)` is the same as `vec[order(vec)]`. We may check,
 ```{r}
 identical(vec[order(vec)], sort(vec))
 ```
 
-### Check structure using `str()` 
-The short `str` is not to be confused with strings as it instead is short for `structure`.  Thus, `str` returns structure of given object.  Example
+`order()` is what we use to sort the rows of a data frame, as `df[order(df$amount), ]`. It can take several columns, for ties, and `-` for descending numbers, like `df[order(df$dept, -df$amount), ]`. With dplyr, `arrange()` does this more readably.
+
+### Check structure using `str()`
+`str` is short for *structure*, not for strings. It shows the structure of an object compactly. Example
 ```{r}
 str(vec)
 ```
 
-Extremely useful when we need to inspect data frames.
+It is extremely useful to inspect a data frame, showing the type and the first few values of every column. Run it on every file you read.
 ```{r}
 str(iris)
 ```
 
 ### Generate a summary using `summary()` {-}
-In addition to `str` explained above, `summary()` is also useful is getting result summaries of given objects.  Example-1: When given object is vector
+`summary()` gives a summary of an object. Example-1: a numeric vector
 ```{r}
 summary(vec)
 ```
-We observe that when numeric vector is passed, it produces quantile summary.  Example-2: When input object is data frame.
+For a numeric vector, it gives the minimum, quartiles, mean and maximum. Example-2: a data frame.
 ```{r}
 summary(iris)
 ```
 
+`summary()` of a data frame is a good first look at audit data. Negative or zero amounts show up in the minimum, absurdly large ones in the maximum, and the count of `NA`s is given for each column which has any.
 
+## Summary of functions used
+
+| Purpose | Functions |
+|-----------------------|--------------------------------|
+| Comparison and logic | `==`, `!=`, `<`, `>`, `<=`, `>=`, `&`, <code>&#124;</code>, `!`, `xor()`, `&&`, <code>&#124;&#124;</code>, `%in%`, `is.na()`, `all()`, `any()`, `ifelse()` |
+| Arithmetic | `sum()`, `prod()`, `mean()`, `max()`, `min()`, `round()`, `signif()`, `ceiling()`, `floor()`, `trunc()`, `abs()`, `sqrt()`, `log()`, `exp()` |
+| Statistics | `sd()`, `var()`, `median()`, `range()`, `IQR()`, `quantile()`, `scale()`, `summary()` |
+| Random numbers and samples | `set.seed()`, `rnorm()`, `runif()`, `rpois()`, `sample()` |
+| Running calculations | `cumsum()`, `cumprod()`, `cummax()`, `cummin()`, `diff()` |
+| Strings | `paste()`, `paste0()`, `startsWith()`, `endsWith()`, `nchar()`, `toupper()`, `tolower()`, `substr()`, `strsplit()`, `sub()`, `gsub()`, `grep()`, `grepl()`, `regexpr()`, `gregexpr()` |
+| Tables and counts | `table()`, `prop.table()`, `rowSums()`, `colSums()`, `rowMeans()`, `colMeans()` |
+| Vectors | `unique()`, `duplicated()`, `identical()`, `seq_len()`, `seq_along()`, `cut()`, `sort()`, `order()`, `t()` |
+| Looking at objects | `cat()`, `str()`, `summary()` |
+
+: Functions used in this chapter, all from base R {#tbl-basefunctions}
