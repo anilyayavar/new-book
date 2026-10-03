@@ -5,38 +5,38 @@ source("_common.R")
 
 # Functions and operations in R {#sec-func}
 
-What is a function? Mathematically, a function $f$ is a relationship which map an input $x$ to an specific output, which is denoted as $f(x)$.  There are only two conditions i.e. every input should have an output, and same input if passed into same function multiple times, it should produce same output each time.  So if $x=y$ we should have $f(x)=f(y)$.  
+What is a function? Mathematically, a function $f$ is a rule which maps an input $x$ to a specific output, denoted $f(x)$. Every input must have an output, and the same input must give the same output every time. So if $x=y$, then $f(x)=f(y)$.
 
 ```{r echo=FALSE, fig.show='hold', fig.align='center', fig.cap="Author's illustration of a function", out.width="99%"}
 knitr::include_graphics("images/function.png")
 ```
 
-For example `squaring` if considered on numbers is a function.  We denote this as $f(x)=x^2$.  Or, `square-root` on positive numbers is also a function.
+For example, *squaring* a number is a function, written $f(x)=x^2$. So is the *square root* of a positive number.
 
-Now there may be more than one input, let us assume three inputs `x`, `y` and `z` and our function's job is to add three times `x`, two times `z` and one time `y` together.  We will write this function as $f(x,y,z) = 3x+y+2z$.  Each programming language has some pre-defined functions.  Here inputs are usually termed as `arguments`.  Normally values to `arguments` should be passed by users, but many times there's a default value for these arguments. So if the value of that argument is not supplier by the user/coder explicitly, that function uses that default value silently and produces a result.  
+A function may have more than one input. Suppose a function adds three times `x`, one time `y` and two times `z`. We write it as $f(x,y,z) = 3x+y+2z$. In programming, the inputs are called *arguments*. Usually the user gives their values, but many arguments have a *default* value, which the function uses silently if no value is given.
 
-R's engine then calculates the output as per definition of that function and gives us the output.  If that output is assigned to some variable R does not displays/prints anything but if function is performed only the output is displayed usually, with the exception that many times function is carried out silently and nothing is returned.
+R calculates the output as per the definition of the function. If the output is assigned to an object, nothing is printed. Otherwise, the output is usually printed in the console. (Some functions do their work silently, like saving a file, and return nothing visible.)
 
-In this chapter we will learn about some of the pre-defined functions which shall be used in our data analysis operations.  We can also define our own custom functions which we will learn in @sec-cust.
+Every programming language comes with ready-made functions. In this chapter we will see how to use them, and how to write our own, in @sec-cust. The next chapter lists the most useful built-in ones.
 
-As an example, `sum()` is a predefined function available in R, which produces sum of one or more vectors passed in the function as arguments.
+As an example, `sum()` is a built-in function, which adds up all the numbers given to it.
 ```{r}
 sum(1:10, 15:45)
 ```
 
-To check the arguments available for any pre-defined function, we can use another function `args()` which take a _function name_ as an argument and returns all the available arguments to that function.  
+To see the arguments of a function, we can use the function `args()`, which takes a _function name_ and returns its arguments.
 ```{r}
 args(sum)
 ```
 
-Here we see that there is an argument (which is anmed argument0 `na.rm` having a default value `FALSE`.  Actually, this argument silently takes default value and produces results.  But if `TRUE` is required as a value to this argument that need to be explicitly mentioned.
+We see an argument `na.rm`, with the default value `FALSE`. Unless we say otherwise, the function uses this default silently, and a single missing value makes the whole sum missing. If we want missing values left out, we must say `na.rm = TRUE` explicitly.
 ```{r}
 sum(1:10, NA)
 sum(1:10, NA, na.rm = TRUE)
 ```
 
 
-To get the definition of any existing function, we may just type its name without parenthesis on console, and the definition will be returned as an output.
+To see the code of a function, type its name without parentheses in the console. (For `sum()`, the work is done by compiled code inside R, so we only see a short stub.)
 
 ```{r}
 sum
@@ -46,7 +46,7 @@ To get further help about any existing function, refer @sec-help.
 
 ## Custom Functions {#sec-cust}
 
-One of R’s greatest strengths is the user’s ability to add functions\index{custom function}. In fact, many of the functions in R are functions of existing functions. The structure of a function looks like this:
+One of R's greatest strengths is that users can write their own functions\index{custom function}. In fact, many of the functions in R are built from other functions. If you find yourself copying the same few lines of code again and again, changing only a value or two, it is time to write a function. The structure of a function looks like this:
 
 ```
 myfunctionname <- function(arg1, arg2, ... ){
@@ -54,9 +54,9 @@ myfunctionname <- function(arg1, arg2, ... ){
   return(object)
 }
 ```
-**Note:** Objects in the function are local to the function. The object returned can be any data type, from scalar to list. 
+**Note:** Objects created inside a function are local to it. The object returned can be of any type, from a single value to a list. If there is no `return()`, the function returns the value of its last line, which is the usual style in R.
 
-Let’s take a look at an example.  We will create a function which will take 3 numbers, will give an output by adding thrice of first, second and twice of third.
+Let us take an example. We create a function which takes 3 numbers, and adds three times the first, the second, and twice the third.
 ```{r}
 my_fun1 <- function(first,second,third){
   first*3+second+third*2
@@ -64,16 +64,17 @@ my_fun1 <- function(first,second,third){
 # let's check whether it is working as desired
 my_fun1(3,1,10)
 ```
-- If the arguments provided are not named, it will take all arguments in the order these are defined.
-- However, we can provide named arguments in any order.  See this
+- If the arguments are not named, they are taken in the order in which they are defined.
+- Named arguments can be given in any order. See this
 ```{r}
 my_fun1(second=3, first=1, third=10)
 ```
-- Partial matching of names are also allowed.  Example
+- Partial names are also matched. Example
 ```{r}
 my_fun1(sec=3,fir=1,thi=10)
 ```
-- We can also provide default values to any argument.  These default values are however, overridden when specific values are given.  See this example.
+  This works, but avoid it in code you keep. A partial name may match a different argument if the function is changed later.
+- We can give default values to any argument. The default is used only when no value is given. See this example.
 ```{r}
 # let's create a new function which adds twice the second argument to first argument, which in turn by default is 10
 my_fun2 <- function(first=10, second){
@@ -82,7 +83,7 @@ my_fun2 <- function(first=10, second){
 my_fun2(second = 10)
 my_fun2(1, 10)
 ```
-- There may be functions which do not require any argument.  See this example
+- A function may need no argument at all. See this example
 ```{r}
 my_fun3 <- function(){
   print('Hi')
@@ -92,14 +93,16 @@ my_fun3()
 
 ### Special argument ellipsis `...` {-}
 
-While searching for help of a function in r, you may have came across something like this `sum(..., na.rm = FALSE)`.  The three dots `...`\index{... ellipsis} here are referred to as ellipsis\index{ellipsis}.  Basically it means that the function is designed to take any number of named or unnamed arguments.
+In the help of a function, you may have come across something like `sum(..., na.rm = FALSE)`. The three dots `...`\index{... ellipsis} are called the *ellipsis*\index{ellipsis}. They mean that the function can take any number of arguments in their place.
 
-Thus it means we can provide any number of arguments in place of `...`.  Now the point to be noted here is that values to all agruments occurring after `...` must only be named.  See this example-
+The point to note is that any argument which comes *after* `...` must be given by name. See this example.
 ```{r}
 sum(1:100, NA, TRUE)
 sum(1:100, NA, na.rm = TRUE)
 ```
-Now we can even use these three dots in our own custom functions.  Just unpack these before writing the actual statement for that function.  See this simple example-
+In the first line, `TRUE` was not taken as the value of `na.rm`. It became one more number to add (as `1`), so the result is still `NA`. Only the named `na.rm = TRUE` works.
+
+We can use the three dots in our own functions too. Inside the function, `list(...)` collects whatever was passed. See this simple example.
 ```{r}
 my_ellipsis_func <- function(...){
   l <- list(...) # unpack ellipsis
@@ -110,7 +113,7 @@ my_ellipsis_func(1:10, 11:20, 'a string') # we are passing three arguments
 
 ### Environment issues {-}
 
-- Any of the argument values are not saved/updated in global environment\index{global environment}.  See this example
+- A function works on its own copies of the arguments. Changing them inside the function does not change anything in the global environment\index{global environment}. See this example
 ```{r}
 x <- 10
 my_fun4 <- function(x){
@@ -119,7 +122,7 @@ my_fun4 <- function(x){
 my_fun4(2)
 x
 ```
-- Even if we create another variable inside the function, that variable is not available outside that function's environment.
+- An object created inside a function is not available outside it, even if it has the same name as an object outside.
 ```{r}
 y <- 5
 my_fun5 <- function(){
@@ -129,7 +132,7 @@ my_fun5 <- function(){
 my_fun5()
 y
 ```
-- If however, we want to create a variable (or update existing variable) inside the function intentionally, we may use `forced assignment` denoted as `<<-`.  See this example
+- To create or change an object outside the function deliberately, there is the *super-assignment* operator `<<-`. See this example
 ```{r}
 y <- 5
 my_fun5 <- function(){
@@ -139,7 +142,8 @@ my_fun5 <- function(){
 my_fun5()
 y
 ```
-- As already stated, we can create object of any type using a custom function.
+  Use `<<-` rarely, if ever. A function which changes things outside itself is hard to follow and to check. It is better for a function to *return* its result, which is then assigned.
+- As already stated, a function can return an object of any type. Here it returns a list.
 ```{r}
 my_list_fun <- function(x){
   list(sum=sum(x),
@@ -149,3 +153,66 @@ my_list_fun <- function(x){
 my_list_fun(1:10)
 ```
 
+### Short functions with `\(x)` {-}
+
+Since R 4.1, a short function can be written with a backslash in place of the word `function`. So `\(x) x * 2` is the same as `function(x) x * 2`. Such *anonymous* functions, which are not given a name, are handy inside other functions, as we will see in @sec-purrr and later chapters.
+
+```{r}
+(\(x) x * 2)(21)
+```
+
+## Functions for audit work
+
+Let us write three small functions which come in handy in audit analysis.
+
+**Amounts in lakh.** Reports in India often show amounts in lakh or crore.
+
+```{r}
+in_lakh <- function(x, digits = 2) {
+  round(x / 1e5, digits)
+}
+in_lakh(c(1250000, 87500, 31415926))
+in_lakh(31415926, digits = 0)
+```
+
+**Percentage change.** Comparing a figure with the previous year is an everyday task.
+
+```{r}
+pct_change <- function(old, new, digits = 1) {
+  round(100 * (new - old) / old, digits)
+}
+pct_change(old = c(120, 80, 50), new = c(150, 60, 50))
+```
+
+Since R works on whole vectors, the function works on all three pairs at once, without any extra code.
+
+**Checking the input.** A function used often should stop with a clear message when given wrong input, rather than return a wrong answer. `stopifnot()` does this simply.
+
+```{r error=TRUE}
+gst_amount <- function(taxable_value, rate = 18) {
+  stopifnot(is.numeric(taxable_value), rate %in% c(0, 5, 18, 40))  # main GST rates since 22 September 2025
+  round(taxable_value * rate / 100, 2)
+}
+gst_amount(c(1000, 2500))
+gst_amount(1000, rate = 15)
+```
+
+::: callout-tip
+## Audit tip
+
+Put your frequently used functions, like these, in one `.R` file, say `audit_functions.R`, and load them at the start of every analysis with `source("audit_functions.R")`. The same tested code is then used across all your audits, and a correction made once applies everywhere.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `function()`, `\()` | base R | Create a function |
+| `return()` | base R | Return a value from a function (otherwise the last value is returned) |
+| `args()` | base R | Show the arguments of a function |
+| `...` | base R | Pass any number of arguments |
+| `<<-` | base R | Assign to an object outside the function (use rarely) |
+| `stopifnot()` | base R | Stop with an error if a condition is not met |
+| `source()` | base R | Run the code in an R file, like a file of your functions |
+
+: Functions used in this chapter {#tbl-funcfunctions}
