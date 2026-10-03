@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Visualising data with `ggplot2`
+# Visualising data with `ggplot2` {#sec-ggplot2}
 
 ## Core concepts of **grammar of graphics**
 
@@ -13,11 +13,11 @@ source("_common.R")
 
 [^00-ggplot2-2]: <https://link.springer.com/book/10.1007/0-387-28695-0>
 
-Hadley Wickham, in his paper titled **A Layered Grammar of Graphics**[^00-ggplot2-3](2010) [@layered-grammar] proposed his idea of layered grammar of graphics in detail and simultaneously put forward his idea of *ggplot2* as an open source implementation framework for building graphics. Readers/Users are advised to check the paper as it describes the concept of grammar of graphics in detail. By the end of the decade the package progressed[^00-ggplot2-4] to one of the most used and popular packages in R.
+Hadley Wickham, in his paper titled **A Layered Grammar of Graphics**[^00-ggplot2-3](2010) [@layered-grammar] proposed his idea of layered grammar of graphics in detail and simultaneously put forward his idea of *ggplot2* as an open source implementation framework for building graphics. Readers/Users are advised to check the paper as it describes the concept of grammar of graphics in detail. Over the next decade the package grew[^00-ggplot2-4] into one of the most used and popular packages in R.
 
 [^00-ggplot2-3]: <http://vita.had.co.nz/papers/layered-grammar.pdf>
 
-[^00-ggplot2-4]: Version 3.3.0 was released in March 2020
+[^00-ggplot2-4]: Version 3.3.0 was released in March 2020, and version 4.0.0, with a rewritten internal structure and many new features, in September 2025. This book uses version 4.
 
 The relationship between the components explained in both the grammars can be illustrated with the image[^00-ggplot2-5] in @fig-rgg1. The components on the left have been put forward by Wilkinson whereas those on right were proposed by Wickham. It may be seen that `TRANS` has no relation in `ggplot2` as its role is played by in-built features of R.
 
@@ -45,7 +45,7 @@ Thus, to build a graphic having one or more dimensions, from a given data, we us
     needs some scaling like logarithmic transformation, etc.
 6.  **Coordinate System:** Though most of the time *Cartesian coordinate
     system* is used, yet there are times when *polar coordinate system*
-    (e.g. pie chart) or *spherical coordinate system* (e.g. geographical
+    (e.g. pie chart) or *map projections* (e.g. geographical
     maps) are used.
 7.  **Facets:** Used when based on certain dimension, the plot is
     divided into further sub-plots.
@@ -56,7 +56,7 @@ Out of the afore-mentioned components, first three (`data`, `aesthetics` and `ge
 
 We will use `mtcars` data-sets, which is a default dataset in the package, to learn the concepts. Let us see what happens when `data` is provided to `ggplot` function-
 
-```{r fig-figblank, fig.height=2, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data provided to ggplot2"}
+```{r fig-figblank, message=FALSE, warning=FALSE, fig.height=2, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data provided to ggplot2"}
 library(tidyverse)
 ggplot(data=mtcars)
 ```
@@ -79,7 +79,7 @@ as points (due to the geometry we used `geom_point`) as soon as we added
 another layer of function `ggplot()` using a `+` sign in the earlier
 code. **Using the code above, we have actually plotted the relationship
 between weight of the vehicle (`wt`) and mileage in miles per gallon
-(`mpg`) of the vehicles available in `mpg` dataset.**
+(`mpg`) of the vehicles available in the `mtcars` dataset.**
 
 We could have plotted the data as box-plot if we had used another
 geometry say `geom_boxplot` here. Refer @fig-rgg4.
@@ -100,7 +100,7 @@ may draw the same plot in @fig-rgg3 using the following
 code wherein we haven't used these as named arguments. We will follow
 the same convention in subsequent sections.
 
-```         
+```
 ggplot(mtcars, aes(wt, mpg)) +
   geom_point()
 ```
@@ -144,11 +144,13 @@ Some commonly used aesthetics are -
 -   `fill` = The interior color (e.g. of a bar or box-plot)
 -   `color` = The exterior line of a `bar`, `boxplot`, etc., or the
     point color if using `geom_point()`
--   `size` = Size (e.g. line thickness, point size)
+-   `size` = Size of points and text
+-   `linewidth` = Thickness of lines and borders (before ggplot2 version 3.4, `size` was used for this too)
 -   `alpha` = Transparency (`1 = opaque`, `0 = invisible`)
--   `binwidth` = Width of histogram bins
 -   `width` = Width of "bar plot" columns
 -   `linetype` = Line type (e.g. solid, dashed, dotted)
+
+Some settings, like `binwidth`, the width of histogram bins, are not aesthetics but *arguments* of a particular geom. We will meet them with their geoms.
 
 ### Color, the most important aesthetic
 
@@ -164,7 +166,7 @@ for three purposes-
     elements.
 
 To understand the use cases, let us fill the color of all points in
-Figure \@(fig:rgg3) with say, `"red"` color. To do this, we can provide
+@fig-rgg3 with say, `"red"` color. To do this, we can provide
 the value of `color` aesthetic directly inside the `geom_*` function
 (@fig-rgg5).
 
@@ -210,7 +212,7 @@ layer which was wrapped in `geom_point()` function. The aesthetic could
 have been wrapped in `ggplot()` layer also. So basically the following
 code will also produce exactly the same chart-
 
-```         
+```
 ggplot(mtcars, aes(wt, mpg, color = as.factor(cyl))) +
   geom_point()
 ```
@@ -241,9 +243,9 @@ basis of variable `mpg` we will use `fill` aesthetic instead of `color`
 shortly).
 
 ```{r fig-rgg9, fig.align='center', fig.show='hold', fig.cap="using color to plot variable directly"}
-mtcars |> 
+mtcars |>
   summarise(mpg = mean(mpg, na.rm = TRUE),
-            .by = c(cyl, carb)) |> 
+            .by = c(cyl, carb)) |>
   ggplot() +
   geom_tile(aes(x = cyl, y = carb, fill = mpg))
 ```
@@ -289,6 +291,7 @@ both `fill` for the inside and `color` for the outline. (@fig-rgg11.)
 ::: {#fig-rgg11}
 
 ```{r fig.align='center', fig.show='hold'}
+# From here on, all plots in this chapter use theme_bw()
 theme_set(theme_bw())
 
 ggplot(mtcars, aes(wt, mpg)) +
@@ -316,10 +319,10 @@ Usually, it is used to map a continuous variable with it. Example-
 
 ```{r fig-rgg12, fig.show='hold', fig.align='center', fig.cap="Setting transparency with the number of cylinders"}
 ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point(aes(alpha = cyl), size = 4) 
+  geom_point(aes(alpha = cyl), size = 4)
 ```
 
-We may see in @fig-rgg12 that points transparency nor
+We may see in @fig-rgg12 that the transparency of points now
 varies according to the number of cylinders i.e. `cyl` variable in the
 data. Similar to other aesthetics we may pass static value between 0 to
 1 to `alpha` for setting the transparency of geometries as desired.
@@ -362,9 +365,9 @@ library(tidyverse)
 
 data.frame(
   x = 4:1
-) %>% 
-  mutate(y = list(1:12)) %>% 
-  unnest_longer(y) %>% 
+) %>%
+  mutate(y = list(1:12)) %>%
+  unnest_longer(y) %>%
   mutate(z = dplyr::setdiff(0:(nrow(.) + 5), 26:31)) %>%
   ggplot(aes(x=y, y=x, label=z)) +
   geom_point(aes(shape=z), size=7, fill = "orange", color = "blue") +
@@ -486,7 +489,7 @@ function. This can be confirmed from the label on `y` axis.
 Readers are advised to note the change in x-axis as soon as the variable
 is converted to a categorical variable, by executing the code-
 
-```         
+```
 ggplot(mtcars, aes(as.factor(cyl))) +
   geom_bar()
 ```
@@ -521,12 +524,12 @@ aesthetic. But in same granular data, we may sometimes require to
 perform an aggregation on another variable.
 
 As an example let us see the mean city mileage `cty` for every `class`
-of car in `mpg` data-set. To achieve this, we will another aesthetics
-`stat` with special value `"summary_bin"`. Moreover, the `stat`
-aesthetics also requires a `fun` statistic which is `mean` in our case.
+of car in `mpg` data-set. To achieve this, we will use the argument
+`stat` of `geom_bar()`, with the special value `"summary_bin"`. With it, we
+also give the argument `fun`, the summary function, which is `mean` in our case. (`stat = "summary"` works the same way for a discrete `x`.)
 
 ```{r fig-rgg19, fig.show='hold', fig.align='center', fig.cap="Bivariate Bar Chart representing mean milaege per class of car"}
-ggplot(mpg, aes(x = class, y = cty)) + 
+ggplot(mpg, aes(x = class, y = cty)) +
   geom_bar(stat = "summary_bin", fun = mean)
 ```
 
@@ -542,24 +545,24 @@ what this aesthetic is doing actually in a short-while. For a change,
 this time let's draw the plot with x and y axes flipped.
 
 ```{r fig-rgg20, fig.show='hold', fig.align='center', fig.cap="Bivariate Bar Chart representing mean milaege per class of car"}
-aggregated_mpg <- mpg |> 
+aggregated_mpg <- mpg |>
   summarise(mean_cty = mean(cty),
-            .by = class) 
+            .by = class)
 
 ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
   geom_bar(stat = "identity")
 ```
 
 In @fig-rgg20 we can see the desired have been generated.
-Readers may try the above-mentioned code by removing `stat - "identity"`
+Readers may try the above-mentioned code by removing `stat = "identity"`
 from the `geom_bar()`.
 
-Now, as promised we will discuss what `stat` aesthetic does. While
+Now, as promised we will discuss what the `stat` argument does. While
 generating summary in a bivariate chart we used `stat = "summary_bin"`
 which created summary using `fun` of un-aggregated data. Whereas
 `stat = "identity"` tells ggplot2 that data is either already aggregated
 or there is only value of `y` per category of `x` variable. So are there
-other `stat` aesthetics available for us? The answer is yes. However,
+other `stat` values available for us? The answer is yes. However,
 readers are advised to plot bar charts on aggregated data using
 `geom_col` which has been discussed in subsequent sections, instead of
 trying the complex aggregations within ggplot2 as it gets trickier from
@@ -583,8 +586,8 @@ ggplot(mpg, aes(x = class, fill = fl)) +
 
 In @fig-rgg24 we achieved our desired results simply by
 mapping `fill` to our additional variable. Actually, this was possible
-due to default value of `position` aesthetic in `geom_bar()` layer
-`"stack"` matches our requirement. By default, multiple bars occupying
+due to the default value of the `position` argument of the `geom_bar()` layer,
+`"stack"`, which matches our requirement. By default, multiple bars occupying
 the same x position will be stacked atop one another by
 `position_stack()`.
 
@@ -649,17 +652,17 @@ ggplot(mpg, aes(x = class, fill = fl)) +
 
 As stated earlier, plotting bar charts on tedious aggregations through
 ggplot2 gets trickier, it is always advisable to plot bar charts through
-`geom_col()` in such cases after aggregating thee data ourselves. Since
-the difference between `geom_bar` and `geom_col` is that former uses by
-default: it counts the number of cases at each x position. On the other
-hand, latter uses `stat = “identity”` by default. So to draw the plot as
+`geom_col()` in such cases after aggregating the data ourselves. The
+difference between `geom_bar` and `geom_col` is that the former uses
+`stat = "count"` by default, that is, it counts the number of cases at each x position. The
+latter uses `stat = "identity"` by default, that is, it draws the values as they are. So to draw the plot as
 in @fig-rgg20 through `geom_col()` we may not have to use
 `stat` explicitly. (Refer @fig-rgg30.)
 
 ```{r fig-rgg30, fig.show='hold', fig.align='center', fig.cap="Plotting through geom col"}
-aggregated_mpg <- mpg |> 
+aggregated_mpg <- mpg |>
   summarise(mean_cty = mean(cty),
-            .by = class) 
+            .by = class)
 
 ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
   geom_col()
@@ -675,7 +678,7 @@ aggregation.
 
 ### Adding labels to charts using `geom_text` or `geom_label`
 
-Before laerning how to draw other plots using `geom_*` family of
+Before learning how to draw other plots using `geom_*` family of
 functions, it is the right time to learn labelling the geometries in the
 plots.
 
@@ -691,10 +694,10 @@ customize the appearance of the labels by adding additional arguments to
 
 -   `size` to set font size
 -   `color` to color the fonts
--   `hjust` or `vjust` to adjust the labels vertically or horizontally,
+-   `hjust` and `vjust` to adjust the labels horizontally and vertically,
     respectively. We can modify text alignment with these aesthetics.
-    These can either be a number between `0` (right/bottom) and `1`
-    (top/left) or a character (`"left"`, `"middle"`, `"right"`,
+    These can either be a number between `0` (left/bottom) and `1`
+    (right/top) or a character (`"left"`, `"middle"`, `"right"`,
     `"bottom"`, `"center"`, `"top"`). There are two special alignments:
     `"inward"` and `"outward"`. Inward always aligns text towards the
     center, and outward aligns it away from the center.
@@ -711,12 +714,12 @@ ggplot(mtcars, aes(x = hp, y = mpg)) +
   geom_text(aes(label = rownames(mtcars)),
             size = 3,
             color = "dodgerblue",
-            vjust = -1) # -1 pushes he value further upwards (vjust)
+            vjust = -1) # -1 pushes the label further upwards (vjust)
 
 ```
 
 In @fig-rgg31 we can see the geometries (i.e points) have
-been labelled slighly above the points (due to `vjust = -1`). We may
+been labelled slightly above the points (due to `vjust = -1`). We may
 observe that some labels are overlapped. There is a fantastic package
 `ggrepel` which works for `ggplot2` plots and places the overlapped
 labels in a nicer way. See @fig-rgg32.
@@ -736,7 +739,7 @@ ggplot(mtcars, aes(x = hp, y = mpg)) +
             fontface = "bold.italic")
 ```
 
-labelling bar charts generated through granular data using `geom_bar()`
+Labelling bar charts generated through granular data using `geom_bar()`
 may be sometimes tricky as we have to use `stat` functions used to
 generate summary/aggregation. See Example in @fig-rgg35
 
@@ -805,7 +808,7 @@ details, readers may find it pretty easier to draw the above chart
 labels through `position_stack` argument.
 
 ```{r fig-rgg37, fig.show='hold', fig.align='center', fig.cap="Colored bar chart labelled"}
-mpg_agg <- mpg |> 
+mpg_agg <- mpg |>
   count(class, fl)
 
 ggplot(mpg_agg, aes(
@@ -822,7 +825,7 @@ ggplot(mpg_agg, aes(
 
 ### Histograms and related plots
 
-Readers by now, mayhave understood why ggplot2 is such a vast topic that
+Readers by now may have understood why ggplot2 is such a vast topic that
 often it requires separate book. Full coverage in a single chapter is
 nearly impossible. However, there are several other geoms which are not
 as trickier as `geom_bar` and simultaneously useful while analysing the
@@ -840,8 +843,8 @@ ggplot(diamonds, aes(carat)) +
   geom_histogram()
 ```
 
-In @fig-rgg38 a histogram has been generated with a warning
-to pick better value for bin-width. So let us modify the bin-width to
+In @fig-rgg38 a histogram has been generated, with a message
+to pick a better value for the bin width. So let us modify the bin-width to
 say, 0.025.
 
 ```{r fig-rgg21, fig.show='hold', fig.align='center', fig.cap="Histogram with custom binwidth"}
@@ -849,8 +852,8 @@ ggplot(diamonds, aes(carat)) +
   geom_histogram(binwidth = 0.025)
 ```
 
-We may use `bins` aesthetic to choose the number of bins in histogram.
-Other aestheics like `fill` or `color` may also be used.
+We may instead use the argument `bins` to choose the number of bins in the histogram.
+Aesthetics like `fill` or `color` may also be used.
 
 ```{r fig-rgg39, fig.show='hold', fig.align='center', fig.cap="Filled Histogram"}
 ggplot(diamonds, aes(price, fill = cut)) +
@@ -859,7 +862,7 @@ ggplot(diamonds, aes(price, fill = cut)) +
 
 Related geom is `geom_freqpoly` (short for frequency polygon) which
 display the counts with lines. So histogram in @fig-rgg39
-may be drawn as frequency polygon usingthis geom layer. Refer @fig-rgg40.
+may be drawn as a frequency polygon using this geom layer. Refer @fig-rgg40.
 
 ```{r fig-rgg40, fig.show='hold', fig.align='center', fig.cap="Filled frequency polygon"}
 ggplot(diamonds, aes(price, color = cut)) +
@@ -878,7 +881,7 @@ ggplot(diamonds, aes(price, after_stat(density), colour = cut)) +
 ### Line Charts
 
 Since almost all geoms in ggplot2 have been named intuitively, we can
-have a correct guess that line charts canbe drawn using `geom_line()`.
+have a correct guess that line charts can be drawn using `geom_line()`.
 However, unlike geoms we have seen till now, `geom_line()` is a special
 geom and works correctly in groups. It is thus sometimes referred to as
 grouped or collective geom.
@@ -906,7 +909,7 @@ ggplot(exdata, aes(index, values)) +
 
 In @fig-rgg42, we can see that values have been plotted but
 for each index these have been joined first then moving onto another
-index. This inadvertant thing can be fixed by use of aesthetic `group`.
+index. This unintended result can be fixed by use of aesthetic `group`.
 The group aesthetic determines which observations are connected. See
 @fig-rgg43.
 
@@ -937,13 +940,13 @@ only are thus, advised to load the package `tidyr` (or alternatively
 `tidyverse` which contains both of these packages). These data-sets
 contains some economic parameters, on a monthly basis from US.
 
-In @fig-rgg46, separate lines for each variable and for
+In @fig-rgg45, separate lines for each variable and for
 each of the months across the years have been plotted.
 
 ```{r fig-rgg45, fig.show='hold', fig.align='center', fig.cap="Groups in multiple variables"}
-economics_long |> 
+economics_long |>
   mutate(year = year(date),
-         month = month(date)) |> 
+         month = month(date)) |>
   ggplot(aes(year, value01, group = interaction(month, variable))) +
   geom_line()
 ```
@@ -992,9 +995,9 @@ ggplot(economics, aes(date, unemploy)) +
   geom_smooth()
 ```
 
-A warning shows that `method` argument used to smooth the curve is
-`loess`. The other methods available are `lm`, `glm` , `gam` etc. These
-require `formula` to be provided. We may also smooth a scatter plot
+A message tells us that the `method` used to smooth the curve is
+`loess`, the default for small data. The other methods available are `lm`, `glm`, `gam` etc.
+Giving the `method` and `formula` ourselves avoids the message. We may also smooth a scatter plot
 using this function, to see a regression (linear) line. Refer plot in
 @fig-rgg49.
 
@@ -1004,8 +1007,8 @@ ggplot(mpg, aes(cty, hwy)) +
   geom_smooth(method = "lm", formula = "y ~ x")
 ```
 
-Readers may note, in @fig-rgg49 that there much lesser
-points seen in this plot than actually available due to overlapping of
+Readers may note, in @fig-rgg49, that far fewer
+points are seen in this plot than actually available due to overlapping of
 points. This overlapping issue can either be solved using `alpha`
 aesthetic or by using `jitter` method in scatter plots. `geom_jitter`
 adds a random noise to the data, so that the overlapping points are seen
@@ -1033,8 +1036,8 @@ ggplot(exdata, aes(index, values)) +
 ```
 
 In @fig-rgg50 we can see that points have been added over
-the line. If we reverse the order, we can see in figure #ref(fig:rgg51)
-that line (latter layer) is drawn over points (former layer).
+the line. If we reverse the order, we can see in @fig-rgg51
+that the line (latter layer) is drawn over points (former layer).
 
 ```{r fig-rgg51, fig.show='hold', fig.align='center', fig.cap="Understanding overlapping in geoms"}
 ggplot(exdata, aes(index, values))  +
@@ -1065,7 +1068,7 @@ ggplot(mtcars, aes(wt, mpg)) +
   geom_point() +
   geom_abline(intercept = 37, slope = -5, color = "dodgerblue") +
   geom_vline(xintercept = 3.5, color = "orange")
-  
+
 ```
 
 ### List of geoms available in `ggplot2`
@@ -1113,9 +1116,9 @@ where `*` represent position aesthetic usually `x` or `y`; and `#`
 represents variable type. For example we have these two functions for
 continuous axis/variables.
 
-```         
-scale_x_continuous(name, breaks, labels, limits, trans)
-scale_y_continuous(name, breaks, labels, limits, trans)
+```
+scale_x_continuous(name, breaks, labels, limits, transform)
+scale_y_continuous(name, breaks, labels, limits, transform)
 ```
 
 In arguments to above functions, we can see that axis title (name), axis
@@ -1127,11 +1130,11 @@ renamed them using `scale` functions (Refer @fig-scale1).
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%"}
 # Basic Scatter Plot
-ggplot(cars, aes(x = speed, y = dist)) + 
+ggplot(cars, aes(x = speed, y = dist)) +
   geom_point()
 # Modifying scales both axis title and axis limits
-ggplot(cars, aes(x = speed, y = dist)) + 
-  geom_point() + 
+ggplot(cars, aes(x = speed, y = dist)) +
+  geom_point() +
   scale_x_continuous(name="Speed of cars", limits=c(10, 15)) +
   scale_y_continuous(name="Stopping distance", limits=c(0, 150))
 ```
@@ -1139,28 +1142,29 @@ ggplot(cars, aes(x = speed, y = dist)) +
 Modifying Scales in GGplot2
 :::
 
-We can also applying transformation on axes using `trans` argument
-(refer @fig-scale2).
+We can also apply a transformation to the axes using the `transform` argument
+(refer @fig-scale2). Before ggplot2 version 3.5, this argument was called `trans`, a name you will still see in older code.
 
 ```{r fig-scale2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Transforming Axes in GGplot2"}
-ggplot(cars, aes(x = speed, y = dist)) + 
+ggplot(cars, aes(x = speed, y = dist)) +
   geom_point()+
-  scale_x_continuous(trans='log10') +
-  scale_y_continuous(trans='log10')
+  scale_x_continuous(transform = 'log10') +
+  scale_y_continuous(transform = 'log10')
 ```
 
 The transformation is actually carried out by a `"transformer"`, which describes the transformation, its inverse, and how to draw the labels. A Few of these transformations are listed in @tbl-modscales following.
 
 | Name           | Equivalent function $f(x)$ |
 |----------------|----------------------------|
-| `"asn"`        | $\tanh^{-1}(x)$            |
+| `"asn"`        | $2\sin^{-1}(\sqrt{x})$     |
+| `"atanh"`      | $\tanh^{-1}(x)$            |
 | `"exp"`        | $e ^ x$                    |
 | `"identity"`   | $x$                        |
 | `"log"`        | $\log(x)$                  |
 | `"log10"`      | $\log_{10}(x)$             |
 | `"log2"`       | $\log_2(x)$                |
 | `"logit"`      | $\log(\frac{x}{1 - x})$    |
-| `"probit"`     | $\Phi(x)$                  |
+| `"probit"`     | $\Phi^{-1}(x)$             |
 | `"reciprocal"` | $x^{-1}$                   |
 | `"reverse"`    | $-x$                       |
 | `"sqrt"`       | $x^{1/2}$                  |
@@ -1195,13 +1199,13 @@ ggplot(economics, aes(date, psavert)) +
                      labels = scales::label_percent(scale = 1))
 ```
 
-In @fig-scale4, we have modified (i) name of `x` axis, (ii) breaks, which places the label, (iii) label for 2 digits of year, (iv) limited the data to be plotted using `limits`, (v) name of `y` axis and (vi) modified the bales of `y` axis as percentages; all using scale functions.
+In @fig-scale4, we have modified (i) name of `x` axis, (ii) breaks, which places the label, (iii) label for 2 digits of year, (iv) limited the data to be plotted using `limits`, (v) name of `y` axis and (vi) modified the labels of `y` axis as percentages; all using scale functions.
 
-Readers may have noticed that we have modified the axes lables in plot in @fig-scale4 using `scales` package. Using `scales` library we may modify format of labels (refer plot in @fig-scale3).
+Readers may have noticed that we have modified the axes labels in plot in @fig-scale4 using `scales` package. Using `scales` library we may modify format of labels (refer plot in @fig-scale3).
 
 ```{r fig-scale3, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Transforming Axes in GGplot2"}
-state.x77 %>% 
-  as.data.frame() %>% 
+state.x77 %>%
+  as.data.frame() %>%
   ggplot(aes(Area, Illiteracy/100)) +
   geom_point(size = 3, color = "dodgerblue") +
   scale_x_continuous(name = "Area in Square Miles", labels = scales::label_comma()) +
@@ -1217,32 +1221,32 @@ Some other functions in `scales` library useful for displaying numerical data on
     .34, etc.
 -   `scales::label_date()`
 -   `scales::label_date_short()` formats dates
--   `scale::label_wrap()` useful to wrap long strings across multiple
+-   `scales::label_wrap()` useful to wrap long strings across multiple
     lines.
-    
-In @fig-scale4, though we have limited the scale for a fixed duration, readers may notice that there is still an empty space on both sides of the scale.  In @fig-rgg20 the space between `y` axis labels and bars may be annoying to some.  To modify this empty space on scales (usually position scales) we can use `expand` argument of `scale_*_*` function through another function `expansion`.  This function `expansion` has two arguments namely `mult` and `add`.  
+
+In @fig-scale4, though we have limited the scale for a fixed duration, readers may notice that there is still an empty space on both sides of the scale.  In @fig-rgg20 the space between `y` axis labels and bars may be annoying to some.  To modify this empty space on scales (usually position scales) we can use `expand` argument of `scale_*_*` function through another function `expansion`.  This function `expansion` has two arguments namely `mult` and `add`.
 
 - `mult` argument takes a vector with two numeric elements which indicate range expansion factors.
 - `add` argument also takes a vector with two numeric elements but these indicate additive range expansion constants.
 
-To understand this let's again consider the example in @fig-rgg20.  Providing `mult = c(0, 0.2)` in `expansion` multiplies `x` axis (continuous in this case) with `0` times on left side, and `0.2` times of `limit` on right side.  See output in @fig-scale5.
+To understand this let's again consider the example in @fig-rgg20.  Providing `mult = c(0, 0.2)` in `expansion` adds no space on the left side of the `x` axis (continuous in this case), and space equal to `0.2` times the range of the data on the right side.  See output in @fig-scale5.
 
 
 ```{r fig-scale5, fig.show='hold', fig.align='center', fig.cap="Modifying scale limits though expansion"}
-aggregated_mpg <- mpg |> 
+aggregated_mpg <- mpg |>
   summarise(mean_cty = mean(cty),
-            .by = class) 
+            .by = class)
 
 ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
   geom_bar(stat = "identity") +
   scale_x_continuous(expand = expansion(mult = c(0, 0.2)))
-  
+
 ```
 
 ### Adding secondary position axis
-Most of the times two different position aesthetics are shown in same plot having different scales altogether.  In such cases secondary axes can be useful for comparing datasets with different magnitudes or units, allowing for a clearer representation of diverse data sets within a single chart.  However, caution is needed as secondary axes can sometimes lead to misleading interpretations. If not used carefully, they might obscure important trends or create confusion, especially if the scale differences are not immediately obvious to the viewer.
+Sometimes two different measures are shown in the same plot, on different scales altogether.  In such cases secondary axes can be useful for comparing datasets with different magnitudes or units, allowing for a clearer representation of diverse data sets within a single chart.  However, caution is needed as secondary axes can sometimes lead to misleading interpretations. If not used carefully, they might obscure important trends or create confusion, especially if the scale differences are not immediately obvious to the viewer.
 
-Secondary axes can be added in ggplot2, using `sec_axis` function as an argument to `sec.axis` inside `scale`s.  As an example, we can see the two `y` axis representing same data both in degree Fahrenheit and degree Celsius in @fig-scale6.  First argument of `sec_axis` takes a transformation function using tidyverse style syntax.  Another useful argument is `name` apart from other usual functions like `labels`, etc.
+Secondary axes can be added in ggplot2, using `sec_axis` function as an argument to `sec.axis` inside `scale`s.  As an example, we can see the two `y` axis representing same data both in degree Fahrenheit and degree Celsius in @fig-scale6.  The first argument of `sec_axis`, named `transform`, takes a transformation formula in the `~` style, where `.` stands for the values of the primary axis.  Another useful argument is `name` apart from other usual functions like `labels`, etc.
 
 ```{r fig-scale6, fig.show='hold', fig.align='center', fig.cap="Adding Secondary Axis"}
 airquality |>
@@ -1256,8 +1260,8 @@ airquality |>
                      expand = expansion(mult = c(0, 0.1)),
                      sec.axis = sec_axis(~ (. - 32) * 5 / 9,
                                          name = " Average Temp (\u00B0C)")) +
-  scale_x_discrete(name = "Month") 
-  
+  scale_x_discrete(name = "Month")
+
 ```
 
 ### Customising color (or fill) mappings
@@ -1275,7 +1279,7 @@ following mentioned colors. Readers may also note that all `fill` scale
 functions have a corresponding `color` scale function to be used with
 `color` aesthetic.
 
-```         
+```
 scale_colour_gradient(
   name = waiver(),
   ...,
@@ -1298,9 +1302,9 @@ more related scales.
 The usage may be clear with the following examples.
 
 ```{r fig-rgg53, fig.show='hold', fig.align='center', fig.cap="Customising Fill scale"}
-economics |> 
+economics |>
   mutate(month = month(date, label = TRUE, abbr = TRUE),
-         year = year(date)) |> 
+         year = year(date)) |>
   ggplot(aes(year, month)) +
   geom_tile(aes(fill = psavert)) +
   scale_fill_gradient2(low = "red",
@@ -1350,7 +1354,7 @@ df <- data.frame(
   colour = c("red", "green", "blue", "yellow")
 )
 
-ggplot(df, aes(x, y)) + 
+ggplot(df, aes(x, y)) +
   geom_tile(aes(fill = colour))
 
 ggplot(df, aes(x, y)) +
@@ -1391,8 +1395,8 @@ smoothed curve as the data out of the plot has been discarded.
 ::: {#fig-rgg56}
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="33%"}
-base <- ggplot(mpg, aes(displ, hwy)) + 
-  geom_point() + 
+base <- ggplot(mpg, aes(displ, hwy)) +
+  geom_point() +
   geom_smooth()
 
 # Full dataset
@@ -1438,9 +1442,9 @@ three plots in @fig-rgg57.
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="33%"}
 base <- ggplot(mtcars, aes(y = factor(1), fill = factor(cyl))) +
-  geom_bar(width = 1) + 
+  geom_bar(width = 1) +
   scale_y_discrete(name = NULL,
-                   guide = "none", 
+                   guide = "none",
                    expand = c(0, 0)) +
   scale_fill_discrete(guide = "none")
 
@@ -1494,18 +1498,18 @@ base + coord_radial(expand = FALSE,
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="49%"}
 
-base2 <- mpg |> 
-    count(class) |> 
+base2 <- mpg |>
+    count(class) |>
   ggplot(aes(y = n, x = "", fill = class)) +
   geom_col() +
-  geom_text(aes(label = n), 
+  geom_text(aes(label = n),
                  position = position_stack(vjust = 0.5))
 
 base2 + coord_polar(theta = "y")
 
 base2 +
-  coord_radial(expand = FALSE, 
-               theta = "y", 
+  coord_radial(expand = FALSE,
+               theta = "y",
                inner.radius = 0.5)
 
 ```
@@ -1520,7 +1524,7 @@ circle, as shown in @fig-rgg61.
 ```{r fig-rgg61, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', fig.cap="Bar plot in circle"}
 mtcars |>
   #arrange(-mpg) |>
-  rownames_to_column('Car') |> 
+  rownames_to_column('Car') |>
   ggplot(aes(seq_along(mpg), mpg, fill = factor(cyl))) +
   geom_col(width = 1,
            color = "white") +
@@ -1544,47 +1548,43 @@ mtcars |>
 
 ## Faceting
 
-The amount of data also makes a difference: if there is a lot of data it
-can be hard to distinguish different groups. An alternative solution is
-to use faceting, as described next. Facets, or "small-multiples", are
+When there is a lot of data, it can be hard to distinguish different groups in one plot,
+even with colours and shapes. An alternative is
+to use faceting. Facets, or "small-multiples", are
 used to split one plot into a multi-panel figure, with one panel
 ("facet") per group of data. The same type of plot is created multiple
 times, each one using a sub-group of the same dataset.
 
 In `ggplot2` faceting can be achieved using either of the functions -
 
--   `facet_grid()` creates a grid of plots, with each plot showing a
-    subset of the data. We may also specify the number of columns to use
-    in the grid using the `ncol` argument.
--   `facet_wrap()` creates a grid of plots with different variables on
-    each axis. We may also specify the scales to use for each axis using
-    the `scales` argument.
+-   `facet_wrap()` creates one panel for each level of a single variable,
+    and wraps the panels into rows, like words in a paragraph. We may
+    specify the number of columns with the `ncol` argument.
+-   `facet_grid()` creates a grid of panels, with the levels of one variable
+    as rows and of another as columns.
 
-Let us understand this, with the following examples. In @fig-rgg62 `facet_grid()` has been used. Notice that
-`facet_grid()` arranges the plots in a grid with different variables on
-each axis. We specify the variables to use for faceting using the `~`
-operator. For example, `facet_grid(variable1 ~ variable2)` will create a
-grid of plots with `variable1` on the y-axis and `variable2` on the
-x-axis. This is useful when we want to compare the relationship between
-two variables across different levels of a third variable.
+Both functions have a `scales` argument, which lets each panel have its own axis range (`scales = "free"`), instead of a common one.
+
+Let us understand this with the following examples. In @fig-rgg62, `facet_wrap()` has been used. We specify
+the variable to use for faceting with the `~` operator. `facet_wrap(~ variable)` creates
+one panel for each level of the variable. This is useful when we have
+a single categorical variable that we want to use for faceting.
 
 ```{r fig-rgg62, fig.show='hold', fig.align='center', fig.cap="Wrapping sub plots in facets"}
-ggplot(mpg, aes(x = displ, y = hwy)) + 
-  geom_point() + 
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point() +
   facet_wrap(~ class, ncol = 2)
 ```
 
-On the other hand, `facet_wrap()` creates a grid of plots, each showing
-a subset of your data based on a single variable. We specify the
-variable to use for faceting using the same `~` operator here too. For
-example, `facet_wrap(~ variable)` will create a grid of plots, each
-showing a different level of the variable. This is useful when you have
-a single categorical variable that you want to use for faceting. See
-example in @fig-rgg63.
+On the other hand, `facet_grid()` arranges the panels in a grid, with a different
+variable on each side. For example, `facet_grid(variable1 ~ variable2)` creates a
+grid with the levels of `variable1` as rows and those of `variable2` as
+columns. This is useful when we want to compare a relationship across the
+combinations of two other variables. See the example in @fig-rgg63, with years as rows and classes of car as columns.
 
 ```{r fig-rgg63, fig.show='hold', fig.align='center', fig.cap="Grid alignment of sub plots in facets"}
-ggplot(mpg, aes(x = displ, y = hwy)) + 
-  geom_point() + 
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point() +
   facet_grid(year ~ class)
 ```
 
@@ -1599,7 +1599,7 @@ We have already covered use of `geoms` like `geom_text`, `geom_label`, `geom_vli
 -   `geom_rect()` is used to draw a rectangle in plot area using aesthetics `xmin`, `xmax`, `ymin` and `ymax`
 -   `geom_segment()` can create a line segment.
 
-Moreover, there is a helper function `annotate` which also adds geoms to a plot, but unlike a typical geom function, the properties of the geoms are not mapped from variables of a data frame, but are instead passed in as vectors. This is useful for adding small annotations (such as text labels) or if we have your data in vectors, and for some reason don't want to put them in a data frame. See an example in plot in @fig-rrgg63 wherein we have added five annotation elements (i) a rectangle, (ii) two text labels and (iii) two arrows. 
+Moreover, there is a helper function `annotate` which also adds geoms to a plot, but unlike a typical geom function, the properties of the geoms are not mapped from variables of a data frame, but are instead passed in as vectors. This is useful for adding small annotations (such as text labels) or if we have our data in vectors, and for some reason don't want to put them in a data frame. See an example in plot in @fig-rrgg63 wherein we have added five annotation elements (i) a rectangle, (ii) two text labels and (iii) two arrows.
 
 ```{r fig-rrgg63, fig.show='hold', fig.align='center', fig.cap="Annotating charts"}
 ggplot(economics, aes(date, unemploy)) +
@@ -1650,7 +1650,7 @@ ggplot(economics, aes(date, unemploy)) +
 
 ### Labels
 
-Effective labeling is crucial for ensuring that plots are accessible and comprehensible to a wider audience. To achieve this, it's important to use full variable names for axis and legend labels, as this enhances clarity. The plot's `title` and `subtitle` should be employed to communicate the primary insights and key takeaways, making the information more digestible at a glance. The `caption` serves as a valuable space to include details about the data source, providing context and credibility. Furthermore, the `tag` feature can be utilized to add identification markers, which is particularly helpful when comparing or displaying multiple plots within a project.
+Effective labelling is crucial for ensuring that plots are accessible and comprehensible to a wider audience. To achieve this, it's important to use full variable names for axis and legend labels, as this enhances clarity. The plot's `title` and `subtitle` should be employed to communicate the primary insights and key takeaways, making the information more digestible at a glance. The `caption` serves as a valuable space to include details about the data source, providing context and credibility. Furthermore, the `tag` feature can be utilized to add identification markers, which is particularly helpful when comparing or displaying multiple plots within a project.
 
 There are several ways to add labels to ggplot2 charts, but we will focus on using the `labs()` function, which allows us to add `titles`, `subtitles`, `axis labels`, and other annotations like `caption`, etc., to the plot. Example -
 
@@ -1662,15 +1662,33 @@ ggplot(mtcars, aes(x = hp, y = mpg, color = factor(cyl))) +
        x = "Horsepower",
        y = "Miles per gallon",
        color = "Cylinders",
-       caption = "Source: R datasets", 
+       caption = "Source: R datasets",
        tag = "Chart-1")
 ```
+
+### Labels from a dictionary, new in ggplot2 4.0
+
+Data received from departments often has coded column names, like `amt_sanc` or `dist_cd`. From version 4.0, we can give `labs()` a *dictionary*, a named vector which maps column names to readable labels. Every axis and legend title is then taken from it.
+
+```{r}
+#| label: fig-labsdict
+#| fig-cap: "Axis and legend titles taken from a data dictionary"
+dictionary <- c(displ = "Engine displacement (litres)",
+                hwy   = "Highway mileage (miles per gallon)",
+                drv   = "Drive")
+
+ggplot(mpg, aes(displ, hwy, colour = drv)) +
+  geom_point() +
+  labs(dictionary = dictionary)
+```
+
+A single dictionary can be kept for a whole dataset, and used for every chart made from it.
 
 ## Themes
 
 Till now (except in a few cases) we have used the default themes of plots generated in ggplot2. Themes can be however be used to customise the appearance, visual aesthetics by exercising fine control over the non-data elements in the plot.  We can customize the appearance of plots, such as the axis labels, titles, background colors, and font sizes, styles, etc. by applying themes to the plot.
 
-There are certain complete themes available in `ggplot2` which set all of the theme elements to values designed to work harmoniously.  Defualt theme applied to a plot in ggplot2 is `theme_gray()`.  A complete list of themes available in ggplot2 is given in the @tbl-themesp below:
+There are certain complete themes available in `ggplot2` which set all of the theme elements to values designed to work harmoniously.  Default theme applied to a plot in ggplot2 is `theme_gray()`.  A complete list of themes available in ggplot2 is given in the @tbl-themesp below:
 
 | Theme name         | Description                                                                                                                                                                                                                                |
 |--------------------|----------------------------------------------------|
@@ -1734,7 +1752,7 @@ knitr::include_graphics("images/elements.png")
 
 As an example refer plot in @fig-theme2 wherein certain plot elements have been modified using `theme` function.
 
-```{r fig-theme2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Customising Themes in GGplot2"}
+```{r fig-theme2, fig.align='center', fig.show='hold', fig.cap="Customising Themes in GGplot2"}
 myplot<- ggplot(mpg, aes(x = cty, y = hwy)) +
   geom_point(size = 2, position = position_jitter(seed = 42), aes(color = factor(class))) +
   geom_point(shape=21, size = 4.5, position = position_jitter(seed = 42), aes(color = factor(class))) +
@@ -1742,7 +1760,7 @@ myplot<- ggplot(mpg, aes(x = cty, y = hwy)) +
   labs(title = "City Vs. Highway Mileages",
        caption = "Data Source: MPG Dataset",
        x = "Mileage in City (Miles per Gallon)",
-       y = "Milaege in Highway (Miles per Gallon)",
+       y = "Mileage in Highway (Miles per Gallon)",
        color = "Class") +
   theme(
     panel.background = element_rect(fill = NA),
@@ -1756,15 +1774,91 @@ myplot<- ggplot(mpg, aes(x = cty, y = hwy)) +
     plot.caption = element_text(face = "italic", size = 12),
     legend.title = element_text(face = "bold.italic", size = 12),
     legend.text = element_text(size = 12),
-    legend.position = c(1, 1),
+    legend.position = "inside",
+    legend.position.inside = c(1, 1),
     legend.justification = c(1, 1),
-    legend.background = element_rect(size = 1, fill = "white", colour = "grey")
+    legend.background = element_rect(linewidth = 1, fill = "white", colour = "grey")
   )
 
 myplot
 ```
 
-We can combine multiple customization options together to create a customized theme that fits our specific needs using `theme_set()`. The possibilities for customization are endless, so feel free to experiment and create your own unique theme!
+Notice two settings for the legend. `legend.position = "inside"` places the legend inside the plot area, and `legend.position.inside = c(1, 1)` gives its position, here the top right corner. (Before ggplot2 version 3.5, a pair of numbers was given directly to `legend.position`.)
+
+We can combine several customisation options into a theme of our own, and apply it to all plots with `theme_set()`. This is useful for giving all charts of an audit report the same look.
+
+### Ink and paper, new in ggplot2 4.0
+
+From version 4.0, the complete themes have three arguments which change the whole look at once. `ink` is the colour of the foreground, like text, lines and points. `paper` is the colour of the background. And `accent` is the colour used for highlights, like the line of `geom_smooth()`.
+
+```{r}
+#| label: fig-inkpaper
+#| fig-cap: "A complete theme recoloured with ink, paper and accent"
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point() +
+  geom_smooth(method = "lm", formula = y ~ x) +
+  theme_bw(ink = "navy", paper = "ivory", accent = "firebrick")
+```
+
+One line gives a consistent house style, without changing a dozen theme elements one by one.
+
+## A chart for an audit report {#sec-ggplot2-audit}
+
+Let us put several of these features together, in the kind of chart that appears in audit reports. We have the budget and the expenditure of 12 districts under a scheme, in rupees. We want to show the *utilisation*, expenditure as a percentage of budget, with the districts sorted, amounts in lakh, and the districts which spent more than their budget highlighted.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the district data"
+set.seed(310)
+districts <- tibble(
+  dist_name = c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur", "Gopalganj",
+                "Haripur", "Kishanpur", "Lalganj", "Madhopur", "Narsinghpur", "Rampur"),
+  amt_be    = round(runif(12, 200, 900) * 1e5),       # budget estimate
+) |>
+  mutate(amt_exp = round(amt_be * runif(12, 0.55, 1.05)))
+# Planted. Two districts spent well over their budget
+districts$amt_exp[c(4, 9)] <- round(districts$amt_be[c(4, 9)] * c(1.18, 1.27))
+```
+
+```{r}
+#| label: fig-utilisation
+#| fig-cap: "Utilisation of funds by districts, with excess expenditure highlighted"
+#| fig-height: 5
+districts |>
+  mutate(utilisation = amt_exp / amt_be,
+         excess      = utilisation > 1,
+         dist_name   = fct_reorder(dist_name, utilisation)) |>
+  ggplot(aes(utilisation, dist_name, fill = excess)) +
+  geom_col() +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  geom_text(aes(label = scales::label_number(scale = 1e-5, accuracy = 1, big.mark = ",",
+                                             suffix = " lakh")(amt_exp)),
+            hjust = -0.1, size = 3) +
+  scale_x_continuous(labels = scales::label_percent(),
+                     expand = expansion(mult = c(0, 0.25))) +
+  scale_fill_manual(values = c(`FALSE` = "grey60", `TRUE` = "firebrick"),
+                    labels = c("Within budget", "Exceeded budget")) +
+  labs(title = "Utilisation of funds, 2024-25",
+       subtitle = "Expenditure as a percentage of the budget estimate",
+       x = NULL, y = NULL, fill = NULL,
+       caption = "Labels show the expenditure. The dashed line marks 100%.") +
+  theme(legend.position = "top")
+```
+
+Each choice in this chart serves the reader.
+
+- The districts are sorted by utilisation with `fct_reorder()`, so the order itself tells the story.
+- Only the districts which exceeded their budget are in colour. Everything else is grey, so the eye goes straight to them.
+- The dashed line at 100% gives a reference, so the reader does not have to judge the lengths of bars.
+- The labels show the expenditure in lakh, the unit used in Indian government reports, with `scales::label_number(scale = 1e-5, suffix = " lakh")`.
+- The title says what is shown, and the caption explains the marks.
+
+::: callout-tip
+## Audit tip
+
+A chart in an audit report should make *one* point clearly. Decide the point first, then remove everything that does not serve it. Use colour for emphasis, not for decoration, and always show the reference, like the budget, the norm or the average, against which the reader should judge.
+:::
+
 
 ## Saving/exporting plots
 
@@ -1790,7 +1884,7 @@ We can use the options as per requirement.
 
 We may also save our plots using function `ggsave()` here. Its syntax is simple
 
-```         
+```
 ggsave(
   filename,
   plot = last_plot(),
@@ -1809,7 +1903,7 @@ ggsave(
 
 All arguments are simple to understand. Thus for example if we need to save the plot we generated in @fig-theme2,  we can use `ggsave`.
 
-```         
+```
 ggsave('Mileages.png', myplot, height = 10, width = 8)
 ```
 
@@ -1866,4 +1960,23 @@ ggplot(mtcars, aes(x = wt, y = mpg)) +
 dev.off()
 ```
 
---------------------
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `ggplot()`, `aes()` | ggplot2 | Start a plot with data, and map variables to aesthetics |
+| `geom_point()`, `geom_line()`, `geom_path()`, `geom_smooth()` | ggplot2 | Scatter plots, lines and trend lines |
+| `geom_bar()`, `geom_col()`, `geom_histogram()`, `geom_freqpoly()` | ggplot2 | Bars from counts or values, and distributions |
+| `geom_boxplot()`, `geom_tile()` | ggplot2 | Box plots and heat-maps |
+| `geom_text()`, `geom_label()`, `geom_text_repel()` | ggplot2, ggrepel | Labels on a plot |
+| `geom_vline()`, `geom_hline()`, `geom_abline()`, `annotate()` | ggplot2 | Reference lines and annotations |
+| `position_stack()`, `position_dodge()`, `position_fill()` | ggplot2 | Stacked, side by side, and 100% stacked bars |
+| `scale_x_continuous()`, `scale_x_date()`, `scale_fill_manual()` and others | ggplot2 | Control axes, colours and other mappings |
+| `label_percent()`, `label_comma()`, `label_number()` | scales | Format axis and data labels |
+| `coord_cartesian()`, `coord_flip()`, `coord_polar()`, `coord_radial()` | ggplot2 | Coordinate systems, zooming, and pie or donut charts |
+| `facet_wrap()`, `facet_grid()` | ggplot2 | Small multiples, one panel per group |
+| `labs()` | ggplot2 | Titles, axis labels, caption and tag, or a label dictionary |
+| `theme_bw()` and other complete themes, `theme()`, `theme_set()` | ggplot2 | Overall look, individual elements, and a default theme |
+| `ggsave()`, `png()`, `pdf()`, `dev.off()` | ggplot2, base R | Save plots to files |
+
+: Functions used in this chapter {#tbl-ggplotfunctions}
