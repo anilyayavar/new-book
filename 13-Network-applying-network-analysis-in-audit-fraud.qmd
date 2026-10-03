@@ -3,23 +3,44 @@
 source("_common.R")
 ```
 
-# Applying network analysis in audit/fraud detection
-## Use case-1: Finding network of related entities/persons - Identity Theft {#sec-dup_net}
-**The Following Content is Under Development.**
+# Applying network analysis in audit/fraud detection {#sec-netaudit}
 
-Imagine a scenario when users may have multiple IDs such as mobile numbers, email ids, and say some other ID issued by a Government Department say Income Tax Department (e.g. PAN number in Indian Scenario).  Using techniques mentioned in @sec-dup, we may easily find out duplicate users, i.e. duplicates on the basis of one ID.  Sometimes need arise where we have to find out network of all the duplicate users where they have changed one or two IDs but retained another. E.g. There may be a social sector scheme where any beneficiary is expected to be registered only once for getting that scheme benefits.  Scheme audit(s) may require auditors to check duplicate beneficiaries using multiple IDs.
+In the last chapter (@sec-graph), we learnt the concepts of graph theory and the tools to work with networks in R. In this chapter we will apply them to real audit problems. Many frauds are about *connections* that someone wants to hide.
 
-Understand this with the @tbl-gra101.
-```{r tbl-gra101, echo=FALSE, fig.show='hold', message=FALSE, warning=FALSE, fig.align='center'}
+- One person registering many times in a scheme, each time with a slightly different identity.
+- A cartel of firms which always bid together.
+- Money or invoices going round in a circle between a few firms.
+- A vendor secretly connected to an employee who approves its bills.
+
+Each of these leaves a trace in the data, which is hard to see in a table but easy to see in a network. The recipe is nearly always the same. We turn the records into a graph, reduce the graph to the parts that matter, find the structure we are looking for (a connected group, a cycle, a community, a path), and then go back to the records.
+
+## Prerequisites
+
+We will use `tidyverse` for data handling, `igraph` for the analysis, and `visNetwork` to draw interactive networks. In each interactive network of this chapter, you can zoom, drag the vertices, hover over them for details, and click a vertex to highlight its neighbours.
+
+```{r}
+#| message: false
+#| warning: false
 library(tidyverse)
-library(kableExtra)
+library(igraph)
+library(visNetwork)
+```
+
+## Use case-1: Finding network of related entities/persons - Identity Theft {#sec-dup_net}
+
+Imagine a scheme where each person has several IDs, such as a mobile number, an email ID, and an ID issued by a Government Department, like the PAN in India. Using the techniques of @sec-dup, we can easily find duplicates on the basis of any *one* ID. But sometimes a person registers again after changing one or two IDs, while keeping another. For example, in a social sector scheme, each beneficiary is expected to register only once. A scheme audit may require the auditor to find duplicate beneficiaries across *all* the IDs together.
+
+Let us understand this with @tbl-gra101.
+
+```{r}
+#| label: tbl-gra101
+#| tbl-cap: "Dummy Data"
 PANs <- paste0(
   "PANNO", c("0000", "0000", "1111", "2222", "3333", "4444", "5555", "5555", "6666", "7777"),
   c("A", "A", "B", "C", "D", "E", "F", "F", "G", "H")
 )
 
 emails <- paste0(c("aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg", "hhhh", "iiii", "bbbb"), "@gmail.com")
-
 
 tele <- paste0("9", c("1", "2", "3", "4", "1", "1", "5", "6", "3", "2") %>%
   map_chr(~ rep(.x, 9) %>%
@@ -32,129 +53,626 @@ dummy_data <- data.frame(
   PAN = PANs
 )
 
-kable(dummy_data, caption = "Dummy Data")
+knitr::kable(dummy_data)
 ```
 
-It may be seen that out of ten persons, two with IDs 6 and 10 respectively share none of IDs out of Email, PAN and Telephone number. But if we see closely, ID-6 shares mobile number with ID-1 who in turn share PAN number with ID-2.  ID-2 further shares both Email and Mobile number with ID-6 thus establishing a relation and a network between ID-6 and ID-10.  This is clear in @fig-igraph11. _Note that we are not considering names while finding out duplicates._
+Persons with IDs 6 and 10 share none of the three IDs, Mobile, Email and PAN. But look closely. ID-6 shares the mobile number with ID-1, who in turn shares the PAN with ID-2. ID-2 further shares both the email and the mobile number with ID-10. So ID-6 and ID-10 are linked, through a chain. Such chains are impossible to see in a table of thousands of rows. But they are obvious in a network, as in @fig-idnet1. *Note that we are not using names to find duplicates. Names are easily changed and often spelt differently.*
 
-```{r fig-igraph11, fig.show='hold', fig.align='center', fig.cap="Network diagram of connected entities", out.width="75%"}
+```{r}
+#| label: fig-idnet1
+#| fig-cap: "Network of persons (blue) and their IDs. Hover or click to explore."
+id_long <- dummy_data |>
+  pivot_longer(-ID, names_to = "id_type", values_to = "value") |>
+  mutate(person = paste0("ID-", ID),
+         id_node = paste(id_type, value, sep = ":"))
 
-knitr::include_graphics("images/canvas.png")
+id_nodes <- bind_rows(
+  tibble(id = unique(id_long$person), group = "Person"),
+  distinct(id_long, id = id_node, group = id_type)
+) |>
+  mutate(label = if_else(group == "Person", id, ""), title = id)
+
+visNetwork(id_nodes, select(id_long, from = person, to = id_node),
+           width = "100%", height = "450px") |>
+  visGroups(groupname = "Person", color = "steelblue", shape = "dot") |>
+  visGroups(groupname = "Mobile", color = "orange", shape = "square") |>
+  visGroups(groupname = "Email", color = "seagreen", shape = "triangle") |>
+  visGroups(groupname = "PAN", color = "tomato", shape = "diamond") |>
+  visOptions(highlightNearest = TRUE) |>
+  visLegend()
 ```
 
-We may find these duplicates using a branch of mathematics called _Graph Theory_.^[[https://en.wikipedia.org/wiki/Graph_theory](https://en.wikipedia.org/wiki/Graph_theory)] We won't be discussing any core concepts of graph theory here.  There are a few packages to work with graph theory concepts in R, and we will be using `igraph` [@R-igraph] for our analysis here. Let's load the library.
+Notice the structure of this graph. It is *bipartite*. Persons are connected only to IDs, and IDs only to persons. Two persons are related if there is any path between them. In graph theory terms, all related persons fall in the same *connected component*. So all we have to do is find the components of this graph.
 
-```{r message=FALSE, warning=FALSE}
-library(igraph)
+### The algorithm
 
+Here is the complete algorithm.
+
+```{r}
+id_cols <- c("Mobile", "Email", "PAN")
+
+dummy_data |>
+  mutate(across(all_of(id_cols), as.character)) |>
+  pivot_longer(cols = all_of(id_cols), names_to = "id_type",
+               values_to = "value", values_drop_na = TRUE) |>
+  mutate(id_node = paste(id_type, value, sep = ":")) |>
+  select(ID, id_node) |>
+  graph_from_data_frame(directed = FALSE) |>
+  components() |>
+  _$membership |>
+  stack() |>
+  set_names(c("UNIQUE_ID", "ID")) |>
+  filter(!str_detect(ID, ":")) |>
+  mutate(ID = as.integer(as.character(ID))) |>
+  right_join(dummy_data, by = "ID")
+```
+
+We now have a `UNIQUE_ID` for each person, based on all three IDs together. Persons 1, 2, 5, 6 and 10 share one `UNIQUE_ID`, so they may be the same person, or a group acting together. Let us understand the algorithm step by step.
+
+__Step-1__: All the ID columns must be of the same type. Real data often has a mix of character and numeric IDs, like a numeric mobile number and an alphanumeric PAN. Using `across()` inside `mutate()`, we convert all of them to character. Readers may refer to @sec-vectors for changing types, and @sec-across for changing many columns at once with `across()`.
+
+```
+id_cols <- c("Mobile", "Email", "PAN")
+dummy_data |>
+  mutate(across(all_of(id_cols), as.character))
+```
+
+__Step-2__: Pivot all the ID columns into a longer format, so that each row links one person with one ID. Two things should be kept in mind. First, the data must have a column which identifies each record, here `ID`. If there is none, create one with `row_number()` before pivoting. Second, missing IDs must be removed while pivoting, using `values_drop_na = TRUE`. Otherwise, all persons with a missing PAN would be linked through the common value `NA`.
+
+__Step-3__: Prefix each ID value with its type, like `Mobile:9111111111`. This is important. Without it, a value appearing in two different columns would become one vertex. For example, a record number `"12"` and a ward number `"12"` would wrongly link two records. Then we keep only the two columns we need, the record `ID` and the prefixed `id_node`. Up to this step, our data looks like this.
+
+```{r echo=FALSE}
+id_edges <- dummy_data |>
+  mutate(across(all_of(id_cols), as.character)) |>
+  pivot_longer(cols = all_of(id_cols), names_to = "id_type",
+               values_to = "value", values_drop_na = TRUE) |>
+  mutate(id_node = paste(id_type, value, sep = ":")) |>
+  select(ID, id_node)
+head(id_edges)
+```
+
+__Step-4__: We create an undirected graph from this data, using `graph_from_data_frame()`. Each row becomes an edge between a person and an ID. Readers may plot it, but for large data the plot will be a cluttered hairball. The tips at the end of this chapter explain how to deal with that.
+
+__Step-5__: `components()` finds the connected components of the graph. Its element `$membership` is a named vector, giving the component number of each vertex.
+
+```{r}
+id_graph <- graph_from_data_frame(id_edges, directed = FALSE)
+components(id_graph)$membership
+```
+
+The native pipe placeholder `_$membership` extracts this element inside a pipe. We then convert the named vector into a data frame with `stack()`, and name its two columns with `set_names()`.
+
+__Step-6__: The membership includes the ID vertices too, like `Mobile:9111111111`. We keep only the person vertices, which have no `:` in their name. Their names are characters, so we convert them back to integers. Finally, we join the result back to the original data with `right_join()`.
+
+### A bigger example, beneficiaries of a scheme
+
+The dummy data showed the idea. Let us now try it on a more realistic register of 3,000 beneficiaries of an imaginary scheme. Each has a mobile number, a bank account and, for about 60% of them, a PAN. We have planted a few cases.
+
+- 60 pairs of beneficiaries share a mobile number. These are families, and genuine.
+- A ring of 7 registrations, each sharing one ID with the previous one, as if one person kept registering again, changing one ID at a time.
+- An agent's mobile number, entered against 30 beneficiaries.
+- A placeholder mobile number, `9999999999`, entered by data entry operators against 45 beneficiaries who did not give a number.
+
+As usual, the code to create the data is folded.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the beneficiary register"
+set.seed(1234)
+n <- 3000
+rand_mobile <- function(k) paste0(sample(6:9, k, TRUE), sprintf("%09d", sample(0:999999999, k)))
+rand_acct   <- function(k) sprintf("%011.0f", runif(k, 1e10, 9e10))
+rand_pan    <- function(k) paste0(replicate(k, paste(sample(LETTERS, 5, TRUE), collapse = "")),
+                                  sprintf("%04d", sample(0:9999, k, TRUE)), sample(LETTERS, k, TRUE))
+
+ben <- tibble(ben_id  = sprintf("B%05d", 1:n),
+              mobile  = rand_mobile(n),
+              bank_ac = rand_acct(n),
+              pan     = rand_pan(n))
+
+# Genuine. 60 families share a mobile number
+fam <- sample(1:n, 120)
+ben$mobile[fam[61:120]] <- ben$mobile[fam[1:60]]
+
+# Planted. A ring of 7 registrations, each sharing one ID with the previous one
+ring <- c(101, 502, 903, 1304, 1705, 2106, 2507)
+
+# PAN not given by about 40% of beneficiaries
+ben$pan[sample(setdiff(1:n, ring), 0.4 * n)] <- NA
+
+for (i in 2:length(ring)) {
+  col <- c("mobile", "bank_ac", "pan")[(i %% 3) + 1]
+  ben[[col]][ring[i]] <- ben[[col]][ring[i - 1]]
+}
+
+# Planted. An agent's mobile number on 30 beneficiaries
+agent <- sample(setdiff(1:n, c(ring, fam)), 30)
+ben$mobile[agent] <- "9876543210"
+
+# Placeholder number entered when the mobile was not given
+junk <- sample(setdiff(1:n, c(ring, fam, agent)), 45)
+ben$mobile[junk] <- "9999999999"
 ```
 
 ```{r}
-dat <- data.frame(
-  MainID = 1:9,
-  Name = c("A", "B", "C", "B", "E", "A", "F", "G", "H"),
-  ID1 = c(11,12,13,13,14,15,16,17,17),
-  ID2 = c("1a", "1b","1b", "2a", "2b", "2c", "2c", "2e", "3a"),
-  ID3 = c("AB", "AB", "BC", "CD", "EF", "GH", "HI", "HI", "JK")
-)
-# A preview of our sample data
-dat
+head(ben)
 ```
 
-Now the complete algorithm is as under-
+Let us convert it into the long format, with prefixed IDs, as before.
+
 ```{r}
-id_cols <- c("ID1", "ID2", "ID3")
-dat %>% 
-  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
-  pivot_longer(cols = all_of(id_cols), 
-               values_drop_na = TRUE) %>% 
-  select(MainID, value) %>% 
-  graph_from_data_frame() %>%
-  components() %>%
-  pluck(membership) %>%
-  stack() %>%
-  set_names(c('UNIQUE_ID', 'MainID')) %>%
-  right_join(dat %>% 
-               mutate(MainID = as.factor(MainID)), 
-             by = c('MainID'))
+ben_long <- ben |>
+  pivot_longer(-ben_id, names_to = "id_type", values_to = "value",
+               values_drop_na = TRUE) |>
+  mutate(id_node = paste(id_type, value, sep = ":"))
 ```
 
-We may see that we have got unique ID of users based on all three IDs. Let us understand the algorithm used step by step.
+**First, look at the most shared IDs.** Before building any graph, let us count how many beneficiaries each ID is linked with.
 
-__Step-1__: First we have to ensure that all the ID columns (Store names of these columns in one vector say `id_cols`) must be of same type.  Since we had a mix of character (Alphanumeric) and numeric IDs, using `dplyr::across` with `dplyr::mutate` we can convert all the three ID columns to character type. Readers may refer to @sec-vectors for type change, and @sec-across for changing data type of multiple columns simultaneously using `dplyr::across`.
-
-Thus, first two lines of code above correspond to this step only.
-```
-id_cols <- c("ID1", "ID2", "ID3")
-dat %>%
-  mutate(across(.cols = id_cols, as.character))
+```{r}
+ben_long |>
+  count(id_node, sort = TRUE) |>
+  head(5)
 ```
 
-__Step-2__: Pivot all id columns to longer format so that all Ids are linked with one main ID.  Now two things should be kept in mind.  One that there should be a main_Id column in the data frame.  If not create one using `dplyr::row_number()` before pivoting.  Secondly, if there are `NA`s in any of the IDs these have to be removed while pivoting.  Use argument `values_drop_na = TRUE` inside the `tidyr::pivot_longer`. Thus, this step will correspond to this line-
-```
-pivot_longer(cols = all_of(id_cols), values_drop_na = TRUE)
-```
-where - first argument data is invisibly passed through dplyr pipe i.e. `%>%`. Upto this step, our data frame will look like -
-```{r echo=FALSE}
-id_cols <- c("ID1", "ID2", "ID3")
-dat %>% 
-  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
-  pivot_longer(cols = all_of(id_cols), 
-               values_drop_na = TRUE)
+Two values stand out at once. `9999999999` is obviously a placeholder, not a real number. If we keep it, it will link 45 unrelated beneficiaries into one false group. `9876543210` is linked with 30 beneficiaries. It looks genuine, and is exactly the kind of *hub* an auditor wants to find. It may be the number of an agent or a middleman, who registered and perhaps controls these beneficiaries. We drop the placeholder and keep the rest.
+
+```{r}
+ben_long <- ben_long |>
+  filter(value != "9999999999")
 ```
 
+**Next, drop the leaf nodes.** Most IDs belong to exactly one beneficiary. In the graph, such an ID is a *leaf*, a vertex with only one edge. A leaf can never link two beneficiaries, so it adds nothing to our analysis. It only makes the graph bigger. Let us compare the graph with and without them.
 
-__Step-3:__ Now we need only two columns, one is `mainID` and another is `value` which is created by pivoting all ID columns.  We will use `select(MainID, value)` for that.
+```{r}
+g_full <- graph_from_data_frame(select(ben_long, ben_id, id_node), directed = FALSE)
 
-__Step-4:__ Thereafter we will create a graph object from this data (output after step-3), using `igraph` package.  Interested readers may see how the graph object will look like, using `plot()` function. The output is shown in @fig-igraph2. __However, this step is entirely optional and it may also be kept in mind that graph output of large data will be highly cluttered and may not be comprehensible at all.__
+# Keep only IDs shared by at least two beneficiaries
+ben_shared <- ben_long |>
+  add_count(id_node) |>
+  filter(n > 1)
 
-```{r fig-igraph2, fig.align='center', fig.show='hold', fig.cap="Plot of graph object"}
-dat %>% 
-  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
-  pivot_longer(cols = all_of(id_cols), 
-               values_drop_na = TRUE) %>% 
-  select(MainID, value) %>% 
-  graph_from_data_frame() %>%
-  plot()
+g_ben <- graph_from_data_frame(select(ben_shared, ben_id, id_node), directed = FALSE)
+
+tibble(graph    = c("All IDs", "Shared IDs only"),
+       vertices = c(vcount(g_full), vcount(g_ben)),
+       edges    = c(ecount(g_full), ecount(g_ben)))
 ```
 
-__Step-5:__ This step will be a combination of three lines of codes which will number each ID based on connectivity of all components in the graph objects.  Actually `components` will give us an object where `$membership` will give us `unique_ids` for each component in the graph.
-```{r echo=FALSE}
-id_cols <- c("ID1", "ID2", "ID3")
-dat %>% 
-  mutate(across(.cols = all_of(id_cols), as.character)) %>% 
-  pivot_longer(cols = all_of(id_cols), 
-               values_drop_na = TRUE) %>% 
-  select(MainID, value) %>% 
-  graph_from_data_frame() -> dat2
-dat2 %>% 
-  components()
-```
-Next we have to `purrr::pluck`, `$membership` only from this object, which will return a named vector.  
-```{r echo=FALSE}
-dat2 %>% 
-  components() %>% 
-  pluck(membership)
+The graph has shrunk from `r format(vcount(g_full), big.mark = ",")` vertices to just `r vcount(g_ben)`, and the answer is not affected at all. Beneficiaries who share nothing with anyone have dropped out too, which is what we want. With real data of lakhs of records, this one step often makes the difference between a graph R can handle easily and one it cannot.
+
+**Now find the groups.** Let us find the components, and count how many beneficiaries each one has.
+
+```{r}
+ben_groups <- components(g_ben)$membership |>
+  stack() |>
+  set_names(c("group", "node")) |>
+  filter(str_starts(node, "B")) |>
+  count(group, name = "beneficiaries", sort = TRUE)
+
+ben_groups |> count(beneficiaries, name = "number_of_groups")
 ```
 
-We can then `stack` this named vector into a data frame using `stack` and `set_names`
-```{r echo=FALSE}
-dat2 %>% 
-  components() %>% 
-  pluck(membership) %>% 
-  stack %>% 
-  set_names(c('UNIQUE_ID', 'MainID'))
+```{r}
+#| include: false
+n_pairs <- sum(ben_groups$beneficiaries == 2)
 ```
 
-I suggest to purposefully name second column in the output data as `MainID` so that it can be joined with original data frame in the last step.  `UNIQUE_ID` in this data will give us the new column which will allocate same ID to all possible duplicates in network of three IDs.
+There are `r n_pairs` groups of two. These are mostly the families who share a mobile, which is normal. There is one group of 30, around the agent's number. And there is one group of 7, the ring we planted. Let us draw this second largest group, in @fig-ring.
 
-__Step-6:__ In the last step we have to join the data frame back to original data frame.  Since the type of `MainID` is now factor type, we can convert type of this column in original data frame before `right_join` the same.  Hence the final step, `right_join(dat %>% mutate(MainID = as.factor(MainID)), by = c('MainID'))`.
+```{r}
+#| label: fig-ring
+#| fig-cap: "A ring of 7 registrations linked through changing IDs"
+# ben_groups is sorted by size. Take the second largest group.
+ring_id <- ben_groups$group[2]
+ring_nodes <- names(which(components(g_ben)$membership == ring_id))
 
-## Use case-2: Classification using graph theory
+ring_graph <- induced_subgraph(g_ben, ring_nodes)
 
-*The Content is Under Development.*
+ring_vis <- toVisNetworkData(ring_graph)
+ring_vis$nodes <- ring_vis$nodes |>
+  mutate(group = if_else(str_starts(id, "B"), "Beneficiary", str_extract(id, "^[a-z_]+")),
+         title = id)
+
+visNetwork(ring_vis$nodes, ring_vis$edges, width = "100%", height = "400px") |>
+  visGroups(groupname = "Beneficiary", color = "steelblue", shape = "dot") |>
+  visGroups(groupname = "mobile", color = "orange", shape = "square") |>
+  visGroups(groupname = "bank_ac", color = "purple", shape = "triangle") |>
+  visGroups(groupname = "pan", color = "tomato", shape = "diamond") |>
+  visOptions(highlightNearest = TRUE) |>
+  visLegend()
+```
+
+Each beneficiary in the chain shares only *one* ID with the next. No check on a single ID column would find more than a pair. Only the network shows the whole ring.
+
+::: callout-tip
+## Audit tip
+
+The *degree* of an ID vertex, that is, the number of beneficiaries linked to it, is a quick way to find hubs. A mobile number or bank account linked with many beneficiaries deserves verification in the field. Who is the person behind it, and are the beneficiaries real?
+:::
+
+## Use case-2: Classification using graph theory - Bidders who bid together
+
+Community detection, which we learnt in @sec-graph, classifies the vertices of a network into groups of closely linked vertices. Let us use it to find bid rigging. A *cartel* of firms agree among themselves who will win a tender. The others put in higher *cover bids*, to make the tender look competitive. Firms of a cartel therefore keep appearing in the same tenders. We looked for such firms with association rules in @sec-apriori. Let us now look at the same problem as a network.
+
+We create bids for 200 tenders of an imaginary department. There are 40 firms, and 3 to 6 firms bid in each tender. We have planted a cartel of 5 firms, which bid together in every fourth tender.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the bids"
+set.seed(77)
+firms  <- sprintf("F%02d", 1:40)
+cartel <- c("F05", "F11", "F23", "F31", "F38")
+
+bids <- map_dfr(1:200, function(t) {
+  b <- sample(firms, sample(3:6, 1))
+  if (t %% 4 == 0) {
+    # Cartel tender. 3 to 5 cartel firms, with 0 to 2 outsiders
+    b <- union(sample(cartel, sample(3:5, 1)),
+               sample(setdiff(firms, cartel), sample(0:2, 1)))
+  }
+  tibble(tender = sprintf("T%03d", t), firm = b)
+})
+```
+
+```{r}
+head(bids)
+```
+
+Tenders and firms form a bipartite graph. But we are interested in the relation between *firms*. So we *project* the bipartite graph onto the firms. In the projected graph, two firms are connected if they bid in at least one common tender, and the edge `weight` is the number of tenders in which they bid together. The function `bipartite_projection()` does this. It needs a logical vertex attribute `type`, which tells which set each vertex belongs to.
+
+```{r}
+bid_graph <- graph_from_data_frame(bids, directed = FALSE)
+V(bid_graph)$type <- V(bid_graph)$name %in% bids$firm
+
+firm_graph <- bipartite_projection(bid_graph, which = "true")
+firm_graph
+```
+
+Let us see how many times pairs of firms have bid together.
+
+```{r}
+table(E(firm_graph)$weight)
+```
+
+```{r}
+#| include: false
+w_normal <- max(E(firm_graph)$weight[E(firm_graph)$weight < 15])
+w_cartel <- range(E(firm_graph)$weight[E(firm_graph)$weight >= 15])
+```
+
+Most pairs of firms have met in only one or two tenders, and no ordinary pair has met in more than `r w_normal`. But a few pairs have met `r w_cartel[1]` to `r w_cartel[2]` times. That is a clear break. Let us keep only the edges with 10 or more joint bids, and see which firms remain.
+
+```{r}
+frequent <- delete_edges(firm_graph, E(firm_graph)[weight < 10])
+frequent <- delete_vertices(frequent, V(frequent)[degree(frequent) == 0])
+V(frequent)$name
+```
+
+These are exactly the five firms of our planted cartel. Without choosing any threshold, community detection with the Louvain method reaches the same answer.
+
+```{r}
+set.seed(1)
+firm_comm <- cluster_louvain(firm_graph)
+sizes(firm_comm)
+firm_comm[[which.min(sizes(firm_comm))]]
+```
+
+The smallest community found is again the cartel. @fig-cartel shows the network of firms, coloured by community, with thicker edges for more joint bids. With 40 firms there are `r ecount(firm_graph)` edges, and drawing all of them gives an unreadable hairball. So we draw only the pairs which bid together 4 or more times.
+
+```{r}
+#| label: fig-cartel
+#| fig-cap: "Firms coloured by community. Only pairs with 4 or more joint bids are drawn, and edge width is the number of joint bids."
+cartel_vis <- toVisNetworkData(firm_graph)
+cartel_vis$nodes$group <- paste("Community", membership(firm_comm))
+cartel_vis$edges <- cartel_vis$edges |>
+  filter(weight >= 4) |>
+  mutate(value = weight, title = paste("Joint bids:", weight))
+
+visNetwork(cartel_vis$nodes, cartel_vis$edges, width = "100%", height = "500px") |>
+  visIgraphLayout(layout = "layout_with_fr", randomSeed = 7) |>
+  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) |>
+  visLegend()
+```
+
+::: callout-warning
+## Caution
+
+Firms may bid together often for genuine reasons. There may be only a few qualified firms for specialised work in a district. Joint bidding is a lead. Look for further signs, like one firm winning in turn (bid rotation), losing bids that are always slightly higher than the winning bid, bids submitted from the same computer or IP address, a common address, partner, or bank account between the firms, or the same mistakes in their bid documents.
+:::
 
 ## Use case-3: Finding circular transactions
 
-*The Content is Under Development.*
+In *circular trading*, a group of firms issue invoices to each other in a circle. A sells to B, B to C, C to D, and D back to A, often for nearly the same amount, within a few days. No real goods move. The purpose may be to show a false turnover to get bank loans, or to pass on input tax credit under GST fraudulently. In a network of invoices, where each firm is a vertex and each invoice a directed edge from seller to buyer, such trading shows up as a **cycle**.
 
+Let us create a year's invoices among the firms of a district, 15 manufacturers, 40 wholesalers and 150 retailers. Genuine goods flow one way, from manufacturers to wholesalers to retailers, so genuine trade has no cycles. We have planted two rings of circular trading. One ring of 4 firms went round twice, in September and November. Another ring of 3 retailers went round once, in January.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the invoices"
+set.seed(99)
+mk <- sprintf("M%02d", 1:15)    # manufacturers
+ws <- sprintf("W%02d", 1:40)    # wholesalers
+rt <- sprintf("R%03d", 1:150)   # retailers
+
+invoices <- bind_rows(
+  tibble(seller = sample(mk, 400, TRUE), buyer = sample(ws, 400, TRUE)),
+  tibble(seller = sample(ws, 900, TRUE), buyer = sample(rt, 900, TRUE))
+) |>
+  mutate(date   = as.Date("2023-04-01") + sample(0:364, n(), TRUE),
+         amount = round(rlnorm(n(), log(2e5), 0.8)))
+
+# Planted circular trading. Each invoice a little higher than the last, two days apart
+circle <- function(firms, start, amount) {
+  k <- length(firms) - 1
+  tibble(seller = head(firms, -1), buyer = firms[-1],
+         date   = start + (0:(k - 1)) * 2,
+         amount = round(amount * (1 + cumsum(runif(k, 0, 0.01)))))
+}
+ring1 <- c("W07", "R015", "R088", "W23", "W07")
+ring2 <- c("R040", "R121", "R063", "R040")
+
+invoices <- bind_rows(invoices,
+                      circle(ring1, as.Date("2023-09-11"), 4850000),
+                      circle(ring1, as.Date("2023-11-20"), 5200000),
+                      circle(ring2, as.Date("2024-01-08"), 2975000)) |>
+  mutate(invoice_no = sprintf("INV%05d", row_number())) |>
+  relocate(invoice_no)
+```
+
+```{r}
+head(invoices)
+```
+
+Let us create a directed graph. The invoice number, date and amount become edge attributes.
+
+```{r}
+inv_graph <- graph_from_data_frame(select(invoices, seller, buyer, everything()),
+                                   directed = TRUE)
+inv_graph
+```
+
+**Strongly connected components.** In a directed graph, a *strongly connected component* is a group of vertices in which each vertex can reach every other *following the arrows*. A vertex which is not part of any cycle forms a component on its own. So components of more than one vertex contain cycles.
+
+```{r}
+scc <- components(inv_graph, mode = "strong")
+table(scc$csize)
+```
+
+All firms are on their own, except one group of 4 and one group of 3. These are our two rings.
+
+**Pruning sources and sinks.** There is another way to reach the same answer, which also makes big graphs much smaller. A firm which only sells and never buys (a *source*, with in-degree 0) cannot be part of a cycle. Neither can a firm which only buys and never sells (a *sink*, with out-degree 0). So we can delete them. But deleting them may turn other firms into sources or sinks, so we repeat until nothing more can be deleted. This is the directed version of dropping leaf nodes.
+
+```{r}
+pruned <- inv_graph
+repeat {
+  drop <- V(pruned)[degree(pruned, mode = "in") == 0 | degree(pruned, mode = "out") == 0]
+  if (length(drop) == 0) break
+  pruned <- delete_vertices(pruned, drop)
+}
+pruned
+```
+
+Out of the `r vcount(inv_graph)` firms which traded during the year, only `r vcount(pruned)` remain. Every one of them is part of a cycle.
+
+**Listing the cycles.** Now `simple_cycles()` lists each cycle. Since the first ring went round twice, there are two invoices for each of its links. So we first combine repeated edges into one with `simplify()`, to list each ring only once.
+
+```{r}
+rings <- simple_cycles(simplify(pruned))
+lapply(rings$vertices, names)
+```
+
+Let us pull out the invoices of these rings, and look at their dates and amounts. Note that we keep only the invoices where the seller and the buyer belong to the *same* ring. The two rings may also have genuine dealings with each other, which are not part of any cycle.
+
+```{r}
+ring_firms <- names(scc$membership)[scc$membership %in% which(scc$csize > 1)]
+
+# Invoices where the seller and buyer are in the same ring
+ring_invoices <- invoices |>
+  filter(seller %in% ring_firms, buyer %in% ring_firms) |>
+  filter(scc$membership[seller] == scc$membership[buyer]) |>
+  arrange(date)
+ring_invoices
+```
+
+The pattern is unmistakable. The same amount, a little higher each time, goes round the ring within a week. Together these `r nrow(ring_invoices)` invoices are worth ₹`r format(round(sum(ring_invoices$amount) / 1e7, 1), nsmall = 1)` crore, without any goods moving. @fig-circular shows the rings.
+
+```{r}
+#| label: fig-circular
+#| fig-cap: "Circular trading. Each arrow shows the total invoiced from a seller to a buyer, with the number of invoices in brackets. Hover for details."
+# One edge per seller and buyer, with all its invoices in the tooltip
+circ_edges <- ring_invoices |>
+  group_by(from = seller, to = buyer) |>
+  summarise(label = paste0("₹", round(sum(amount) / 1e5), " lakh (", n(), ")"),
+            title = paste0(invoice_no, " (", date, "): ₹ ",
+                           format(amount, big.mark = ","), collapse = "<br>"),
+            .groups = "drop")
+circ_nodes <- tibble(id = ring_firms, label = ring_firms)
+
+visNetwork(circ_nodes, circ_edges, width = "100%", height = "450px") |>
+  visIgraphLayout(layout = "layout_with_kk") |>
+  visEdges(arrows = "to", smooth = list(enabled = TRUE, type = "curvedCW", roundness = 0.15),
+           font = list(size = 11, align = "middle")) |>
+  visNodes(color = "orange") |>
+  visOptions(highlightNearest = TRUE)
+```
+
+::: callout-warning
+## Caution
+
+Not every cycle is a fraud. Goods may be returned, or two firms may genuinely buy different goods from each other. Look at the amounts, the dates, the goods described, and whether there is any proof of movement of goods, like e-way bills or transport receipts. Circular trading usually shows nearly equal amounts going round quickly, often between firms with few other transactions.
+:::
+
+## Use case-4: Links between employees and vendors
+
+A vendor which is secretly owned or controlled by an employee of the organisation is a classic conflict of interest. The employee may push its bills, approve inflated rates, or pass on inside information. Such a link usually leaves traces in the data. The employee and the vendor may share a bank account, a mobile number or an address. Sometimes the link is indirect, through a relative or a third firm.
+
+This is the same problem as use case 1, but across *two* masters. Let us create an employee master of 150 employees and a vendor master of 80 vendors, each with a bank account, a mobile number and an address. We have planted three links.
+
+- Vendor `V023` has the same bank account as employee `E107`.
+- Vendor `V051` has the same address as employee `E033`.
+- Vendor `V064` shares a mobile number with vendor `V012`, whose address is the same as that of employee `E088`. This is an indirect link, two steps away.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the employee and vendor masters"
+set.seed(31)
+emp <- tibble(
+  emp_id  = sprintf("E%03d", 1:150),
+  bank_ac = rand_acct(150),
+  mobile  = rand_mobile(150),
+  address = paste("H.No.", sample(1:999, 150),
+                  sample(c("Sector 4", "Civil Lines", "Model Town", "Gandhi Nagar",
+                           "Shastri Nagar"), 150, TRUE))
+)
+ven <- tibble(
+  vendor_id = sprintf("V%03d", 1:80),
+  bank_ac   = rand_acct(80),
+  mobile    = rand_mobile(80),
+  address   = paste("Shop", sample(1:300, 80),
+                    sample(c("Main Bazar", "Industrial Area", "Station Road"), 80, TRUE))
+)
+
+# Planted links
+ven$bank_ac[23] <- emp$bank_ac[107]
+ven$address[51] <- emp$address[33]
+ven$mobile[64]  <- ven$mobile[12]
+ven$address[12] <- emp$address[88]
+```
+
+We stack both masters together, pivot them longer, prefix the IDs, and keep only the shared IDs, exactly as in use case 1. In real data, addresses must first be cleaned and standardised, as discussed in @sec-dup.
+
+```{r}
+ev_long <- bind_rows(
+  emp |> rename(entity = emp_id),
+  ven |> rename(entity = vendor_id)
+) |>
+  pivot_longer(-entity, names_to = "id_type", values_to = "value") |>
+  mutate(id_node = paste(id_type, value, sep = ":")) |>
+  add_count(id_node) |>
+  filter(n > 1)
+
+ev_graph <- graph_from_data_frame(select(ev_long, entity, id_node), directed = FALSE)
+```
+
+Now we find the components which contain *both* an employee and a vendor.
+
+```{r}
+components(ev_graph)$membership |>
+  stack() |>
+  set_names(c("group", "node")) |>
+  filter(str_detect(node, "^[EV]\\d")) |>
+  group_by(group) |>
+  filter(any(str_starts(node, "E")), any(str_starts(node, "V"))) |>
+  summarise(entities = paste(sort(as.character(node)), collapse = ", "))
+```
+
+All three planted links are found, including the indirect one. To explain *how* a vendor is linked to an employee, we use `shortest_paths()`.
+
+```{r}
+shortest_paths(ev_graph, from = "V064", to = "E088")$vpath[[1]]
+```
+
+The path reads like the finding itself. Vendor V064 has the same mobile number as vendor V012, which has the same address as employee E088. @fig-empven shows the links.
+
+```{r}
+#| label: fig-empven
+#| fig-cap: "Employees (red) linked with vendors (blue) through shared details"
+ev_vis <- toVisNetworkData(ev_graph)
+ev_vis$nodes <- ev_vis$nodes |>
+  mutate(group = case_when(str_starts(id, "E") ~ "Employee",
+                           str_starts(id, "V") ~ "Vendor",
+                           TRUE ~ "Shared detail"),
+         label = if_else(group == "Shared detail", "", id),
+         title = id)
+
+visNetwork(ev_vis$nodes, ev_vis$edges, width = "100%", height = "400px") |>
+  visGroups(groupname = "Employee", color = "tomato", shape = "dot") |>
+  visGroups(groupname = "Vendor", color = "steelblue", shape = "dot") |>
+  visGroups(groupname = "Shared detail", color = "grey", shape = "square", size = 10) |>
+  visOptions(highlightNearest = TRUE) |>
+  visLegend()
+```
+
+::: callout-tip
+## Audit tip
+
+Extend the employee master with the details of close relatives, where these are available from declarations, nominations or pension papers. Many conflicts of interest run through a spouse, a son or a brother-in-law, not through the employee directly.
+:::
+
+## Tips for working with big networks
+
+Real audit data has lakhs of records. A network built carelessly from such data can be too big to analyse, or full of false links. Here are some tips which help.
+
+**1. Drop the leaf nodes.** Most IDs belong to only one record. In the graph, these are leaves, vertices with only one edge, and they can never link two records. Dropping them shrinks the graph enormously without changing the answer. We can drop them either *before* building the graph, or *after*.
+
+```{r}
+#| eval: false
+# Before building the graph, with dplyr
+edges_shared <- edges_long |>
+  add_count(id_node) |>
+  filter(n > 1)
+
+# After building the graph, with igraph.
+# Delete ID vertices with one edge, then records left with no edge
+g <- delete_vertices(g, V(g)[degree(g) == 1 & str_detect(name, ":")])
+g <- delete_vertices(g, V(g)[degree(g) == 0])
+```
+
+In a directed graph where we look for cycles, we drop sources and sinks repeatedly, as we did in use case 3. For an undirected graph where we look for tightly knit groups, the same idea is the *k-core*. The 2-core is what remains after repeatedly removing all vertices with fewer than 2 edges. `coreness()` gives the core number of each vertex, so `induced_subgraph(g, V(g)[coreness(g) >= 2])` keeps the 2-core.
+
+**2. Prefix every ID with its type.** Write `mobile:9876543210`, not `9876543210`. Otherwise two different kinds of ID which happen to have the same value become one vertex, and create false links.
+
+**3. Look at the most connected IDs first, and remove junk values.** Placeholder values like `9999999999`, `0000000000`, `NA`, `test@gmail.com`, `XXXXX0000X`, or the address of the office itself, link hundreds of unrelated records into one giant group. Always run `count(id_node, sort = TRUE)` before building the graph. Remove the junk values, and keep the genuine hubs aside for separate examination.
+
+**4. Clean before you connect.** `9876543210`, `+91 98765 43210` and `09876543210` are the same mobile number. Standardise IDs, as discussed in @sec-dup, before building the graph. Otherwise real links are missed.
+
+**5. Work with components, not with the whole graph.** Use `components()` to split the graph, and then study the components of interest one at a time with `induced_subgraph()`. Sort them by size. Groups of 2 are usually families or genuine. Very large groups usually mean a junk value is still present.
+
+**6. Beware of bipartite projection with hubs.** When we project a bipartite graph, an ID shared by $d$ records creates $d(d-1)/2$ edges. One junk value shared by 10,000 records would create about five crore edges. Remove junk values and big hubs before projecting.
+
+**7. Draw only what matters, and draw it fast.** Plot a component or an ego network, not the whole graph. For `visNetwork`, use `visIgraphLayout()`, so that the layout is calculated once in R and the browser does not have to run its slow physics simulation. Keep labels short, and put details in the `title` (tooltip).
+
+**8. Keep the record keys and amounts.** Keep the original record IDs, invoice numbers, amounts and dates as attributes of vertices and edges. Every finding has to be traced back to the documents, and quantified in rupees.
+
+::: callout-tip
+## Share the network
+
+`visSave(network, file = "ring.html")` saves an interactive network as a single HTML file. It can be emailed to the audit team or attached to the working papers, and opened in any browser without R.
+:::
+
+## A suggested workflow
+
+1. **Decide the vertices and edges.** What are the entities (persons, firms, accounts), and what links them (shared IDs, bids, invoices)? Is the graph directed?
+2. **Prepare the data.** Clean and standardise the IDs, prefix them with their type, and pivot to one row per link.
+3. **Look at the most connected IDs.** Remove junk values. Note the genuine hubs.
+4. **Reduce the graph.** Drop leaves, sources and sinks, or take the k-core, depending on the question.
+5. **Find the structure.** Components for related entities, communities for groups, cycles for circular flows, shortest paths to explain a link, centrality for key players.
+6. **Visualise** the parts of interest with `visNetwork`, and share them.
+7. **Go back to the records.** Verify every lead with documents, and quantify it.
+
+::: callout-important
+## Remember
+
+A link in a network shows that two records share something. It does not show *why*. Family members share mobiles, neighbours share addresses, and specialised firms meet in the same tenders. A network gives *leads*, not *findings*. Every lead must be verified with documents, and where needed, in the field.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `pivot_longer()` | tidyr | Turns ID columns into one row per record and ID |
+| `add_count()` | dplyr | Counts records per ID, used to drop leaf IDs |
+| `graph_from_data_frame()` | igraph | Builds a graph from a data frame of links |
+| `components()` | igraph | Connected components (`mode = "strong"` for directed cycles) |
+| `bipartite_projection()` | igraph | Turns a bipartite graph into a graph of one type of vertex |
+| `cluster_louvain()` | igraph | Finds communities, like cartels |
+| `degree()`, `delete_vertices()` | igraph | Find and drop leaves, sources and sinks |
+| `coreness()` | igraph | Core number of each vertex, to take the k-core |
+| `simple_cycles()`, `simplify()` | igraph | Lists the cycles of a graph, after merging repeated edges |
+| `shortest_paths()` | igraph | Shows how two entities are linked |
+| `toVisNetworkData()` | visNetwork | Converts an igraph object into nodes and edges data frames |
+| `visNetwork()`, `visGroups()`, `visOptions()`, `visLegend()` | visNetwork | Interactive network plots |
+| `visIgraphLayout()`, `visSave()` | visNetwork | Fast layout for big networks, and saving as HTML |
+
+: Functions used in this chapter {#tbl-netauditfunctions}
