@@ -3,16 +3,23 @@
 source("_common.R")
 ```
 
-# Data Cleaning in R
-Data cleansing is one of the important steps in data analysis. Multiple packages are available in r to clean the data sets.  One of such packages is `janitor` which we will be using in this chapter along with few other packages.  
+# Data Cleaning in R {#sec-clean}
 
-Let's load it
+Data cleaning is one of the most important steps in data analysis, and often the longest. Data received from offices is rarely ready for analysis. Column names have spaces and symbols, there are blank rows and title rows, amounts are written with commas and "/-", dates are in different formats, and missing values are written as "-", "N/A" or "Nil". Several packages in R help with this. In this chapter we will use `janitor`, along with `readr`, `stringr` and `lubridate`, and end with a complete example of cleaning a messy file received from an office.
+
+**Prerequisites**
+
 ```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
 library(janitor)
 ```
 
-## Cleaning Column names.
-We know that names of objects in R follow certain conventions like we may not have certain special characters in names.  If a space has been used that is to be quoted under a pair of backticks \`.  But generally when we read data from files in excel, we can have some 'dirty' names, which we should clean before proceeding.  In such `clean_names()` come handy.  E.g.
+## Cleaning Column names
+
+Names of objects in R follow certain rules. For example, a name with a space or a special character must be wrapped in backticks \`. Files from Excel often have such "dirty" column names, which we should clean before going further. The function `clean_names()` does this. E.g.
+
 ```{r}
 # Create a data.frame with dirty names
 test_df <- as.data.frame(matrix(ncol = 6))
@@ -23,54 +30,77 @@ names(test_df) <- c("firstName", "ábc@!*", "% successful (2009)",
 test_df
 ```
 
-Using `clean_names()` which is also pipe friendly, we can clean names in one step.  (Results will be in snake case)
+Using `clean_names()`, which works well in a pipe, we can clean all the names in one step. The results are in *snake case*, with lower case words joined by underscores.
+
 ```{r}
-test_df %>% 
+test_df |>
   clean_names()
 ```
 
-It -
+`clean_names()`
 
-+ Parses letter cases and separators to a consistent format.
-+ Default is to `snake_case`, but other cases like `camelCase` are available
++ Brings letter case and separators to one consistent format.
++ Uses `snake_case` by default, but other cases like `camelCase` are available.
 + Handles special characters and spaces, including transliterating characters like `œ` to `oe`.
-+ Appends numbers to duplicated names
-+ Converts `“%”` to “percent” and `“#”` to `“number”` to retain meaning
-+ Spacing (or lack thereof) around numbers is preserved
++ Adds numbers to duplicated names.
++ Converts `"%"` to "percent" and `"#"` to "number", to keep their meaning.
++ Gives a name to a blank column, like `x`.
 
 ## Handling duplicate records
-In `janitor` package, we have a ready to use function `get_dupes()`. It allows us to find “similar” observations in a data set based on certain characteristics.  Syntax is pretty simple, and function is pipe friendly too.  Suppose we have to find out duplicate in `mtcars` dataset on each combination of `wt` and `cyl`.  
+
+`janitor` has a ready function, `get_dupes()`, which finds records that are duplicates on the columns we name. It also works well in a pipe. Suppose we want to find duplicates in the `mtcars` data on each combination of `wt` and `cyl`.
+
 ```{r}
-mtcars %>% 
+mtcars |>
   get_dupes(wt, cyl)
 ```
-We can see that it returns all duplicate records with an additional column `dupe_count` so that these duplicates can be analysed separately.
 
-## Remove Constant (Redundant) columns
-Dropping columns from a `data.frame` that contain only a single constant value throughout is again easy through `janitor::remove_constant()`.
+It returns all copies of the duplicate records, with an extra column `dupe_count`, so that they can be examined together. Duplicate detection is covered in detail in @sec-dup.
 
 ## Remove empty rows and/or columns
-While importing messy data from excel files, we may get some empty rows and/or columns.  Sorting out this issue, is easy using `janitor::remove_empty()`.
+
+Files exported from Excel often have empty rows, used as spacers, and empty columns. `remove_empty()` removes rows and/or columns which are entirely empty.
+
+```{r}
+with_blanks <- tibble(a = c(1, NA, 3), b = c(NA, NA, NA), c = c("x", NA, "z"))
+with_blanks
+
+with_blanks |> remove_empty(c("rows", "cols"))
+```
+
+## Remove Constant (Redundant) columns
+
+`remove_constant()` drops columns which have the same value in every row. Such columns, like a column holding the name of the office in every row, carry no information for analysis.
+
+```{r}
+tibble(voucher = 1:3, office = "Amarpur", amount = c(500, 800, 1200)) |>
+  remove_constant()
+```
 
 ## Fix excel dates stored as serial numbers
-While loading excel files in R, we may have sometimes noticed `41590` instead of having a `date format`.  Sorting out this issue is again easy in `janitor` as we have a function `excel_numeric_to_date()` for this. Example
+
+When an Excel file is read into R, a date sometimes appears as a number like `41590` instead. Excel stores dates as the number of days since its starting date, and the format is sometimes lost. `excel_numeric_to_date()` converts such numbers to dates. Example
+
 ```{r}
-janitor::excel_numeric_to_date(41590)
+excel_numeric_to_date(41590)
 ```
 
 ## Convert a mix of date and datetime formats to date
-Similar to above, we can also sort out, if we have a column mix of different date formats, using `janitor::convert_to_date()` or `janitor::convert_to_datetime()`.  See Examples-
+
+Similarly, a column with a mix of Excel serial numbers and dates can be converted with `convert_to_date()` or `convert_to_datetime()`. See this example.
+
 ```{r}
 unsorted_dates <- c('2018-05-31', '41590', 41590)
-janitor::convert_to_date(unsorted_dates)
+convert_to_date(unsorted_dates)
 ```
-**Note in above example, we have created a heterogeneous vector, but implicit coercion rules of R have converted all forms to character only.**
 
-In real world examples, where data is entered through multiple machines/data points simultaneously, we may a column mix of date formats.  In that case, we may use `parse_date_time()` function in `lubridate` package.  To allow different formats we have use `order` agument in this function.  Example
+**Note that the vector above mixes text and a number, but R's coercion rules have already turned all of them into text.**
+
+When data is entered on many computers, or comes from many offices, a date column may mix several formats. The function `parse_date_time()` from `lubridate` can read such a column. The argument `orders` lists the possible orders of day, month and year, and the function tries each of them.
 
 ```{r}
-mixed_dates <- c("13-11-1991", "13-Sep-22", 
-                 "20 August 2000", "15 August 87", 
+mixed_dates <- c("13-11-1991", "13-Sep-22",
+                 "20 August 2000", "15 August 87",
                  "03/31/23", "12-31-2022")
 
 lubridate::parse_date_time(mixed_dates,
@@ -78,4 +108,119 @@ lubridate::parse_date_time(mixed_dates,
                            locale = "eng")
 ```
 
+::: callout-warning
+## Caution, ambiguous dates
 
+A date like `03/04/2023` can be the 3rd of April (Indian style, day first) or the 4th of March (American style, month first). No function can tell which was meant. If both orders are allowed, `parse_date_time()` simply takes whichever of them it tries first. Before converting, find out how each source writes dates, and, where possible, check a few dates in the converted data against the documents. A day of 13 or more is never a month, which helps to identify the style of a source.
+:::
+
+## Missing values written in many ways
+
+Missing values are written in many ways, like an empty cell, `NA`, `-`, `N/A`, `Nil` or `0`. R treats only a true `NA` as missing. The others are text, or worse, a real zero. Two tools help.
+
+- While reading a file, the argument `na` of `read_csv()` lists the values to be read as missing, like `na = c("", "NA", "-", "N/A", "Nil")`.
+- After reading, `na_if()` from `dplyr` turns a given value into `NA`, like `mutate(remarks = na_if(remarks, "Nil"))`.
+
+```{r}
+tibble(status = c("Paid", "-", "Nil", "Paid")) |>
+  mutate(status = na_if(status, "-"),
+         status = na_if(status, "Nil"))
+```
+
+Be careful with zero. A zero in an amount column may be a real zero, or a missing value entered as zero. Find out which, from the source, before treating zeros as missing.
+
+## Audit use case, cleaning a file received from an office {#sec-clean-audit}
+
+Let us put everything together. An office has sent its statement of payments for April 2024, prepared in a spreadsheet and saved as csv. Here is how it looks, line by line.
+
+```{r}
+messy <- 'Office of the Executive Engineer, PWD Division Amarpur
+Statement of payments for April 2024
+
+S.No.,Voucher No.,Name of Vendor,Amount (Rs.),Date of Payment,Remarks,Remarks
+1,PV/24/001, Sharma Traders ,"1,25,000/-",01/04/2024,,
+2,PV/24/002,GUPTA & SONS,"45,600",02-04-2024,,
+,,,,,,
+3,PV/24/003,Kaveri Infra,N/A,05 Apr 2024,Cancelled,
+4,PV/24/004,sharma traders,"98,000/-",2024-04-08,,
+5,PV/24/005,Om Sai Suppliers,-,10/04/2024,,
+Total,,,,,,'
+
+writeLines(messy, "april_payments.csv")
+```
+
+It has every problem we have discussed. Two title lines and a blank line above the column names, column names with spaces and symbols, two columns with the same name, a blank row, a total row at the bottom, vendor names in different cases and with extra spaces, amounts with commas and "/-", missing amounts as "N/A" and "-", and dates in four formats.
+
+**Step 1, read everything as text, skipping the title lines.** Reading as text ensures that nothing is lost or wrongly converted at this stage.
+
+```{r}
+raw <- read_csv("april_payments.csv", skip = 3,
+                col_types = cols(.default = col_character()))
+raw
+```
+
+`read_csv()` has renamed the two `Remarks` columns to keep them apart, and told us so.
+
+**Step 2, clean the structure.** Clean the names, remove empty rows and columns, and drop the total row.
+
+```{r}
+step2 <- raw |>
+  clean_names() |>
+  remove_empty(c("rows", "cols")) |>
+  filter_out(s_no == "Total")
+step2
+```
+
+Notice that we used `filter_out()`, which we learnt in @sec-DPLYRR. It drops only the rows which are certainly the total row.
+
+**Step 3, clean the values.**
+
+```{r}
+payments <- step2 |>
+  mutate(vendor = str_squish(str_to_upper(name_of_vendor)),
+         amount = parse_number(amount_rs, na = c("-", "N/A")),
+         date   = as.Date(parse_date_time(date_of_payment,
+                                          orders = c("dmy", "ymd", "d b Y")))) |>
+  select(voucher_no, vendor, amount, date, remarks = remarks_6)
+payments
+```
+
+All dates are now real dates, all amounts real numbers, and the two forms of *Sharma Traders* have become the same.
+
+**Step 4, record what was found.** The cleaning itself has revealed facts which belong in the working papers.
+
+```{r}
+payments |>
+  summarise(payments          = n(),
+            amount_missing    = sum(is.na(amount)),
+            total_amount      = sum(amount, na.rm = TRUE),
+            cancelled         = sum(remarks %in% "Cancelled"))
+```
+
+```{r}
+#| include: false
+file.remove("april_payments.csv")
+```
+
+The statement has 5 payments. The amount of 2 of them is not given, one of which is marked cancelled, but the other is not. That payment, voucher PV/24/005, needs an explanation. And the statement's own total row was empty, so the total of ₹`r round(sum(payments$amount, na.rm = TRUE) / 1e5, 2)` lakh must be reconciled with the cash book.
+
+::: callout-tip
+## Audit tip
+
+Never clean the original file. Keep it unchanged, and do all cleaning in code, as we did here. The code is then a complete record of every change made to the data, which another auditor can read and repeat. Record in the working papers the problems found while cleaning, like missing amounts and inconsistent names. They are often findings in themselves, about the quality of the auditee's records.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `clean_names()` | janitor | Makes column names consistent and easy to use |
+| `get_dupes()` | janitor | Shows all copies of duplicate records |
+| `remove_empty()`, `remove_constant()` | janitor | Drop empty rows and columns, and constant columns |
+| `excel_numeric_to_date()`, `convert_to_date()` | janitor | Convert Excel serial numbers to dates |
+| `parse_date_time()` | lubridate | Read dates written in several formats |
+| `na_if()` | dplyr | Turn a placeholder value into `NA` |
+| `parse_number()` | readr | Numbers from text, ignoring commas and symbols |
+| `str_squish()`, `str_to_upper()` | stringr | Standardise text, like vendor names |
+
+: Functions used in this chapter {#tbl-cleanfunctions}

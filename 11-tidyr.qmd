@@ -3,19 +3,19 @@
 source("_common.R")
 ```
 
-# Data Wrangling in `tidyr`
+# Data Wrangling in `tidyr` {#sec-tidyr}
 
-In this chapter we will learn about reshaping data to the format most suitable for our data analysis work.  To reshape the data, we will use `tidyr` package [@R-tidyr] which is part of core `tidyverse` and can be loaded either by calling `library(tidyr)` or `library(tidyverse)`. 
+In this chapter we will learn to reshape data into the form most suitable for analysis. This matters a great deal in audit, because data received from offices is usually laid out for *reading*, not for analysis. A monthly statement with one column for each month, a register with "-do-" in place of repeated entries, or several values crammed into one cell.  To reshape the data, we will use `tidyr` package [@R-tidyr] which is part of core `tidyverse` and can be loaded either by calling `library(tidyr)` or `library(tidyverse)`.
 
 **Prerequisites**
 
-```{r message=FALSE}
+```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 ```
 
 ## Concepts of tidy data
 
-[Hadley Wickham](https://hadley.nz/), the chief scientist behind development of RStudio, tidyverse, and much more, introduced the concept of tidy data in a paper^[[https://www.jstatsoft.org/article/view/v059i10](https://www.jstatsoft.org/article/view/v059i10)] published in the Journal of Statistical Software [@JSSv059i10].  Tidy data is a framework to structure data sets so they can be easily analyzed and visualized. It can be thought of as a goal one should aim for when cleaning data. Once we understand what tidy data is, that knowledge will make our data analysis, visualization, and collection much easier. [@JSSv021i12] 
+[Hadley Wickham](https://hadley.nz/), the chief scientist behind development of RStudio, tidyverse, and much more, introduced the concept of tidy data in a paper^[[https://www.jstatsoft.org/article/view/v059i10](https://www.jstatsoft.org/article/view/v059i10)] published in the Journal of Statistical Software [@JSSv059i10].  Tidy data is a framework to structure data sets so they can be easily analyzed and visualized. It can be thought of as a goal one should aim for when cleaning data. Once we understand what tidy data is, that knowledge will make our data analysis, visualization, and collection much easier. [@JSSv021i12]
 
 A tidy data-set has the following properties:
 
@@ -50,10 +50,10 @@ tidyr::table5
 Let us discuss these example one by one -
 
 - `table1` fulfills all three rules stated above and is thus, in tidy format.  Notice that every observation has its own row, and each variable is stored in a separate column.
-- `table2` stores one observation in two columns (separately for cases and population) and is thus not tidy.
-- `table3` stores two variables in one column (cases and population together) and is thus not tidy.
-- `table4a` and `table4b` clearly stores one observation in two different tables and is thus not tidy.  We may further notice that both these tables use values as column headers, which also violate rule no.3 stated above.
-- `table5` again stores one variable i.e. year in two separate columns, and thus does not follow rule no.2 stated above.
+- `table2` spreads one observation over two *rows*, one for cases and one for population, with the column `type` telling which is which. So it breaks rule 2, and is not tidy.
+- `table3` stores two variables, cases and population, together in one column `rate`. So it breaks rule 1.
+- `table4a` and `table4b` store the data of one observation in two different tables, breaking rule 3. Moreover, both use *values* of the variable year, `1999` and `2000`, as column headers, so the variable year is spread over two columns, breaking rule 1 too.
+- `table5` splits the single variable year into two columns, `century` and `year`, breaking rule 1. Like `table3`, it also crams cases and population into one column.
 
 ##### Reshaping data {-}
 
@@ -64,7 +64,7 @@ In real world problems we will mostly come across data-sets that are not in tidy
 
 To perform this _tidying_ exercise, we will need two most important functions from `tidyr` i.e. `pivot_longer` and `pivot_wider`.  So let us understand the functioning of these.
 
-## LONGER format through function `pivot_longer()` 
+## LONGER format through function `pivot_longer()`
 
 Often we will come across data sets that will have values (instead of actual variable name) as column headers.  Let us take the example of `table4a` or `table4b` shown above.  Both these tables have values of variable `year` as column names.  So we need to re-structure these tables into a longer format where these values form part of columns instead of column names.  We will use `pivot_longer()` function for this.  Th basic syntax is-
 ```
@@ -92,16 +92,26 @@ if (knitr:::is_latex_output()) {
 }
 ```
 
-Basic functionality can be understood using the following example-
+Basic functionality can be understood using the following example.
+
 ```{r}
-iris_summary <- iris %>% 
-  group_by(Species) %>% 
+iris_summary <- iris |>
   summarise(mean = mean(Sepal.Width),
-            st_dev = sd(Sepal.Width))
+            st_dev = sd(Sepal.Width),
+            .by = Species)
 iris_summary
 ```
 
-Using `pivot_wider` we can convert column headers into values.  Check the diagram in @fig-plong.
+The names of the two statistics, `mean` and `st_dev`, are column headers here. With `pivot_longer()`, we turn these headers into values of a new column `statistic`.
+
+```{r}
+iris_summary |>
+  pivot_longer(cols = c(mean, st_dev),
+               names_to = "statistic",
+               values_to = "value")
+```
+
+Check the diagram in @fig-plong.
 
 ```{r fig-plong, echo=FALSE, fig.cap="Diagrammatic representation of pivot\\_longer", fig.show='hold', fig.align='center', out.width="99%"}
 knitr::include_graphics("images/pivot_longer.png")
@@ -113,14 +123,14 @@ Now we are ready to convert `table4a` into a tidier format.
 
 ```{r}
 pivot_longer(
-  table4a, 
-  cols = c('1999', '2000'), 
-  names_to = 'year', 
+  table4a,
+  cols = c('1999', '2000'),
+  names_to = 'year',
   values_to = 'cases')
 ```
 With _pipes_  and a little tweaking, the above syntax could have been written as-
 ```{r, eval=FALSE}
-tidyr::table4a %>%                         # first argument passed through pipe 
+tidyr::table4a |>                         # first argument passed through pipe
   pivot_longer(cols = -country,     # all columns except country
                names_to = "year",
                values_to = "cases")
@@ -128,18 +138,18 @@ tidyr::table4a %>%                         # first argument passed through pipe
 
 ### Case-II when both variables and variable names are combined together as column names {-}
 
-We have seen a simple case to tidy the table when the values (e.g. years) were depicted as column names instead of variables i.e. actual data.  There may be cases when column names are a combination of both.  
+We have seen a simple case to tidy the table when the values (e.g. years) were depicted as column names instead of variables i.e. actual data.  There may be cases when column names are a combination of both.
 
 Example - Say we have a table `table6` as
 ```{r, echo=FALSE}
-(table6 <- left_join(table4a %>% set_names(c('country', 'cases_1999', 'cases_2000')),
-          table4b %>% set_names(c('country', 'pop_1999', 'pop_2000')),
+(table6 <- left_join(table4a |> set_names(c('country', 'cases_1999', 'cases_2000')),
+          table4b |> set_names(c('country', 'pop_1999', 'pop_2000')),
           by="country"))
 ```
 
 We may use `names_sep` argument in this case, which will separate the combined variables from the column names -
 ```{r}
-table6 %>% 
+table6 |>
   pivot_longer(cols = !country,
                names_sep = "_",
                names_to = c("count_type", "year"),
@@ -163,15 +173,15 @@ if (knitr:::is_latex_output()) {
 Example-
 
 ```{r}
-table6 %>% 
+table6 |>
   pivot_longer(cols = !country,
                names_sep = "_",
                names_to = c(".value", "year"),
                values_to = "count")
 ```
-> Note that by using `.value` the argument `values_to` becomes meaning less.
+> Note that with `.value`, the argument `values_to` is not needed, since the names of the value columns come from the headers themselves.
 
-## WIDER format through `pivot_wider()` 
+## WIDER format through `pivot_wider()`
 
 As the name suggests, `pivot_wider()` does exactly opposite to what a `pivot_longer` does. Additionally, this function is used to create summary reports, as pivot functionality in MS Excel, through `values_fn` argument.  Diagrammatically this can be represented as in @fig-pwide. The basic syntax (with commonly used arguments) is-
 
@@ -189,12 +199,12 @@ pivot_wider(
 where-
 
 - `id_cols` is a vector of columns that uniquely identifies each observation
-- `names_from` is a vector of columns to get the name of the output column 
+- `names_from` is a vector of columns to get the name of the output column
 - `values_from` similarly provides columns to get the cell values from
 - `values_fill` provides what each value should be filled in with when missing
 - `values_fn` is a named list - to apply different aggregations to different `values_from` columns
 
-> Also note that there are many other arguments for this function, which may be used to deal with complicated tables. 
+> Also note that there are many other arguments for this function, which may be used to deal with complicated tables.
 
 Basic functionality of this function can be understood with the following animated @fig-tidy3.
 ```{r fig-tidy3, echo=FALSE, fig.show='hold', fig.align='center', fig.cap="Basic functionality of Pivot wider"}
@@ -217,20 +227,20 @@ knitr::include_graphics("images/pivot_wider.png")
 Example-1:
 
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(names_from = "type",
               values_from = "count")
 ```
 
 Example-2:
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(names_from = year,
               values_from = count)
 ```
 Example-3: Summarisation
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(id_cols = country,
               names_from = type,
               values_from = count,
@@ -239,7 +249,7 @@ tidyr::table2 %>%
 
 Example-4: Summarisation with different id_cols
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(id_cols = year,
               names_from = type,
               values_from = count,
@@ -248,27 +258,27 @@ tidyr::table2 %>%
 
 Example-5: Use of multiple columns in `names_from` argument
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(names_from = c(year, type),
                values_from = count)
 ```
 
 What if order is reversed in `names_from` arg.  See Example-6:
 ```{r}
-tidyr::table2 %>% 
+tidyr::table2 |>
   pivot_wider(names_from = c(type, year),
                values_from = count)
 ```
 Example-7: Multiple columns in `values_from`
 ```{r}
-tidyr::table1 %>% 
+tidyr::table1 |>
   pivot_wider(names_from = year,
               values_from = c(cases, population))
 ```
 
 Example-8: Use of names_vary argument to control the order of output columns
 ```{r}
-tidyr::table1 %>% 
+tidyr::table1 |>
   pivot_wider(names_from = year,
               values_from = c(cases, population),
               names_vary = "slowest")
@@ -279,7 +289,9 @@ For more details please refer to [package vignette](https://tidyr.tidyverse.org/
 ## Separate Column(s) into multiple columns/ Join columns into one column
 
 ### Separate a character column into multiple with `separate()` {-}
-As the name suggests, `separate()` function is used to separate a given character column into multiple columns either using a regular expression or a vector of character positions.
+As the name suggests, the function `separate()` splits a character column into several columns, either at a separator given as a regular expression, or at given character positions.
+
+> Since tidyr version 1.3, `separate()` is *superseded* by three more specific functions, `separate_wider_delim()` (split at a separator), `separate_wider_position()` (split at fixed positions) and `separate_wider_regex()` (split by a regular expression). `separate()` still works, and is used in much existing code, so we learn it first. The newer functions are shown after the examples.
 The syntax is -
 ```
 separate(
@@ -307,7 +319,7 @@ Explanation of purpose of different arguments in above syntax -
 
 Example-1:
 ```{r}
-tidyr::table3 %>% 
+tidyr::table3 |>
   separate(rate, into = c("cases", "population"),
            convert = TRUE) # optional - will convert the values
 ```
@@ -316,7 +328,7 @@ Example-2:
 ```{r}
 data.frame(
   x = c("a", "a+b", "c+d+e")
-) %>% 
+) |>
   separate(x,
            into=c('X1', 'X2', 'X3'),
            fill = "left")
@@ -326,8 +338,8 @@ Example-3:
 ```{r}
 data.frame(
   x = c("A$B", "C+D", "E-F")
-) %>% 
-  separate(x, 
+) |>
+  separate(x,
            sep = "\\-|\\$",
            into = c('X1', 'X2'),
            remove = FALSE)
@@ -336,7 +348,7 @@ Example-4:
 ```{r}
 data.frame(
   x = c("a", "a+b", "c+d+e")
-) %>% 
+) |>
   separate(x,
            into=c('X1', 'X2'),
            extra = "merge")
@@ -344,11 +356,11 @@ data.frame(
 ### Unite multiple character columns into one using `unite()` {-}
 It complements `separate` by uniting the columns into one.  Its syntax is
 ```
-unite(data, 
-      col, 
-      ..., 
-      sep = "_", 
-      remove = TRUE, 
+unite(data,
+      col,
+      ...,
+      sep = "_",
+      remove = TRUE,
       na.rm = FALSE)
 ```
 Explanation of arguments in the above syntax-
@@ -362,32 +374,44 @@ Explanation of arguments in the above syntax-
 
 Example-1a:
 ```{r}
-tidyr::table5 %>% 
+tidyr::table5 |>
   unite("Year",
-        c("century", "year"), 
+        c("century", "year"),
         sep = "",
         remove = FALSE)
 ```
-Example-1b:
-We may complete the tidying process in the next step
+Example-1b: We may complete the tidying in the next step.
 ```{r}
-tidyr::table5 %>% 
+tidyr::table5 |>
   unite("Year",
-        c("century", "year"), 
-        sep = "") %>% 
-  separate(rate, 
+        c("century", "year"),
+        sep = "") |>
+  separate(rate,
            into = c("cases", "population"),
            convert = TRUE)
 ```
-Example-
+
+**The newer functions.** `separate_wider_delim()` does the job of Example-1 above. It is stricter. If some value has too few or too many pieces, it stops with an error and tells us which rows, instead of filling them with `NA` silently. The arguments `too_few` and `too_many` say what to do in such cases.
+
+```{r}
+table3 |>
+  separate_wider_delim(rate, delim = "/", names = c("cases", "population"))
+```
+
+`separate_wider_position()` splits at fixed positions, which suits codes. For example, a GSTIN can be split into its State code, PAN, entity number and the rest.
+
+```{r}
+tibble(gstin = c("27AAPFU0939F1ZV", "29AABCK1234C1Z1")) |>
+  separate_wider_position(gstin, widths = c(state = 2, pan = 10, entity = 1, rest = 2))
+```
 
 ## Separate row(s) into multiple rows
 
 ### Split data into multiple rows with `separate_rows()` {-}
-This function is used to separate delimited values placed in one single cell/column into multiple rows (as against in rows using `separate`).
+This function separates delimited values placed in one cell into several *rows* (whereas `separate()` puts them into several columns). Its newer, stricter form is `separate_longer_delim()`.
 See Example-
 ```{r}
-tidyr::table3 %>% 
+tidyr::table3 |>
   separate_rows(
     rate,
     sep = "/",
@@ -396,14 +420,13 @@ tidyr::table3 %>%
 ```
 To create `type` we have to however, add an extra step to the above example-
 ```{r}
-tidyr::table3 %>% 
+tidyr::table3 |>
   separate_rows(
     rate,
     sep = "/",
     convert = TRUE
-  ) %>% 
-  group_by(country, year) %>% 
-  mutate(type = c("cases", "pop"))
+  ) |>
+  mutate(type = c("cases", "pop"), .by = c(country, year))
 ```
 
 ## Expand table to handle missing rows/values
@@ -411,16 +434,16 @@ tidyr::table3 %>%
 Sometimes, when we deal with missing data, we require to handle implicit missing values as well.  Either we have to turn these values into explicit missing values or we have to fill appropriate values.  In such cases, two functions namely `complete` and `fill` both from same package are extremely useful.  Let's learn these as well.
 
 ### Turn implicit missing values to explicit using `complete()` {-}
-As th name suggests, this function is used to turn implicit missing values (invisible rows) to explicit missing values (visible rows with `NA`).  
+As the name suggests, this function is used to turn implicit missing values (invisible rows) to explicit missing values (visible rows with `NA`).
 
-As an example, let's suppose fuel prices are revised randomly.  Say, after revision on `1 January 2020` prices revise on `20 January 2020`.  So we will have only 2 rows in data for say `Janaury 2020`.  Thus, there are `r 31-2` implicit missing values in the data.
+As an example, let's suppose fuel prices are revised randomly.  Say, after revision on `1 January 2020` prices revise on `20 January 2020`.  So we will have only 2 rows in the data for, say, `January 2020`.  Thus, there are `r 31-2` implicit missing values in the data.
 
 The syntax is
 
 ```
-complete(data, 
-         ..., 
-         fill = list(), 
+complete(data,
+         ...,
+         fill = list(),
          explicit = TRUE)
 ```
 Where -
@@ -429,17 +452,17 @@ Where -
 - `...` are meant to provide column names to be completed
 - `fill` provides a list to supply a single value which can be provided instead of `NA` for missing combinations.
 
-In the example mentioned above we can proceed as 
+In the example mentioned above we can proceed as
 ```{r}
 # First create a sample data
 df <- data.frame(
   date = c(as.Date("2020-01-01"), as.Date("2020-01-20")),
   price = c(75.12, 78.32)
 )
-df 
+df
 
 # Use tidyr::complete to see explicit missing values
-df %>% 
+df |>
   complete(date = seq.Date(as.Date("2020-01-01"), as.Date("2020-01-31"), by = "day"))
 ```
 Though the above example created dates as per the criteria given, `complete` function can find all unique combinations in the set of columns provided and return complete set of observations. See this example
@@ -453,7 +476,7 @@ df2 <- data.frame(
 )
 df2
 # use complete to find all combination
-df2 %>% 
+df2 |>
   complete(year, qtr, # cols provided
            fill = list(sales = 0))
 
@@ -470,10 +493,102 @@ fill(data, # used to provide data
 ```
 The arguments are pretty simple.  Most of the time `"down"` method is used. As an example we could see the example of fuel prices mentioned above.
 ```{r}
-fill_df <- df %>% 
-  complete(date = seq.Date(as.Date("2020-01-01"), as.Date("2020-01-31"), by = "day")) %>% 
+fill_df <- df |>
+  complete(date = seq.Date(as.Date("2020-01-01"), as.Date("2020-01-31"), by = "day")) |>
   fill(price, .direction = "down")
 
 head(fill_df)
 tail(fill_df)
 ```
+
+## Audit use case, a month-wise statement {#sec-tidyr-audit}
+
+Offices commonly report expenditure in a statement with one row for each district and one column for each month, like this.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the statement"
+set.seed(42)
+fy_months <- c("Apr", "May", "Jun", "Jul", "Aug", "Sep",
+               "Oct", "Nov", "Dec", "Jan", "Feb", "Mar")
+statement <- tibble(district = c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur")) |>
+  bind_cols(as_tibble(matrix(round(runif(5 * 12, 20, 60), 1), nrow = 5,
+                             dimnames = list(NULL, fy_months))))
+# March rush in two districts
+statement$Mar[c(2, 5)] <- statement$Mar[c(2, 5)] * 4
+# Chandpur did not report for three months; the cells were left blank
+statement[3, c("Jul", "Aug", "Sep")] <- NA
+```
+
+```{r}
+statement
+```
+
+This layout is easy to read, but hard to analyse. To compare months, find a share, or plot a trend, we need one row for each district and month. So we pivot it longer.
+
+```{r}
+monthly <- statement |>
+  pivot_longer(cols = -district, names_to = "month", values_to = "exp_lakh") |>
+  mutate(month = factor(month, levels = fy_months))   # months in the order of the financial year
+
+monthly
+```
+
+We made `month` a factor with the levels in the order of the financial year, as we learnt in @sec-factors. Otherwise months would sort alphabetically, with April after August.
+
+**The share of March.** Now each question is a short pipe. What share of each district's yearly expenditure was spent in March?
+
+```{r}
+monthly |>
+  summarise(year_total  = sum(exp_lakh, na.rm = TRUE),
+            march       = sum(exp_lakh[month == "Mar"], na.rm = TRUE),
+            march_share = round(100 * march / year_total, 1),
+            .by = district) |>
+  arrange(desc(march_share))
+```
+
+Two districts spent about a quarter or more of the year's money in March alone, against about 8% in an even year. That is the *rush of expenditure* at the end of the year, which the General Financial Rules ask departments to avoid.
+
+**Months not reported.** Blank cells became `NA` when the statement was pivoted, so Chandpur's missing months are visible. But often, missing months are simply *absent rows* in long data, not `NA`. Suppose a district's months appear only when it reported. `complete()` brings back every district-month combination, so the absent ones show up.
+
+```{r}
+reported <- monthly |> filter(!is.na(exp_lakh))   # data as it often arrives
+nrow(reported)
+
+reported |>
+  complete(district, month) |>
+  filter(is.na(exp_lakh))
+```
+
+`complete()` found the 3 months which Chandpur did not report. Without it, a total for Chandpur would quietly cover only 9 months.
+
+**Back to a report.** Finally, `pivot_wider()` turns a summary back into the familiar layout for a report, say quarter-wise.
+
+```{r}
+monthly |>
+  mutate(quarter = paste0("Q", (as.integer(month) - 1) %/% 3 + 1)) |>
+  pivot_wider(id_cols = district, names_from = quarter, values_from = exp_lakh,
+              values_fn = sum)
+```
+
+Chandpur's second quarter is `NA`, since none of its three months was reported. Had we used `sum(x, na.rm = TRUE)`, it would have shown 0, as if Chandpur spent nothing in that quarter, which is not what the data says.
+
+::: callout-tip
+## Audit tip
+
+Pivot data longer for analysis, and wider only at the end, for presentation. And before summing or averaging data over time, always check with `complete()` that no period is silently missing. A missing month and a month with zero expenditure are different findings.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `pivot_longer()` | tidyr | Turn columns into rows, like months in columns into a month column |
+| `pivot_wider()` | tidyr | Turn rows into columns, optionally summarising with `values_fn` |
+| `separate()`, `separate_wider_delim()`, `separate_wider_position()` | tidyr | Split a column into several columns |
+| `unite()` | tidyr | Join several columns into one |
+| `separate_rows()`, `separate_longer_delim()` | tidyr | Split values in a cell into several rows |
+| `complete()` | tidyr | Add the missing combinations, making implicit missing values explicit |
+| `fill()` | tidyr | Fill missing values with the previous or next value, like "-do-" |
+
+: Functions used in this chapter {#tbl-tidyrfunctions}

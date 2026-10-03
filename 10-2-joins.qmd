@@ -1,10 +1,9 @@
 ```{r}
 #| include: false
 source("_common.R")
-suppressPackageStartupMessages(library(tidyverse))
 ```
 
-# Combining Tables/tabular data
+# Combining Tables/tabular data {#sec-joins}
 
 ```{r fig.cap="Most of times, joining two or more tables will be required to perform analytics", fig.align="center", echo=FALSE, out.width="75%", out.height="75%"}
 
@@ -12,9 +11,17 @@ knitr::include_graphics("images/conf.jpg")
 
 ```
 
-In real world scenarios, there may hardly be a case when we have to analyse one single table.  There may be cases when we have to either join tables split into multiple smaller tables (e.g. we can have smaller tables split States-wise), or the tables may be divided into various smaller master and transaction tables (relational databases).  
+In real audit work, there is hardly ever a single table to analyse. A table may be split into smaller tables, say one for each State, which have to be put back together. More often, the data comes from a database, where it is divided into *master* tables (vendors, employees, schemes) and *transaction* tables (payments, bills, claims), linked by codes. Many of the most useful audit tests are joins. Payments to vendors not in the approved list, employees drawing pay after retirement, bills charged at a rate other than the one in force.
 
-We may thus divide the data tables joining requirements into three broad categories-
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+```
+
+We may divide the requirements of joining tables into three broad categories.
 
 - Simple joins or concatenation
 - Relational Joins
@@ -23,7 +30,7 @@ We may thus divide the data tables joining requirements into three broad categor
 Let us discuss each of these with examples.
 
 ## Simple joins/concatenation
-Many times tables split into smaller tables have to be joined back before proceeding further for data analytics.  We may have to join two or more tables either columnwise (e.g. some of the features for all rows have been split into a separate table) or row wise (e.g. all the fields/columns are split into smaller tables like a separate table for each State).  Diagramatically these joins may be depicted as shown in @fig-joins.
+Many times tables split into smaller tables have to be joined back before proceeding further for data analytics.  We may have to join two or more tables either columnwise (e.g. some of the features for all rows have been split into a separate table) or row wise (e.g. all the fields/columns are split into smaller tables like a separate table for each State).  Diagrammatically, these joins may be depicted as shown in @fig-joins.
 
 ```{r fig-joins, echo=FALSE, fig.cap="Illustration of Simple joins/concatenation", fig.show='hold', out.width="99%", fig.align='center'}
 knitr::include_graphics("images/concat_joins.png")
@@ -32,7 +39,7 @@ knitr::include_graphics("images/concat_joins.png")
 ### Column binding
 As we have already seen that data frames act like matrices in many ways except to that fact that these support heterogeneous data unlike matrices.  We have also discussed the ways two matrices can be joined.  Base R has two dedicated functions i.e. `cbind()` and `rbind()` for these operations.
 
-In _tidyverse_ (dplyr specifically) we have two similar functions `bind_cols()` and `bind_rows` respectively which provide us better functionality for these use cases.  The syntax for finction `bind_cols()` used for concatenating two or more tables _column wise_ is -
+In _tidyverse_ (dplyr specifically) we have two similar functions `bind_cols()` and `bind_rows` respectively which provide us better functionality for these use cases.  The syntax for the function `bind_cols()` used for concatenating two or more tables _column wise_ is -
 
 ```
 bind_cols(
@@ -75,11 +82,11 @@ virginica <- iris[101:103, 1:4]
 bind_rows(setosa, versicolor, virginica, .id = 'groups')
 ```
 
-> Note: In the above example if the requirement is to store data tables names into the new _identifier_ column just list convert the databases into a list and `.id` will take element_names as the values in identifiers.  Try this `bind_rows(list(setosa=setosa, versicolor=versicolor, virginica=virginica), .id = 'Species')` 
+> Note: In the above example, to store the names of the tables in the new _identifier_ column, put the tables in a named list. `.id` then takes the names of the list elements as its values. Try this: `bind_rows(list(setosa=setosa, versicolor=versicolor, virginica=virginica), .id = 'Species')`
 
 ## Relational joins
 
-Relational Joins are usually needed to join multiple tables based on _primary key_ and _secondary keys_.  The joins may either be _one-to-one_ key join or _one-to-many_ key joins.  Broadly these can either be _inner joins_ or _outer joins_. Diagrammatically these may be represented as shown in @fig-joinm wherein it may be noticed that additional columns from `right` data frame gets appended to `left` data frame.  For this reason, these four joins are also known as mutating joins.
+Relational joins combine tables on the basis of *keys*, the columns which identify a record, like a vendor code or an employee number. A *primary key* uniquely identifies each row of a table, and a *foreign key* in another table refers to it.  The joins may either be _one-to-one_ key join or _one-to-many_ key joins.  Broadly these can either be _inner joins_ or _outer joins_. Diagrammatically these may be represented as shown in @fig-joinm wherein it may be noticed that additional columns from `right` data frame gets appended to `left` data frame.  For this reason, these four joins are also known as mutating joins.
 
 ```{r fig-joinm, echo=FALSE, fig.cap="Illustration of Mutating Joins in dplyr", fig.show='hold', out.width="99%", fig.align='center'}
 knitr::include_graphics("images/mutating_joins.png")
@@ -92,7 +99,7 @@ The syntax of all these joins is nearly same-
 where -
 
 - `x` and `y` are data frames to be joined
-- `by` is a character vector of column names to be joined by
+- `by` gives the key column(s), as a character vector or with `join_by()`, which we will see shortly
 - `suffix` argument provides suffixes to be added to column names, if any of those are duplicate
 - `keep` argument decides whether the join keys from both x and y be preserved in the output?
 
@@ -137,9 +144,9 @@ Example-1:
 full_join(band_members, band_instruments)
 ```
 
-You must have noticed that each of the examples shown above has thrown a warning that join has been performed on variable `name`.  We may override this warning by specifically providing the joining _key_ column name(s) in `by` argument i.e. `by = "name"`.
+You must have noticed that each of the examples above printed a message, that the join was made on the column `name`. When `by` is not given, dplyr joins on all the columns with the same names in both tables. It is safer to always give the key yourself, like `by = "name"`, so that the join does not silently change if a column is added later.
 
-There may be cases when the joining _key_ column(s) in the two data frames are of different names.  These cases can also be handled by using `by` argument.  
+There may be cases when the joining _key_ column(s) in the two data frames are of different names.  These cases can also be handled by using `by` argument.
 
 Example-
 ```{r}
@@ -150,7 +157,7 @@ left_join(band_members, band_instruments2, by = c('name' = 'artist'))
 > Note: Each of the `*_join()` can be joined on multiple keys/columns (i.e. more than one) using `by` argument as explained above.
 
 ### Many-to-many Joins {-}
-Example of four of the above-mentioned joins are many to many joins and thus need to be used carefully.  See the following example
+If a key value appears more than once in *both* tables, every copy in one table is matched with every copy in the other. Such *many-to-many* joins multiply rows, and need to be used carefully. See the following example.
 ```{r}
 df1 <- data.frame(
   x = c(1, 1, NA),
@@ -162,9 +169,11 @@ df2 <- data.frame(
   z = c(101, 102, 201, 202)
 )
 df2
-df1 %>% left_join(df2, by = 'x')
+df1 |> left_join(df2, by = 'x')
 ```
-In fact, we can use argument `relationship` explicitly to silence this warning and avoid errors.  This argument can take one of these values
+Notice two things in this output. First, each `1` in `df1` has been matched with both `1`s in `df2`, giving four rows. Second, the `NA` in `df1` has been matched with *both* `NA`s in `df2`. By default, dplyr treats a missing key as matching another missing key. We will see in a moment why this is dangerous in audit data.
+
+dplyr warns us about the many-to-many relationship. We can state the relationship we *expect* with the argument `relationship`. If the data does not fit, the join stops with an error, which is exactly what we want. The argument can take one of these values
 
 - `NULL` (default)
 - `"one-to-one"`
@@ -174,8 +183,42 @@ In fact, we can use argument `relationship` explicitly to silence this warning a
 
 Example above re-coded
 ```{r}
-df1 %>% left_join(df2, by = 'x', relationship = "many-to-many")
+df1 |> left_join(df2, by = 'x', relationship = "many-to-many")
 ```
+
+### Missing keys, a common trap {-}
+
+Let us see how a missing key can inflate a total. Two payments have no vendor code, and the vendor master also has two vendors without a code.
+
+```{r}
+payments <- tibble(voucher = 1:5, vendor_code = c("V1", "V2", NA, NA, "V3"),
+                   amount = c(100, 200, 300, 400, 500))
+vendors  <- tibble(vendor_code = c("V1", "V2", NA, NA),
+                   vendor_name = c("Sharma", "Gupta", "Unknown-1", "Unknown-2"))
+
+joined <- payments |> left_join(vendors, by = "vendor_code")
+joined
+c(rows_before = nrow(payments), rows_after = nrow(joined))
+c(total_before = sum(payments$amount), total_after = sum(joined$amount))
+```
+
+Five payments of ₹1,500 have become seven rows, totalling ₹2,200. Each payment without a vendor code was matched with *both* vendors without a code. The argument `na_matches = "never"` stops missing keys from matching each other.
+
+```{r}
+payments |> left_join(vendors, by = "vendor_code", na_matches = "never")
+```
+
+Even better, state that each payment should match *at most one* vendor. Then dplyr stops, instead of quietly adding rows.
+
+```{r error=TRUE}
+payments |> left_join(vendors, by = "vendor_code", relationship = "many-to-one")
+```
+
+::: callout-tip
+## Audit tip
+
+After every join, compare the number of rows and the totals before and after, as we did above. A left join on a proper key should never change them. If the rows increase, the key is not unique in the second table, or missing keys are matching each other. Use `relationship` to make dplyr check this for you, and `na_matches = "never"` for keys which may be missing.
+:::
 
 
 
@@ -196,28 +239,36 @@ df2 <- data.frame(
   z = c(101, 301, 401, 501)
 )
 df2
-df1 %>% semi_join(df2, by = 'x')
+df1 |> semi_join(df2, by = 'x')
 ```
 
 ### Anti Joins
-The `anti_join` is basically opposite to that of `semi_join`.  It keeps only those records from left data-frame which are not available in right data-frame.  Example
+The `anti_join` is the opposite of `semi_join`. It keeps only those records of the left data frame which have *no* match in the right data frame. Example
 ```{r}
-df1 %>% anti_join(df2, by = 'x')
+df1 |> anti_join(df2, by = 'x')
 ```
+
+Anti joins are the backbone of *completeness* and *validity* tests in audit. Some examples are
+
+- payments to vendors who are not in the approved vendor list, `payments |> anti_join(vendors, by = "vendor_code")`,
+- beneficiaries paid but not in the list of eligible beneficiaries,
+- items issued from the store which were never received into it.
+
+Each row returned is an exception to be explained.
 
 
 ## Relational, but non-equi joins {#sec-nonequi}
-Till now, we have learnt joins that use syntax of dplyr version before 1.1.0.  However, in dplyr newest version, 1.1.0, released in January 2023, a new helper function `join_by()` has been introduced.  It actually, constructs a specification that describes how to join two tables using a small domain specific language. The result can be supplied as the by argument to any of the join functions that we have learnt above.  For equal joins, we have learnt above, there are two slight but easier to implement changes if we use `join_by()` -
+So far, we have given the keys as character strings. Since dplyr version 1.1.0, released in January 2023, there is a helper function `join_by()`.  It actually, constructs a specification that describes how to join two tables using a small domain specific language. The result can be supplied as the by argument to any of the join functions that we have learnt above.  For equal joins, we have learnt above, there are two slight but easier to implement changes if we use `join_by()` -
 
 - we may pass variable names in by argument instead of using characters as described above.
-- instead of using `=` we have to use `==` which is actually the equality operator as opposed to assignment operator we were using earlier. 
+- instead of using `=` we have to use `==` which is actually the equality operator as opposed to assignment operator we were using earlier.
 
 So our syntax for `left_join` example is
 ```{r}
 band_instruments2
 left_join(band_members, band_instruments2, by = join_by(name == artist))
 ```
-Simple, isn't it.  But now using the potential of this new helper function, we can on the other hand join two (or more data frames) using inequality conditions.  
+Simple, isn't it? But the real power of `join_by()` is that it can join tables on *inequality* conditions too.
 
 ### Inequality Joins
 Inequality joins match on an inequality, such as `>`, `>=`, `<`, or `<=`, and are common in time series analysis and genomics. To construct an inequality join using `join_by()`, we have to supply two column names separated by one of the above mentioned inequalities.  See the following example for better understanding of inequality joins.
@@ -247,26 +298,26 @@ rates <- data.frame(
 rates
 
 # total sale(1st attempt)
-sales %>% 
+sales |>
   left_join(rates,
             by = join_by(product.id,
                          sales.date >= revision.date))
 ```
 
-We got the results, but the results/rates are obtained fixed on all earlier dates.  To solve this issue, we have **rolling joins**.  See next section.
+We got results, but too many of them. Each sale has been matched with *every* rate revision made on or before its date, so a sale after the third revision appears three times, with three different rates. What we want is only the *latest* revision on or before the sale date. For this, we have **rolling joins**. See the next section.
 
 ### Rolling Joins
 Rolling joins are a variant of inequality joins that limit the results returned from an inequality join condition. They are useful for "rolling" the closest match forward/backwards when there isn't an exact match. To construct a rolling join, we have to wrap inequality condition with `closest()`.
 
 Above example solved by wrapping date condition in `closest()`
 ```{r}
-sales %>% 
+sales |>
   left_join(rates,
             by = join_by(product.id,
                          closest(sales.date >= revision.date)))
 ```
 
-We may see that we do not have rates for product `A` for sales made on `01-01-2022`.  
+We may see that we do not have rates for product `A` for sales made on `01-01-2022`.
 
 ### Overlap Joins
 Overlap joins are a special case of inequality joins involving one or two columns from the left-hand table overlapping a range defined by two columns from the right-hand table. There are three helpers that `join_by()` recognizes to assist with constructing overlap joins, all of which can be constructed from simpler inequalities.
@@ -277,41 +328,86 @@ Overlap joins are a special case of inequality joins involving one or two column
 
 - `overlaps(x_lower, x_upper, y_lower, y_upper, ..., bounds = "[]")` which is short for `x_lower <= y_upper, x_upper >= y_lower`
 
-We can make use of these functions as per our need.  
+We can make use of these functions as per our need.
 
-Example-2: Suppose we have `orders` data where we have customer-wise orders, corresponsing order dates and ship dates.  Let us suppose we want to know about customers who placed another order, without waiting for shipping of any of their previous/earlier order.
+Example-2: Suppose we have `orders` data, with customer-wise orders and their order and ship dates.  Let us suppose we want to know about customers who placed another order, without waiting for shipping of any of their previous/earlier order.
 
 ```{r}
-orders <- structure(list(customer_id = c("A", "A", "A", "B", "B", "C", 
-"C"), order_id = 1:7, order_date = c("2019-01-01", "2019-01-05", 
+orders <- structure(list(customer_id = c("A", "A", "A", "B", "B", "C",
+"C"), order_id = 1:7, order_date = c("2019-01-01", "2019-01-05",
 "2019-01-16", "2019-01-05", "2019-01-06", "2019-01-07", "2019-01-09"
-), ship_date = c("2019-01-30", "2019-02-10", "2019-01-18", "2019-01-08", 
-"2019-01-08", "2019-01-08", "2019-01-10")), row.names = c(NA, 
+), ship_date = c("2019-01-30", "2019-02-10", "2019-01-18", "2019-01-08",
+"2019-01-08", "2019-01-08", "2019-01-10")), row.names = c(NA,
 -7L), class = "data.frame")
 
-# print 
+# print
 orders
 
 # customers who placed the orders without
 # waiting to ship their earlier order
-orders %>% 
+orders |>
   inner_join(orders,
              by = join_by(customer_id,
                           overlaps(order_date, ship_date, order_date, ship_date),
-                          order_id < order_id)) 
+                          order_id < order_id))
 ```
 
-### Example uses of rolling joins.
+Each row of the result is a pair of orders of the same customer, where the second order was placed before the first was shipped. Customer A placed order 2 while order 1 was still not shipped, and so on.
 
-**The content is under development.**
+### Audit use of rolling joins, the rate in force {#sec-joins-audit}
+
+Rates of supply contracts, allowances and taxes are revised from time to time. A bill must use the rate in force on its date. A bill charged at an old, higher rate after a revision is an overpayment. Let us check some bills for cement and steel against a table of rate revisions.
+
+```{r}
+rate_revisions <- tibble(
+  item           = c("Cement", "Cement", "Steel", "Steel"),
+  effective_from = as.Date(c("2024-04-01", "2024-10-01", "2024-04-01", "2024-12-01")),
+  rate           = c(390, 360, 62, 58)
+)
+
+bills <- tibble(
+  bill_no      = sprintf("B-%02d", 1:8),
+  item         = rep(c("Cement", "Steel"), each = 4),
+  bill_date    = as.Date(c("2024-05-10", "2024-09-25", "2024-10-15", "2024-12-20",
+                           "2024-06-01", "2024-11-30", "2024-12-15", "2025-02-10")),
+  qty          = c(500, 800, 600, 700, 10000, 8000, 12000, 9000),
+  rate_charged = c(390, 390, 390, 360, 62, 62, 62, 58)
+)
+```
+
+The rolling join picks, for each bill, the latest revision on or before the bill date.
+
+```{r}
+bills |>
+  left_join(rate_revisions,
+            by = join_by(item, closest(bill_date >= effective_from))) |>
+  mutate(excess = (rate_charged - rate) * qty) |>
+  filter(excess > 0)
+```
+
+Bill B-03 was charged the old cement rate of ₹390, two weeks after it was revised to ₹360. Bill B-07 was charged the old steel rate after its revision. Together, they show an excess payment of ₹`r format(18000 + 48000, big.mark = ",")`. The same join checks dearness allowance against the rate in force for each month, or tax rates against the date of each invoice.
 
 ### Cross Joins
-This join matches everything with everything and therefore can be thought of as a cross product of two data frames. We can use `cross_join` for this special join.  If we have `m` and `n` rows in two data frames, then as a result of cross join we will have `m*n` rows.
+This join matches every row of one table with every row of the other, so it can be thought of as a cross product of two data frames. We use `cross_join()` for it. If the two data frames have `m` and `n` rows, the result has `m*n` rows. It grows very fast, so use it only on small tables. For comparing records of a large table with each other, an inequality join is far more efficient, as we saw in @sec-dup.
 
 Example-
 ```{r}
 df <- data.frame(products = c('A', 'B', 'C'))
 
-df %>% 
+df |>
   cross_join(df)
 ```
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `bind_cols()`, `bind_rows()` | dplyr | Put tables side by side, or one below the other |
+| `inner_join()`, `left_join()`, `right_join()`, `full_join()` | dplyr | Join tables on keys, keeping matched, left, right or all rows |
+| `semi_join()`, `anti_join()` | dplyr | Keep rows with, or without, a match in another table |
+| `join_by()` | dplyr | Describe the join, including inequalities |
+| `closest()`, `between()`, `within()`, `overlaps()` | dplyr | Rolling and overlap joins inside `join_by()` |
+| `cross_join()` | dplyr | Every row with every row |
+| `relationship`, `na_matches` | dplyr | Arguments to check the type of join, and stop missing keys matching |
+
+: Functions used in this chapter {#tbl-joinfunctions}
