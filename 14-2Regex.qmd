@@ -1,27 +1,36 @@
 ```{r}
 #| include: false
 source("_common.R")
-suppressPackageStartupMessages(library(tidyverse))
 ```
 
 # Regex - A quick introduction {#sec-regex}
 
-A __Regular Expression__, or __regex__ for short, is a powerful tool, which helps us writing code for pattern matching in texts.  Regex, is a pattern that describes a set of strings. It is a sequence of characters that define a search pattern. It is used to search for and manipulate text. Regex can be used in many programming languages, including R.
+A __Regular Expression__, or __regex__ for short, is a powerful tool for pattern matching in text. A regex is a sequence of characters which describes a *pattern*, and so a whole set of strings that fit it. It is used to search for, extract and replace text. Regex is available in nearly every programming language, including R.
 
-Regex patterns are made up of a combination of regular characters and special characters. Regular characters include letters, digits, and punctuation marks. Special characters have a specific meaning in regex and are used to represent patterns of characters.
+Regex patterns are made up of ordinary characters and special characters. Ordinary characters, like letters and digits, match themselves. Special characters have a specific meaning, and are used to describe patterns of characters.
 
-Regex patterns can be used for a variety of purposes, including:
+Regex patterns are used for a variety of purposes, like
 
 - Searching for specific strings in text
 - Extracting specific parts of a string
 - Replacing parts of a string with other text
-- Validating input from users
+- Validating data, like checking whether a PAN or a mobile number is in the correct format
 
-In R, we can use the `grep` and `gsub` functions to search for and manipulate text using regex.
+For an auditor, the last use is very important. Master data with wrongly formatted PANs, GSTINs, mobile numbers or bank IFSC codes is common, and some of these errors hide fraud. We will learn to check them at the end of this chapter, in @sec-regex-validate.
+
+## Prerequisites
+
+Base R has functions like `grepl()`, `regmatches()` and `gsub()` for regex. In this chapter we use the package `stringr`, part of `tidyverse`, whose functions are more consistent. We learnt `stringr` in the previous chapter. The function `str_view()` is especially useful while learning regex, since it highlights the matches between `<` and `>`.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+```
 
 ## Basic Regex -  Literal Characters
 
-Every _literal character_, in itself is a `regex` that matches itself. Thus, `a` matches third character in text `Charles`.  These literal characters are case sensitive.
+Every _literal character_ is in itself a regex which matches itself. Thus, `a` matches the third character in the text `Charles`. Literal characters are case sensitive.
 
 Example-1
 ```{r}
@@ -32,8 +41,11 @@ str_view(ex_text, "x")
 str_view(ex_text, "X", match = NA)
 ```
 
+The second pattern found no match, since there is no capital `X` in the text. The argument `match = NA` makes `str_view()` show the strings without any match too.
+
 ### Case sensitivity
-As the literals are case_sensitive and we sometimes are not aware of exact case, to match case insensitive literals, we can make use of `stringr` function `regex` in this case, wherein an argument `ignore_case` (note snake case) is there.  Actually, behind the scenes, all regex expressions in stringr are wrapped in this function with argument defaults as `FALSE`. Thus, the code in above example is actually equivalent to the following-
+
+Since literals are case sensitive, and we are sometimes not sure of the exact case, we may want to match regardless of case. For this, `stringr` has the function `regex()`, with an argument `ignore_case`. Behind the scenes, every pattern in `stringr` is wrapped in `regex()`, with `ignore_case = FALSE` by default. Thus, the code in the above example is equivalent to the following.
 
 ```{r}
 # Match literal `x`
@@ -42,7 +54,7 @@ str_view(ex_text, regex("x"))
 str_view(ex_text, regex("X"), match = NA)
 ```
 
-Thus, to match case insensitive literals (or other regex expressions) we may make use of the argument `ignore_case` like this-
+To match regardless of case, we set `ignore_case = TRUE`.
 
 ```{r}
 # Match literal `x`
@@ -50,9 +62,10 @@ str_view(ex_text, regex("X", ignore_case = TRUE))
 ```
 
 ## Metacharacters
+
 ### Character sets
 
-It is always not feasible to put every literal characters.  We may also match literal characters from a given set of options. To **match a group of characters** we have to put all these in square brackets.  So, `[abc]` matches either of `a`, `b`, or `c`.  
+It is not always possible to list every literal character. We may want to match any one character out of a set. To **match one of a group of characters**, we put all of them in square brackets. So, `[abc]` matches either `a`, `b`, or `c`.
 
 Example-
 ```{r}
@@ -62,7 +75,8 @@ str_view(ex_vec, "[aeiou]")
 # matches a vowel irrespective of case
 str_view(ex_vec, regex("[aeiou]", ignore_case = TRUE))
 ```
-To **match a range of characters/numbers** we can separate these by hyphen in square brackets. So, `[a-n]` will match a character from range `[abcdefghijklmn]`.
+
+To **match a range of characters or digits**, we separate the ends of the range with a hyphen inside the square brackets. So, `[a-n]` matches any one character from `abcdefghijklmn`, and `[0-9]` matches any digit.
 
 Example-
 ```{r}
@@ -70,13 +84,14 @@ ex_text <- "The quick brown fox jumps over the lazy dog"
 # Match a, b or c in lower case
 str_view(ex_text, regex("[a-c]"))
 ```
+
 Example-2
 ```{r}
 ex_colors <- c("grey", "black", "gray")
 str_view(ex_colors, "gr[ae]y")
 ```
 
-We can also use __pre-built character classes__ listed below.
+We can also use the __pre-built character classes__ listed below.
 
   + `[:punct:]` punctuation.
   + `[:alpha:]` letters.
@@ -98,24 +113,26 @@ str_view(ex_vec2, "[:digit:]", match = NA)
 ```
 
 ### Negation of character sets/classes
-Typing a caret [`^`] after the opening square bracket negates the character class.  Example-
+
+Typing a caret `^` just after the opening square bracket *negates* the set, so that it matches any character *except* those listed. Example-
+
 ```{r}
 ex_colors <- c("grey", "black", "gray")
 str_view(ex_colors, "gr[^c-f]y")
 ```
 
-So, in this case `gr` followed by character except from `c` to `f` and further followed by `y` will only be matched, resulting in matching `gray` but not matching `grey`.  So, putting a `^` caret character inside the character classes before putting matching characters/classes will match everything except those characters/classes.
+Here `gr`, followed by any character except `c` to `f`, followed by `y`, is matched. So `gray` is matched but not `grey`.
 
 ### Non-printable characters/ Meta characters (short-hand character classes)
 
-We can use special character sequences to put non-printable characters in our regular expression(s). E.g. `\t` matches a tab character.  __But since `\` is an escape character in R, we need to escape it too.__  So to match a tab character we have to put `\\t` in our regex sequence.  Regex for that matches new line (line feed) is `\\n`. `Regex` for other meta characters is listed below-
+Special character sequences stand for non-printable characters. For example, `\t` matches a tab character. __But since `\` is also an escape character in R strings, we have to escape it too.__ So to match a tab character, we write `\\t` in our pattern. Similarly, `\\n` matches a new line (line feed). Other such short-hand classes are
 
-  + `\\s` matches a white-space character.  Moreover, its complement `\\S` matches any character except a white-space.
-  + `\\w` matches any alphanumeric character. Similarly, its complement is `\\W` which matches any character except alphanumeric characters.
-  + `\\d` matches any digit.  Similarly, its complement is `\\D` which matches any character except digits.
-  + `\\b` matches any word boundary.  Thus, `\\B` matches any character except a word boundary.
-  + `.` matches any character. To match a literal dot `.` we have to escape that; and thus `\\.` matches a dot character.
-  
+  + `\\s` matches a white-space character, like a space, tab or new line. Its complement `\\S` matches any character except a white-space.
+  + `\\w` matches a *word* character, that is, a letter, a digit or the underscore `_`. Its complement `\\W` matches any other character.
+  + `\\d` matches any digit. Its complement `\\D` matches any character except a digit.
+  + `\\b` matches a word boundary, the *position* between a word character and a non-word character. It matches a position, not a character. `\\B` matches any position which is not a word boundary.
+  + `.` matches any character (except a new line). To match a literal dot `.` we have to escape it, so `\\.` matches a dot.
+
 See these examples-
 ```{r}
 ex_vec3 <- c("One apple", "2 oranges & 3 bananas.")
@@ -128,7 +145,7 @@ str_view(ex_vec3, ".\\.", match = NA)
 
 ## Quantifiers
 
-What if we want to match more than one literal/character through `regex`? Let's say if we want to check whether the given string or string vector contain two consecutive vowels.  One method may be to use character classes two times i.e. using `[aeiou][aeiou]`. But this method is against the principles of __DRY__^[Dont repeat yourself] which is one of the common principle of programming.  To solve these issues, we have quantifiers.
+What if we want to match more than one character? Say we want to check whether a string contains two consecutive vowels. One way is to write the character set twice, `[aeiou][aeiou]`. But this goes against __DRY__^[Don't Repeat Yourself], a common principle of programming. And what if we wanted ten of them? For this we have quantifiers, which say how many times the previous item may occur.
 
 - `+` __1 or more__ occurrences
 - `*` __0 or more__
@@ -138,18 +155,34 @@ What if we want to match more than one literal/character through `regex`? Let's 
   + `{n,}` n or more
   + `{n,m}` between n and m
 
-Thus, we may match two consecutive vowels using `[aeiou]{2}`.  See this example
+Thus, we may match two consecutive vowels using `[aeiou]{2}`. See this example
 
 ```{r}
 ex_vec <- c("Apple", "Banana", "pineapple")
 str_view(ex_vec, "[aeiou]{2}", match = NA)
 ```
+
+Quantifiers are very useful in validating data. For example, `[0-9]{6}` matches six digits in a row, like a PIN code.
+
+### Greedy and lazy quantifiers
+
+By default, quantifiers are *greedy*. They match as much as they can. Adding a `?` after a quantifier makes it *lazy*, so that it matches as little as it can. See the difference.
+
+```{r}
+html <- "<b>Total</b> amount is <b>Rs 500</b>"
+# Greedy, from the first < to the last >
+str_extract(html, "<.+>")
+# Lazy, from the first < to the nearest >
+str_extract(html, "<.+?>")
+```
+
 ## Alternation
 
-Alternation in regular expressions allows you to match one pattern or another, depending on which one appears first in the input string. The pipe symbol `|` is used to separate the alternative patterns. 
+Alternation allows us to match one pattern *or* another. The pipe symbol `|` separates the alternatives.
 
 ##### Basic Alternation
-Let's start with a basic example to illustrate how alternation works:
+
+Let us start with a basic example.
 
 ```{r}
 string <- "I have an apple and a banana"
@@ -157,17 +190,35 @@ pattern <- "apple|banana"
 
 str_extract(string, pattern)
 ```
+
+`str_extract()` returns only the first match in the string, which is `apple`. `str_extract_all()` would return both.
+
 ##### Order of Precedence
 
-When using alternation, it's important to keep in mind the order of precedence rules. In general, the first pattern that matches the input string will be selected, and subsequent patterns will not be considered. Here's an example to illustrate this:
+Which match is returned when several alternatives could match? Two rules decide it.
+
+1. The regex engine scans the text from left to right. The match which *starts earliest* in the text wins, whatever the order of the alternatives.
+2. If two alternatives can match at the *same* position, the alternative written *first* in the pattern wins.
+
 ```{r}
 string <- "I have a pineapple and an apple"
 str_extract(string, pattern = "apple|pineapple")
 ```
-In this example, we have a string `string` that contains the words "apple" and "pineapple". We want to extract the first occurrence of either "apple" or "pineapple" from this text using a regular expression pattern that utilizes alternation. The pattern `apple|pineapple` means "match 'apple' OR 'pineapple'". However, since the input string contains "pineapple" before "apple", the `str_extract()` function selects the first matching string "pineapple".
+
+Here the result is `pineapple`, although `apple` is written first in the pattern. This is because of rule 1. The `p` of "pineapple" comes before the `a` of "apple" in the text. At that position, `apple` cannot match, but `pineapple` can.
+
+Now see rule 2.
+
+```{r}
+str_extract("pineapple", "pine|pineapple")
+str_extract("pineapple", "pineapple|pine")
+```
+
+Both alternatives can match at the very first position. In the first pattern, `pine` is written first, so it wins, and we get only part of the word. So when one alternative is the beginning of another, write the *longer* one first.
 
 ##### Grouping Alternatives
-We can also use parentheses to group alternative patterns together. This can be useful for specifying more complex patterns. Example:
+
+We can use parentheses to group alternatives, to build more complex patterns. Example-
 
 ```{r}
 string <- "Apple and pineapples are good for health"
@@ -176,36 +227,49 @@ pattern <- "(apple|banana|cherry) (and|or) (pineapple|kiwi|mango)"
 str_view(string, regex(pattern, ignore_case = TRUE))
 ```
 
-In above examples, we have used `stringr::regex()` to modify regex flag to ignore cases while matching.
+In the above example, we have used `regex()` to ignore case while matching.
 
 ## Anchors
 
-Anchors in regular expressions allow you to match patterns at specific positions within the input string. In R, you can use various anchors in your regular expressions to match the beginning, end, or specific positions within the input text. 
+Anchors match *positions*, rather than characters. They let us match patterns only at specific places in the text.
 
 ### Beginning and End Anchors
 
-The beginning anchor `^` and end anchor `$` are used to match patterns at the beginning or end of the input string, respectively.  Example
+The anchor `^` matches the beginning of the string, and `$` matches its end. Example
+
 ```{r}
 string <- "The quick brown fox jumps over the lazy dog. The fox is brown."
 pattern <- "^the"
 str_view(string, regex(pattern, ignore_case = TRUE))
 ```
-In the above example, we are matching word `the` which is at the beginning of a sentence only.
+
+Only the first `The` is matched, the one at the beginning of the *string*. The `The` at the beginning of the second sentence is not matched, since it is not at the beginning of the string. (If a string has several lines, `regex(pattern, multiline = TRUE)` makes `^` and `$` match at the beginning and end of each line.)
+
+Anchors are essential for validating data. `[0-9]{6}` finds six digits *anywhere*, so it would also accept "PIN 1100011 New Delhi". `^[0-9]{6}$` accepts only a string which is *exactly* six digits, from beginning to end.
+
+```{r}
+pins <- c("110001", "PIN 110001", "1100011")
+str_detect(pins, "[0-9]{6}")
+str_detect(pins, "^[0-9]{6}$")
+```
 
 ### Word Boundary Anchors
-The word boundary anchor `\\b` is used to match patterns at the beginning or end of a word within the input string.  Example
+
+The word boundary anchor `\\b` matches at the beginning or end of a word. Example
+
 ```{r}
 string <- 'Apple and pineapple, both are good for health'
 pattern <- '\\bapple\\b'
 str_view(string, regex(pattern, ignore_case = TRUE))
 ```
-In the above example, though `apple` string is contained in another word `pineapple` we are limiting our search for whole words only.
+
+Though the string `apple` is contained in the word `pineapple`, we have limited our search to whole words only.
 
 ## Capture Groups
 
-A capture group is a way to group a part of a regular expression and capture it as a separate sub-string. This can be useful when you want to extract or replace a specific part of a string.  In R, capture groups are denoted by parentheses `()`. Anything inside the parentheses is captured and can be referenced later in the regular expression or in the replacement string.
+A capture group is a part of a regex inside parentheses `()`. Whatever it matches is *captured*, and can be referred to later, either within the same regex or in a replacement string.
 
-One use of capturing group is to refer back to it within a match with back reference: `\1` refers to the match contained in the first parenthesis, `\2` in the second parenthesis, and so on. 
+One use is to refer back to a group within the same match, with a *back reference*. `\\1` refers to the text matched by the first group, `\\2` by the second, and so on.
 
 Example-1
 
@@ -215,6 +279,7 @@ my_fruits <- c('apple', 'banana', 'coconut', 'berry', 'cucumber', 'date')
 pattern <- '(.)\\1'
 str_view(my_fruits, regex(pattern), match = NA)
 ```
+
 Example-2
 ```{r}
 # search for repeated pair of alphabets
@@ -222,7 +287,8 @@ pattern <- '(..)\\1'
 str_view(my_fruits, regex(pattern), match = NA)
 ```
 
-Another way to use capturing group is, when we want to replace the pattern with something else.  It is better to understand this with the following example-
+Another use is in replacement. Let us understand this with an example.
+
 ```{r}
 # We have names in last_name, first_name format
 names <- c('Hanks, Tom', 'Affleck, Ben', 'Damon, Matt')
@@ -233,14 +299,17 @@ str_replace_all(names, '(\\w+),\\s+(\\w+)', '\\2 \\1')
 
 ```
 
+The first group captures the last name and the second group the first name. In the replacement, `\\2 \\1` puts them in the reverse order.
+
 ## Lookarounds
-__Look-ahead__ and __look-behinds__ are zero-width assertions in regex. They are used to match a pattern only if it is followed or preceded by another pattern, respectively. The pattern in the look-ahead or look-behind is not included in the match.
+
+__Look-aheads__ and __look-behinds__ are *zero-width assertions*. They check whether a pattern is followed or preceded by another pattern, without including that other pattern in the match.
 
 ### Lookahead
 
-A look-ahead is used to match a pattern only if it is followed by another pattern. *Positive Lookaheads* are written as `(?=...)`, where `...` is the pattern that must follow the match.
+A look-ahead matches a pattern only if it is followed by another pattern. *Positive look-aheads* are written as `(?=...)`, where `...` is the pattern that must follow.
 
-For example, the regex pattern `hello(?= world)` matches "hello" only if it is followed by " world". It matches "hello world" but not "hello there world" or "hello".
+For example, the pattern `hello(?= world)` matches "hello" only if it is followed by " world". It matches in "hello world" but not in "hello there world" or "hello".
 
 Example
 
@@ -251,9 +320,10 @@ str_view(string, "hello(?= world)", match = NA)
 ```
 
 ### Lookbehind
-A look-behind is used to match a pattern only if it is preceded by another pattern. Look-behinds are written as `(?<=...)`, where `...` is the pattern that must precede the match.
 
-For example, the regex pattern `(?<=hello )world` matches "world" only if it is preceded by "hello ". It matches "hello world" but not "world hello" or "hello there world".
+A look-behind matches a pattern only if it is preceded by another pattern. Look-behinds are written as `(?<=...)`, where `...` is the pattern that must come before.
+
+For example, the pattern `(?<=hello )world` matches "world" only if it is preceded by "hello ". It matches in "hello world" but not in "world hello" or "hello there world".
 
 Example
 
@@ -265,9 +335,9 @@ str_view(string, "(?<=hello )world", match = NA)
 
 ### Negative Lookahead and Lookbehinds
 
-Negative look-ahead and negative look-behinds are used to match a pattern only if it is not followed or preceded by another pattern, respectively. Negative look-ahead and look-behinds are written as `(?!...)` and `(?<!...)`, respectively.
+Negative look-aheads and negative look-behinds match a pattern only if it is *not* followed or preceded by another pattern, respectively. They are written as `(?!...)` and `(?<!...)`.
 
-For example, the regex pattern `hello(?! world)` matches "hello" only if it is not followed by " world". It matches "hello there" but not "hello world" or "hello world there".
+For example, the pattern `hello(?! world)` matches "hello" only if it is not followed by " world". It matches in "hello there" but not in "hello world" or "hello world there".
 
 Example-
 
@@ -277,41 +347,47 @@ str_view(string, "hello(?! world)", match = NA)
 
 ```
 
-And the regex pattern `(?<!hello )world` matches "world" only if it is not preceded by "hello ". It matches "world hello" and "hello there world" but not "hello world".
+And the pattern `(?<!hello )world` matches "world" only if it is not preceded by "hello ". It matches in "world hello" and "hello there world" but not in "hello world".
 
 ```{r}
 string <- c("hello world", "world hello", "hello there world")
 str_view(string, "(?<!hello )world", match = NA)
 ```
 
-*While the difference between the look-ahead and look-behind may be subtle, yet these become clear when string/pattern replacement or extraction is required.*  
+*The difference between look-aheads and look-behinds may look subtle, but it becomes clear when we extract or replace text.*
 
-Examples- 
+Examples-
 ```{r}
 string <- "I have 10 apples, 6 pineapples and 5 bananas"
 
 # look-behind to match "apples" preceded by a digit and a space
-pattern1 <- "(?<=\\d\\s)apples"  
+pattern1 <- "(?<=\\d\\s)apples"
 
 # look-ahead to match count of apples
-pattern2 <- "\\d+(?=\\sapple)"  
+pattern2 <- "\\d+(?=\\sapple)"
 
 str_view(string = string, pattern = pattern1, match = NA)
 str_view(string = string, pattern = pattern2, match = NA)
 ```
 
+The first pattern matches the word `apples` only where a count comes before it, and not inside `pineapples`. The second extracts only the *number* of apples, `10`, since the look-ahead checks for " apple" without including it in the match.
+
 ## Comments
+
 ### Comments within regex
-We can use the # character to add comments within a regex pattern.  Any text following the `#` symbol on a line is ignored by the regex engine and treated as a comment. This can be useful for documenting your regex patterns or temporarily disabling parts of a pattern for testing or debugging.  Example-
+
+Complex patterns are hard to read later. We can put a comment inside a pattern with `(?#...)`. Everything between `(?#` and `)` is ignored by the regex engine. Example-
 
 ```{r}
 str_view(c("xyz","abc"), "x(?#this is a comment)", match = NA)
 ```
 
 ### Verbose Mode (multi-line comments)
-In regular expressions, verbose mode is a feature that allows you to write more readable and maintainable regex patterns by adding comments and white-space without affecting their behavior. To enable verbose mode, we can use the `(?x)` or `(?verbose)` modifier at the beginning of your regex pattern.
 
-Example - Using this regex we can extract words that contain a vowel at third place.
+In *verbose mode*, white-space in the pattern is ignored, and anything after a `#` on a line is a comment. So we can write a long pattern over several lines, with a comment on each. To enable verbose mode, we start the pattern with `(?x)`. (With `stringr`, we may instead use `regex(pattern, comments = TRUE)`.)
+
+Example - Using this regex we can extract words that contain a vowel at the third place.
+
 ```{r}
 string <- "The quick brown fox jumps over the lazy dog"
 pattern <- "(?x)      # Enable verbose mode
@@ -323,4 +399,475 @@ pattern <- "(?x)      # Enable verbose mode
 str_view(string, pattern, match = NA)
 ```
 
+## Validating data with regex, in the Indian context {#sec-regex-validate}
 
+Audit data is full of identifiers, like PAN, GSTIN, Aadhaar, mobile numbers, email IDs, IFSC codes and vehicle numbers. Each of them has a fixed *format*. A value which does not fit the format is certainly wrong. It may be a typing error, a placeholder like `NA` or `0000000000`, or a made-up value. Checking formats is one of the quickest tests an auditor can run on master data.
+
+Three habits make validation reliable.
+
+1. **Standardise first.** Convert to upper case, and remove spaces, dots and hyphens, before checking. `abcde 1234 f` is a correctly typed PAN, just written untidily.
+2. **Always anchor the pattern** with `^` and `$`, as we saw above. Otherwise a wrong value which merely *contains* a valid-looking part will pass.
+3. **Validate, do not just detect.** `str_detect()` returns `TRUE` or `FALSE` for each value. Keep this result as a new column, so that the reason for each exception can be reported.
+
+### Email IDs
+
+A simple pattern for an email ID is, one or more allowed characters, then `@`, then a domain name with at least one dot and a top level domain of two or more letters.
+
+```{r}
+email_pattern <- "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$"
+
+emails <- c("ram.kumar@gmail.com", "accounts@abc-traders.co.in", "sales@abc",
+            "ram kumar@gmail.com", "ram..kumar@gmail.com", "NA")
+
+tibble(email = emails,
+       format_ok = str_detect(emails, email_pattern),
+       # dots may not come together, or at the start or end of the name
+       dots_ok   = !str_detect(emails, "\\.\\.|^\\.|\\.@"))
+```
+
+`sales@abc` has no top level domain, `ram kumar@gmail.com` has a space, and `NA` is not an email at all. `ram..kumar@gmail.com` fits the simple pattern but has two dots together, which most email providers do not allow. The second column catches it.
+
+::: callout-note
+## No regex is perfect for email
+
+The official rules for email addresses are very complicated, and allow strange addresses which nobody uses. The pattern above accepts nearly all real addresses, and rejects most errors. The only way to be sure an email ID really exists is to send a mail to it.
+:::
+
+### Gmail dot and plus aliases
+
+Gmail ignores dots in the user name, and anything after a `+` sign. So `rkumar@gmail.com`, `r.kumar@gmail.com`, `r.ku.mar@gmail.com` and `rkumar+tender@gmail.com` all deliver to the *same* mailbox. Someone wanting to register several times, as different vendors or beneficiaries, can use this trick to show a "different" email ID each time. Exact duplicate checks (@sec-dup) will not find them. So before checking duplicates, we must normalise the email IDs.
+
+```{r}
+normalise_email <- function(x) {
+  x <- str_to_lower(str_trim(x))
+  user   <- str_extract(x, "^[^@]+")
+  domain <- str_extract(x, "(?<=@).+$")
+  # googlemail.com is the same as gmail.com
+  domain <- str_replace(domain, "^googlemail\\.com$", "gmail.com")
+  # For every domain, drop the "+tag" part. For Gmail, also drop the dots.
+  user <- str_remove(user, "\\+.*$")
+  user <- if_else(domain == "gmail.com", str_remove_all(user, "\\."), user)
+  paste0(user, "@", domain)
+}
+
+ids <- c("RKumar@gmail.com", "r.kumar@gmail.com", "r.ku.mar@googlemail.com",
+         "rkumar+tender@gmail.com", "r.kumar@yahoo.com")
+tibble(email = ids, normalised = normalise_email(ids))
+```
+
+The first four IDs are one mailbox. The Yahoo ID keeps its dot, since other providers do not ignore dots.
+
+::: callout-warning
+## Caution
+
+Many providers, including Outlook, also support `+` aliases, so we drop the `+tag` part for all domains. But *only* Gmail ignores dots. Removing dots from other domains could merge two genuinely different people. Treat a match on normalised emails as a lead, and verify it.
+:::
+
+### Mobile numbers
+
+Indian mobile numbers have 10 digits and start with 6, 7, 8 or 9. In data, they appear with a `+91` or `0` prefix, and with spaces or hyphens. So we first keep only the digits, and remove the country code or the leading zero. A *back reference* also helps us find junk numbers made of one repeated digit, like `9999999999`.
+
+```{r}
+clean_mobile <- function(x) {
+  d <- str_remove_all(x, "\\D")                # keep only digits
+  d <- str_replace(d, "^91(?=\\d{10}$)", "")   # country code
+  d <- str_replace(d, "^0(?=\\d{10}$)", "")    # trunk prefix 0
+  d
+}
+
+mobiles <- c("+91 98734 56120", "098734-56121", "9873456122", "12345 67890",
+             "9999999999", "98765432", "1234567890")
+
+tibble(mobile = mobiles,
+       cleaned = clean_mobile(mobiles),
+       valid   = str_detect(cleaned, "^[6-9][0-9]{9}$"),
+       junk    = str_detect(cleaned, "^(\\d)\\1{9}$") |
+                 cleaned %in% c("1234567890", "9876543210", "0123456789"))
+```
+
+The pattern `^(\\d)\\1{9}$` captures the first digit and then checks that the same digit is repeated nine more times. Notice that `9999999999` is a *valid* format, but it is junk. Such placeholder values must be removed before any duplicate or network analysis, as we saw in @sec-dup_net.
+
+### PAN
+
+A Permanent Account Number has 10 characters, five letters, four digits and a letter, like `ABCPK1234D`. Two of these characters carry meaning.
+
+- The **4th character** tells the type of holder. `P` is an individual, `C` a company, `H` a Hindu Undivided Family, `F` a firm (including LLP), `A` an association of persons, `T` a trust, `B` a body of individuals, `L` a local authority, `J` an artificial juridical person, and `G` the government.
+- The **5th character** is the first letter of the holder's surname, for an individual, or of the name, for others.
+
+So besides the format, we can check whether the PAN fits the holder. A company using a PAN whose 4th character is `P` is using an *individual's* PAN, which needs to be looked into.
+
+```{r}
+pans <- tibble(
+  name = c("Kumar Traders Pvt Ltd", "Rakesh Kumar", "Sharma & Sons", "Gupta Enterprises Pvt Ltd", "Anil"),
+  type = c("Company", "Individual", "Firm", "Company", "Individual"),
+  pan  = c("AACCK1234M", "ABCPK5678N", "AAAFS9012P", "ABBPG3456Q", "ABCD12345E")
+)
+
+pans |>
+  mutate(format_ok = str_detect(pan, "^[A-Z]{5}[0-9]{4}[A-Z]$"),
+         holder    = str_sub(pan, 4, 4),
+         pan_type  = case_when(holder == "P" ~ "Individual",
+                               holder == "C" ~ "Company",
+                               holder == "F" ~ "Firm",
+                               holder == "H" ~ "HUF",
+                               holder == "T" ~ "Trust",
+                               .default = "Other"),
+         type_ok   = pan_type == type)
+```
+
+`Gupta Enterprises Pvt Ltd` claims to be a company, but its PAN belongs to an individual. The last PAN is not in the correct format at all.
+
+::: callout-note
+## A check letter without a published rule
+
+The last letter of a PAN is a check character. But the Income Tax Department has not published how it is calculated. So we cannot verify it, and a PAN in the correct format may still not exist. The only sure way is verification on the Income Tax e-filing portal. For GSTIN, Aadhaar and card numbers, however, the check digit rules are public, as we will see shortly.
+:::
+
+### Other Indian formats
+
+Many other identifiers can be checked with a pattern alone. @tbl-regexformats lists some useful ones, after removing spaces and hyphens and converting to upper case.
+
+| Identifier | Pattern | Example | Notes |
+|----------------|--------------------|----------------|------------------------|
+| PIN code | `^[1-9][0-9]{5}$` | `110001` | Six digits, not starting with 0 |
+| IFSC (bank branch) | `^[A-Z]{4}0[A-Z0-9]{6}$` | `SBIN0001234` | Bank code, a zero, branch code |
+| TAN | `^[A-Z]{4}[0-9]{5}[A-Z]$` | `DELA12345B` | Tax deduction account number |
+| Vehicle registration | `^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$` | `DL3CAB1234` | State, district, series, number |
+| Vehicle, BH series | `^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$` | `22BH1234AA` | Bharat series |
+| UPI ID | `^[A-Za-z0-9._-]{2,256}@[A-Za-z]{2,64}$` | `ramkumar@okaxis` | Case not changed for UPI |
+| Aadhaar (format only) | `^[2-9][0-9]{11}$` | (not shown) | 12 digits, not starting with 0 or 1 |
+| GSTIN (format only) | `^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$` | `27AAPFU0939F1ZV` | See below |
+
+: Patterns for some Indian identifiers {#tbl-regexformats}
+
+Let us check a few.
+
+```{r}
+tibble(value   = c("SBIN0001234", "SBIN1001234", "dl 3c ab 1234", "DL-3C-1234", "22BH1234AA", "011001"),
+       std     = str_to_upper(str_remove_all(value, "[\\s-]")),
+       ifsc    = str_detect(std, "^[A-Z]{4}0[A-Z0-9]{6}$"),
+       vehicle = str_detect(std, "^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$"),
+       pin     = str_detect(std, "^[1-9][0-9]{5}$"))
+```
+
+`SBIN1001234` is not a valid IFSC, since its fifth character must be a zero. `011001` is not a valid PIN code, since PIN codes do not start with 0.
+
+## Check digits, when regex is not enough {#sec-checkdigits}
+
+A pattern checks the *shape* of a value. It cannot tell whether `27AAPFU0939F1ZV` is a real GSTIN, or whether one digit was typed wrongly. Many identifiers have a **check digit** for this purpose. It is the last character, calculated from all the other characters by a fixed rule. If any one character is typed wrongly, the calculation does not match, and the error is caught.
+
+Check digits need arithmetic, which regex cannot do. So we write small R functions. Each function first checks the format with a regex, and then the check digit.
+
+### GSTIN
+
+A GSTIN has 15 characters.
+
+- Characters 1 and 2 are the **State code**, like `07` for Delhi, `09` for Uttar Pradesh, `27` for Maharashtra and `29` for Karnataka.
+- Characters 3 to 12 are the **PAN** of the taxpayer.
+- Character 13 is the entity number, `1` for the first registration of that PAN in the State, `2` for the second, and so on.
+- Character 14 is `Z` by default.
+- Character 15 is the **check character**.
+
+The check character is calculated as follows. Each of the first 14 characters is converted to a number, `0` to `9` for digits and `10` to `35` for `A` to `Z`. These numbers are multiplied alternately by 1 and 2. Each product is split into its quotient and remainder on division by 36, and the two are added. The check character is the one whose value, added to the total, makes it a multiple of 36.
+
+```{r}
+gst_chars <- c(0:9, LETTERS)   # "0" to "9" are 0 to 9, "A" to "Z" are 10 to 35
+
+gstin_check_char <- function(first14) {
+  v <- match(strsplit(first14, "")[[1]], gst_chars) - 1
+  p <- v * rep(c(1, 2), 7)
+  total <- sum(p %/% 36 + p %% 36)
+  gst_chars[((36 - total %% 36) %% 36) + 1]
+}
+
+gstin_valid <- function(x) {
+  x <- str_to_upper(str_remove_all(x, "\\s"))
+  map_lgl(x, function(g) {
+    if (is.na(g) || !str_detect(g, "^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$")) {
+      return(FALSE)
+    }
+    gstin_check_char(str_sub(g, 1, 14)) == str_sub(g, 15, 15)
+  })
+}
+
+gstin_valid(c("27AAPFU0939F1ZV",   # a valid GSTIN
+              "27AAPFU0938F1ZV",   # one digit typed wrongly
+              "27AAPUF0939F1ZV",   # two letters swapped
+              "27AAPFU0939F1Z"))   # a character missing
+```
+
+The first GSTIN is valid. A single wrong digit, or two swapped letters, makes the check character fail.
+
+A GSTIN also lets us cross-check two other fields. Its characters 3 to 12 must be the same as the vendor's PAN, and its State code should match the State of the vendor's address.
+
+```{r}
+str_sub("27AAPFU0939F1ZV", 3, 12)   # the PAN inside the GSTIN
+str_sub("27AAPFU0939F1ZV", 1, 2)    # the State code
+```
+
+### Aadhaar and the Verhoeff algorithm
+
+An Aadhaar number has 12 digits. It does not start with 0 or 1, and its last digit is a check digit calculated by the **Verhoeff algorithm**. Verhoeff is cleverer than simple checksums. It uses three small tables, based on the mathematics of the symmetries of a pentagon, and it catches *every* single wrong digit and *every* swap of two adjacent digits, the two most common typing errors.
+
+We do not need to understand the mathematics to use it. The function below follows the standard algorithm. It reads the digits from right to left, combining them with the running check value through the tables `d` and `p`. The number is valid if the final check value is 0.
+
+```{r}
+verhoeff_d <- matrix(c(
+  0,1,2,3,4,5,6,7,8,9, 1,2,3,4,0,6,7,8,9,5, 2,3,4,0,1,7,8,9,5,6, 3,4,0,1,2,8,9,5,6,7,
+  4,0,1,2,3,9,5,6,7,8, 5,9,8,7,6,0,4,3,2,1, 6,5,9,8,7,1,0,4,3,2, 7,6,5,9,8,2,1,0,4,3,
+  8,7,6,5,9,3,2,1,0,4, 9,8,7,6,5,4,3,2,1,0), nrow = 10, byrow = TRUE)
+verhoeff_p <- matrix(c(
+  0,1,2,3,4,5,6,7,8,9, 1,5,7,6,2,8,3,0,9,4, 5,8,0,3,7,9,6,1,4,2, 8,9,1,6,0,4,3,5,2,7,
+  9,4,5,3,1,2,6,8,7,0, 4,2,8,6,5,7,3,9,0,1, 2,7,9,3,8,0,6,4,1,5, 7,0,4,6,9,1,3,2,5,8),
+  nrow = 8, byrow = TRUE)
+verhoeff_inv <- c(0, 4, 3, 2, 1, 5, 6, 7, 8, 9)
+
+verhoeff_valid <- function(x) {
+  map_lgl(x, function(num) {
+    if (is.na(num) || !str_detect(num, "^[0-9]+$")) return(FALSE)
+    digits <- rev(as.integer(strsplit(num, "")[[1]]))
+    check <- 0
+    for (i in seq_along(digits)) {
+      check <- verhoeff_d[check + 1, verhoeff_p[((i - 1) %% 8) + 1, digits[i] + 1] + 1]
+    }
+    check == 0
+  })
+}
+
+# The check digit to add at the end of a number (used to create test data)
+verhoeff_digit <- function(num) {
+  digits <- rev(as.integer(strsplit(num, "")[[1]]))
+  check <- 0
+  for (i in seq_along(digits)) {
+    check <- verhoeff_d[check + 1, verhoeff_p[(i %% 8) + 1, digits[i] + 1] + 1]
+  }
+  verhoeff_inv[check + 1]
+}
+
+aadhaar_valid <- function(x) {
+  x <- str_remove_all(x, "\\s")
+  str_detect(x, "^[2-9][0-9]{11}$") & verhoeff_valid(x)
+}
+```
+
+Let us test it on the standard example of the algorithm, where 236 gets the check digit 3, and on a made-up 12-digit number with its check digit attached.
+
+```{r}
+verhoeff_digit("236")
+verhoeff_valid(c("2363", "2364"))
+
+test_no <- paste0("23412341234", verhoeff_digit("23412341234"))
+aadhaar_valid(c(test_no, "234123412340", "134123412346"))
+```
+
+::: callout-warning
+## Aadhaar numbers are sensitive
+
+The Aadhaar Act restricts the collection, storage and display of Aadhaar numbers. Never publish or share full Aadhaar numbers in working papers or reports. Mask all but the last four digits, for example with `str_replace(x, "^\\d{8}", "XXXXXXXX")`. All Aadhaar numbers in this book are made up.
+:::
+
+### Card numbers and the Luhn algorithm
+
+Debit and credit card numbers, and the IMEI numbers of mobile phones, use the simpler **Luhn algorithm**. Starting from the rightmost digit, every second digit is doubled. If doubling gives a two digit number, 9 is subtracted from it. The number is valid if the sum of all the digits is a multiple of 10.
+
+```{r}
+luhn_valid <- function(x) {
+  x <- str_remove_all(x, "[\\s-]")
+  map_lgl(x, function(num) {
+    if (is.na(num) || !str_detect(num, "^[0-9]{2,}$")) return(FALSE)
+    digits <- rev(as.integer(strsplit(num, "")[[1]]))
+    second <- seq_along(digits) %% 2 == 0
+    digits[second] <- digits[second] * 2
+    digits[digits > 9] <- digits[digits > 9] - 9
+    sum(digits) %% 10 == 0
+  })
+}
+
+# 4111 1111 1111 1111 is a well known test card number
+luhn_valid(c("4111 1111 1111 1111", "4111 1111 1111 1112", "79927398713"))
+```
+
+Luhn catches every single wrong digit, and most swaps of adjacent digits. But it misses one swap, `09` written as `90` or the other way round, since both give the same sum. Verhoeff has no such gap.
+
+## Audit use case 1, validating a vendor master
+
+Let us now validate a small vendor master, the kind of table every payment system has. We have planted some typical problems in it. The GSTINs are built with our function `gstin_check_char()`, so that the valid ones have correct check characters.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the vendor master"
+make_gstin <- function(state, pan, entity = "1") {
+  first14 <- paste0(state, pan, entity, "Z")
+  paste0(first14, gstin_check_char(first14))
+}
+
+vendors <- tribble(
+  ~vendor_id, ~vendor_name,                ~state,        ~pan,         ~gstin,                                   ~email,                      ~mobile,           ~ifsc,
+  "V01",      "Kaveri Suppliers Pvt Ltd",  "Karnataka",   "AABCK1234C", make_gstin("29", "AABCK1234C"),           "accounts@kaveri.co.in",     "+91 98450 12345", "CNRB0001234",
+  "V02",      "Bharat Stationers",         "Delhi",       "AAFFB5678D", "07AAFFB5678D1Z9",                        "bharatstat@gmail.com",      "9811012345",      "PUNB0123400",
+  "V03",      "Laxmi Electricals",         "Uttar Pradesh","AAGFL2345E", make_gstin("09", "AAGFL2354E"),          "laxmielec@yahoo.com",       "9415012345",      "SBIN0004567",
+  "V04",      "National Printers",         "Karnataka",   "AAHFN6789F", make_gstin("27", "AAHFN6789F"),           "natprint@gmail.com",        "9845098450",      "HDFC0001111",
+  "V05",      "Om Sai Infra Pvt Ltd",      "Maharashtra", "BQRPS4321G", make_gstin("27", "BQRPS4321G"),           "omsai.infra@gmail.com",     "9822012345",      "ICIC0002222",
+  "V06",      "Rajdhani Computers",        "Delhi",       "AAJFR1122H", make_gstin("07", "AAJFR1122H"),           "rkumar@gmail.com",          "9999999999",      "UTIB0003333",
+  "V07",      "Shree Ganesh Transport",    "Delhi",       "AAKFS3344J", make_gstin("07", "AAKFS3344J"),           "r.kumar@gmail.com",         "98110 6789",      "SBIN1005555",
+  "V08",      "Delhi Office Solutions",    "Delhi",       "AALFD5566K", make_gstin("07", "AALFD5566K"),           "rkumar+bids@gmail.com",     "9811067890",      "KKBK0006666",
+  "V09",      "Verma & Sons",              "Uttar Pradesh","AAMFV7788L", make_gstin("09", "AAMFV7788L"),          "vermasons@rediffmail",      "9415098765",      "BARBOVJLKNO"
+)
+```
+
+```{r}
+vendors |> select(vendor_id, vendor_name, pan, gstin)
+```
+
+Now let us run all the checks. We add one column for each check, so that every exception can be explained.
+
+```{r}
+# State codes of the States in our data
+state_codes <- c("Delhi" = "07", "Uttar Pradesh" = "09", "Maharashtra" = "27", "Karnataka" = "29")
+
+checks <- vendors |>
+  mutate(
+    mobile_clean    = clean_mobile(mobile),
+    email_norm      = normalise_email(email),
+    pan_format      = str_detect(pan, "^[A-Z]{5}[0-9]{4}[A-Z]$"),
+    pan_holder_ok   = !(str_detect(vendor_name, regex("pvt|ltd|limited", ignore_case = TRUE)) &
+                          str_sub(pan, 4, 4) != "C"),
+    gstin_ok        = gstin_valid(gstin),
+    gstin_pan_match = str_sub(gstin, 3, 12) == pan,
+    gstin_state_ok  = str_sub(gstin, 1, 2) == state_codes[state],
+    email_ok        = str_detect(email, email_pattern),
+    mobile_ok       = str_detect(mobile_clean, "^[6-9][0-9]{9}$") &
+                      !str_detect(mobile_clean, "^(\\d)\\1{9}$"),
+    ifsc_ok         = str_detect(ifsc, "^[A-Z]{4}0[A-Z0-9]{6}$")
+  )
+```
+
+To report the exceptions, we pivot the check columns longer, and keep the failed ones.
+
+```{r}
+check_cols <- c("pan_format", "pan_holder_ok", "gstin_ok", "gstin_pan_match",
+                "gstin_state_ok", "email_ok", "mobile_ok", "ifsc_ok")
+
+exceptions <- checks |>
+  select(vendor_id, vendor_name, all_of(check_cols)) |>
+  pivot_longer(all_of(check_cols), names_to = "check", values_to = "passed") |>
+  filter(!passed) |>
+  group_by(vendor_id, vendor_name) |>
+  summarise(failed_checks = paste(check, collapse = ", "), .groups = "drop")
+
+exceptions
+```
+
+Seven of the nine vendors fail at least one check. Let us read them.
+
+- `V02`'s GSTIN fails the check character. It is mistyped, or invented.
+- `V03`'s GSTIN contains a *different* PAN from its PAN field. The digits `2345` and `2354` are swapped. Either field could be wrong.
+- `V04` is in Karnataka, but its GSTIN is registered in Maharashtra (State code `27`).
+- `V05` is a private limited company with an individual's PAN.
+- `V06` has a junk mobile number. `V07` has a mobile number with only 9 digits, and an IFSC whose fifth character is not zero.
+- `V09` has an incomplete email ID, and its IFSC has the letter `O` in place of the digit zero, a very common typing error.
+
+One more check needs a different approach. Do different vendors share an email box? Let us look at the normalised emails.
+
+```{r}
+checks |>
+  group_by(email_norm) |>
+  filter(n() > 1) |>
+  select(vendor_id, vendor_name, email, email_norm)
+```
+
+Three "different" vendors, `V06`, `V07` and `V08`, use the same Gmail box, `rkumar@gmail.com`, written in three ways. If they bid against each other in tenders, the bids may not be independent. This is a lead for a closer look, and a natural input for the network analysis of @sec-netaudit.
+
+::: callout-tip
+## Audit tip
+
+Run these checks on the *whole* master, not a sample. They take seconds. Present the exceptions with the reason for each, as above, so that the department can correct the data. Pay special attention to PANs which do not match the type of vendor, GSTINs which do not contain the vendor's PAN, and shared contact details. These are more often signs of irregularity than of careless typing.
+:::
+
+## Audit use case 2, made-up Aadhaar numbers
+
+A scheme requires each beneficiary's Aadhaar number to be seeded. Suppose some field functionaries, unable to collect the number, typed in made-up numbers just to get past the mandatory field. Such numbers have the right format, but a made-up number has only a one in ten chance of having the correct check digit. Let us test this on an imaginary list of 5,000 beneficiaries.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the beneficiary list"
+set.seed(321)
+make_aadhaar <- function(n) {
+  first11 <- paste0(sample(2:9, n, TRUE),
+                    map_chr(1:n, \(i) paste(sample(0:9, 10, TRUE), collapse = "")))
+  paste0(first11, map_chr(first11, \(x) as.character(verhoeff_digit(x))))
+}
+
+ben <- tibble(ben_id  = sprintf("B%05d", 1:5000),
+              aadhaar = make_aadhaar(5000))
+
+# Planted. 150 made-up numbers, typed at random
+made_up <- sample(1:5000, 150)
+ben$aadhaar[made_up] <- paste0(sample(2:9, 150, TRUE),
+                               map_chr(1:150, \(i) paste(sample(0:9, 11, TRUE), collapse = "")))
+
+# Planted. 40 genuine numbers with one digit mistyped
+typo <- sample(setdiff(1:5000, made_up), 40)
+pos  <- sample(2:12, 40, TRUE)
+for (k in seq_along(typo)) {
+  d <- as.integer(str_sub(ben$aadhaar[typo[k]], pos[k], pos[k]))
+  str_sub(ben$aadhaar[typo[k]], pos[k], pos[k]) <- as.character((d + sample(1:9, 1)) %% 10)
+}
+```
+
+```{r}
+ben_checked <- ben |>
+  mutate(valid = aadhaar_valid(aadhaar),
+         aadhaar_masked = str_replace(aadhaar, "^\\d{8}", "XXXXXXXX"))
+
+ben_checked |> count(valid)
+```
+
+```{r}
+#| include: false
+caught_madeup <- sum(!ben_checked$valid[made_up])
+caught_typo   <- sum(!ben_checked$valid[typo])
+```
+
+`r sum(!ben_checked$valid)` numbers fail the check. Of the 150 made-up numbers, `r caught_madeup` are caught, about nine in ten, as expected. All `r caught_typo` mistyped numbers are caught, since Verhoeff catches every single wrong digit. No genuine number is flagged. Notice that we display only the masked numbers.
+
+```{r}
+ben_checked |> filter(!valid) |> select(ben_id, aadhaar_masked) |> head()
+```
+
+::: callout-warning
+## Caution
+
+A failed check proves that the number is wrong. A passed check does *not* prove that it is right. About one made-up number in ten passes by chance, and a real number of *another* person passes too. Whether the number belongs to the beneficiary can be confirmed only through Aadhaar authentication. Use the check digit to find the certainly wrong numbers, and to estimate how serious the problem is. Here `r caught_madeup` of the 150 made-up numbers were caught. In real data we do not know the true number, but we can estimate it as about 10/9 of the made-up numbers caught.
+:::
+
+## A suggested workflow
+
+1. **List the identifiers** in the data, and find out the official format of each.
+2. **Standardise** them, by changing case and removing spaces, dots and hyphens.
+3. **Check formats** with anchored patterns, using `str_detect()`. Keep one column for each check.
+4. **Verify check digits** where a public rule exists, like GSTIN, Aadhaar and card numbers.
+5. **Cross-check fields**, like the PAN inside the GSTIN, the State code against the address, and the 4th character of the PAN against the type of entity.
+6. **Normalise and look for sharing**, like the same Gmail box or the same mobile number for different entities.
+7. **Report the exceptions with reasons**, and protect sensitive numbers by masking them.
+
+::: callout-important
+## Remember
+
+A regex checks the *shape* of a value, and a check digit catches most *typing errors*. Neither proves that the value is genuine or belongs to the right person. Values which fail are certainly wrong. Values which pass still need verification against the original documents or the official databases.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `str_view()` | stringr | Shows the matches of a pattern, for learning and checking regex |
+| `str_detect()` | stringr | `TRUE` or `FALSE` for each string, whether it matches the pattern |
+| `str_extract()`, `str_extract_all()` | stringr | Extract the first or all matches |
+| `str_replace()`, `str_replace_all()`, `str_remove_all()` | stringr | Replace or remove matches, with back references like `\\1` |
+| `regex()` | stringr | Sets options like `ignore_case`, `multiline` and `comments` |
+| `str_sub()` | stringr | Takes characters at given positions, like the State code of a GSTIN |
+| `normalise_email()`, `clean_mobile()` | written in this chapter | Standardise email IDs (Gmail aliases) and mobile numbers |
+| `gstin_valid()`, `aadhaar_valid()`, `luhn_valid()` | written in this chapter | Check the format and check digit of GSTIN, Aadhaar and card numbers |
+
+: Functions used in this chapter {#tbl-regexfunctions}
