@@ -6,7 +6,18 @@ source("_common.R")
 # Factors {#sec-factors}
 We often have a requirement, where we need to have our character variable representing categorical data that should take values from a fixed and known set of finite values (or categories).  Additionally sometimes these categories need to be sorted in a specific order which may not be alphabetical.  Categorical data like this plays an important role in data analytics. 
 
-To deal with such categorical data, we have a special class `factor` in R (Readers may remember that we learnt about this data type, though in short only, in @sec-fctrss).  In data analytical tasks we often need to create use factors, so let us discuss about these in a bit detail in this chapter.
+To deal with such categorical data, we have a special class `factor` in R. We met this data type briefly in @sec-fctrss. Audit data is full of categories, like expenditure heads, types of vendors, districts, risk ratings and months. So let us discuss factors in a little more detail in this chapter, and apply them to audit data at the end, in @sec-fct-audit.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)   # includes forcats
+library(patchwork)
+library(conflicted)
+conflicts_prefer(dplyr::filter)
+```
 
 ## Factors in base R
 Factors in R are objects built over atomic data-type `integer`.  We have two primary functions to create (and coerce) factors from character vectors.
@@ -103,12 +114,15 @@ Ordering a factor in R has another benefit, we can actually perform calculations
 Suppose if we want to find how many shirts do we have of sizes "Large" or greater.
 
 
-```{r error=TRUE}
+```{r}
+#| warning: true
 # How many shirts are there of sizes L or greater?
 sum(shirts2_ordered >= "Large")
-# But unordered factor will result in error.
+# But an unordered factor gives only a warning, and NA
 sum(shirts2_f >= "Large")
 ```
+
+Notice that the unordered factor did not stop with an error. It gave a warning, and the answer `NA`. In a long script, such a warning is easily missed, and the `NA` silently flows into later results. So always read the warnings, and use ordered factors wherever the order matters.
 
 We can check the given factor is an ordered factor or not using function `is.ordered()`.  E.g.
 ```{r}
@@ -117,12 +131,11 @@ is.ordered(shirts2_f)
 ```
 
 ### Functions returning factors as output
-Readers may remember that in @sec-cutt we learnt about a function `cut` which returns a factor variable as output.  In the next sections we will learn some functions which will be useful while working with factor variables, either as input or output or both.
+Readers may remember that in an earlier chapter we learnt about a function `cut()` which returns a factor variable as output.  In the next sections we will learn some functions which will be useful while working with factor variables, either as input or output or both.
 
 ## Factors in `forcats`
 Package `forcats` which is part of core tidyverse provides us with more robust and useful ways to create and deal with factor variables.  In `forcats` we have function `fct` for creating factor variables. It will produce errors if any value is not available in the given levels, to avoid bugs/typographical errors in the code.  E.g.
 ```{r error=TRUE}
-library(forcats)
 months_31 <- c("Jan", "Mar", "May", "Jul", "Aug", "Oxt", "Dec")
 fct(months_31, levels = month.abb)
 ```
@@ -159,7 +172,6 @@ To learn more functions from `forcats` we will use `gss_cat` data frame which is
 If we analyse the (mean) number of hours spent per day on TV watching across different religions in `gss_cat`, we can see that -
 
 ```{r fig-reord, fig.show='hold', fig.align='center', fig.cap="Factors with default order"}
-library(tidyverse)
 gss_cat |>
   summarise(tv = mean(tvhours, na.rm = TRUE), .by = relig) |>
   ggplot(aes(relig, tv)) +
@@ -229,10 +241,6 @@ fct_reorder2(
 ```
 Here default function is `last2` which simply means that levels of `.f` are sorted on the basis of last values of `.y` when plotted against `.x` as in grouped line charts.  E.g. See @fig-reord5.
 ```{r fig-reord5, fig.show='hold', fig.align='center', fig.cap="Factors reordered on two criteria"}
-library(patchwork)
-library(conflicted)
-conflicts_prefer(dplyr::filter)
-
 default <- economics_long |> 
   filter(date < dmy("31122003"), date >= dmy("01011995")) |> 
   ggplot(aes(date, value01)) +
@@ -271,9 +279,9 @@ gss_cat |>
 ```
 
 ### Ordering bar charts in order of frequency {#sec-infreq}
-Function `fct_infreq()` is helpful in sorting the factor in decreasing order of frequency and thus, can be used to sort the bar charts (Refer charts in @fig-fct16).
+Function `fct_infreq()` sorts the levels of a factor in decreasing order of frequency, so it can be used to sort bar charts (Refer charts in @fig-fct16).
 
-```{r fig-fct16, fig.align='center', fig.show='hold', fig.cap="Default and increasing order by Frequency"}
+```{r fig-fct16, fig.align='center', fig.show='hold', fig.cap="Default order (left) and decreasing order of frequency (right)"}
 
 default <- mpg |> 
   ggplot(aes(trans)) +
@@ -307,16 +315,16 @@ Readers may explore these functions by themselves.
 In @sec-ordfact we saw how an unordered factor can be turned into an ordered factor.  This ordering can cause one side effect while plotting in ggplot2.  Ordered factor use `scale_color_viridis` by default whereas unordered factor doesn't.  See following example (Notice how the color scale has been @fig-moreord to @fig-moreord2).
 
 ```{r fig-moreord, fig.cap="Use of color scale in ordered and unordered factors"}
-mtcars %>% 
-  mutate(cyl = ordered(factor(cyl))) %>% 
+mtcars |> 
+  mutate(cyl = ordered(factor(cyl))) |> 
   ggplot(aes(wt, mpg)) +
   geom_point(size = 5, aes(color = cyl)) +
   ggtitle("Ordered Factor")
 ```
 
 ```{r fig-moreord2, fig.cap="Use of color scale in ordered and unordered factors"}
-mtcars %>% 
-  mutate(cyl = factor(cyl)) %>% 
+mtcars |> 
+  mutate(cyl = factor(cyl)) |> 
   ggplot(aes(wt, mpg)) +
   geom_point(size = 5, aes(color = cyl)) +
   ggtitle("Unordered Factor")
@@ -367,11 +375,11 @@ Some examples-
 
 ```{r fig-fctlump, fig.show='hold', fig.align='center', fig.cap="Lumping Factors"}
 # We can check the religion in `gss_cat` and followers count
-gss_cat %>% 
+gss_cat |> 
   count(relig)
 
 # Let's restrict these to 5 religions only
-gss_cat %>% 
+gss_cat |> 
   ggplot(aes(fct_lump_n(relig, n = 5))) +
   geom_bar()
 ```
@@ -381,24 +389,113 @@ In @fig-fctlump we can see that there are five religions plus `"other"` category
 We may also make use of `w` argument, if we already have our factor and its counts of levels in another vector.  See @fig-fctlump2 -
 
 ```{r fig-fctlump2, fig.show='hold', fig.align='center', fig.cap="Lumping Factors by making use of w argument"}
-gss_cat %>% 
-  count(relig) %>% 
+gss_cat |> 
+  count(relig) |> 
   # Making use of `w` argument
-  mutate(relig = fct_lump_n(relig, n = 5, w = n)) %>% 
+  mutate(relig = fct_lump_n(relig, n = 5, w = n)) |> 
   ggplot(aes(relig, n)) +
-  geom_bar(stat = "identity")
+  geom_col()
 ```
 
-To sort the levels in increasing order of frequency we can use `fct_infreq()` function which we learnt in @sec-infreq. It may also take `w` argument (optionally, of course) if we have our factor levels already counted.  So, to sort the levels in @fig-fctlump2, we may make use of this function one step before lumping.  See @fig-fctlump3.
+`geom_col()` draws bars whose heights are already in the data, here the counts `n`. It is the same as `geom_bar(stat = "identity")`. To sort the levels in decreasing order of frequency, we can use the function `fct_infreq()`, which we learnt in @sec-infreq. It may also take `w` argument (optionally, of course) if we have our factor levels already counted.  So, to sort the levels in @fig-fctlump2, we may make use of this function one step before lumping.  See @fig-fctlump3.
 
 ```{r fig-fctlump3, fig.show='hold', fig.align='center', fig.cap="Sorting and Lumping Factors"}
-gss_cat %>% 
-  count(relig) %>% 
+gss_cat |> 
+  count(relig) |> 
   # Sorting making use of `w` argument
   mutate(relig = fct_infreq(relig, w = n),
-         relig = fct_lump_n(relig, n = 5, w = n)) %>% 
+         relig = fct_lump_n(relig, n = 5, w = n)) |> 
   ggplot(aes(relig, n)) +
-  geom_bar(stat = "identity")
+  geom_col()
 ```
 
----------------------------------------------
+## Audit use cases {#sec-fct-audit}
+
+### Catching codes that are not in the approved list
+
+Expenditure is booked under heads from an approved list. A head typed wrongly, or invented, is a data quality problem, and sometimes a way of hiding an expense. `factor()` turns any value not in its `levels` into `NA` silently, as we saw with the shirt sizes. `fct()` refuses, and tells us which values are not allowed. Both behaviours are useful. Let us take a few vouchers.
+
+```{r}
+approved_heads <- c("Office expenses", "Repairs", "Supplies", "Professional fees", "Travel")
+
+vouchers <- tibble(
+  voucher_no = sprintf("PV-%03d", 1:8),
+  head = c("Repairs", "Supplies", "Ofice expenses", "Travel", "Hospitality",
+           "Repairs", "supplies", "Professional fees")
+)
+```
+
+```{r error=TRUE}
+fct(vouchers$head, levels = approved_heads)
+```
+
+`fct()` stops with an error, listing the values which are not approved. To find the vouchers concerned, we let `factor()` turn them into `NA`, and pick those rows.
+
+```{r}
+vouchers |>
+  mutate(head_f = factor(head, levels = approved_heads)) |>
+  filter(is.na(head_f))
+```
+
+Three vouchers have heads outside the approved list. *Ofice expenses* is a typing error and *supplies* differs only in case, but *Hospitality* is a head which does not exist in the approved list at all. It needs an explanation.
+
+### Risk ratings, an ordered factor
+
+Audit planning often rates units as Low, Medium or High risk. These ratings have a natural order. As an ordered factor, they can be compared and filtered directly.
+
+```{r}
+units <- tibble(
+  unit = c("Division A", "Division B", "Division C", "Division D", "Division E"),
+  risk = factor(c("Medium", "Low", "High", "Very high", "Low"),
+                levels = c("Low", "Medium", "High", "Very high"), ordered = TRUE)
+)
+
+# Units of Medium risk or above, to be covered this year
+units |>
+  filter(risk >= "Medium") |>
+  arrange(desc(risk))
+```
+
+Without the ordered factor, `"Medium"` and `"High"` would be compared as text, alphabetically, and `"High"` would wrongly come before `"Low"`.
+
+### Top vendors and the rest
+
+Charts of expenditure by vendor usually have too many bars. A common audit chart shows the top few vendors, and puts the rest together as *Other*. Since we are interested in *money*, not in the number of payments, we lump by the amount, using the `w` argument (@fig-fctvendor).
+
+```{r}
+#| label: fig-fctvendor
+#| fig-cap: "Payments to the top 8 vendors, and all others together"
+set.seed(124)
+payments <- tibble(
+  vendor = sample(sprintf("Vendor %02d", 1:40), 2000, TRUE,
+                  prob = c(10, 8, 6, rep(1, 37))),
+  amount = round(rlnorm(2000, log(25000), 1.1))
+)
+
+payments |>
+  mutate(vendor = fct_lump_n(vendor, n = 8, w = amount, other_level = "All others"),
+         vendor = fct_infreq(vendor, w = amount) |> fct_relevel("All others", after = Inf) |>
+           fct_rev()) |>
+  summarise(amount_lakh = sum(amount) / 1e5, .by = vendor) |>
+  ggplot(aes(amount_lakh, vendor)) +
+  geom_col(fill = "steelblue") +
+  labs(x = "Amount paid (Rs lakh)", y = NULL) +
+  theme_bw()
+```
+
+`fct_lump_n()` keeps the 8 vendors with the most money and lumps the rest. `fct_infreq()` with `w = amount` sorts the vendors by the amount paid. And `fct_relevel(..., after = Inf)` moves *All others* to the end, so that it does not look like the biggest vendor. Horizontal bars, with the vendor on the y-axis, keep long names readable. But ggplot2 draws the first level at the *bottom* of the y-axis, so we reverse the order with `fct_rev()`, to bring the biggest vendor to the top.
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `factor()`, `as.factor()`, `levels()` | base R | Create factors and see their levels. Values not in `levels` become `NA` |
+| `factor(ordered = TRUE)`, `ordered()`, `is.ordered()` | base R | Ordered factors, which can be compared with `<` and `>=` |
+| `fct()` | forcats | Create a factor, with an error for values not in `levels` |
+| `fct_count()`, `fct_unique()` | forcats | Counts and unique values of a factor |
+| `fct_reorder()`, `fct_reorder2()` | forcats | Order levels by another variable |
+| `fct_infreq()`, `fct_rev()`, `fct_relevel()`, `fct_inorder()` | forcats | Order levels by frequency, reverse them, or move some by hand |
+| `fct_relabel()`, `fct_recode()`, `fct_collapse()` | forcats | Change or combine level names |
+| `fct_lump_n()`, `fct_lump_prop()`, `fct_lump_min()`, `fct_lump_lowfreq()` | forcats | Lump rare levels into *Other* |
+
+: Functions used in this chapter {#tbl-fctfunctions}

@@ -4,8 +4,9 @@ source("_common.R")
 ```
 
 
-# Probability in R
-We will keep short here.  Instead of learning all the concepts of probability, we will see how to calculate probability, densities, quantiles for nearly any type of distribution.  R's powerhorse has four types of functions for each of the distributions associated called `pqdr` functions.  Actually all these are prefixes.  Consider a probability function $P(X=x) = p$ for a variable $x$ and $p$ be the associated probability.  
+# Probability in R {#sec-probability}
+
+We will keep this short. Instead of learning all the concepts of probability, we will see how to calculate probabilities, densities, quantiles and random numbers for nearly any distribution. Base R has four functions for each common distribution. Their names start with the prefixes `p`, `q`, `d` and `r`, followed by a short name of the distribution, like `norm` for the normal distribution or `binom` for the binomial.
 
 | Distribution                   | P |  Q | D | R  |
 | ------------------------------ | --------- | ------ | ----- | -----|
@@ -30,75 +31,147 @@ We will keep short here.  Instead of learning all the concepts of probability, w
 | Wilcoxon Rank Sum Statistic    | pwilcox   | qwilcox | dwilcox | rwilcox |
 | Wilcoxon Signed Rank Statistic | psignrank | qsignrank | dsignrank | rsignrank |
 
-All these functions are vectorised. Let us explore these one by one.
+: The p, q, d and r functions of common distributions {#tbl-pqdr}
 
+All these functions are vectorised. Let us explore them one by one.
 
 ## `p*()` set of functions
-These set of functions give the cumulative **p**robability distribution of that probability function.  
 
-Example-1.  What is the probability of a number being less than or equal to `25` in `Normal` distribution with `mean = 50` and `sd = 10`.
+These functions give the cumulative **p**robability, that is, the probability that a value is *less than or equal to* a given number.
+
+Example-1. What is the probability of a value being less than or equal to `25` in a normal distribution with `mean = 50` and `sd = 10`?
 
 ```{r}
 pnorm(25, mean = 50, sd = 10)
 ```
 
-On the contrary, the probability of a number being greater than or equal to 25 in the above distribution is-
+On the contrary, the probability of a value being greater than 25 in the same distribution is
+
 ```{r}
-# Either deduct probability from 1 
+# Either deduct probability from 1
 1 - pnorm(25, mean = 50, sd = 10)
 # Or provide FALSE to lower.tail argument
 pnorm(25, mean = 50, sd = 10, lower.tail = FALSE)
 ```
 
-Example-2: What is the probability of one or more heads out of two tosses of a fair coin (binomial distribution with `p = 0.5`).
+Example-2. What is the probability of getting one or more heads in two tosses of a fair coin? The number of heads follows a binomial distribution with `size = 2` and `prob = 0.5`. "One or more" is the same as "more than zero", so we ask for the upper tail above 0.
 
 ```{r}
-pbinom(1, size = 2, p = 0.5)
+pbinom(0, size = 2, prob = 0.5, lower.tail = FALSE)
 ```
 
+Be careful with discrete distributions. `pbinom(1, ...)` would give the probability of *at most* one head, which is a different question. Here it happens to give the same number, 0.75, by coincidence of this small example, but in general the two differ.
 
 ## `q*()` set of functions
-These set of functions, give **q**uantile which is the inverse of cumulative probability function. So if $f$ is cdf (cumulative distribution function) of a given probability distribution then $F$ the quantile is inverse of `f` i.e. $F = f^{-1}$.  These are related by
+
+These functions give the **q**uantile, which is the inverse of the cumulative probability. If $F$ is the cumulative distribution function, which turns a value $x$ into a probability $p$, then the quantile function $F^{-1}$ turns a probability back into a value.
 
 $$
-p = f(x)
-$$ {#eq-s1} 
+p = F(x)
+$$ {#eq-s1}
 
 $$
-x = F(x) = f^{-1}(x)
-$$ {#eq-s2} 
+x = F^{-1}(p)
+$$ {#eq-s2}
 
-Example- In the above same normal distribution (`mean = 50` and `sd = 10`) What is number below which 90% of population will be distributed.
+Example. In the same normal distribution (`mean = 50` and `sd = 10`), below which value do 90% of the values lie?
 
 ```{r}
 qnorm(0.9, mean = 50, sd = 10)
 ```
 
-Similar to `cdf` here we may use `lower.tail` argument to find the number above which a population percent is distributed.
+As with the `p` functions, we may use the `lower.tail` argument to find the value *above* which 90% of the values lie.
+
 ```{r}
 qnorm(0.9, mean = 50, sd = 10, lower.tail = FALSE)
 ```
 
 ## `d*()` set of functions
-We saw that `p` group denotes `cdf`, `q` group denotes `inverse cdf`, but `d` group actually denotes probability **d**ensity function of a given distribution.  Simply stating, this returns the height of probability distribution function for a given x value.
 
-So what is expected probability of drawing exactly 2 heads out of two tosses of a single fair coin (i.e. from a binomial distribution with probability `p = 0.5`).
+The `p` functions give cumulative probabilities and the `q` functions their inverse. The `d` functions give the **d**ensity, the height of the distribution at a given value. For a *discrete* distribution like the binomial, this height is simply the probability of exactly that value.
+
+So what is the probability of getting exactly 2 heads in two tosses of a fair coin?
 
 ```{r}
-dbinom(2, 2, prob = 0.5)
+dbinom(2, size = 2, prob = 0.5)
 ```
 
+For a *continuous* distribution like the normal, the density is not a probability itself. Probabilities come from areas under the curve, which the `p` functions give.
+
 ## `r*()` set of functions
-These set of functions are used to generate **r**andom numbers from a Statistical distribution.  So to generate `10` random numbers from Normal distribution with `mean = 50` and `sd = 10`, we can use `rnorm`.
+
+These functions generate **r**andom numbers from a distribution. So to generate `10` random numbers from a normal distribution with `mean = 50` and `sd = 10`, we use `rnorm()`. Setting a seed with `set.seed()` makes the result reproducible.
 
 ```{r}
+set.seed(2024)
 rnorm(10, mean = 50, sd = 10)
 ```
 
-We can actually check this using histogram.
-```{r fig.align='center', fig.show='hold', fig.cap="Histogram of Random numbers generated out of Normal distribution", out.width="75%"}
+We can check the shape of the distribution with a histogram of many such numbers (@fig-rnormhist).
+
+```{r}
+#| label: fig-rnormhist
+#| fig-cap: "Histogram of random numbers generated from a normal distribution"
+#| fig-align: center
+#| out-width: "75%"
 set.seed(1234)
-hist(rnorm(10000, 50, 10), breaks = 50)
+hist(rnorm(10000, 50, 10), breaks = 50, main = NULL, xlab = "Value")
 ```
 
+The `r` functions are how we create the simulated data used throughout this book, like the payments and claims with planted irregularities.
 
+## Probability in audit sampling {#sec-prob-audit}
+
+Why should an auditor care about these functions? Because every statistical sample rests on them. Let us see two questions that come up in every sampling plan.
+
+**Question 1. If I find no errors in my sample, how sure can I be?** Suppose the true rate of deviations from a control is 5%, which we would consider too high. We test 60 items and find none. What is the chance of that happening? Each item is a deviation with probability 0.05, so the number of deviations in 60 items follows a binomial distribution.
+
+```{r}
+dbinom(0, size = 60, prob = 0.05)
+```
+
+```{r}
+#| include: false
+p0 <- dbinom(0, size = 60, prob = 0.05)
+```
+
+There is only a `r round(100 * p0, 1)`% chance of finding no deviation in 60 items if the true rate were 5%. So if we do find none, we can be about `r round(100 * (1 - p0))`% confident that the true rate is below 5%. This is the logic behind sample sizes for tests of controls.
+
+For small rates and large populations, the **Poisson** distribution gives nearly the same answer, with only one parameter, the expected number of deviations, here $60 \times 0.05 = 3$.
+
+```{r}
+ppois(0, lambda = 3)
+```
+
+**Question 2. What is the highest rate consistent with what I found?** The Poisson distribution also tells us how high the true number of errors could be, at a chosen confidence level, given the errors we found. These upper limits are called **reliability factors** or **confidence factors**, and auditors usually read them from printed tables. In R they come from a single function, `qgamma()`, because of a mathematical link between the Poisson and gamma distributions.
+
+```{r}
+# Reliability factors for 0 to 5 errors found
+tibble::tibble(errors_found = 0:5,
+               factor_95    = round(qgamma(0.95, 0:5 + 1), 2),
+               factor_90    = round(qgamma(0.90, 0:5 + 1), 2))
+```
+
+These are exactly the factors printed in audit sampling tables. The factor 3.00 for zero errors at 95% confidence is the most used number in audit sampling. We will use these factors to calculate sample sizes and evaluate results in the next chapter (@sec-sampling).
+
+::: callout-note
+## Why does `qgamma()` give Poisson limits?
+
+If errors occur at random, at an average of $\lambda$ per sample, then the probability of seeing $k$ or fewer errors is `ppois(k, lambda)`. The upper limit at 95% is the value of $\lambda$ for which this probability falls to 5%. That value happens to be the 95th percentile of a gamma distribution with shape $k + 1$, so `qgamma(0.95, k + 1)` gives it directly. We can check it.
+
+```{r}
+ppois(0, qgamma(0.95, 1))
+ppois(2, qgamma(0.95, 3))
+```
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `pnorm()`, `pbinom()`, `ppois()` | base R (stats) | Cumulative probability, use `lower.tail = FALSE` for the upper tail |
+| `qnorm()`, `qgamma()` | base R (stats) | Quantiles, the value below which a given share lies |
+| `dbinom()` | base R (stats) | Probability of exactly a value, for discrete distributions |
+| `rnorm()`, `set.seed()` | base R | Random numbers, reproducibly |
+
+: Functions used in this chapter {#tbl-probfunctions}
