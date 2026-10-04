@@ -6,19 +6,17 @@ source("_common.R")
 
 # Colors in R {#sec-COLORR}
 
-What is a visualisation without colours? Colours are crucial in conveying meaning effectively, with some colours having specific psychological associations. For instance, red can represent emotions such as love and anger, but it is also often used to indicate declines or losses in data visualizations. In the context of data visualization, color sets the mood and emphasizes the message of the display. It creates a particular atmosphere and can turn a simple visualization into a compelling data narrative.
+Colours carry meaning in a chart. Red is read as a warning, a loss or a shortfall, and green as safe or good, so a chart that colours good results red sends the wrong message before anyone reads a number. Well-chosen colours make the important points stand out, separate categories clearly, and show gradients that text alone cannot.
 
-While tools like ggplot2 are excellent for crafting impactful data visualizations, the default color schemes may sometimes require customization. Carefully selected colors can make it easier and quicker for users to interpret the data and grasp the intended message.
-
-The strategic use of colors can highlight critical data points, differentiate categories, and depict gradients in a way that text alone cannot achieve. Effective color choices make complex data more accessible and engaging, fostering better understanding and retention of information. See the following example (@fig-colorex), wherein mean highway mileage for each class of cars in `mpg` data-set has been shown. Color has been used to distinguish classes those having mileage greater than average mileage.
+The default colours of ggplot2 are chosen only to be distinct, not to carry meaning, so they often need changing. See the following example (@fig-colorex), which shows the mean highway mileage of each class of cars in the `mpg` dataset. Colour marks the classes with mileage above the average.
 
 ```{r fig-colorex, fig.show='hold', fig.align='center', fig.cap="Default colors in GGPLOT2"}
 library(tidyverse, warn.conflicts = FALSE, quietly = TRUE)
-mpg %>% 
-  summarise(hwy = mean(hwy), .by = class) %>% 
+mpg |> 
+  summarise(hwy = mean(hwy), .by = class) |> 
   mutate(class = fct_reorder(class, hwy),
          mean = mean(hwy),
-         performance = ifelse(hwy >= mean, "Above", "Below")) %>% 
+         performance = ifelse(hwy >= mean, "Above", "Below")) |> 
   ggplot(aes(y = class, x = hwy, fill = performance)) +
   geom_col() +
   geom_vline(aes(xintercept = mean), linetype = "dashed", linewidth = 1) +
@@ -26,11 +24,11 @@ mpg %>%
   ggtitle("Class wise Mean Highway mileage of cars")
 ```
 
-We may notice that default color choice by R's GGPLOT2 is not effective as it has picked negative shades for classes having good mileage.
+The default colours are not effective here. ggplot2 has given red, a colour usually read as bad, to the classes with *better* than average mileage, simply because "Above" comes first in alphabetical order.
 
-In addition, it is crucial to consider color-blind friendly palettes to ensure that visualizations are accessible to all users. Approximately 8% of men and 0.5% of women globally experience some form of color blindness. By using color schemes that are distinguishable to those with color vision deficiencies, such as those provided by tools like [ColorBrewer](https://en.wikipedia.org/wiki/ColorBrewer), designers can create inclusive visualizations. This not only broadens the audience but also demonstrates a commitment to accessibility and inclusivity. Thoughtful color selection, including the use of color-blind friendly palettes, can significantly enhance the effectiveness and reach of data visualizations.
+It is also important to use colours that readers with colour blindness can tell apart. About 8% of men and 0.5% of women have some form of colour blindness, most commonly difficulty in telling red from green. Palettes designed with this in mind, such as those of [ColorBrewer](https://en.wikipedia.org/wiki/ColorBrewer) described below, make a chart readable for everyone. In audit reports, which may also be printed in black and white, it helps to choose colours that differ in lightness as well as in hue.
 
-Readers who wish to learn more about usage of appropriate colors in data visualizations may [refer this blog post](https://blog.datawrapper.de/10-ways-to-use-fewer-colors-in-your-data-visualizations/). So let us learn how to tweak colors in data visualizations to make them convey the message clear and effective.
+Readers who wish to learn more about the use of colour in charts may [refer to this blog post](https://blog.datawrapper.de/10-ways-to-use-fewer-colors-in-your-data-visualizations/). Let us now see how to choose colours in R.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 library(RColorBrewer)
@@ -39,7 +37,7 @@ library(RColorBrewer)
 
 ## Choosing colors by own choice
 
-We need different colors for making visualizations in R. In base R plots, colors are usually specified using "col" whereas in ggplot2 these are manipulated using 'fill' or 'color' aesthetics. There are 600+ built in colors in R. We can have a look on these using `colors()` function.
+In base R plots, colours are given with the argument `col`, while in ggplot2 they are set with the `fill` or `colour` aesthetics. R has more than 600 named colours, listed by the function `colors()`.
 
 ```{r}
 # See names of random 20 colors
@@ -47,20 +45,20 @@ set.seed(123)
 sample(colors(), 20)
 ```
 
-As we can see that `colors()` function produces color names, we can use color names directly while plotting.
+These names can be used directly in plots.
 
 ```{r}
 # In base R
 barplot(c(5,4,3,2), col = c("lightgoldenrodyellow", "mediumorchid1", "indianred2", "paleturquoise"))
 ```
 
-Or alternatively, we can use HEX color code values for these colors.
+Or we can give colours by their *hex codes*, explained in the next section.
 
 ```{r}
 barplot(c(2, 3, 4, 5), col = c("#fedcba", "#abcdef", "#123456", "#654321"))
 ```
 
-In the following plot, readers may see random 100 colors printed from the `colors()` in R.
+The following plot shows 100 of the named colours, chosen at random.
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
@@ -68,11 +66,11 @@ In the following plot, readers may see random 100 colors printed from the `color
 set.seed(12345)
 COLORS <- sample(colors(), 100)
 library(scales)
-expand.grid(x = 1:5, y = 1:20) %>%
+expand.grid(x = 1:5, y = 1:20) |>
   mutate(col = COLORS,
          text_col = map(col, col2rgb),
-         text_col = map_dbl(text_col, ~ sum(.x/255 * c(0.2126, 0.7152, 0.0722))),
-         text_col = ifelse(text_col > 0.5, "black", "white")) %>%
+         text_col = map_dbl(text_col, \(x) sum(x / 255 * c(0.2126, 0.7152, 0.0722))),
+         text_col = ifelse(text_col > 0.5, "black", "white")) |>
   ggplot(aes(x, y)) +
   geom_tile(color = "white", aes(fill = col)) +
   scale_fill_identity() +
@@ -83,13 +81,13 @@ expand.grid(x = 1:5, y = 1:20) %>%
 
 ## Colors by hex values
 
-Colors in R can also be directly selected by entering the hex value of the color preceded by a `#` hash character. These hex values generally contain six hexadecimal digits, out of which-
+A colour can also be given by its hex code: a `#` followed by six hexadecimal digits, of which
 
 -   first two represent hex value of `red`
 -   next two represent `green`
 -   and last two represent `blue`
 
-thus forming rgb/RGB value of a color. Readers may already know that there are sixteen hexadecimal digits, `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `a`, `b`, `c`, `d`, `e` and `f`. So two hexadecimal digits actually represent $16{\times}16 = 256$ values in base-10. Thus,
+together forming the RGB (red, green, blue) value of the colour. There are sixteen hexadecimal digits, `0` to `9` and `a` to `f`, so two of them can represent $16{\times}16 = 256$ levels of each colour, from `00` (none) to `ff` (full). Thus,
 
 -   `#000000` represents perfect black (no color at all)
 -   `#ff0000` represents red color
@@ -105,7 +103,7 @@ barplot(2:6, col = c("#000000", "#ff0000", "#ffff00", "#00ffff", "#ff00ff"), mai
 
 ## Color palettes in Base R
 
-A color palette is a combination of colors used by UI designers when designing an interface. Base R has certain palettes that may be used in visualizations.
+A *palette* is a set of colours chosen to work together. Base R has several palettes, each given by a function that returns the requested number of colours.
 
 ```{r}
 heat.colors(5)
@@ -116,14 +114,14 @@ cm.colors(4)
 hcl.colors(5)
 ```
 
-See colors in action in the following plots
+The following plots show these palettes in use.
 
 ```{r}
 par(mfrow = c(2, 3))
 barplot(1:5, col = heat.colors(5), main = "Heat Colors")
 barplot(1:7, col = rainbow(7), main = "Rainbow colors")
 barplot(1:7, col = terrain.colors(7), main = "Terrain Colors")
-barplot(1:5, col = topo.colors(5), main = "Topgraphical Colors")
+barplot(1:5, col = topo.colors(5), main = "Topographical Colors")
 barplot(1:6, col = cm.colors(6), main = "CM colors")
 barplot(1:7, col = hcl.colors(7), main = "HCL Colors")
 
@@ -131,7 +129,7 @@ barplot(1:7, col = hcl.colors(7), main = "HCL Colors")
 
 ## Color Brewer
 
-There are some color palettes created specifically for the purpose and which let us choose best colors for story telling. [Cynthia Brewer](https://en.wikipedia.org/wiki/Cynthia_Brewer) an American cartographer, who worked on visibility and color theory in cartography developed colorblind-friendly sets of colors, known as the Brewer palettes. `RColorBrewer` package in R presents us those palettes for use in our data visualizations.
+[Cynthia Brewer](https://en.wikipedia.org/wiki/Cynthia_Brewer), an American cartographer who worked on the use of colour in maps, developed sets of colours that work well together and that are, in many cases, safe for readers with colour blindness. They are known as the Brewer palettes, and the package `RColorBrewer` makes them available in R.
 
 Let us load the package and display all available palettes there.
 
@@ -145,20 +143,20 @@ display.brewer.all()
 knitr::include_graphics("images/brewer.png")
 ```
 
-These are actually divided into three categories, namely-
+They fall into three categories.
 
--   *Sequential*: For use preferably with continuous scales;
--   *Qualitative*: To be used for non-ordered categorical things -- such as factor, like country or continent;
--   *Diverging*: For use in continuous scales showing two diverging trends like positives and negatives, etc.
+-   *Sequential*, for ordered values from low to high, like expenditure by district;
+-   *Qualitative*, for categories with no order, like departments or schemes;
+-   *Diverging*, for values on both sides of a meaningful middle, like savings and excesses against a budget.
 
-To display a single palette, we can use `display.brewer.pal(n, name)` where `n` and `name` are arguments requiring number of colors and palette name respectively.
+To display a single palette, use `display.brewer.pal(n, name)`, with the number of colours `n` and the palette's `name`.
 
 ```{r out.height="20%"}
 # View a single RColorBrewer palette by specifying its name
 display.brewer.pal(n = 7, name = 'BrBG')
 ```
 
-See the following examples showing us to pick color palette using
+In charts, the palettes are used with
 
 -   `scale_fill_brewer` or `scale_color_brewer` in ggplot2
 -   `brewer.pal` in base R plots.
@@ -178,7 +176,7 @@ barplot(c(2,4, 5, 7, 3), col = brewer.pal(n = 5, name = "Accent"))
 
 ## Package `colorspace`
 
-The colorspace package provides a broad toolbox for selecting individual colors or color palettes, manipulating these colors, and employing them in various kinds of visualizations.
+The package `colorspace` provides a broad toolbox for choosing colours and palettes, based on the HCL (hue, chroma, luminance) colour model, which matches the way people perceive colour.
 
 The colorspace package provides three types of palettes based on the HCL model:
 
@@ -195,12 +193,12 @@ hcl_palettes(plot = TRUE)
 
 To provide access to the HCL color palettes from within `ggplot2` graphics suitable discrete and/or continuous ggplot2 color scales are provided. The scales are named via the scheme `scale_<aesthetic>_<datatype>_<colorscale>()`, where `<aesthetic>` is the name of the aesthetic (`fill`, `color`, `colour`), `<datatype>` is the type of the variable plotted (discrete or continuous) and `<colorscale>` sets the type of the color scale used (`qualitative`, `sequential`, `diverging`, `divergingx`).
 
-To illustrate `diverging` color palette, we can plot @fig-colorex, as
+A diverging palette suits @fig-colorex well, since mileage lies above or below a meaningful middle, the average. Here is the chart again, with red for below the average and green for above.
 
 ```{r}
-mpg %>%
-  summarise(hwy = mean(hwy), .by = class) %>%
-  mutate(class = fct_reorder(class, hwy)) %>%
+mpg |>
+  summarise(hwy = mean(hwy), .by = class) |>
+  mutate(class = fct_reorder(class, hwy)) |>
   ggplot(aes(y = class, x = hwy, fill = hwy)) +
   geom_col() +
   scale_fill_continuous_diverging(palette = "Red-Green", mid = mean(mpg$hwy)) +
@@ -209,4 +207,25 @@ mpg %>%
   ggtitle("Class wise Mean Highway mileage of cars")
 ```
 
-------------------------------------------------------------------------
+## Colours for audit charts {.unnumbered}
+
+A few rules of thumb serve well in audit reports.
+
+- Use colour to carry *one* message, such as exceptions in red and everything else in grey, rather than giving every category its own bright colour.
+- Keep the usual meanings: red for shortfalls, losses and exceptions; green or blue for normal or good.
+- Choose palettes that are safe for colour blindness and readable when printed in black and white, such as the Brewer palettes or the HCL palettes of `colorspace`.
+- Use a sequential palette for ordered values, a diverging one around a meaningful middle, and a qualitative one only for unordered categories.
+
+## Summary of functions used {.unnumbered}
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `colors()` | grDevices | Names of R's built-in colours |
+| `heat.colors()`, `rainbow()`, `terrain.colors()`, `topo.colors()`, `cm.colors()`, `hcl.colors()` | grDevices | Base R palettes |
+| `display.brewer.all()`, `display.brewer.pal()`, `brewer.pal()` | RColorBrewer | Show and use the Brewer palettes |
+| `scale_fill_brewer()`, `scale_colour_brewer()` | ggplot2 | Brewer palettes in ggplot2 |
+| `hcl_palettes()`, `scale_fill_continuous_diverging()` | colorspace | HCL palettes, and their ggplot2 scales |
+| `scale_fill_identity()`, `scale_fill_manual()` | ggplot2 | Use colours given in the data, or chosen by hand |
+
+: Functions used in this appendix {#tbl-colorfunctions}
+

@@ -1,19 +1,46 @@
-[![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fanilyayavar%2Fnew-book%2F&count_bg=%2379C83D&title_bg=%23555555&icon=&icon_color=%23E7E7E7&title=hits&edge_flat=false)](https://hits.seeyoufarm.com)
+# R for Audit Analytics
 
-Welcome!
+*Data analytics for auditors, with R and the tidyverse*, by [Anil Goyal](https://www.linkedin.com/in/anil-kumar-goyal/).
 
-# Welcome to R for Audit Analytics {.unnumbered}
+**Read the book online, free: <https://anilyayavar.github.io/new-book/>**
 
-<a href="https://anilyayavar.github.io/new-book/index.html"><img src="images/cover.jpg" alt="Hard-Cover to be released soon" class="cover" width="705" height="1125"/></a>
+<a href="https://anilyayavar.github.io/new-book/index.html"><img src="images/cover.jpg" alt="Cover of R for Audit Analytics" width="300"/></a>
 
-<p xmlns:cc="http://creativecommons.org/ns#" xmlns:dct="http://purl.org/dc/terms/">
+## About the book
 
-<a property="dct:title" rel="cc:attributionURL" href="https://anilyayavar.github.io/new-book/">R for Audit Analytics</a> by <a rel="cc:attributionURL dct:creator" property="cc:attributionName" href="https://www.linkedin.com/in/anil-kumar-goyal/">Anil Goyal</a> is licensed under <a href="https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1" target="_blank" rel="license noopener noreferrer" style="display:inline-block;">CC BY-NC 4.0<img src="https://mirrors.creativecommons.org/presskit/icons/cc.svg?ref=chooser-v1" style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"/><img src="https://mirrors.creativecommons.org/presskit/icons/by.svg?ref=chooser-v1" style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"/><img src="https://mirrors.creativecommons.org/presskit/icons/nc.svg?ref=chooser-v1" style="height:22px!important;margin-left:3px;vertical-align:text-bottom;"/></a>
+A practical guide to data analytics for auditors, in government and elsewhere, using the free and open-source R language. No knowledge of programming is assumed. Every technique is explained in plain language and shown at work on an audit problem, with Indian examples and realistic simulated data in which irregularities are planted for the analysis to find.
 
-</p>
+The book is in ten parts:
 
-The author works for Government of India. The opinions expressed in this book are personal to the author and are not to be construed as that of Government of India, or of author in his official capacity. All data-sets and examples used in the book are either sample data-sets available with R and allied packages or available online (or other sources) as open data-sets or created by author himself to demonstrate the case under discussion. None of the data-sets and examples used in this book pertain to any entity ever handled by the author in his official capacity and do not breach the official secrecy in any manner.
+1. **R Basics**: the R language from the beginning
+2. **Getting and Shaping Data**: reading files, including PDFs and messy Excel; cleaning, joining and reshaping; dates; data too large for Excel
+3. **Exploring Data, Statistics and Sampling**: charts, descriptive statistics, audit sampling and statistical tests
+4. **Working with Strings**: text, regular expressions, validating PAN, GSTIN and Aadhaar, and fuzzy name matching
+5. **Forensic Tests for Audit**: rule-based validation, Benford's law, Nigrini's tests, duplicates, record linkage, gaps and process mining
+6. **Patterns and Anomalies**: regression, logistic regression, decision trees, random forests, PCA, clustering, association rules, time series, anomaly detection and DEA
+7. **Text Analytics**
+8. **Network Analytics**
+9. **Geospatial Analytics**
+10. **Reporting**: reproducible audit reports and working papers
 
-------------------------------------------------------------------------
+## Building the book
 
-This is website for book **R for Audit Analytics** hosted for absolutely free for use by all. This is the work by [Anil Goyal](https://www.linkedin.com/in/anil-kumar-goyal/). Suggestions, errors, etc. may be communicated to author over his email [anilyayavar\@gmail.com](mailto:anilyayavar@gmail.com){.email} or through the [github version](https://github.com/anilyayavar/new-book) of this book.
+The book is written in [Quarto](https://quarto.org). To build it yourself, you need R (version 4.5 or later), Quarto (which comes with RStudio), and the R packages listed in the appendix *R packages used in this book*, which gives a single command to install them all. Then, in the project folder, run
+
+```
+quarto render
+```
+
+The rendered book is written to the `_book` folder.
+
+## Credits
+
+The R package [`cagmetaphone`](https://github.com/AtharvTyagi1805/cagmetaphone), used in the book for matching names by their sound, was developed by **Atharv Tyagi** during an internship under the author's guidance.
+
+## Licence, disclaimer and feedback
+
+<a href="https://anilyayavar.github.io/new-book/">R for Audit Analytics</a> by Anil Goyal is licensed under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/). You may share and adapt it for non-commercial purposes, with credit to the author.
+
+The author works for the Government of India. The opinions expressed in the book are personal to the author, and are not to be construed as those of the Government of India. All data in the book is either sample data available with R, open data, or data simulated by the author; none of it pertains to any entity handled by the author in his official capacity.
+
+Suggestions and corrections are welcome, by [email](mailto:anilyayavar@gmail.com) or through the [issues](https://github.com/anilyayavar/new-book/issues) of this repository.
