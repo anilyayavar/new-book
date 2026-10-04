@@ -1,0 +1,416 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Reproducible Audit Reports {#sec-reports}
+
+Every analysis in this book ends the same way. The results have to reach someone: the audit officer, the head of the audit party, the auditee, or the report. Too often, this last step is done by hand. Figures are copied from the R console into Word, tables are pasted into Excel and formatted, and the whole process is repeated for each district, each month, each audit. Every copy is a chance for a mistake, and when the data changes, everything has to be done again.
+
+In this chapter we learn to produce the reports themselves with code.
+
+- A **Quarto report** combines text, tables and charts, with every number computed from the data at the moment the report is made. Change the data, and the report updates itself.
+- With **parameters**, one report template produces a separate report for every district, unit or period, in a loop.
+- **Excel working papers**, with a summary sheet and one formatted sheet of exceptions for each check, are produced by the package `openxlsx`, ready to be handed over or filed.
+
+This book itself is written in Quarto, so everything you see here is a small version of the same idea.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(gt)         # formatted tables
+library(openxlsx)   # Excel workbooks
+```
+
+For rendering reports from R we also need the package `quarto` (`install.packages("quarto")`), and Quarto itself, which comes with RStudio.
+
+## Our audit, a scheme in five districts {#sec-reports-data}
+
+A State's *Kisan Sahayata* scheme pays each eligible farmer ₹2,000 in each of three instalments a year. We have the payment register and the beneficiary list for 2024-25, for five districts, and four checks to run.
+
+1. Was any instalment paid more than once to the same beneficiary?
+2. Was any payment different from the entitlement of ₹2,000?
+3. Was anything paid to a beneficiary marked deceased or ineligible?
+4. Is any bank account shared by more than one beneficiary?
+
+The audit party wants one report for each district, to send to the District Collector, and one Excel workbook of the exceptions for each district, for verification in the field.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the data files"
+project_dir <- file.path(tempdir(), "kisan_audit")
+dir.create(project_dir, showWarnings = FALSE)
+
+set.seed(2025)
+districts <- c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur")
+n_ben <- 2500
+beneficiaries <- tibble(
+  ben_id   = sprintf("KS%06d", 1:n_ben),
+  district = sample(districts, n_ben, TRUE),
+  status   = sample(c("Active", "Deceased", "Ineligible"), n_ben, TRUE, prob = c(0.96, 0.025, 0.015)),
+  account  = sprintf("%011.0f", runif(n_ben, 1e10, 9.99e10))
+)
+instalments <- tibble(instalment = 1:3,
+                      due = as.Date(c("2024-06-15", "2024-10-15", "2025-02-15")))
+payments <- beneficiaries |>
+  filter(status == "Active" | runif(n()) < 0.5) |>      # some not-active beneficiaries still paid
+  cross_join(instalments) |>
+  mutate(paid_on = due + sample(0:20, n(), TRUE), amount = 2000) |>
+  select(ben_id, district, instalment, paid_on, amount, account)
+# Planted. Instalments paid twice, more often in Chandpur
+dup <- payments |>
+  slice_sample(n = 60, weight_by = if_else(district == "Chandpur", 5, 1)) |>
+  mutate(paid_on = paid_on + sample(1:30, n(), TRUE))
+payments <- bind_rows(payments, dup)
+# Planted. Wrong amounts
+wrong <- sample(nrow(payments), 40)
+payments$amount[wrong] <- sample(c(4000, 20000, 6000), 40, TRUE)
+# Planted. Six beneficiaries in Devgarh sharing one account
+share <- beneficiaries |> filter(district == "Devgarh") |> slice_sample(n = 6) |> pull(ben_id)
+beneficiaries$account[beneficiaries$ben_id %in% share] <- "50012345678"
+payments$account[payments$ben_id %in% share] <- "50012345678"
+
+write_csv(arrange(payments, paid_on), file.path(project_dir, "payments.csv"))
+write_csv(beneficiaries, file.path(project_dir, "beneficiaries.csv"))
+```
+
+```{r}
+list.files(project_dir)
+```
+
+## Step 1. Put the checks in functions {#sec-reports-functions}
+
+The first step towards any repeatable report is to write each check as a function (@sec-func), which takes the data of one district and returns its exceptions. The functions are kept in one file, `checks.R`, which every report and every script then uses with `source("checks.R")`. A correction made once in this file applies everywhere.
+
+```{r}
+check_duplicates <- function(pay) {
+  pay |> filter(n() > 1, .by = c(ben_id, instalment)) |> arrange(ben_id, instalment, paid_on)
+}
+check_amount <- function(pay, entitlement = 2000) {
+  pay |> filter(amount != entitlement)
+}
+check_status <- function(pay, ben) {
+  pay |>
+    inner_join(ben |> select(ben_id, status), by = "ben_id") |>
+    filter(status != "Active")
+}
+check_shared_accounts <- function(ben) {
+  ben |> filter(n() > 1, .by = account) |> arrange(account)
+}
+
+run_checks <- function(pay, ben) {
+  list(duplicates      = check_duplicates(pay),
+       wrong_amount    = check_amount(pay),
+       not_active      = check_status(pay, ben),
+       shared_accounts = check_shared_accounts(ben))
+}
+```
+
+`run_checks()` returns a *list* of four data frames, one for each check. Let us try it on one district, and make the summary that the report will show.
+
+```{r}
+payments_all <- read_csv(file.path(project_dir, "payments.csv"), show_col_types = FALSE)
+benef_all    <- read_csv(file.path(project_dir, "beneficiaries.csv"), show_col_types = FALSE,
+                         col_types = cols(account = col_character()))
+
+summarise_checks <- function(results, entitlement = 2000) {
+  dup <- results$duplicates
+  tibble(
+    check  = c("Same instalment paid more than once",
+               "Amount different from the entitlement",
+               "Payment to deceased or ineligible beneficiaries",
+               "Bank account shared by more than one beneficiary"),
+    cases  = c(nrow(dup) - nrow(distinct(dup, ben_id, instalment)),
+               nrow(results$wrong_amount),
+               nrow(results$not_active),
+               n_distinct(results$shared_accounts$account)),
+    amount = c(sum(dup$amount) - sum(distinct(dup, ben_id, instalment, .keep_all = TRUE)$amount),
+               sum(results$wrong_amount$amount - entitlement),
+               sum(results$not_active$amount),
+               NA)
+  )
+}
+
+chandpur <- run_checks(filter(payments_all, district == "Chandpur"),
+                       filter(benef_all, district == "Chandpur"))
+summarise_checks(chandpur)
+```
+
+```{r}
+#| include: false
+# save the same functions as checks.R in the project folder, as the reports expect
+dump(c("check_duplicates", "check_amount", "check_status", "check_shared_accounts",
+       "run_checks", "summarise_checks"),
+     file = file.path(project_dir, "checks.R"))
+```
+
+For duplicates, the cases and the amount count only the *extra* payments, not the first, legitimate one. The shared accounts are counted as accounts, and are not valued, since the money may have reached the right people.
+
+## Step 2. Formatted tables with `gt` {#sec-reports-gt}
+
+A tibble printed in the console is fine for the analyst, but a report needs a proper table. The package `gt` builds one step by step, much as ggplot2 builds a chart: a title, formatted numbers, a note for missing values.
+
+```{r}
+summarise_checks(chandpur) |>
+  gt() |>
+  cols_label(check = "Check", cases = "Cases", amount = "Amount (₹)") |>
+  fmt_number(columns = amount, decimals = 0) |>
+  sub_missing(columns = amount, missing_text = "Not valued") |>
+  tab_header(title = "Summary of exceptions", subtitle = "Chandpur district, 2024-25") |>
+  tab_source_note("Source: payment register and beneficiary list of the scheme.")
+```
+
+`fmt_number()` adds the thousands separators, and `sub_missing()` writes a phrase in place of `NA`. The same table appears correctly in HTML and in Word reports.
+
+## Step 3. A parameterised Quarto report {#sec-reports-quarto}
+
+A Quarto document is a plain text file with the extension `.qmd`. It has three kinds of content.
+
+- A **header**, between two lines of `---`, written in a format called YAML. It gives the title, the output formats, and other options.
+- **Text**, written in Markdown: `##` for headings, `*italics*`, `**bold**`, lists with `-`, and so on.
+- **Code chunks**, between ```` ```{r} ```` and ```` ``` ````, whose results (tables, charts, numbers) appear in the report. Numbers can also be placed inside sentences with *inline code*, written as a backtick, the letter `r`, the code, and a closing backtick.
+
+The key to producing many reports from one file is a **parameter**. In the header, under `params:`, we declare a value with a default, here the district. Inside the document, the value is available as `params$district`. Change the parameter, and the same document becomes the report for another district.
+
+Here is the complete template, `audit_report.qmd`.
+
+````markdown
+---
+title: "Kisan Sahayata payments: audit findings"
+subtitle: "District report"
+date: today
+format:
+  html:
+    embed-resources: true
+  docx: default
+params:
+  district: "Amarpur"
+  payments_file: "payments.csv"
+  beneficiaries_file: "beneficiaries.csv"
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{{r}}
+#| label: setup
+library(tidyverse)
+library(gt)
+source("checks.R")
+
+pay_all <- read_csv(params$payments_file, show_col_types = FALSE)
+ben_all <- read_csv(params$beneficiaries_file, show_col_types = FALSE,
+                    col_types = cols(account = col_character()))
+pay <- pay_all |> filter(district == params$district)
+ben <- ben_all |> filter(district == params$district)
+results <- run_checks(pay, ben)
+summary_tbl <- summarise_checks(results)
+
+lakh <- function(x) paste0("₹", format(round(x / 1e5, 2), nsmall = 2), " lakh")
+```
+
+## District: `r params$district`
+
+During 2024-25, `r format(nrow(pay), big.mark = ",")` payments totalling
+`r lakh(sum(pay$amount))` were made to `r n_distinct(pay$ben_id)` beneficiaries
+in `r params$district` district. The results of the checks are summarised below.
+
+```{{r}}
+summary_tbl |>
+  gt() |>
+  cols_label(check = "Check", cases = "Cases", amount = "Amount (₹)") |>
+  fmt_number(columns = amount, decimals = 0) |>
+  sub_missing(columns = amount, missing_text = "Not valued")
+```
+
+In all, `r lakh(sum(summary_tbl$amount, na.rm = TRUE))` was paid irregularly
+in the cases that could be valued.
+
+## Payments by month
+
+```{{r}}
+#| fig-height: 3
+pay |>
+  count(month = floor_date(paid_on, "month"), wt = amount, name = "amount") |>
+  ggplot(aes(month, amount / 1e5)) +
+  geom_col(fill = "steelblue") +
+  labs(x = NULL, y = "₹ lakh") +
+  theme_minimal()
+```
+
+## About this report
+
+```{{r}}
+data_hash <- unname(tools::md5sum(c(params$payments_file, params$beneficiaries_file)))
+```
+
+Generated on `r format(Sys.time(), "%d %B %Y, %H:%M")` from `r params$payments_file`
+(MD5 `r data_hash[1]`) and `r params$beneficiaries_file` (MD5 `r data_hash[2]`),
+with `r R.version.string`.
+````
+
+A few points about the template.
+
+- `execute: echo: false` hides the code, so that the report shows only results. A report for the Collector should not contain R code.
+- `embed-resources: true` packs the charts and styles into the single HTML file, so that it can be sent by email.
+- Every number in the text is inline code. None is typed in, so none can go out of date.
+- The last section records *when* the report was made, from *which* data files, identified by their hashes (@sec-file-hash), and with which version of R. Anyone can later confirm that the report came from those files. This is the working-paper trail.
+- `summarise_checks()` is also kept in `checks.R`, along with the four checks.
+
+To produce the report for one district from RStudio, open the file and click **Render**. The default district, Amarpur, is used.
+
+## Step 4. One report for every district {#sec-reports-loop}
+
+To render the template for every district, we call `quarto_render()` from the package `quarto` in a loop, giving a different parameter each time with `execute_params`. Since the subtitle is part of the header, not the code, we pass it as metadata with `quarto_args`. Each report gets its own file name.
+
+```{r}
+#| eval: false
+library(quarto)
+
+districts <- c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur")
+
+walk(districts, \(d) {
+  for (fmt in c("html", "docx")) {
+    quarto_render(
+      input          = "audit_report.qmd",
+      output_format  = fmt,
+      output_file    = paste0("audit_report_", d, ".", fmt),
+      execute_params = list(district = d),
+      quarto_args    = c("--metadata", paste0("subtitle:District report, ", d)),
+      quiet          = TRUE
+    )
+  }
+})
+```
+
+This produces ten files, an HTML and a Word report for each district, in under a minute, each with its own figures, table and chart. (We have not run the loop while building this book, since it renders separate documents, but it was tested on the files created above.) When the data is corrected, or a new month's data arrives, running the loop again regenerates every report.
+
+::: callout-tip
+## Audit tip
+
+Word (`docx`) output is usually the most convenient for audit, since draft paras and reports go through several rounds of editing by people who do not use R. Generate the Word report from Quarto, so that the numbers are right, and let the editing happen in Word. Quarto can also use your office's Word template for styles and letterhead, through the `reference-doc` option of the `docx` format.
+:::
+
+## Step 5. Excel working papers {#sec-reports-excel}
+
+The field party needs the exceptions themselves, one row per case, to verify against the records. An Excel workbook is the most convenient form. With `openxlsx` we can build it exactly as we want: a summary sheet, a sheet for each check, a bold header, number formats, filters and frozen header rows.
+
+We write a function that builds the workbook for one district.
+
+```{r}
+write_working_paper <- function(district, pay_all, ben_all, folder) {
+  pay <- filter(pay_all, district == !!district)
+  ben <- filter(ben_all, district == !!district)
+  results <- run_checks(pay, ben)
+
+  wb <- createWorkbook()
+  header_style <- createStyle(textDecoration = "bold", fgFill = "#DDEBF7", border = "bottom")
+  money_style  <- createStyle(numFmt = "#,##0")
+
+  # Summary sheet
+  addWorksheet(wb, "Summary")
+  writeData(wb, "Summary", paste("Kisan Sahayata audit, 2024-25:", district, "district"),
+            startRow = 1)
+  addStyle(wb, "Summary", createStyle(textDecoration = "bold", fontSize = 13), rows = 1, cols = 1)
+  writeData(wb, "Summary", summarise_checks(results), startRow = 3, headerStyle = header_style)
+  addStyle(wb, "Summary", money_style, rows = 4:7, cols = 3)
+  setColWidths(wb, "Summary", cols = 1:3, widths = c(50, 10, 14))
+
+  # One sheet per check
+  for (check in names(results)) {
+    addWorksheet(wb, check)
+    writeData(wb, check, results[[check]], headerStyle = header_style, withFilter = TRUE)
+    freezePane(wb, check, firstRow = TRUE)
+    setColWidths(wb, check, cols = seq_along(results[[check]]), widths = "auto")
+  }
+  file <- file.path(folder, paste0("working_paper_", district, ".xlsx"))
+  saveWorkbook(wb, file, overwrite = TRUE)
+  file
+}
+```
+
+A few details. `withFilter = TRUE` adds the filter buttons to the header row, `freezePane()` keeps the header visible while scrolling, and `setColWidths(widths = "auto")` fits the columns to their contents. The `!!district` inside `filter()` uses the *value* of the function's argument, not a column of the same name, as in @sec-duckdb-tests.
+
+Now one workbook for each district.
+
+```{r}
+wp_folder <- file.path(project_dir, "working_papers")
+dir.create(wp_folder, showWarnings = FALSE)
+
+wp_files <- map_chr(districts, \(d) write_working_paper(d, payments_all, benef_all, wp_folder))
+basename(wp_files)
+```
+
+Let us check one of them by reading it back.
+
+```{r}
+getSheetNames(wp_files[4])
+read.xlsx(wp_files[4], sheet = "Summary", startRow = 3)
+read.xlsx(wp_files[4], sheet = "shared_accounts")
+```
+
+Devgarh's workbook lists the six beneficiaries who share one bank account, ready for the field party to verify.
+
+::: callout-note
+The newer package `openxlsx2` offers the same features with a modern design, and is worth considering for new work. For simple output without formatting, `writexl::write_xlsx()`, which takes a named list of data frames and writes one sheet for each, is the quickest way (@sec-read).
+:::
+
+## Organising an audit project {#sec-reports-project}
+
+When reports are produced by code, the files of an audit fall naturally into a simple structure, as suggested in @sec-file.
+
+```
+kisan_audit/
+  data/                 the files received, never edited
+  checks.R              the check functions, used by everything else
+  audit_report.qmd      the report template
+  run_all.R             the loop that renders every report and working paper
+  reports/              the generated reports
+  working_papers/       the generated workbooks
+```
+
+The rule is that nothing in `reports/` or `working_papers/` is ever edited by hand. If something is wrong, the fix goes into the data, the checks or the template, and `run_all.R` is run again. Then the reports, the working papers and the code always agree, and the whole audit can be reproduced from the data files by anyone, at any time.
+
+::: callout-caution
+Generated reports are only as right as the code behind them. Before sending reports to auditees, check one or two of them thoroughly by hand: recount a few cases from the raw data, and confirm the totals against the source. Once a template is verified, every report from it can be trusted to the same standard, which is far more than can be said for reports typed by hand.
+:::
+
+## A suggested workflow
+
+1. **Write each check as a function**, in one file, and test it on one unit.
+2. **Make a summary function** that turns the results into a report-ready table.
+3. **Write the report template** in Quarto, with a parameter for the unit, inline code for every number, and a section recording the data files, their hashes, and the date.
+4. **Render it once** for the default unit, and check it thoroughly.
+5. **Render for every unit** in a loop with `quarto_render()` and `execute_params`.
+6. **Generate the Excel working papers** with `openxlsx`, one workbook per unit.
+7. **Never edit outputs by hand.** Fix the inputs and re-run.
+
+::: callout-important
+## Remember
+
+- A report generated by code has no copying errors, and updates itself when the data changes.
+- Parameters, declared under `params:` and used as `params$name`, turn one template into many reports.
+- `quarto_render(execute_params = ...)` renders a template for each value in a loop.
+- `gt` makes formatted tables for HTML and Word; `openxlsx` makes formatted Excel working papers.
+- Record the data files, their hashes and the date in every report, so that it can be reproduced and verified.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `gt()`, `cols_label()`, `fmt_number()`, `sub_missing()`, `tab_header()`, `tab_source_note()` | gt | Build a formatted table |
+| `quarto_render(execute_params, output_format, output_file, quarto_args)` | quarto | Render a Quarto document with given parameters |
+| `params$name` | Quarto | Use a parameter inside a Quarto document |
+| `createWorkbook()`, `addWorksheet()`, `writeData()`, `saveWorkbook()` | openxlsx | Build and save an Excel workbook |
+| `createStyle()`, `addStyle()`, `setColWidths()`, `freezePane()` | openxlsx | Format cells, size columns and freeze the header |
+| `getSheetNames()`, `read.xlsx()` | openxlsx | Check a workbook by reading it back |
+| `tools::md5sum()` | tools | Hash of a data file, recorded in the report |
+| `walk()`, `map_chr()` | purrr | Repeat for every district |
+| `dump()` | base R | Save R functions to a file |
+
+: Functions used in this chapter {#tbl-reportsfunctions}

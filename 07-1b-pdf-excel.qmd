@@ -1,0 +1,424 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Data from PDFs and Messy Excel Files {#sec-pdfxl}
+
+Audit data does not always arrive as a clean CSV file. Very often it comes as a **PDF**: a bank statement, a set of sanction orders, work orders, invoices, or a report from a computerised system that can only "print" to PDF. And when it comes as an **Excel** workbook, it is usually laid out for the eye, not for analysis: a title on top, headers spread over two rows with merged cells, subtotals in between, notes at the bottom, and some cells coloured yellow to mark something the department wanted to draw attention to (or did not).
+
+`read_csv()` and `read_excel()` (@sec-read) expect neat rectangles of data. In this chapter we learn to get data out of the other kind of file.
+
+- From **PDFs**, with the package `pdftools`: reading the text of every page, cutting it into columns, and pulling particular facts out of many documents.
+- From **messy Excel**, with the packages `tidyxl` and `unpivotr`: reading a workbook cell by cell, with its formatting and formulas, and untangling headers spread over several rows.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(pdftools)   # text from PDF files
+library(tidyxl)     # Excel files, cell by cell
+library(unpivotr)   # untangling multi-row headers
+```
+
+Install them once with `install.packages(c("pdftools", "tidyxl", "unpivotr"))`.
+
+## Two kinds of PDF {#sec-pdfxl-kinds}
+
+Before starting, look at what kind of PDF you have. Open it and try to select a word with the mouse.
+
+- If the text can be selected and copied, it is a **text PDF**, produced by a computer program. The text is stored inside the file, and `pdftools` can read it exactly.
+- If the whole page selects as one picture, it is a **scanned PDF**, a photograph of paper. There is no text inside, only an image. To read it, the image must first be converted to text by *optical character recognition* (OCR), for example with the package `tesseract`. OCR makes mistakes, especially with numbers, poor scans and Indian-language text, so every figure read by OCR must be checked.
+
+This chapter deals with text PDFs, which are by far the commoner kind in audit: bank statements downloaded from net banking, reports from IFMS or ERP systems, and orders typed on a computer.
+
+## A bank statement in PDF {#sec-pdfxl-statement}
+
+A district health society has given us its bank statement for the first quarter of 2024-25, as a three-page PDF downloaded from the bank's website. The code below creates such a file. It also plants one alteration, of the kind that is made to a statement to hide a misappropriation.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the bank statement PDF"
+pdf_dir <- file.path(tempdir(), "audit_pdfs")
+dir.create(pdf_dir, showWarnings = FALSE)
+
+set.seed(1)
+n <- 80
+dates  <- sort(as.Date("2024-04-01") + sample(0:90, n, TRUE))
+debit  <- ifelse(runif(n) < 0.65, round(rlnorm(n, log(20000), 1), 2), NA)
+credit <- ifelse(is.na(debit), round(rlnorm(n, log(70000), 0.8), 2), NA)
+narration <- ifelse(is.na(debit),
+  sample(c("NEFT CR TREASURY", "RTGS CR GRANT", "INT CR"), n, TRUE),
+  sample(c("CHQ PAID SHARMA TRADERS", "NEFT DR GUPTA AND SONS", "CHQ PAID KAVERI INFRA",
+           "ATM WDL"), n, TRUE))
+opening <- 500000
+balance <- opening + cumsum(coalesce(credit, 0) - coalesce(debit, 0))
+# Planted. The balance on one line has been altered by Rs 25,000
+balance[37] <- balance[37] + 25000
+
+fmt <- function(x) ifelse(is.na(x), "", formatC(x, format = "f", digits = 2, big.mark = ","))
+row_text <- function(d, nar, dr, cr, bal) sprintf("%-10s  %-26s  %14s  %14s  %16s", d, nar, dr, cr, bal)
+lines <- row_text(format(dates, "%d-%m-%Y"), narration, fmt(debit), fmt(credit), fmt(balance))
+
+pdf(file.path(pdf_dir, "bank_statement.pdf"), width = 8.27, height = 11.69, family = "Courier")
+pages <- split(lines, ceiling(seq_along(lines) / 30))
+for (p in seq_along(pages)) {
+  plot.new(); par(mar = c(0, 0, 0, 0)); plot.window(c(0, 1), c(0, 1))
+  header <- c("STATE BANK OF EXAMPLE - ACCOUNT STATEMENT",
+              "Account: 12345678901   District Health Society, Amarpur",
+              sprintf("Page %d of %d", p, length(pages)), "",
+              row_text("Date", "Narration", "Debit", "Credit", "Balance"))
+  if (p == 1) header <- c(header, row_text("", "OPENING BALANCE", "", "", fmt(opening)))
+  y <- 0.97
+  for (l in c(header, pages[[p]])) { text(0.03, y, l, adj = 0, cex = 0.62); y <- y - 0.025 }
+}
+invisible(dev.off())
+```
+
+`pdf_info()` tells us about the file, and `pdf_text()` reads its text, giving one long string for each page.
+
+```{r}
+statement_file <- file.path(pdf_dir, "bank_statement.pdf")
+pdf_info(statement_file)$pages
+
+pages_text <- pdf_text(statement_file)
+length(pages_text)
+cat(substr(pages_text[1], 1, 700))
+```
+
+The text keeps the layout of the page, with columns lined up by spaces. That is what makes it usable. Let us turn it into a table, in four steps.
+
+**Step 1. Split into lines, and clean.** Each page string is split at the line breaks (`"\n"`). We then drop the empty lines. One more thing needs care. Look closely at the dates above. The hyphens are not ordinary hyphens but the *minus sign* character `−` (Unicode `−`), which looks the same but is a different character, so `dmy()` would not recognise the dates. Such look-alike characters are common in text taken from PDFs. We replace them with the ordinary hyphen.
+
+```{r}
+all_lines <- pages_text |>
+  str_split("\n") |>
+  unlist() |>
+  str_replace_all("−", "-")
+all_lines <- all_lines[str_trim(all_lines) != ""]
+head(all_lines, 8)
+```
+
+**Step 2. Keep only the transaction lines.** Bank names, page numbers and column headings are repeated on every page. The transaction lines are easy to recognise: they start with a date in the form `dd-mm-yyyy`. A regular expression (@sec-regex) picks them out.
+
+```{r}
+txn_lines <- all_lines[str_detect(all_lines, "^\\d{2}-\\d{2}-\\d{4}")]
+length(txn_lines)
+```
+
+**Step 3. Find where the columns are.** The amounts are right-aligned under their headings, so each amount ends where its heading ends. `str_locate()` finds the end of each heading in the header line.
+
+```{r}
+header_line <- all_lines[str_detect(all_lines, "^Date\\s+Narration")][1]
+header_line
+debit_end   <- str_locate(header_line, "Debit")[, "end"]
+credit_end  <- str_locate(header_line, "Credit")[, "end"]
+c(debit_end = debit_end, credit_end = credit_end)
+```
+
+**Step 4. Cut each line at those positions.** `str_sub()` takes the characters between two positions. The debit column is the 15 or so characters ending at the end of "Debit", the credit column those after it up to the end of "Credit", and the balance everything after that. `parse_number()` (@sec-read-check) turns `"85,774.41"` into a number, and an empty cut into `NA`.
+
+```{r}
+statement <- tibble(line = txn_lines) |>
+  mutate(date      = dmy(str_sub(line, 1, 10)),
+         narration = str_trim(str_sub(line, 11, debit_end - 15)),
+         debit     = parse_number(str_sub(line, debit_end - 14, debit_end + 1)),
+         credit    = parse_number(str_sub(line, debit_end + 2, credit_end + 1)),
+         balance   = parse_number(str_sub(line, credit_end + 2, -1))) |>
+  select(-line)
+statement
+```
+
+Always check that the cutting worked, for example that every row has a balance and exactly one of debit or credit.
+
+```{r}
+statement |>
+  summarise(rows = n(), missing_balance = sum(is.na(balance)),
+            both_or_neither = sum(is.na(debit) == is.na(credit)))
+```
+
+### An audit check: does the balance run correctly?
+
+A bank statement has a built-in check. Each balance must equal the previous balance, plus the credit, minus the debit. Recomputing the running balance from the opening balance, and comparing it with the printed one, tests every line of the statement.
+
+```{r}
+statement |>
+  mutate(expected = 500000 + cumsum(coalesce(credit, 0) - coalesce(debit, 0)),
+         difference = round(balance - expected, 2)) |>
+  filter(difference != 0)
+```
+
+One line does not agree. The printed balance is ₹25,000 more than the transactions justify, and the next line is correct again. A statement downloaded from the bank should never show this. Such a line indicates that the document has been altered, and the auditor should obtain the statement directly from the bank.
+
+::: callout-tip
+## Audit tip
+
+Re-performing the running balance takes a minute in R and checks every line of a statement of any length. Do it for every statement obtained from an auditee. When possible, compare the PDF with a statement obtained independently, and check the PDF's properties too: `pdf_info()` shows the program that created the file and the dates it was created and modified. A "bank statement" created by a word processor, or modified after its date, deserves questions.
+:::
+
+## Facts from many PDF documents {#sec-pdfxl-orders}
+
+The second common task is to read *particular facts* from a set of similar documents, and assemble them into a register. Say we have the PDFs of all the sanction orders issued by a directorate during the year. Each states an order number, a date, an amount and a firm, in a fixed sentence. We want them as a table, to check for duplicate order numbers, sanctions beyond delegated powers, or splitting of works.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create 12 sanction order PDFs"
+set.seed(3)
+firms <- c("Sharma Traders", "Gupta and Sons", "Kaveri Infra Projects",
+           "Shri Ganesh Enterprises", "Medicare Supplies")
+orders <- tibble(
+  no      = sprintf("HFW/2024/%03d", sample(100:400, 12)),
+  date    = as.Date("2024-04-01") + sort(sample(0:300, 12)),
+  amount  = round(runif(12, 50000, 480000), -3),
+  firm    = sample(firms, 12, TRUE),
+  purpose = sample(c("supply of medicines", "repair of hospital building",
+                     "purchase of beds", "supply of lab reagents"), 12, TRUE)
+)
+# Planted. An order number used twice, and a sanction above the Director's power of Rs 5 lakh
+orders$no[9] <- orders$no[4]
+orders$amount[7] <- 735000
+
+indian_format <- function(x) {       # 295000 -> "2,95,000"
+  s <- formatC(x, format = "d"); n <- nchar(s)
+  if (n <= 3) return(s)
+  rest <- gsub("(\\d)(?=(\\d{2})+$)", "\\1,", substr(s, 1, n - 3), perl = TRUE)
+  paste0(rest, ",", substr(s, n - 2, n))
+}
+for (i in 1:12) {
+  pdf(file.path(pdf_dir, sprintf("sanction_%02d.pdf", i)), width = 8.27, height = 11.69)
+  plot.new(); par(mar = c(0, 0, 0, 0)); plot.window(c(0, 1), c(0, 1))
+  order_text <- c(
+    "GOVERNMENT OF EXAMPLE STATE", "DIRECTORATE OF HEALTH SERVICES", "",
+    sprintf("Order No. %s                    Dated: %s", orders$no[i], format(orders$date[i], "%d.%m.%Y")),
+    "", "SANCTION ORDER", "",
+    sprintf("Sanction of the Director is hereby accorded for an expenditure of Rs. %s/-",
+            indian_format(orders$amount[i])),
+    sprintf("in favour of M/s %s for %s.", orders$firm[i], orders$purpose[i]),
+    "The expenditure is debitable to Head of Account 2210-01-110-01.", "",
+    "Director of Health Services")
+  y <- 0.95
+  for (l in order_text) { text(0.06, y, l, adj = 0, cex = 0.8); y <- y - 0.03 }
+  invisible(dev.off())
+}
+```
+
+Here is one of them, as `pdf_text()` reads it.
+
+```{r}
+order_files <- list.files(pdf_dir, pattern = "^sanction_.*\\.pdf$", full.names = TRUE)
+cat(pdf_text(order_files[1]))
+```
+
+We read every file with `map_chr()` (@sec-purrr), join each file's pages into one string, and squeeze the spaces with `str_squish()`. Then each fact is pulled out with `str_extract()` and a regular expression with a *lookbehind*, `(?<=...)`, which matches what comes *after* a fixed phrase, like "Order No. ", without including the phrase itself.
+
+```{r}
+sanctions <- tibble(file = basename(order_files),
+                    text = map_chr(order_files, \(f) paste(pdf_text(f), collapse = " "))) |>
+  mutate(text     = str_squish(str_replace_all(text, "−", "-")),
+         order_no = str_extract(text, "(?<=Order No\\. )\\S+"),
+         date     = dmy(str_extract(text, "(?<=Dated: )[0-9.]+")),
+         amount   = parse_number(str_extract(text, "(?<=Rs\\. )[0-9,]+")),
+         firm_purpose = str_extract(text, "(?<=M/s ).+?(?=\\.)"),
+         firm     = str_extract(firm_purpose, ".+?(?= for )"),
+         purpose  = str_remove(firm_purpose, ".+? for ")) |>
+  select(-text, -firm_purpose)
+sanctions
+```
+
+`.+?` means "as few characters as possible". The phrase after "M/s " up to the next full stop holds the firm and the purpose, which we then split at " for ". (Extracting the purpose directly with a lookbehind for " for " would not work, since the first " for " in each order is in "accorded for an expenditure".) Now the register can be tested like any other table.
+
+```{r}
+# order numbers used more than once
+sanctions |> filter(n() > 1, .by = order_no)
+
+# sanctions beyond the Director's delegated power of Rs 5 lakh
+sanctions |> filter(amount > 500000)
+```
+
+The same order number appears on two different sanctions, and one sanction of ₹`r indian_format(max(sanctions$amount))` exceeds the Director's power. Both need explanation.
+
+::: callout-caution
+Before trusting a register built this way, check it. Count the `NA`s in each extracted column, since a document worded differently will not match the pattern and gives `NA` silently. And open a few documents at random to compare with the table, as we would check any extraction.
+
+```{r}
+sanctions |> summarise(across(everything(), \(x) sum(is.na(x))))
+```
+:::
+
+## Messy Excel files {#sec-pdfxl-excel}
+
+Now the second kind of awkward file. A department has sent its district-wise budget and expenditure for two years, as an Excel workbook prepared for printing.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the messy workbook"
+library(openxlsx)
+wb <- createWorkbook()
+addWorksheet(wb, "Statement")
+writeData(wb, 1, "Department of Health - District-wise Budget and Expenditure (Rs. lakh)", startRow = 1)
+writeData(wb, 1, "Prepared by: Accounts Section, as on 31.03.2025", startRow = 2)
+districts <- c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur", "Rampur")
+writeData(wb, 1, t(c("District", "2023-24", NA, "2024-25", NA)), startRow = 4, colNames = FALSE)
+writeData(wb, 1, t(c(NA, "Budget", "Expenditure", "Budget", "Expenditure")), startRow = 5, colNames = FALSE)
+mergeCells(wb, 1, cols = 2:3, rows = 4)
+mergeCells(wb, 1, cols = 4:5, rows = 4)
+mergeCells(wb, 1, cols = 1, rows = 4:5)
+set.seed(9)
+vals <- matrix(round(runif(24, 200, 900), 1), ncol = 4)
+vals[, 2] <- round(vals[, 1] * runif(6, 0.8, 1.02), 1)
+vals[, 4] <- round(vals[, 3] * runif(6, 0.8, 1.02), 1)
+vals[4, 4] <- round(vals[4, 3] * 1.35, 1)      # Planted. Devgarh spends 35% above its budget
+writeData(wb, 1, data.frame(districts, vals), startRow = 6, colNames = FALSE)
+writeData(wb, 1, "Total", startRow = 12, startCol = 1)
+for (j in 2:5) {
+  writeFormula(wb, 1, sprintf("SUM(%s6:%s11)", LETTERS[j], LETTERS[j]), startCol = j, startRow = 12)
+}
+# Planted. The last total typed in by hand, Rs 150 lakh short of the column's sum
+writeData(wb, 1, round(sum(vals[, 4]) - 150, 1), startCol = 5, startRow = 12)
+writeData(wb, 1, "Note: Figures for Devgarh are provisional.", startRow = 14)
+# Planted. Two cells highlighted in yellow
+addStyle(wb, 1, createStyle(fgFill = "#FFFF00"), rows = 9, cols = 5)
+addStyle(wb, 1, createStyle(fgFill = "#FFFF00"), rows = 7, cols = 3)
+xl_file <- file.path(tempdir(), "district_statement.xlsx")
+saveWorkbook(wb, xl_file, overwrite = TRUE)
+```
+
+Here is what `read_excel()` makes of it.
+
+```{r}
+#| message: false
+readxl::read_excel(xl_file)
+```
+
+Everything is in the wrong place. The title has become a column name, the real headers are rows 3 and 4 of the data, the years are in merged cells, all the columns are text, and the total and the note have come in as data. For a one-off file, the quickest fix is to skip the title rows and supply the names ourselves.
+
+```{r}
+readxl::read_excel(xl_file, skip = 5, n_max = 6,
+                   col_names = c("district", "budget_2023_24", "exp_2023_24",
+                                 "budget_2024_25", "exp_2024_25"))
+```
+
+That works, but it depends on our counting the rows correctly, and it loses information that the workbook holds: which cells were highlighted, and which totals are formulas. For that, we read the workbook *cell by cell*.
+
+### Reading cell by cell with `tidyxl`
+
+`xlsx_cells()` returns one row for every cell of the workbook, with its address, its row and column numbers, its type, its value, and its formula, if any.
+
+```{r}
+cells <- xlsx_cells(xl_file)
+cells |>
+  select(address, row, col, data_type, numeric, character, formula, local_format_id) |>
+  head(12)
+```
+
+The value of a cell is in `numeric`, `character`, `logical` or `date`, according to its `data_type`. `local_format_id` points to the cell's formatting, which `xlsx_formats()` reads. The fill colour of each format is deep inside it, at `local$fill$patternFill$fgColor$rgb`. Colours are written in hexadecimal with an extra "alpha" pair in front, so yellow is `"FFFFFF00"`.
+
+```{r}
+formats   <- xlsx_formats(xl_file)
+fill_rgb  <- formats$local$fill$patternFill$fgColor$rgb
+
+cells |>
+  mutate(fill = fill_rgb[local_format_id]) |>
+  filter(fill == "FFFFFF00") |>
+  select(address, row, col, numeric)
+```
+
+The two highlighted cells are C7 (Belapur, expenditure 2023-24) and E9 (Devgarh, expenditure 2024-25). Someone marked them. Why? A highlighted cell in a departmental statement is often the department's own doubt, an unverified figure, or a correction, and it is always worth asking about.
+
+### Formulas and typed-over totals
+
+The `formula` column shows which cells hold a formula. Let us look at the total row.
+
+```{r}
+cells |>
+  filter(row == 12, col > 1) |>
+  select(address, numeric, formula)
+```
+
+Three totals are formulas, `SUM()` of the column above. The fourth, E12, has no formula. Its value was typed in. (The formula cells show no value because our file was written by R and never opened in Excel. In a workbook saved by Excel, `numeric` holds the result of each formula as well.) A typed-in total is a classic way for a statement to say something its own figures do not. Let us compare it with the sum of the figures above it.
+
+```{r}
+typed_total <- cells |> filter(address == "E12") |> pull(numeric)
+column_sum  <- cells |> filter(col == 5, row %in% 6:11) |> summarise(sum(numeric)) |> pull()
+c(typed_total = typed_total, sum_of_column = column_sum, difference = column_sum - typed_total)
+```
+
+The typed total is ₹`r round(column_sum - typed_total)` lakh less than the districts' figures add up to.
+
+::: callout-tip
+## Audit tip
+
+In any workbook received from an auditee, list the cells in total rows and columns that have *no* formula, and check them against the figures they claim to total. Look also for formulas that cover the wrong range, such as `SUM(E6:E10)` in a table that goes down to row 11. `tidyxl` makes both checks easy, because the formula text is right there in the `formula` column.
+:::
+
+### Untangling the headers with `unpivotr`
+
+Finally, let us turn the table itself into tidy data, with the year and the measure taken from the two header rows. The package `unpivotr` does this with `behead()`. It strips one header at a time from the cells, and attaches it as a column to the data cells it belongs to. The direction says where the header lies relative to the data: `"up"` means directly above, and `"up-left"` means above and to the left, which is how a merged cell spanning several columns looks once read cell by cell (its value sits only in the first column).
+
+First we keep only the table area, rows 4 to 11, and drop empty cells.
+
+```{r}
+tidy_statement <- cells |>
+  filter(row >= 4, row <= 11, !is_blank) |>
+  behead("up-left", year) |>         # 2023-24 / 2024-25, from the merged cells
+  behead("up", measure) |>           # Budget / Expenditure
+  behead("left", district) |>        # district names, to the left
+  select(district, year, measure, value = numeric)
+tidy_statement
+```
+
+Each number now carries its district, year and measure. From here, it is ordinary `tidyr` and `dplyr` (@sec-tidyr). For example, the utilisation of the budget in each year:
+
+```{r}
+tidy_statement |>
+  pivot_wider(names_from = measure, values_from = value) |>
+  mutate(utilisation_pct = round(100 * Expenditure / Budget, 1)) |>
+  filter(utilisation_pct > 100) |>
+  arrange(desc(utilisation_pct))
+```
+
+Devgarh spent 35% more than its budget in 2024-25, the highlighted cell E9 (the other excesses are of about 1% or less), which the note at the foot of the sheet called "provisional". The three clues, a highlight, a note and an excess, point to the same figure.
+
+::: callout-note
+`behead()` handles headers in any direction: `"left"`, `"right"`, `"up"`, `"down"`, and combinations like `"up-left"` for merged cells. For workbooks where blocks of data repeat across a sheet, with a heading for each block, see also `partition()` in unpivotr. The book *Spreadsheet Munging Strategies* by Duncan Garmonsway, the author of both packages, works through many real examples.
+:::
+
+## A suggested workflow
+
+1. **Look at the file first.** For a PDF, check whether the text can be selected. For Excel, open it and note the title rows, merged headers, totals, notes and colours.
+2. **Read the raw content**: `pdf_text()` for PDFs, `xlsx_cells()` for Excel.
+3. **Clean the text**: split lines, drop blanks, and replace look-alike characters.
+4. **Pick out the data**: lines matching a pattern, or the cells of the table area.
+5. **Structure it**: cut columns at fixed positions, extract facts with regular expressions, or `behead()` headers.
+6. **Check the extraction**: counts of rows and `NA`s, totals, and a few records compared by eye.
+7. **Use what the file itself reveals**: running balances, typed-over totals, highlighted cells and notes.
+
+::: callout-important
+## Remember
+
+- Text PDFs can be read exactly with `pdftools`; scanned PDFs need OCR, and every figure must then be checked.
+- PDF text keeps its layout. Cut columns at the positions of the headings, and watch for look-alike characters like `−`.
+- `str_extract()` with lookbehinds pulls facts out of many similar documents into one register.
+- `tidyxl` reads Excel cell by cell, with values, formulas and colours; `unpivotr::behead()` untangles headers.
+- Formatting and formulas are evidence. A highlighted cell or a typed-over total is a question to ask.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `pdf_info()` | pdftools | Number of pages, creator, and creation and modification dates of a PDF |
+| `pdf_text()` | pdftools | Text of each page of a PDF, keeping the layout |
+| `str_split()`, `str_replace_all()`, `str_trim()`, `str_squish()` | stringr | Split text into lines, and clean it |
+| `str_detect()`, `str_locate()`, `str_sub()` | stringr | Find lines and positions, and cut text at positions |
+| `str_extract()` with `(?<=...)` | stringr | Extract the text that follows a fixed phrase |
+| `parse_number()` | readr | Turn text like "2,95,000" into a number |
+| `dmy()` | lubridate | Read dates written day first |
+| `xlsx_cells()` | tidyxl | Every cell of a workbook, with value, type and formula |
+| `xlsx_formats()` | tidyxl | Formatting of the cells, including fill colours |
+| `behead()` | unpivotr | Turn header cells into columns attached to the data cells |
+| `read_excel(skip, n_max, col_names)` | readxl | Read a block of a sheet, skipping title rows |
+
+: Functions used in this chapter {#tbl-pdfxlfunctions}
