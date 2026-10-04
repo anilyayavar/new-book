@@ -1,0 +1,453 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Large Data with DuckDB {#sec-duckdb}
+
+Audit data keeps getting bigger. A year of treasury vouchers of a State, the GST returns of a commissionerate, the billing records of an electricity distribution company, or the transactions of a scheme paid through PFMS easily run into crores of rows. Excel stops at 10,48,576 rows. R does better, but it normally reads the whole data into the computer's memory (RAM) before doing anything. With a few crore rows, that is slow, and on an ordinary office laptop it may not be possible at all.
+
+**DuckDB** solves this problem. It is a database engine that runs *inside* R, with nothing to set up, no server, and no database administrator. It can read CSV and Parquet files directly from the disk, without loading them into R, and it is remarkably fast. Best of all, with the package **dbplyr** we use the same `dplyr` verbs we already know (@sec-DPLYRR). We write `filter()`, `summarise()` and `left_join()` as usual, and dbplyr quietly translates them into SQL, the language of databases, for DuckDB to run.
+
+Think of it like this. R is the officer who decides what is to be examined. DuckDB is a very fast assistant in the record room. Instead of having every register carried to the officer's table, the officer sends instructions, the assistant goes through the registers where they lie, and brings back only the summary asked for.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(duckdb)   # the database engine; also loads DBI
+library(dbplyr)   # translates dplyr code into SQL
+```
+
+Install them once with `install.packages(c("duckdb", "dbplyr"))`.
+
+## Our data, a year of treasury vouchers {#sec-duckdb-data}
+
+The treasuries of a State have given us the payment vouchers of the financial year 2024-25, as 12 monthly CSV files. Each row is one payment: the voucher number, the drawing and disbursing officer (DDO) who drew it, the date, the type of bill, the payee, the payee's bank account and the amount. There are 24 lakh rows in all, more than twice what Excel can open.
+
+The code below creates the files in a temporary folder. In a real audit the files would arrive from the department, and this step would not exist. Two kinds of irregularity are planted, which we will find later.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the 12 monthly voucher files"
+set.seed(2025)
+n <- 2400000
+ddo_master <- tibble(
+  ddo_code   = sprintf("DDO%04d", 1:800),
+  treasury   = sample(sprintf("TR%02d", 1:20), 800, TRUE),
+  department = sample(c("Education", "Health", "Police", "Revenue", "Public Works",
+                        "Agriculture", "Rural Development", "Water Resources"), 800, TRUE)
+)
+# More payments towards the end of the year, especially in March
+month_wt <- c(7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 9, 13)    # April to March
+dates    <- seq(as.Date("2024-04-01"), as.Date("2025-03-31"), by = "day")
+fy_month <- (month(dates) - 4) %% 12 + 1
+date_wt  <- month_wt[fy_month] / tabulate(fy_month)[fy_month]
+
+vouchers <- tibble(
+  voucher_no   = sprintf("V%08d", 1:n),
+  ddo_code     = sample(ddo_master$ddo_code, n, TRUE),
+  voucher_date = sample(dates, n, TRUE, prob = date_wt),
+  bill_type    = sample(c("Salary", "Contingent", "Works", "Grant", "Pension"), n, TRUE,
+                        prob = c(0.45, 0.25, 0.10, 0.10, 0.10)),
+  payee_id     = sprintf("P%07d", sample(1:400000, n, TRUE)),
+  amount       = round(rlnorm(n, log(25000), 1.1))
+) |>
+  mutate(payee_account = paste0("AC", substr(payee_id, 2, 8), "0"))
+
+# Planted 1. Contingent and works bills paid twice, under a new voucher number
+dup <- vouchers |>
+  filter(bill_type %in% c("Contingent", "Works")) |>
+  slice_sample(n = 400) |>
+  mutate(voucher_no = sprintf("V9%07d", row_number()))
+
+# Planted 2. Salaries of 14 "employees" in three DDOs credited to one bank account
+ghost <- vouchers |>
+  filter(bill_type == "Salary") |>
+  slice_sample(n = 14 * 12) |>
+  mutate(payee_id      = rep(sprintf("P8%06d", 1:14), 12),
+         ddo_code      = rep(c("DDO0117", "DDO0342", "DDO0655"), length.out = n()),
+         payee_account = "AC00451230",
+         amount        = round(runif(n(), 38000, 52000)))
+
+vouchers <- bind_rows(vouchers, dup, ghost) |> arrange(voucher_date)
+
+# Write one CSV file per month, as received from the treasuries
+data_dir <- file.path(tempdir(), "treasury")
+dir.create(data_dir, showWarnings = FALSE)
+vouchers |>
+  split(format(vouchers$voucher_date, "%Y_%m")) |>
+  iwalk(\(d, m) write_csv(d, file.path(data_dir, paste0("vouchers_", m, ".csv"))))
+
+rm(vouchers)   # from here on, the data exist only as files on the disk
+```
+
+Let us see what we have received.
+
+```{r}
+csv_files <- list.files(data_dir, pattern = "^vouchers_.*csv$", full.names = TRUE)
+tibble(file = basename(csv_files), size_mb = round(file.size(csv_files) / 1e6, 1))
+```
+
+```{r}
+#| include: false
+csv_mb <- sum(file.size(csv_files)) / 1e6
+```
+
+Twelve files, `r round(csv_mb)` MB in all. Notice that we removed the data from R's memory at the end of the code above. From now on, we work on the files directly.
+
+## Connecting to DuckDB {#sec-duckdb-connect}
+
+First we start DuckDB and *connect* to it. `dbConnect()` comes from the package `DBI`, which works the same way for every database R can talk to.
+
+```{r}
+#| message: false
+con <- dbConnect(duckdb())
+```
+
+This creates a database in memory, which disappears when we disconnect. Now we tell DuckDB where the files are. A single line of SQL creates a *view* named `vouchers`, a name for "all the rows in all the files matching this pattern". The `*` in the file name matches every month.
+
+```{r}
+csv_pattern <- file.path(normalizePath(data_dir, winslash = "/"), "vouchers_*.csv")
+dbExecute(con, paste0("CREATE VIEW vouchers AS SELECT * FROM read_csv('", csv_pattern, "')"))
+```
+
+(`normalizePath(..., winslash = "/")` writes the folder path with forward slashes, which DuckDB prefers, even on Windows.) Finally, `tbl()` gives us an R object pointing at the view, which we can use like a data frame.
+
+```{r}
+vouchers <- tbl(con, "vouchers")
+vouchers
+```
+
+It looks like a tibble, with two differences. The header says `# Source: SQL` and the database, and the number of rows is shown as `??`. DuckDB has only peeked at the first few rows to show us a preview. It has not read the files yet.
+
+## Lazy queries and `collect()` {#sec-duckdb-lazy}
+
+This is the one new idea in this chapter. A table from a database is **lazy**. When we write `dplyr` code on it, nothing is computed. dbplyr only writes down what we want. The work is done when we ask to see the result, and then only the *result* comes into R.
+
+Let us count the rows.
+
+```{r}
+row_time <- system.time(
+  n_rows <- vouchers |> count() |> pull(n)
+)
+n_rows
+```
+
+DuckDB read all twelve files and counted `r format(n_rows, big.mark = ",")` rows in `r round(row_time["elapsed"], 2)` seconds. Now a real summary, the number and value of payments in each month.
+
+```{r}
+monthly <- vouchers |>
+  mutate(year = year(voucher_date), month = month(voucher_date)) |>
+  summarise(payments = n(), crore = sum(amount, na.rm = TRUE) / 1e7, .by = c(year, month)) |>
+  arrange(year, month)
+
+monthly
+```
+
+Printing a lazy query shows the first rows of the result, which is enough to check that it is right. To bring the full result into R as an ordinary tibble, for a chart or for further work, we use **`collect()`**.
+
+```{r}
+monthly_df <- collect(monthly)
+class(monthly_df)
+```
+
+```{r}
+#| fig-cap: "Payments by month, 2024-25. March stands out."
+#| fig-height: 3.5
+monthly_df |>
+  mutate(month_label = factor(month.abb[month], levels = month.abb[c(4:12, 1:3)])) |>
+  ggplot(aes(month_label, crore)) +
+  geom_col(fill = "steelblue") +
+  labs(x = NULL, y = "₹ crore") +
+  theme_minimal()
+```
+
+**What does dbplyr send to DuckDB?** `show_query()` prints the SQL it has written for us.
+
+```{r}
+show_query(monthly)
+```
+
+We never have to write this ourselves. But it is worth a look. Auditors who know SQL, or the "equations" of tools like IDEA and ACL, will recognise `SELECT`, `GROUP BY` and `ORDER BY`. And reading the SQL is a good way to confirm that dbplyr has understood what we meant.
+
+::: callout-note
+## Missing values in databases
+
+In R, `sum(c(5, NA))` is `NA`, as we saw in @sec-basics. In SQL, missing values (called `NULL`) are simply *left out* of sums and averages. dbplyr warns about this the first time, unless we write `na.rm = TRUE`, as we did above, to show that we know. Keep the difference in mind. A total from a database never tells you that some amounts were missing, so count the missing values separately with `sum(is.na(amount))`.
+:::
+
+## Audit tests on the full data {#sec-duckdb-tests}
+
+Now let us run some real tests, on all 24 lakh rows, exactly as we would on a small data frame.
+
+### Which DDOs rushed their spending into March?
+
+```{r}
+march_rush <- vouchers |>
+  summarise(total = sum(amount, na.rm = TRUE),
+            march = sum(if_else(month(voucher_date) == 3, amount, 0), na.rm = TRUE),
+            .by = ddo_code) |>
+  mutate(march_share = march / total) |>
+  slice_max(march_share, n = 10) |>
+  collect()
+
+march_rush |> mutate(across(c(total, march), \(x) round(x / 1e5, 1)),
+                     march_share = round(100 * march_share, 1))
+```
+
+```{r}
+#| include: false
+overall_march <- monthly_df |> summarise(s = sum(crore[month == 3]) / sum(crore)) |> pull(s)
+```
+
+Across the State, March accounts for `r round(100 * overall_march, 1)`% of the year's payments. These DDOs spent `r round(100 * min(march_rush$march_share))`% or more in March alone, and would be the first to examine for the rush of expenditure.
+
+### Duplicate payments
+
+A *same-same-same* test (@sec-dup): the same bank account, the same amount and the same date, under different voucher numbers. We restrict it to contingent and works bills, where a repeated payment is suspicious. (Salaries and pensions legitimately repeat the same amount every month, though not on the same date.)
+
+```{r}
+duplicates <- vouchers |>
+  filter(bill_type %in% c("Contingent", "Works")) |>
+  summarise(times_paid = n(), .by = c(payee_account, amount, voucher_date)) |>
+  filter(times_paid > 1)
+
+duplicates |>
+  summarise(groups = n(), excess_paid = sum(amount * (times_paid - 1), na.rm = TRUE)) |>
+  collect()
+```
+
+```{r}
+#| include: false
+dup_sum <- duplicates |> summarise(groups = n(), excess = sum(amount * (times_paid - 1), na.rm = TRUE)) |> collect()
+```
+
+`r dup_sum$groups` groups of payments were made more than once, with ₹`r round(dup_sum$excess / 1e7, 2)` crore paid in excess. To examine them, we bring only these rows into R. A join with the full table gives the voucher details, and still only the matching rows are collected.
+
+```{r}
+dup_vouchers <- vouchers |>
+  semi_join(duplicates, by = c("payee_account", "amount", "voucher_date")) |>
+  arrange(payee_account, voucher_date) |>
+  collect()
+nrow(dup_vouchers)
+head(dup_vouchers, 6)
+```
+
+### One bank account, many employees
+
+Salaries of different employees should go to different bank accounts. An account receiving the salary of several persons may indicate *ghost employees*, whose pay is drawn into one person's account.
+
+```{r}
+shared_accounts <- vouchers |>
+  filter(bill_type == "Salary") |>
+  summarise(employees = n_distinct(payee_id), ddos = n_distinct(ddo_code),
+            amount = sum(amount, na.rm = TRUE), .by = payee_account) |>
+  filter(employees > 1) |>
+  arrange(desc(employees)) |>
+  collect()
+shared_accounts
+```
+
+```{r}
+#| include: false
+sa <- shared_accounts |> slice(1)
+```
+
+One account, `r sa$payee_account`, received the salary of `r sa$employees` different payees, drawn by `r sa$ddos` DDOs, ₹`r round(sa$amount / 1e5, 1)` lakh in the year. The next step is to collect its vouchers, and ask the DDOs for the service records of these "employees".
+
+```{r}
+vouchers |>
+  filter(payee_account == !!sa$payee_account) |>
+  count(ddo_code, payee_id) |>
+  arrange(ddo_code, payee_id) |>
+  collect() |>
+  head(8)
+```
+
+The first row is the account's genuine holder, a single payee in one DDO. The other 14 payees, in three other DDOs, all have their salaries credited to this one account. The `!!` in front of `sa$payee_account` tells dbplyr to insert the *value* of this R object into the query, rather than look for a column of that name in the database.
+
+## Joining with data in R {#sec-duckdb-join}
+
+Often a small table lives in R, like the DDO master with each DDO's department, and we want to join it with the large table in the database. `copy_to()` sends the small table to DuckDB, and the join is then done there.
+
+```{r}
+ddo_db <- copy_to(con, ddo_master, name = "ddo_master", overwrite = TRUE)
+
+vouchers |>
+  left_join(ddo_db, by = "ddo_code") |>
+  summarise(crore = sum(amount, na.rm = TRUE) / 1e7, .by = department) |>
+  arrange(desc(crore)) |>
+  collect()
+```
+
+All the join checks of @sec-joins still apply. Compare row counts and totals before and after, and use `anti_join()` to find vouchers whose DDO code is not in the master.
+
+```{r}
+vouchers |> anti_join(ddo_db, by = "ddo_code") |> count() |> pull(n)
+```
+
+## When dbplyr cannot translate {#sec-duckdb-translate}
+
+dbplyr knows how to translate most `dplyr` verbs, and many common functions, like `if_else()`, `case_when()`, `year()`, `month()`, `n_distinct()`, `str_detect()` and `round()`, into SQL. But it cannot translate a function it does not know, such as one we wrote ourselves. Remember the `fin_year()` function of @sec-lubri-audit.
+
+```{r}
+fin_year <- function(date) {
+  start <- if_else(month(date) >= 4, year(date), year(date) - 1)
+  paste0(start, "-", sprintf("%02d", (start + 1) %% 100))
+}
+```
+
+```{r}
+#| error: true
+vouchers |> mutate(fy = fin_year(voucher_date)) |> head()
+```
+
+dbplyr does not look inside our function. It passes the name `fin_year` on to DuckDB as it is, and DuckDB has never heard of it. (Even if we copied the code in, `sprintf()` has no translation either.) There are two ways out.
+
+1. **Filter and summarise in the database, then `collect()`, then use any R function** on the much smaller result. This is the usual pattern: let DuckDB cut the data down, and let R do the rest.
+2. **Rewrite the logic with functions dbplyr knows.** Here, `if_else()`, `year()` and `month()` are enough to compute the starting year of the financial year inside the database.
+
+```{r}
+vouchers |>
+  mutate(fy_start = if_else(month(voucher_date) >= 4, year(voucher_date), year(voucher_date) - 1)) |>
+  count(fy_start) |>
+  collect()
+```
+
+::: callout-caution
+Rows in a database have no fixed order. Without `arrange()`, the same query may return rows in a different order each time, and `head()` may show different rows. Always `arrange()` before `head()`, or before comparing results.
+:::
+
+## Writing SQL directly {#sec-duckdb-sql}
+
+Those who know SQL can send it straight to DuckDB with `dbGetQuery()`, which returns a data frame. This is also how audit queries written for other databases can be reused.
+
+```{r}
+dbGetQuery(con, "
+  SELECT bill_type, COUNT(*) AS payments, ROUND(SUM(amount) / 1e7, 1) AS crore
+  FROM vouchers
+  GROUP BY bill_type
+  ORDER BY crore DESC
+")
+```
+
+## Parquet, a better format for large data {#sec-duckdb-parquet}
+
+CSV files are simple, but large and slow to read, because every number is stored as text. **Parquet** is a file format designed for large data. It stores each column together, compressed, with its type. DuckDB can write and read it directly.
+
+```{r}
+parquet_file <- file.path(normalizePath(data_dir, winslash = "/"), "vouchers_2024_25.parquet")
+dbExecute(con, paste0("COPY (SELECT * FROM vouchers) TO '", parquet_file, "' (FORMAT parquet)"))
+
+parquet_mb <- file.size(parquet_file) / 1e6
+c(csv_mb = round(csv_mb), parquet_mb = round(parquet_mb))
+```
+
+The same data take `r round(parquet_mb)` MB instead of `r round(csv_mb)` MB. And queries are faster still. `read_parquet()` takes the place of `read_csv()` in the view.
+
+```{r}
+dbExecute(con, paste0("CREATE VIEW vouchers_pq AS SELECT * FROM read_parquet('", parquet_file, "')"))
+vouchers_pq <- tbl(con, "vouchers_pq")
+
+pq_time <- system.time(
+  by_type <- vouchers_pq |> count(bill_type) |> arrange(bill_type) |> collect()
+)
+by_type
+```
+
+This query took `r round(pq_time["elapsed"], 2)` seconds.
+
+::: callout-tip
+## Audit tip
+
+When a large data set arrives, keep the original files untouched, record their hashes as in @sec-file-hash, and convert a working copy to Parquet once. All further analysis then runs on the Parquet file, which is smaller and much faster, and the original files remain as received, for evidence.
+:::
+
+## How much faster? {#sec-duckdb-speed}
+
+Let us compare with the usual way, reading all the CSV files into R with `read_csv()` and then summarising.
+
+```{r}
+readr_time <- system.time({
+  all_rows <- read_csv(csv_files, show_col_types = FALSE)
+  all_rows |> count(bill_type)
+})
+in_memory_mb <- as.numeric(object.size(all_rows)) / 1e6
+rm(all_rows)
+
+duck_time <- system.time(
+  vouchers |> count(bill_type) |> collect()
+)
+```
+
+| Approach | Time (seconds) | Memory used by R |
+|----------|---------------|------------------|
+| `read_csv()`, then `count()` | `r round(readr_time["elapsed"], 2)` | about `r round(in_memory_mb)` MB for the data |
+| DuckDB on the CSV files | `r round(duck_time["elapsed"], 2)` | only the small result |
+| DuckDB on the Parquet file | `r round(pq_time["elapsed"], 2)` | only the small result |
+
+: Reading 24 lakh rows, three ways {#tbl-duckdb-speed}
+
+The times will differ on your computer, but the pattern will not. And the difference grows with the data. With a few crore rows, `read_csv()` may fail for lack of memory, while DuckDB works through the files on disk without trouble.
+
+## A database file for repeated work {#sec-duckdb-file}
+
+So far, DuckDB lived in memory and read the files afresh for every query. For data we will query again and again, over days, we can keep a DuckDB *database file*. Give `dbConnect()` a file name, and load the data into a table once.
+
+```{r}
+#| eval: false
+con <- dbConnect(duckdb(), dbdir = "treasury_2024_25.duckdb")
+dbExecute(con, "CREATE TABLE vouchers AS SELECT * FROM read_parquet('vouchers_2024_25.parquet')")
+# ... next day, in a new R session
+con <- dbConnect(duckdb(), dbdir = "treasury_2024_25.duckdb")
+vouchers <- tbl(con, "vouchers")
+```
+
+Whichever way we connect, we disconnect at the end, which also frees the memory.
+
+```{r}
+dbDisconnect(con)
+```
+
+## A suggested workflow
+
+1. **Keep the original files untouched**, and record their hashes.
+2. **Connect** with `dbConnect(duckdb())`, and create a view over the files with `read_csv()`, using a `*` pattern for many files.
+3. **Point `tbl()` at the view**, and check a preview and the row count against the control totals received with the data.
+4. **Convert to Parquet** if the data will be used more than once, and query that instead.
+5. **Write the analysis in `dplyr`**, as usual. Use `show_query()` when in doubt.
+6. **Filter and summarise in DuckDB**, and `collect()` only the small result, or the exceptions.
+7. **Use R-only functions after `collect()`**, or rewrite them with translatable functions.
+8. **Disconnect** at the end.
+
+::: callout-important
+## Remember
+
+- DuckDB runs inside R and queries large CSV and Parquet files on disk, without loading them into memory.
+- With dbplyr, we use the same `dplyr` verbs; they are translated into SQL.
+- Database tables are lazy. Nothing happens until we print or `collect()` the result.
+- Let DuckDB cut the data down, and bring only the result into R.
+- Missing values are silently left out of SQL sums; check for them separately.
+- Parquet files are smaller and faster than CSV; keep the originals for evidence.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `dbConnect(duckdb())`, `dbDisconnect()` | DBI, duckdb | Start and close a DuckDB database, in memory or in a file |
+| `dbExecute()` | DBI | Run an SQL command, like creating a view or writing Parquet |
+| `dbGetQuery()` | DBI | Run an SQL query and get a data frame |
+| `read_csv()`, `read_parquet()` (inside SQL) | DuckDB | Read CSV or Parquet files, including many files with a `*` pattern |
+| `tbl()` | dplyr | Point at a table or view in the database |
+| `collect()` | dplyr | Run the query and bring the result into R |
+| `show_query()` | dplyr | Show the SQL that dbplyr has written |
+| `copy_to()` | dplyr | Send a small R table to the database, for joins |
+| `!!` | rlang | Insert the value of an R object into a database query |
+| `normalizePath()` | base R | Write a folder path with forward slashes for DuckDB |
+| `system.time()` | base R | Time a piece of code |
+
+: Functions used in this chapter {#tbl-duckdbfunctions}
