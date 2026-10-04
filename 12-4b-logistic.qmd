@@ -1,0 +1,406 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Logistic Regression for Risk Scoring {#sec-logistic}
+
+In @sec-regression we used linear regression to predict a *number*, the expected salary expenditure of an office. Many audit questions, though, have a *yes or no* answer. Was this refund claim irregular? Will this contract overrun? Is this beneficiary ineligible? We cannot examine every case, so we would like to know, before examining them, which cases are most likely to be a "yes".
+
+*Logistic regression* answers exactly this. It learns from cases whose outcome is already known, like claims examined in last year's audit, how the chance of a "yes" depends on the features of a case. It then gives every new case a *risk score*, the estimated probability of a "yes". Examining the highest-scoring cases first finds far more irregularities for the same effort than picking cases at random.
+
+Logistic regression is the workhorse of risk scoring in tax departments, banks and insurers. For auditors it has one more virtue. Its results can be explained in plain words, "claims of merchant exporters had about twice the odds of being irregular", which matters when a selection has to be justified.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(broom)
+```
+
+## From a straight line to an S-curve {#sec-logistic-idea}
+
+Why not use linear regression for a yes/no outcome, coding "yes" as 1 and "no" as 0? Because a straight line goes on rising, or falling, for ever. For large enough values it predicts "probabilities" above 1 or below 0, which make no sense.
+
+Logistic regression instead fits an S-shaped curve, which always stays between 0 and 1. It rises slowly at first, then steeply, and then flattens out as it approaches 1.
+
+```{r}
+#| fig-cap: "The logistic curve stays between 0 and 1"
+#| fig-height: 3
+tibble(x = seq(-6, 6, by = 0.1)) |>
+  ggplot(aes(x, plogis(x))) +
+  geom_line(linewidth = 1) +
+  geom_hline(yintercept = c(0, 1), linetype = "dashed", colour = "grey50") +
+  labs(x = "Combined risk from all features (log-odds)", y = "Probability of 'yes'") +
+  theme_minimal()
+```
+
+To understand the output, we need one idea, the **odds**. The odds of an event are the chance that it happens divided by the chance that it does not.
+
+- A probability of 0.5 is odds of 0.5/0.5 = 1, often said "1 to 1" or "evens".
+- A probability of 0.2 is odds of 0.2/0.8 = 0.25, or "1 to 4".
+- A probability of 0.8 is odds of 0.8/0.2 = 4, or "4 to 1".
+
+Logistic regression is a linear regression, not on the probability itself, but on the logarithm of the odds (the *log-odds*). We need not work with log-odds directly. What matters is how to read the result. Each coefficient, converted with `exp()`, becomes an **odds ratio**, the number by which the odds are *multiplied* when that feature increases by one unit. An odds ratio of 2 doubles the odds, 1 leaves them unchanged, and 0.5 halves them.
+
+## Our data, last year's refund audit {#sec-logistic-data}
+
+Exporters can claim a refund of the GST paid on their inputs. Refunds are a known risk area, because fake input tax credit, claimed on invoices from suppliers who never paid the tax, can be turned into cash. Last year, the audit party examined 2,000 refund claims in detail, and recorded whether each was found irregular. For each claim we know
+
+- `exporter_type`, a manufacturer or a merchant exporter (who buys goods and exports them without manufacturing),
+- `reg_months`, how many months the claimant had been registered under GST,
+- `amount_lakh`, the refund claimed, in ₹ lakh,
+- `nonfiler_pct`, the percentage of the claimant's input tax credit which came from suppliers who had *not* filed their own returns,
+- `irregular`, the outcome of the audit.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the refund claims"
+make_claims <- function(n, prefix) {
+  tibble(
+    claim_id      = sprintf("%s-%04d", prefix, 1:n),
+    exporter_type = sample(c("Manufacturer", "Merchant"), n, TRUE, prob = c(0.65, 0.35)),
+    reg_months    = pmax(1, round(rexp(n, 1 / 40))),
+    amount_lakh   = round(rlnorm(n, log(8), 1), 2),
+    nonfiler_pct  = round(100 * rbeta(n, 0.6, 6), 1)
+  ) |>
+    # The true risk, unknown to the auditor: higher for merchants, for claimants
+    # registered less than a year ago, for larger claims, and above all for
+    # credit from non-filing suppliers
+    mutate(true_logodds = -4.3 + 1.1 * (exporter_type == "Merchant") +
+             1.5 * (reg_months < 12) + 0.3 * log(amount_lakh) + 0.08 * nonfiler_pct,
+           irregular = runif(n) < plogis(true_logodds)) |>
+    select(-true_logodds)
+}
+set.seed(2028)
+past <- make_claims(2000, "RF23")
+```
+
+```{r}
+past
+past |> summarise(claims = n(), irregular = sum(irregular),
+                  irregular_pct = round(100 * mean(irregular), 1))
+```
+
+About `r round(100 * mean(past$irregular))`% of the claims examined were irregular. If we picked claims at random, about `r round(100 * mean(past$irregular))` of every 100 examined would turn out irregular. Let us see if we can do better.
+
+## Look at the data first
+
+Before fitting any model, let us see how the irregular share varies with each feature. For the numeric features, we group them into bands with `cut()`.
+
+```{r}
+past |>
+  summarise(claims = n(), irregular_pct = round(100 * mean(irregular), 1), .by = exporter_type)
+
+past |>
+  mutate(nonfiler_band = cut(nonfiler_pct, c(-Inf, 5, 10, 20, 30, Inf),
+                             labels = c("Up to 5%", "5-10%", "10-20%", "20-30%", "Over 30%"))) |>
+  summarise(claims = n(), irregular_pct = round(100 * mean(irregular), 1), .by = nonfiler_band) |>
+  arrange(nonfiler_band)
+
+past |>
+  mutate(registered = cut(reg_months, c(0, 6, 12, 24, 60, Inf),
+                          labels = c("Up to 6 months", "6-12 months", "1-2 years",
+                                     "2-5 years", "Over 5 years"))) |>
+  summarise(claims = n(), irregular_pct = round(100 * mean(irregular), 1), .by = registered) |>
+  arrange(registered)
+```
+
+Merchant exporters, and claims with much of their credit from non-filers, are clearly riskier. The registration table shows something worth noting. The risk is high for claimants registered for less than a year, and then drops sharply, changing only gently after that. It does not fall steadily month by month. We will come back to this.
+
+## Training and test data {#sec-logistic-split}
+
+A model always fits the data it learnt from better than new data, just as a student does best on questions already seen. To judge honestly how well it will work on *new* claims, we keep part of the data aside. The model learns from 70% of the claims, the *training* set, and is judged on the remaining 30%, the *test* set, which it has never seen.
+
+```{r}
+set.seed(7)
+train_rows <- sample(nrow(past), size = 0.7 * nrow(past))
+train <- past[train_rows, ]
+test  <- past[-train_rows, ]
+c(train = nrow(train), test = nrow(test))
+```
+
+## Fitting the model {#sec-logistic-fit}
+
+Logistic regression is fitted with `glm()`, the function for *generalised linear models*. The formula is written as in `lm()`. The argument `family = binomial` makes it a logistic regression. Since amounts are skewed, we use the logarithm of the amount, as is usual for money.
+
+```{r}
+model1 <- glm(irregular ~ exporter_type + reg_months + log(amount_lakh) + nonfiler_pct,
+              family = binomial, data = train)
+summary(model1)
+```
+
+The output looks like that of `lm()`. Every feature has a small p-value, so each is related to the risk. But the coefficients are in log-odds, which are hard to read. `broom::tidy()` with `exponentiate = TRUE` converts them into odds ratios, with confidence intervals.
+
+```{r}
+or1 <- tidy(model1, exponentiate = TRUE, conf.int = TRUE)
+or1 |> mutate(across(where(is.numeric), \(x) round(x, 3)))
+```
+
+```{r}
+#| include: false
+or_merchant <- or1$estimate[or1$term == "exporter_typeMerchant"]
+or_nonfiler <- or1$estimate[or1$term == "nonfiler_pct"]
+or_months   <- or1$estimate[or1$term == "reg_months"]
+```
+
+Read them like this.
+
+- **Exporter type.** Merchant exporters have `r round(or_merchant, 1)` times the odds of an irregular claim, compared with manufacturers with the same other features. The comparison is with the first category, `Manufacturer`, just as with factors in `lm()`.
+- **Credit from non-filers.** Each extra percentage point multiplies the odds by `r round(or_nonfiler, 3)`. That looks small, but it is per point. Ten more points multiply the odds by `r round(or_nonfiler, 3)`^10^, or `r round(or_nonfiler^10, 1)`.
+- **Amount.** Since we used the logarithm, the odds ratio applies to each multiplication of the amount by *e* (about 2.7). Larger claims are somewhat riskier.
+- **Months registered.** An odds ratio of `r round(or_months, 3)` per month, slightly below 1. Older registrations are slightly less risky.
+
+::: callout-caution
+Odds ratios describe *association*, not cause. Being a merchant exporter does not make a claim irregular. Merchant exporters have simply been riskier in this data, perhaps because fake invoices are easier to use when nothing is manufactured. The model tells us where to look, not who is guilty.
+:::
+
+## Risk scores {#sec-logistic-score}
+
+`predict()` with `type = "response"` gives the predicted probability for each claim, its *risk score*. Without `type = "response"`, it gives log-odds.
+
+```{r}
+test <- test |> mutate(score = predict(model1, newdata = test, type = "response"))
+
+test |>
+  arrange(desc(score)) |>
+  select(claim_id, exporter_type, reg_months, amount_lakh, nonfiler_pct, score, irregular) |>
+  head(8)
+```
+
+The highest scores go to claims with a large share of credit from non-filers, often merchant exporters or recent registrations. Most of them were indeed found irregular.
+
+## How good is the model? {#sec-logistic-evaluate}
+
+### The accuracy trap
+
+The obvious way to use a probability is to call a claim "irregular" if its score is above 0.5. Let us count how that works on the test set, in a *confusion matrix*.
+
+```{r}
+table(predicted_irregular = test$score > 0.5, actually_irregular = test$irregular)
+```
+
+```{r}
+#| include: false
+cm5 <- table(factor(test$score > 0.5, c(FALSE, TRUE)), test$irregular)
+acc5 <- (cm5[1, 1] + cm5[2, 2]) / sum(cm5)
+recall5 <- cm5[2, 2] / sum(cm5[, 2])
+base_acc <- mean(!test$irregular)
+```
+
+The model is right for `r round(100 * acc5, 1)`% of the claims. That sounds good, until we notice that calling *every* claim regular would be right for `r round(100 * base_acc, 1)`%, since most claims are regular. Worse, it catches only `r cm5[2, 2]` of the `r sum(cm5[, 2])` irregular claims, `r round(100 * recall5)`%. When "yes" cases are rare, as irregularities usually are, *accuracy is a misleading measure*. Two other measures matter to an auditor.
+
+- **Recall** (or *sensitivity*), the share of irregular claims that the selection catches. Low recall means irregularities slip through.
+- **Precision**, the share of selected claims that turn out irregular. Low precision means examining many clean claims.
+
+A lower cut-off catches more irregular claims, at the cost of examining more clean ones.
+
+```{r}
+evaluate_cutoff <- function(cutoff) {
+  picked <- test$score > cutoff
+  tibble(cutoff,
+         selected  = sum(picked),
+         caught    = sum(picked & test$irregular),
+         recall    = round(mean(picked[test$irregular]), 2),
+         precision = round(mean(test$irregular[picked]), 2))
+}
+map(c(0.5, 0.3, 0.2, 0.1), evaluate_cutoff) |> list_rbind()
+```
+
+There is no single right cut-off. It depends on how many claims the audit party can examine, and on the cost of missing an irregular claim compared with examining a clean one.
+
+### Ranking: the ROC curve and AUC
+
+In audit we rarely need a yes/no prediction at all. We need a good *ranking*, so that we can examine claims from the top down as far as our resources allow. The standard measure of ranking quality is the **AUC**, the *area under the ROC curve*. It has a simple meaning. Pick one irregular claim and one regular claim at random. The AUC is the probability that the model gives the irregular one the higher score. An AUC of 0.5 is no better than tossing a coin, and 1 is a perfect ranking. In practice, 0.7 to 0.8 is useful, and above 0.8 is good.
+
+The AUC can be calculated from ranks, in the same way as the Wilcoxon test of @sec-tests-wilcox.
+
+```{r}
+auc <- function(score, actual) {
+  r  <- rank(score)
+  n1 <- sum(actual)
+  n0 <- sum(!actual)
+  (sum(r[actual]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+auc1 <- auc(test$score, test$irregular)
+auc1
+```
+
+The AUC on the test set is `r sprintf('%.2f', auc1)`. The ROC curve itself shows, for every possible cut-off, the share of irregular claims caught against the share of regular claims wrongly selected.
+
+```{r}
+#| fig-cap: "ROC curve of the refund risk model on the test set"
+roc_points <- function(score, actual) {
+  ord <- order(score, decreasing = TRUE)
+  tibble(false_alarm_rate = c(0, cumsum(!actual[ord]) / sum(!actual)),
+         catch_rate       = c(0, cumsum(actual[ord]) / sum(actual)))
+}
+roc_points(test$score, test$irregular) |>
+  ggplot(aes(false_alarm_rate, catch_rate)) +
+  geom_line(linewidth = 1) +
+  geom_abline(linetype = "dashed", colour = "grey50") +
+  labs(x = "Share of regular claims selected (false alarms)",
+       y = "Share of irregular claims caught",
+       subtitle = paste("AUC =", sprintf("%.2f", auc1), "; the dashed line is random selection")) +
+  coord_equal() +
+  theme_minimal()
+```
+
+The further the curve bows towards the top-left corner, the better. The dashed diagonal is what random selection would achieve.
+
+### The gains table, in audit language
+
+The most useful view for planning is the *gains table*. Sort the claims by score, divide them into ten equal groups (*deciles*), and count how many irregular claims each group holds.
+
+```{r}
+gains <- test |>
+  mutate(decile = ntile(desc(score), 10)) |>
+  summarise(claims = n(), irregular = sum(irregular), .by = decile) |>
+  arrange(decile) |>
+  mutate(cum_claims_pct = round(100 * cumsum(claims) / sum(claims)),
+         cum_caught_pct = round(100 * cumsum(irregular) / sum(irregular)))
+gains
+```
+
+```{r}
+#| include: false
+top20 <- gains$cum_caught_pct[gains$decile == 2]
+top30 <- gains$cum_caught_pct[gains$decile == 3]
+```
+
+Examining the top 20% of claims by score would have caught `r top20`% of the irregular ones, and the top 30%, `r top30`%. Random selection of 20% of claims would catch only about 20%. That is the value of the model, stated in terms any audit manager understands.
+
+## Making better features {#sec-logistic-features}
+
+Remember the registration table. The risk was high for claimants registered for less than a year, and much lower after that. But `model1` uses `reg_months` as a straight-line effect, a small change in risk for every month. It cannot capture a jump at one year. A simple feature that says whether the claimant is a *new registrant* matches the pattern better.
+
+```{r}
+train <- train |> mutate(new_registrant = reg_months < 12)
+test  <- test  |> mutate(new_registrant = reg_months < 12)
+
+model2 <- glm(irregular ~ exporter_type + new_registrant + log(amount_lakh) + nonfiler_pct,
+              family = binomial, data = train)
+or2 <- tidy(model2, exponentiate = TRUE, conf.int = TRUE)
+or2 |> mutate(across(where(is.numeric), \(x) round(x, 3)))
+
+test <- test |> mutate(score2 = predict(model2, newdata = test, type = "response"))
+auc2 <- auc(test$score2, test$irregular)
+c(model1 = round(auc1, 3), model2 = round(auc2, 3))
+```
+
+New registrants have `r round(or2$estimate[or2$term == "new_registrantTRUE"], 1)` times the odds of an irregular claim, and the AUC on the test set improves from `r round(auc1, 3)` to `r round(auc2, 3)`.
+
+With only about 100 irregular claims in the test set, a small difference in AUC could be the luck of one particular split. A simple check is to repeat the split many times, and see how often the new model wins. (Repeating the split in a systematic way is called *cross-validation*.)
+
+```{r}
+auc_gain <- map_dbl(1:40, \(i) {
+  set.seed(i)
+  rows <- sample(nrow(past), size = 0.7 * nrow(past))
+  tr <- past[rows, ] |> mutate(new_registrant = reg_months < 12)
+  te <- past[-rows, ] |> mutate(new_registrant = reg_months < 12)
+  m1 <- glm(irregular ~ exporter_type + reg_months + log(amount_lakh) + nonfiler_pct,
+            family = binomial, data = tr)
+  m2 <- glm(irregular ~ exporter_type + new_registrant + log(amount_lakh) + nonfiler_pct,
+            family = binomial, data = tr)
+  auc(predict(m2, te), te$irregular) - auc(predict(m1, te), te$irregular)
+})
+c(splits = length(auc_gain), new_model_better = sum(auc_gain > 0),
+  average_gain = round(mean(auc_gain), 3))
+```
+
+The new feature improves the ranking in `r sum(auc_gain > 0)` of `r length(auc_gain)` random splits, so the gain is real. Features built from audit knowledge, like "registered less than a year ago", "supplier and claimant share an address" or "claim filed in the last week of the quarter", often add more than any statistical refinement. Looking at the data first, as we did, is how such features are found.
+
+::: callout-tip
+## Audit tip
+
+Compare models on the *test* set, never on the training set. Adding features always improves the fit on the training data, even useless ones. Only the test set tells whether a change really helps on new cases.
+:::
+
+## Using the model on new claims {#sec-logistic-use}
+
+This year, 1,500 refund claims are pending, and the audit party can examine 150 of them. Their outcomes are, of course, not known yet. We first refit the model on *all* of last year's claims, since the test set has done its job, and then score the new claims.
+
+```{r}
+past <- past |> mutate(new_registrant = reg_months < 12)
+final_model <- glm(irregular ~ exporter_type + new_registrant + log(amount_lakh) + nonfiler_pct,
+                   family = binomial, data = past)
+
+set.seed(2029)
+pending <- make_claims(1500, "RF24") |>
+  select(-irregular) |>                         # outcomes not known yet
+  mutate(new_registrant = reg_months < 12)
+
+pending <- pending |>
+  mutate(risk_score = predict(final_model, newdata = pending, type = "response"),
+         risk_rank  = min_rank(desc(risk_score)))
+
+pending |> arrange(risk_rank) |>
+  select(claim_id, exporter_type, reg_months, amount_lakh, nonfiler_pct, risk_score) |>
+  head(10)
+```
+
+How should the 150 claims be chosen? Not only from the top of the list.
+
+```{r}
+set.seed(11)
+top_risk    <- pending |> slice_max(risk_score, n = 120)
+random_part <- pending |> anti_join(top_risk, by = "claim_id") |> slice_sample(n = 30)
+
+selection <- bind_rows(top_risk |> mutate(basis = "Risk score"),
+                       random_part |> mutate(basis = "Random")) |>
+  arrange(desc(risk_score))
+count(selection, basis)
+```
+
+We take the 120 highest-risk claims, and 30 more chosen at random from the rest, using `anti_join()` from @sec-joins so that no claim is picked twice. The random part is not a waste. It keeps the selection unpredictable, so claimants cannot learn to stay just below the model's radar. It catches kinds of irregularity the model has never seen. And it gives unbiased data for training next year's model, which brings us to the cautions.
+
+::: callout-caution
+## Cautions in using risk models
+
+- **The model learns only from what was examined.** If last year's audit examined mostly large claims, the model knows little about small ones. Outcomes from a partly random selection, as above, correct this over time.
+- **The past is not the future.** Once a risk becomes known, the fraud moves elsewhere. Refit the model every year, and check its AUC on the new year's results.
+- **Do not use features that should not decide treatment**, such as the religion, caste or gender of a proprietor, even if they appear predictive. Such a selection cannot be defended, and usually reflects bias in past selections rather than real risk.
+- **A score is not evidence.** A high score is a reason to examine a claim, never a finding in itself. The finding comes from the examination.
+- **Watch for perfect separation.** If some feature predicts the outcome perfectly in the training data, say every claim from one district was irregular, `glm()` warns that "fitted probabilities numerically 0 or 1 occurred", and the coefficients become unreliable. Merge such small groups, or drop the feature.
+:::
+
+## A suggested workflow
+
+1. **Define the outcome** clearly, such as "irregularity of more than ₹1 lakh found on examination", and collect past cases with known outcomes.
+2. **List candidate features** from audit knowledge, and look at the outcome rate by each feature, banding numeric ones with `cut()`.
+3. **Split** the data into training and test sets.
+4. **Fit** with `glm(..., family = binomial)`, and read the odds ratios with `tidy(exponentiate = TRUE, conf.int = TRUE)`.
+5. **Evaluate on the test set** with the AUC and a gains table. Do not rely on accuracy.
+6. **Improve the features**, comparing models only on the test set.
+7. **Refit on all the data, and score the new cases.**
+8. **Select** mostly by risk score, with a random part, within the capacity available.
+9. **Record** the model, its features and its test results in the working papers, and refit when new outcomes arrive.
+
+::: callout-important
+## Remember
+
+- Logistic regression predicts the probability of a yes/no outcome, and its scores rank cases by risk.
+- `exp()` of a coefficient is an odds ratio, the factor by which the odds change for one unit of the feature.
+- Judge a model on data it has not seen. Use the AUC and a gains table, not accuracy, when "yes" is rare.
+- Good features come from audit knowledge and from looking at the data.
+- Select mostly by risk, partly at random, and treat a score as a lead, never as evidence.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `glm(family = binomial)` | stats | Fit a logistic regression |
+| `summary()` | base R | Coefficients, standard errors and p-values of a model |
+| `tidy(exponentiate = TRUE, conf.int = TRUE)` | broom | Odds ratios with confidence intervals, as a table |
+| `predict(type = "response")` | stats | Predicted probabilities (risk scores) for new data |
+| `plogis()` | stats | The logistic curve, turning log-odds into probabilities |
+| `sample()` | base R | Split data into training and test sets |
+| `table()` | base R | Confusion matrix of predicted and actual outcomes |
+| `rank()`, `cumsum()` | base R | Calculate the AUC and the ROC curve |
+| `ntile()`, `min_rank()` | dplyr | Divide into deciles, and rank by score |
+| `slice_max()`, `slice_sample()`, `anti_join()` | dplyr | Select the top-risk cases and a random part from the rest |
+
+: Functions used in this chapter {#tbl-logisticfunctions}
