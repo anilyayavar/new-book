@@ -1,0 +1,336 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Decision Trees {#sec-trees}
+
+A *decision tree* is a chain of yes/no questions, the kind an experienced auditor asks without thinking. Was the tender open for less than three weeks? If yes, did it get fewer than three bids? If yes, this contract needs a close look. A tree learns such questions from data. It finds which feature to ask about first, where to draw the line (why three weeks, and not two?), and what to ask next, separately for each answer.
+
+Trees have two great strengths for audit work.
+
+- **Their results are rules**, which can be read, discussed and written into an audit programme: "contracts with a tender window under 21 days and at most two bidders were irregular about 60% of the time".
+- **They find combinations by themselves.** A short tender window may matter only when there are few bidders. Logistic regression (@sec-logistic) treats each feature separately, unless we know the combination in advance and tell it. A tree discovers it.
+
+In this chapter we use trees for two audit tasks: learning risk rules from past audit results, and finding out what rule a department *actually* follows in its decisions, as against the rule it is supposed to follow.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(rpart)        # fits decision trees
+library(rpart.plot)   # draws them
+```
+
+`rpart` comes with every installation of R. `rpart.plot` is installed from CRAN with `install.packages("rpart.plot")`.
+
+## Our data, audited works contracts {#sec-trees-data}
+
+Last year's audit examined 3,000 works contracts of a State's public works, irrigation and water supply departments, and recorded whether each was found irregular (excess payment, splitting of works, inflated quantities, and so on). For each contract we know
+
+- `department`,
+- `tender_mode`, whether the contract was awarded through an open tender, a limited tender, or on nomination to a single contractor,
+- `value_lakh`, the value of the contract in ₹ lakh,
+- `window_days`, the days the tender was open for bids (the General Financial Rules require at least three weeks for open tenders),
+- `bidders`, the number of bids received.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the contracts data"
+set.seed(33)
+n <- 3000
+works <- tibble(
+  work_id     = sprintf("WK-%04d", 1:n),
+  department  = sample(c("Roads", "Buildings", "Irrigation", "Water Supply"), n, TRUE),
+  tender_mode = sample(c("Open", "Limited", "Nomination"), n, TRUE, prob = c(0.7, 0.2, 0.1)),
+  value_lakh  = round(rlnorm(n, log(60), 0.9), 1),
+  window_days = pmax(3, round(rnorm(n, 26, 7))),
+  bidders     = pmax(1, rpois(n, 4.5))
+) |>
+  mutate(bidders = if_else(tender_mode == "Nomination", 1, bidders),
+         # The true risk, unknown to the auditor. Planted:
+         # - short tender windows with at most two bidders are very risky
+         # - large contracts awarded on nomination are very risky
+         risk = case_when(
+           tender_mode == "Nomination" & value_lakh > 100 ~ 0.60,
+           window_days < 21 & bidders <= 2               ~ 0.65,
+           window_days < 21                              ~ 0.15,
+           TRUE                                          ~ 0.04),
+         irregular = as.numeric(runif(n) < risk)) |>
+  select(-risk)
+```
+
+```{r}
+works
+mean(works$irregular)
+```
+
+`irregular` is 1 for an irregular contract and 0 otherwise, so its mean, `r round(mean(works$irregular), 3)`, is the share of irregular contracts, about `r round(100 * mean(works$irregular))`%. As in @sec-logistic-split, we keep 30% of the contracts aside as a test set.
+
+```{r}
+set.seed(1)
+train_rows <- sample(nrow(works), size = 0.7 * nrow(works))
+train <- works[train_rows, ]
+test  <- works[-train_rows, ]
+```
+
+## Growing a tree {#sec-trees-grow}
+
+`rpart()` takes a formula, like `lm()` and `glm()`. Since `irregular` is coded 0 and 1, we use `method = "anova"`. The tree then predicts the *share* of irregular contracts in each group, which is exactly the risk score we want. (For a yes/no label instead of a score, `method = "class"` is used, as we will see in @sec-trees-rules-actual.)
+
+```{r}
+set.seed(1)   # rpart uses random numbers for cross-validation, explained later
+tree1 <- rpart(irregular ~ department + tender_mode + value_lakh + window_days + bidders,
+               data = train, method = "anova")
+```
+
+```{r}
+#| fig-cap: "Decision tree for irregularity in works contracts"
+#| fig-height: 5
+rpart.plot(tree1, roundint = FALSE, digits = 2)
+```
+
+```{r}
+#| include: false
+leaf_info <- tree1$frame |> filter(var == "<leaf>")
+top_leaf  <- max(leaf_info$yval)
+```
+
+**How to read the tree.** Start at the top, the *root*, which holds all the training contracts. Each box shows two numbers. The upper one is the share of irregular contracts in that group, and the lower one is the percentage of all contracts which fall in it. The root shows the overall share, `r round(mean(train$irregular), 2)`, for 100% of contracts. Below each box is a question. Contracts for which the answer is *yes* go to the left, and the others to the right. The boxes at the bottom, the *leaves*, are the final groups.
+
+The first question is whether the tender was open for 21 days or more. For the contracts where it was not, on the right, the tree next asks about bidders. Short-window contracts with fewer than 2.5 (that is, at most two) bidders end in a leaf where about three in five were irregular. On the left, among contracts with a proper window, the tree separates those awarded on nomination, and among them those worth more than about ₹1 crore, another high-risk leaf. Every other group has a low share. The tree has found both the planted patterns, and even the 21-day line of the rules, without being told any of them.
+
+## How a tree chooses its questions {#sec-trees-how}
+
+At each step, the tree tries every feature and every possible dividing line. For `window_days` it tries "less than 4", "less than 5", and so on. It picks the question which splits the contracts into two groups that are each as *pure* as possible, one group with mostly irregular contracts and the other with mostly clean ones. Then it repeats the search inside each group separately. That is why the second question can be different on each side. The tree asks about bidders only for contracts with short windows, because that is where bidders matter.
+
+Left alone, this splitting would go on until every leaf held a single contract. `rpart()` stops earlier, by default, when a split would improve the fit by less than 1%. This limit is the *complexity parameter*, `cp`, which we will meet again in @sec-trees-prune.
+
+## From a tree to audit rules {#sec-trees-rules}
+
+`rpart.rules()` writes out the path to each leaf as a rule, sorted by risk.
+
+```{r}
+rpart.rules(tree1, roundint = FALSE)
+```
+
+These read almost like paragraphs of an audit programme. The rules can be turned into `dplyr` code to flag contracts in any new data set. For example, the two high-risk rules become the following. (The tree's line for nomination was ₹109 lakh, which we have rounded to ₹1 crore, for the reason explained below.)
+
+```{r}
+works |>
+  mutate(risk_rule = case_when(
+    window_days < 21 & bidders <= 2                     ~ "Short window, few bidders",
+    tender_mode == "Nomination" & value_lakh >= 100     ~ "Large nomination",
+    .default = "Other")) |>
+  summarise(contracts = n(), irregular_pct = round(100 * mean(irregular), 1), .by = risk_rule)
+```
+
+The thresholds from a tree, like ₹109 lakh here, come from the data and can wobble a little from sample to sample. Before writing them into an audit programme, round them to the nearest limit with a meaning, such as the ₹1 crore beyond which a higher authority must approve, or the 21 days required by the rules.
+
+::: callout-tip
+## Audit tip
+
+Show the tree itself to the audit team and to the department. Unlike most models, a tree can be checked against experience. If a rule makes no sense, say a high risk for contracts awarded on a Tuesday, it is probably chance, and the tree should be pruned or the feature dropped. If a rule makes sense but was not known, it is a finding worth sharing.
+:::
+
+## How good is the tree? {#sec-trees-evaluate}
+
+We judge the tree on the test set, using the AUC from @sec-logistic-evaluate. `predict()` on a tree gives the share of irregular contracts in the leaf each contract falls into.
+
+```{r}
+auc <- function(score, actual) {
+  r  <- rank(score)
+  n1 <- sum(actual)
+  n0 <- sum(!actual)
+  (sum(r[actual]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+test <- test |> mutate(tree_score = predict(tree1, newdata = test))
+auc_tree <- auc(test$tree_score, test$irregular == 1)
+auc_tree
+```
+
+How does a logistic regression with the same features do?
+
+```{r}
+logit1 <- glm(irregular ~ department + tender_mode + value_lakh + window_days + bidders,
+              family = binomial, data = train)
+auc_logit <- auc(predict(logit1, newdata = test), test$irregular == 1)
+auc_logit
+```
+
+The tree ranks the contracts better, with an AUC of `r round(auc_tree, 3)` against `r round(auc_logit, 3)`. The reason is the combinations. In this data, a short window is risky mainly when there are few bidders, and nomination mainly when the contract is large. Logistic regression adds up the effect of each feature separately, so it cannot see this unless we build such combinations ourselves, and to do that we would have to know them already.
+
+This does not make trees always better. When risk rises smoothly with a feature, like the share of credit from non-filers in @sec-logistic, logistic regression captures it in one number, while a tree can only approximate it with steps. In practice, fit both and compare them on the test set.
+
+**Which features matter?** The tree also reports how much each feature contributed to its splits.
+
+```{r}
+round(tree1$variable.importance / sum(tree1$variable.importance) * 100)
+```
+
+The department does not appear at all. Irregularity here does not depend on the department, which is itself useful to know.
+
+## Trees that grow too far {#sec-trees-prune}
+
+A tree can always be grown until it fits the training data almost perfectly. Let us lower `cp` and the smallest group allowed to split, `minsplit`, and see what happens.
+
+```{r}
+set.seed(1)
+deep_tree <- rpart(irregular ~ department + tender_mode + value_lakh + window_days + bidders,
+                   data = train, method = "anova",
+                   control = rpart.control(cp = 0.0005, minsplit = 10))
+
+c(leaves    = sum(deep_tree$frame$var == "<leaf>"),
+  auc_train = round(auc(predict(deep_tree, train), train$irregular == 1), 3),
+  auc_test  = round(auc(predict(deep_tree, test), test$irregular == 1), 3))
+```
+
+```{r}
+#| include: false
+deep_leaves <- sum(deep_tree$frame$var == "<leaf>")
+deep_train  <- auc(predict(deep_tree, train), train$irregular == 1)
+deep_test   <- auc(predict(deep_tree, test), test$irregular == 1)
+```
+
+The deep tree has `r deep_leaves` leaves. On the training data its AUC is a splendid `r round(deep_train, 3)`, but on the test data it falls to `r round(deep_test, 3)`, worse than the small tree. It has *memorised* the training contracts, chance coincidences included, instead of learning the general pattern. This is called *overfitting*, and it is the main danger with trees.
+
+The cure is *pruning*, cutting the tree back to the size that works best on new data. `rpart()` helps by *cross-validation*. While growing the tree, it splits the training data into 10 parts, grows the tree on 9 and checks it on the tenth, ten times over. The results are in the *complexity table*.
+
+```{r}
+round(deep_tree$cptable, 4) |> head(8)   # the first 8 rows of the complexity table
+```
+
+```{r}
+#| include: false
+cpt <- deep_tree$cptable
+best_row <- which.min(cpt[, "xerror"])
+```
+
+Each row is a tree of a different size (`nsplit` is the number of splits, one less than the number of leaves). `rel error` is the error on the training data, which keeps falling as the tree grows. `xerror` is the cross-validated error, an estimate of the error on new data. It falls at first, and then rises again as the tree starts memorising. The lowest `xerror` here is at `r cpt[best_row, "nsplit"]` splits. `plotcp()` shows the same thing as a chart.
+
+```{r}
+#| fig-cap: "Cross-validated error by tree size"
+#| fig-height: 4
+plotcp(deep_tree)
+```
+
+We prune the deep tree at the `cp` with the lowest cross-validated error.
+
+```{r}
+best_cp <- cpt[which.min(cpt[, "xerror"]), "CP"]
+pruned_tree <- prune(deep_tree, cp = best_cp)
+
+c(leaves   = sum(pruned_tree$frame$var == "<leaf>"),
+  auc_test = round(auc(predict(pruned_tree, test), test$irregular == 1), 3))
+rpart.rules(pruned_tree, roundint = FALSE)
+```
+
+Pruning brings the tree back to `r sum(pruned_tree$frame$var == "<leaf>")` leaves, with the same rules and the same test AUC as our first tree, far better than the deep tree. A common, more cautious alternative is the *one standard error rule*: choose the smallest tree whose `xerror` is within one `xstd` of the lowest. It gives simpler trees, which are easier to explain.
+
+::: callout-caution
+Trees are *unstable*. A small change in the data can change the first question, and with it the whole tree below. Do not read too much into the exact thresholds or the lower branches of a single tree. Check that the main rules hold on the test set, and, where possible, on a second year's data. Methods which average many trees, such as *random forests* (the package `ranger`), are much more stable and usually rank better, but give up the readable rules which are a tree's main attraction for audit.
+:::
+
+## What rule is actually being applied? {#sec-trees-rules-actual}
+
+Trees have a second, quite different use in audit. Instead of predicting irregularity, we can fit a tree to the *decisions* an office has made, and read off the rule it actually follows. Then we compare it with the rule it is supposed to follow.
+
+A State scholarship scheme is open to students whose family income is up to ₹2.5 lakh a year and who scored at least 60% in their last examination. Here are 2,000 applications from five districts, with the decision taken on each.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the scholarship applications"
+set.seed(5)
+m <- 2000
+applications <- tibble(
+  app_id      = sprintf("SCH-%04d", 1:m),
+  district    = sample(c("Anandpur", "Bhimnagar", "Keshavpur", "Lalganj", "Motipur"), m, TRUE),
+  applicant   = sample(c("Fresh", "Renewal"), m, TRUE, prob = c(0.6, 0.4)),
+  income_lakh = round(runif(m, 0.5, 6), 2),
+  marks_pct   = round(pmin(99, rnorm(m, 66, 12)), 1)
+) |>
+  mutate(decision = case_when(
+    # Planted. Keshavpur quietly applies an income limit of 4 lakh
+    district == "Keshavpur" & income_lakh <= 4 & marks_pct >= 60 ~ "Approved",
+    income_lakh <= 2.5 & marks_pct >= 60                         ~ "Approved",
+    .default = "Rejected"))
+# A few decisions which follow no rule at all
+odd <- sample(m, 30)
+applications$decision[odd] <- if_else(applications$decision[odd] == "Approved",
+                                      "Rejected", "Approved")
+applications <- applications |>
+  mutate(decision = factor(decision, levels = c("Rejected", "Approved")))
+```
+
+This time the outcome is a category, so we use `method = "class"`.
+
+```{r}
+#| fig-cap: "The rule actually followed in scholarship decisions"
+#| fig-height: 5
+decision_tree <- rpart(decision ~ district + applicant + income_lakh + marks_pct,
+                       data = applications, method = "class")
+rpart.plot(decision_tree, roundint = FALSE, extra = 104)
+```
+
+In a class tree, each box shows the predicted decision, the share of each decision in the group, and the percentage of applications in it (`extra = 104` asks for these). The rules make it plain.
+
+```{r}
+rpart.rules(decision_tree, roundint = FALSE)
+```
+
+The numbers are the share approved. Across the State, the tree recovers the scheme's rule: income below ₹2.5 lakh and marks of about 60% or more. But in Keshavpur alone there is one more approving rule, for incomes between ₹2.5 lakh and ₹4 lakh. The district has been applying an income limit of ₹4 lakh. No one told the tree to look at districts. It found the deviation because the decisions themselves could not be explained without it.
+
+The finding is then confirmed and quantified directly.
+
+```{r}
+applications |>
+  filter(decision == "Approved", income_lakh > 2.5 | marks_pct < 60) |>
+  count(district, name = "approved_outside_rule")
+```
+
+The handful of such cases in the other districts are the scattered odd decisions, each worth checking, but the pattern is in Keshavpur. The next step in audit would be to examine the Keshavpur files, and to see whether any order authorised the higher limit.
+
+::: callout-tip
+## Audit tip
+
+This "what rule is really applied" analysis works for any decision taken against stated criteria: admissions, recruitment, pension and subsidy sanctions, grant of licences, or selection of beneficiaries. If the tree's rule matches the stated one, the process is consistent. If it splits on something that should not matter, such as a district, an officer or a time period, there is a deviation to investigate.
+:::
+
+## A suggested workflow
+
+1. **Define the outcome**: a past audit result coded 0/1 for risk rules, or the decision taken for rule discovery.
+2. **Split** the data into training and test sets (for rule discovery on the full data, this can be skipped).
+3. **Grow a tree** with `rpart()`, `method = "anova"` for a 0/1 risk score, or `method = "class"` for a category.
+4. **Draw it** with `rpart.plot()`, and **write out the rules** with `rpart.rules()`.
+5. **Check for overfitting**: grow a deeper tree, look at `printcp()` and `plotcp()`, and `prune()` at the lowest cross-validated error.
+6. **Evaluate on the test set** with the AUC, and compare with logistic regression.
+7. **Sense-check the rules** with experienced auditors, and round thresholds to meaningful limits.
+8. **Turn the rules into `dplyr` filters**, and apply them to new data.
+
+::: callout-important
+## Remember
+
+- A decision tree is a chain of yes/no questions learnt from data, and its result is a set of readable rules.
+- Trees find combinations of features, like "short window *and* few bidders", by themselves.
+- Deep trees memorise their training data. Prune them using the cross-validated error.
+- Trees are unstable. Trust the main rules that hold on test data, not every branch.
+- A tree fitted to an office's decisions shows the rule it actually applies.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `rpart()` | rpart | Grow a decision tree; `method = "anova"` for a 0/1 risk share or number, `"class"` for a category |
+| `rpart.control()` | rpart | Settings for growing, like `cp` and `minsplit` |
+| `printcp()`, `plotcp()` | rpart | Complexity table and chart, with cross-validated error |
+| `prune()` | rpart | Cut a tree back to a given `cp` |
+| `predict()` | stats | Risk score, or class, for new data |
+| `rpart.plot()` | rpart.plot | Draw a tree |
+| `rpart.rules()` | rpart.plot | Write out the rules of a tree, one per leaf |
+| `glm()` | stats | Logistic regression, for comparison |
+| `case_when()` | dplyr | Turn the tree's rules into flags |
+
+: Functions used in this chapter {#tbl-treefunctions}
