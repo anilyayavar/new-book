@@ -26,12 +26,16 @@ Detecting and investigating anomalies is therefore a core skill for an auditor. 
 |-------------------|------------------|----------------------|------------|
 | Boxplot (IQR rule) | One numeric column | Values far from the middle of the data | @sec-ano-inspect |
 | Grubbs' test | One numeric column, normally distributed | Whether the single most extreme value is an outlier | @sec-ano-grubbs |
+| Robust z-score, within peer groups | One numeric column, or a ratio | Values extreme for their own peer group, without masking | @sec-ano-robustz |
+| Robust Mahalanobis distance | A few related numeric columns | Combinations that break the usual relationship | @sec-ano-mahal |
 | Seasonal Hybrid ESD | One time series | Anomalies after allowing for seasonality | @sec-ano-shesd |
 | k-Nearest Neighbour distance | Many numeric columns | Records far away from all others (global anomalies) | @sec-ano-knn |
 | Local Outlier Factor (LOF) | Many numeric columns | Records unlike their own neighbours (local anomalies) | @sec-ano-lof |
 | Isolation Forest | Many columns, numeric and categorical | Records which are easy to separate from the rest | @sec-ano-iforest |
 | LOF with Gower distance | Many columns, numeric and categorical | Rare combinations of categories and values | @sec-ano-gower |
 | STL decomposition (`timetk`) | One time series | Odd periods after allowing for trend and season | @sec-ano-ts |
+| Change point detection (`changepoint`) | One time series | The date of a lasting shift in level | @sec-ano-changepoint |
+| Combining methods by rank | Scores from several methods | One prioritised list, using the strengths of each | @sec-ano-combine |
 
 : Anomaly detection methods covered in this chapter {#tbl-anomethods}
 
@@ -123,6 +127,154 @@ How do we read this? The *null hypothesis* of the test is that there is **no** o
 
 Grubbs' test checks only *one* value at a time, the most extreme one. If there are several outliers, they can hide each other. For testing several suspected outliers together, a related test called Rosner's test can be used. It is available as `rosnerTest()` in the `EnvStats` package. Also remember that most financial data, like bill amounts, is *not* normally distributed. It usually has a long tail of large values. For such data, Grubbs' test is not suitable unless the data is first transformed, for example by taking logs.
 :::
+
+## Robust z-scores and peer groups {#sec-ano-robustz}
+
+The best-known way to measure how unusual a value is, is the **z-score**: how many standard deviations it lies from the mean. A value with a z-score beyond 3, or below -3, is commonly called an outlier. But the plain z-score has two weaknesses which matter a great deal in audit data.
+
+**It is not robust.** The mean and the standard deviation are themselves pulled by extreme values. A few large outliers raise the mean and inflate the standard deviation, and so make *themselves* look less unusual. This is called *masking*. See this small example.
+
+```{r}
+x <- c(10, 11, 12, 10, 11, 12, 11, 95, 98, 99)
+round((x - mean(x)) / sd(x), 2)
+```
+
+The three obviously odd values, 95, 98 and 99, have z-scores below 1.5. They have hidden one another. The remedy is to use measures which outliers cannot pull: the **median** in place of the mean, and the **median absolute deviation** (MAD) in place of the standard deviation. The MAD is the median of the distances of the values from their median. R's `mad()` scales it so that, for normal data, it matches the standard deviation. The result is the **robust z-score**.
+
+```{r}
+round((x - median(x)) / mad(x), 2)
+```
+
+Now the three odd values stand out at once. A common rule, suggested by Iglewicz and Hoaglin, is to flag robust z-scores beyond 3.5. For money amounts, which are skewed, compute the score on the logarithm of the amount, as we did in @sec-ano-ts.
+
+**It compares everything with everything.** The second weakness matters even more. A district hospital spends far more per patient than a primary health centre. Compared with all facilities together, every district hospital looks "unusual", and a primary health centre spending three times as much as other PHCs looks normal. The fair comparison is with the **peer group**: PHCs with PHCs, district hospitals with district hospitals.
+
+Let us see both points on the medicine expenditure of 300 health facilities of a State.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the facility data"
+set.seed(2028)
+types <- c(PHC = 200, CHC = 70, DH = 30)   # primary, community health centres, district hospitals
+facilities <- tibble(type = rep(names(types), types)) |>
+  mutate(facility = paste0(type, "-", sprintf("%03d", row_number())), .by = type) |>
+  mutate(beds = round(case_when(type == "PHC" ~ runif(n(), 6, 10),
+                                type == "CHC" ~ runif(n(), 30, 50),
+                                TRUE          ~ runif(n(), 100, 300))),
+         patients = round(beds * rlnorm(n(), log(140), 0.25)),          # patients per month
+         cost_per_patient = round(case_when(type == "PHC" ~ 120, type == "CHC" ~ 330,
+                                            TRUE ~ 850) * rlnorm(n(), 0, 0.18)),
+         # Planted. Medicine spending far above the facility's own peers
+         cost_per_patient = case_when(facility == "PHC-037" ~ 410,
+                                      facility == "CHC-012" ~ 1250,
+                                      TRUE ~ cost_per_patient),
+         medicine_lakh = round(patients * cost_per_patient / 1e5, 2))
+```
+
+```{r}
+facilities |>
+  summarise(facilities = n(), median_cost = median(cost_per_patient), .by = type)
+```
+
+First, the plain z-score of the cost per patient, over all 300 facilities.
+
+```{r}
+facilities |>
+  mutate(z = (cost_per_patient - mean(cost_per_patient)) / sd(cost_per_patient)) |>
+  filter(abs(z) > 3) |>
+  count(type)
+```
+
+```{r}
+#| include: false
+plain_flags <- facilities |> mutate(z = (cost_per_patient - mean(cost_per_patient)) / sd(cost_per_patient)) |> filter(abs(z) > 3)
+```
+
+Of the `r nrow(plain_flags)` facilities flagged, `r sum(plain_flags$type == "DH")` are district hospitals, flagged simply for being district hospitals. Now the robust z-score of the log cost, computed *within each type* with `.by`.
+
+```{r}
+robust_z <- function(x) (x - median(x)) / mad(x)
+
+facilities <- facilities |>
+  mutate(rz_peer = robust_z(log(cost_per_patient)), .by = type)
+
+facilities |>
+  filter(abs(rz_peer) > 3.5) |>
+  select(facility, type, cost_per_patient, rz_peer) |>
+  mutate(rz_peer = round(rz_peer, 1))
+```
+
+Only the two planted facilities are flagged. PHC-037 spends ₹410 per patient, ordinary for a CHC but more than three times what other PHCs spend, which the plain z-score over all facilities could not see. CHC-012 spends far more than other CHCs.
+
+::: callout-tip
+## Audit tip
+
+Robust z-scores within peer groups are the simplest anomaly method that an audit team can explain to anyone, and often the most useful. Choose peer groups that *should* behave alike: facilities of one type, schools of one level, police stations of one category, DDOs of one department, vendors of one commodity. Use a ratio that removes size, like cost per patient or expenditure per student. And make sure each group has enough members, at least 20 or 30, for the median and MAD to be reliable.
+:::
+
+## Unusual combinations, robust Mahalanobis distance {#sec-ano-mahal}
+
+Robust z-scores look at one measure at a time. Some anomalies show only in a *combination*. When a natural ratio exists, like cost per patient, the ratio captures the combination, and the z-score of the ratio is the best tool. But often the measures are related in a way no single ratio captures.
+
+Take the primary health centres of a district. Larger PHCs see more patients in the outpatient department (OPD) and also conduct more deliveries, so the two numbers rise together. Each delivery in a public facility earns an incentive under the Janani Suraksha Yojana, so inflated delivery figures are a known risk. Now suppose one PHC reports a fairly *low* OPD but a fairly *high* number of deliveries. Neither number is unusual by itself. Together, they are.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the PHC data"
+set.seed(12)
+n_phc <- 200
+size  <- rlnorm(n_phc, 0, 0.35)              # some PHCs serve larger populations
+phc <- tibble(phc        = sprintf("PHC-%03d", 1:n_phc),
+              opd        = round(1100 * size * rlnorm(n_phc, 0, 0.12)),   # patients per month
+              deliveries = round(30 * size * rlnorm(n_phc, 0, 0.15)))     # deliveries per month
+# Planted. Low OPD (15th percentile) but high deliveries (88th percentile)
+phc$opd[77]        <- round(quantile(phc$opd, 0.15))
+phc$deliveries[77] <- round(quantile(phc$deliveries, 0.88))
+```
+
+```{r}
+phc <- phc |> mutate(z_opd = robust_z(log(opd)), z_deliveries = robust_z(log(deliveries)))
+phc |> filter(phc == "PHC-077") |> mutate(across(starts_with("z_"), \(z) round(z, 2)))
+```
+
+Neither robust z-score of PHC-077 comes anywhere near 3.5. A scatter plot shows the problem at once.
+
+```{r}
+#| fig-cap: "OPD and deliveries rise together; PHC-077 breaks the pattern"
+#| fig-height: 4
+ggplot(phc, aes(opd, deliveries)) +
+  geom_point(alpha = 0.6) +
+  geom_point(data = filter(phc, phc == "PHC-077"), colour = "red", size = 3) +
+  scale_x_log10() + scale_y_log10() +
+  labs(x = "OPD patients per month (log scale)", y = "Deliveries per month (log scale)") +
+  theme_minimal()
+```
+
+The **Mahalanobis distance** measures how far a point lies from the centre of the data, *taking account of how the measures vary together*. A point along the main band of the scatter, even far out, is not unusual. A point *across* the band, like PHC-077, is. It works for any number of measures, where scatter plots are no longer possible.
+
+Like the z-score, it needs a centre and a measure of spread, and like the z-score, these are pulled by outliers. So we use robust estimates, from `cov.rob()` in the package `MASS`, which comes with R. Its "minimum covariance determinant" method finds the centre and spread of the most tightly packed half of the data, ignoring the rest. We work on the logarithms, since the counts are skewed.
+
+```{r}
+X <- cbind(log(phc$opd), log(phc$deliveries))
+robust_fit <- MASS::cov.rob(X, method = "mcd")
+phc$mahal <- mahalanobis(X, center = robust_fit$center, cov = robust_fit$cov)
+
+phc |>
+  arrange(desc(mahal)) |>
+  select(phc, opd, deliveries, mahal) |>
+  mutate(mahal = round(mahal, 1)) |>
+  head(5)
+```
+
+PHC-077 stands far above the rest. How large is "large"? For normal data, the squared Mahalanobis distance, which is what `mahalanobis()` returns, follows a *chi-square* distribution, with as many degrees of freedom as there are measures. So `qchisq(0.999, df = 2)` gives a cut-off that a normal point exceeds only once in a thousand times.
+
+```{r}
+cutoff <- qchisq(0.999, df = ncol(X))
+round(cutoff, 1)
+phc |> filter(mahal > cutoff) |> pull(phc)
+```
+
+Only PHC-077 crosses the cut-off. The next step would be to compare its delivery register with its OPD register, the beds used, and the incentive payments made.
 
 ## Seasonal Hybrid ESD algorithm {#sec-ano-shesd}
 
@@ -794,6 +946,185 @@ expenditure |>
 Here `fin_year` 2019 means the financial year 2019-20, and so on. In every year, March accounts for more than 15% of the annual expenditure.
 :::
 
+## When did behaviour change? Change points {#sec-ano-changepoint}
+
+The time series methods of @sec-ano-ts find *single periods* that are unusual. Sometimes the question is different. *When* did a series shift to a new level, and stay there? A vendor's rate that steps up when a new officer takes charge, a sudden and lasting rise in a hospital's claims after it was empanelled with a new third-party administrator, or collections that drop after a change in the inspection system. Such a lasting shift is not one odd month, so methods looking for odd months may miss it. **Change point detection** looks for exactly these shifts.
+
+Let us take the rate charged per bag of cement by one supplier to a public works division, month by month for four years.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the cement rates"
+set.seed(7)
+cement <- tibble(month = seq(as.Date("2021-04-01"), by = "month", length.out = 48),
+                 # Planted. A lasting step up after the 30th month, and a one-off spike in month 12
+                 rate  = round(c(rnorm(30, 365, 8), rnorm(18, 405, 8))))
+cement$rate[12] <- 440
+```
+
+The package `changepoint` finds the points where the *mean* of a series changes, with `cpt.mean()`. The `PELT` method searches efficiently for any number of change points. One preparation is needed. The function measures changes in units of the series' natural month-to-month noise, and assumes that noise has a standard deviation of 1. So we first divide the series by a robust estimate of its noise, the MAD of the month-to-month differences divided by $\sqrt{2}$.
+
+```{r}
+#| message: false
+#| warning: false
+library(changepoint)
+noise <- mad(diff(cement$rate)) / sqrt(2)
+cp <- cpt.mean(cement$rate / noise, method = "PELT")
+cpts(cp)
+```
+
+```{r}
+#| include: false
+cps <- cpts(cp)
+```
+
+`cpts()` gives the positions after which the mean changes: `r paste(cps, collapse = ", ")`. Let us read them with the dates. The changes after months `r cps[1]` and `r cps[2]` enclose a single month, `r format(cement$month[cps[2]], "%B %Y")`. That is the one-off spike, a *point* anomaly, which the method sees as a tiny segment of its own. The change after month `r cps[3]`, `r format(cement$month[cps[3]], "%B %Y")`, is the lasting shift. The average rate in each segment shows its size.
+
+```{r}
+cement |>
+  mutate(segment = cut(row_number(), breaks = c(0, cps, nrow(cement)))) |>
+  summarise(from = min(month), to = max(month), months = n(), mean_rate = round(mean(rate)),
+            .by = segment)
+```
+
+```{r}
+#| fig-cap: "Cement rates with the detected segments"
+#| fig-height: 3.5
+cement |>
+  mutate(segment = cut(row_number(), breaks = c(0, cps, nrow(cement)))) |>
+  mutate(segment_mean = mean(rate), .by = segment) |>
+  ggplot(aes(month, rate)) +
+  geom_line(colour = "grey50") +
+  geom_point() +
+  geom_step(aes(y = segment_mean), colour = "red", linewidth = 1, direction = "mid") +
+  labs(x = NULL, y = "Rate per bag (₹)") +
+  theme_minimal()
+```
+
+From `r format(cement$month[cps[3] + 1], "%B %Y")`, the supplier has charged about ₹`r round(mean(cement$rate[(cps[3] + 1):48]) - mean(cement$rate[setdiff(1:cps[3], cps[2])]))` more per bag, month after month. The audit questions follow naturally. Did the market rate rise at the same time? Did other suppliers' rates rise too? Was the rate contract revised, and by whom? Did anything else change that month, like the officer in charge?
+
+::: callout-tip
+## Audit tip
+
+Run change point detection on many series at once, say the rate of every major item from every supplier, with `map()` (@sec-purrr), and list the series with a lasting shift, the date and the size of the shift. Then compare the dates with known events: rate revisions, transfers of officers, new contracts. A shift with no explanation is a strong lead. `cpt.meanvar()` looks for changes in both the mean and the variability, which can reveal, for example, a period when rates suddenly stopped varying, as if copied.
+:::
+
+## Combining several methods {#sec-ano-combine}
+
+Each method in this chapter sees anomalies in its own way. A robust z-score sees one extreme measure. The Mahalanobis distance sees a broken relationship. An isolation forest sees records that are easy to separate from the rest, and LOF sees records unlike their own neighbours. A record flagged by several methods is a stronger lead than one flagged by a single method, and different methods catch different kinds of irregularity. So in practice we run several, and combine their verdicts into **one ranked list** for examination.
+
+The scores of different methods are on different scales: a z-score of 4, a Mahalanobis distance of 25, an isolation score of 0.6. They cannot be added directly. The simplest fair way is to convert each method's scores into **ranks**, or rather percentile ranks between 0 and 1, and average them. A record which every method places near the top gets a combined score near 1.
+
+Let us add a third measure to our PHC data, medicine expenditure, and plant two more cases of different kinds.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to add medicine expenditure and two more planted cases"
+set.seed(21)
+phc <- phc |>
+  mutate(medicine_lakh = round(opd * 120 * rlnorm(n(), 0, 0.15) / 1e5, 2))
+# Planted. PHC-140 spends far more on medicines than its OPD explains
+phc$medicine_lakh[140] <- round(phc$medicine_lakh[140] * 2.6, 2)
+# Planted. PHC-021 reports far less of everything than any other PHC
+phc$opd[21]           <- round(min(phc$opd) * 0.45)
+phc$deliveries[21]    <- max(1, round(min(phc$deliveries) * 0.45))
+phc$medicine_lakh[21] <- round(min(phc$medicine_lakh) * 0.45, 2)
+```
+
+Now we score every PHC with four methods. All of them work on the logarithms of the three measures.
+
+```{r}
+#| message: false
+library(isotree)
+library(dbscan)
+
+logs <- phc |> transmute(l_opd = log(opd), l_del = log(deliveries), l_med = log(medicine_lakh))
+
+scores <- phc |>
+  transmute(
+    phc,
+    # 1. largest robust z-score among the three measures, and medicine per OPD patient
+    robust_z = pmax(abs(robust_z(logs$l_opd)), abs(robust_z(logs$l_del)),
+                    abs(robust_z(logs$l_med)), abs(robust_z(logs$l_med - logs$l_opd))),
+    # 2. robust Mahalanobis distance
+    mahal = {
+      fit <- MASS::cov.rob(as.matrix(logs), method = "mcd")
+      mahalanobis(as.matrix(logs), fit$center, fit$cov)
+    },
+    # 3. isolation forest score
+    iforest = {
+      set.seed(1)
+      predict(isolation.forest(logs, ntrees = 200), logs)
+    },
+    # 4. local outlier factor, on scaled values
+    lof = lof(scale(logs), minPts = 10)
+  )
+```
+
+Each column is a score where *higher means more unusual*. Now we turn each into a percentile rank with `percent_rank()`, and average.
+
+```{r}
+combined <- scores |>
+  mutate(across(c(robust_z, mahal, iforest, lof), percent_rank, .names = "pr_{.col}")) |>
+  mutate(combined = (pr_robust_z + pr_mahal + pr_iforest + pr_lof) / 4) |>
+  arrange(desc(combined))
+
+combined |>
+  select(phc, starts_with("pr_"), combined) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3))) |>
+  head(8)
+```
+
+```{r}
+#| include: false
+planted <- c("PHC-021", "PHC-077", "PHC-140")
+avg_rank_077 <- which(combined$phc == "PHC-077")
+```
+
+PHC-021 and PHC-140 top the list. But where is PHC-077, the PHC whose deliveries were out of line with its OPD? It is at position `r avg_rank_077`. Let us see how each method ranked the three planted PHCs, out of `r nrow(phc)`.
+
+```{r}
+map(c(robust_z = "robust_z", mahalanobis = "mahal", isolation_forest = "iforest", lof = "lof"),
+    \(col) rank(-combined[[col]])[match(planted, combined$phc)]) |>
+  as_tibble() |>
+  mutate(phc = planted, .before = 1)
+```
+
+Three methods placed PHC-077 near the top, but the robust z-score, which looks at one measure at a time, saw nothing unusual in it, exactly as we found in @sec-ano-mahal. Its low rank on that one method pulled the average down. This is the weakness of averaging: it *dilutes* an anomaly that only some methods can see, and different kinds of anomaly are, by their nature, seen by different methods.
+
+A remedy that auditors find natural is a **vote**. Count, for each record, how many methods place it in their top 5%, and rank records first by the number of votes, then by the average.
+
+```{r}
+top_share <- 0.05
+voted <- combined |>
+  mutate(votes = (pr_robust_z >= 1 - top_share) + (pr_mahal >= 1 - top_share) +
+                 (pr_iforest >= 1 - top_share) + (pr_lof >= 1 - top_share)) |>
+  arrange(desc(votes), desc(combined))
+
+voted |>
+  select(phc, votes, combined) |>
+  mutate(combined = round(combined, 3)) |>
+  head(8)
+```
+
+```{r}
+#| include: false
+vote_pos <- match(planted, voted$phc)
+n_two_plus <- sum(voted$votes >= 2)
+```
+
+Now the three planted PHCs are at positions `r paste(sort(vote_pos), collapse = ", ")`. A record that most methods flag, for whatever reason each has, rises to the top, while a record that one method alone happens to place high stays lower. In all, `r n_two_plus` PHCs are flagged by two or more methods, a short and well-founded list for examination. Not every record on it is planted. The others with several votes are simply the smallest or largest PHCs in the data, and an examination would quickly clear them. That is normal: anomaly methods find the *unusual*, and only the records can say whether it is *wrong*.
+
+::: callout-tip
+## Audit tip
+
+Keep the individual method scores alongside the combined score in your working papers. When a record is examined, they explain *why* it was selected: "medicine spending three times what its OPD explains" (robust z of the ratio), or "deliveries out of line with OPD" (Mahalanobis). An explained selection is much easier to defend than a single number.
+:::
+
+::: callout-note
+Averaging and voting both give every method an equal say. If experience shows that one method finds more real issues in your data, give it a larger weight. And when outcomes of past examinations are available, consider the supervised methods of @sec-logistic and @sec-forest, which learn directly from what was found.
+:::
+
 ## Choosing a method
 
 With so many methods, which one should an auditor use? @tbl-anochoose gives a simple guide.
@@ -801,8 +1132,12 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 | Your data | Suggested method |
 |----------------------------------|-------------------------------|
 | One amount column, quick check | Boxplot, drawn group-wise |
+| Entities that fall into natural peer groups | Robust z-score of a size-free ratio, within each group |
+| A few related measures for each entity | Robust Mahalanobis distance |
 | One column, roughly bell-shaped, one suspect value | Grubbs' test |
 | A monthly, weekly or daily series | STL decomposition with `timetk`, on log scale for money |
+| A series that may have shifted to a new level | Change point detection with `changepoint` |
+| Several methods, one list to examine | Average of percentile ranks |
 | A table of numeric indicators for each vendor, employee etc. | Isolation forest first, then LOF to look for local anomalies |
 | Numeric and categorical columns together | LOF with Gower distance, or isolation forest with factors |
 | Known rules, like entitlements or limits | A direct rule-based check, before any of the above |
@@ -815,9 +1150,10 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 2.  **Apply the known rules first.** Limits, entitlements and rates can be checked directly, without any algorithm.
 3.  **Look at the data.** Draw boxplots and histograms, group-wise. Many anomalies are visible at this stage itself.
 4.  **Prepare the data for the algorithm.** Scale numeric columns for kNN and LOF. Use the log for money amounts. Convert categorical columns to factors.
-5.  **Run more than one method.** A record flagged by two different methods is a stronger lead.
-6.  **Rank, do not label.** Sort records by score and examine them from the top.
-7.  **Verify with documents.** Explain every flagged record from the records, before treating it as a finding.
+5.  **Compare like with like.** Use peer groups and size-free ratios, so that big entities are not flagged merely for being big.
+6.  **Run more than one method, and combine them by rank.** A record flagged by several methods is a stronger lead.
+7.  **Rank, do not label.** Sort records by score and examine them from the top.
+8.  **Verify with documents.** Explain every flagged record from the records, before treating it as a finding.
 
 ::: callout-important
 ## Remember
@@ -832,6 +1168,9 @@ An anomaly is only *unusual*. It is not necessarily *wrong*. Many anomalies have
 | `summary()`, `boxplot()` | base R | Quick view of spread and extreme values |
 | `boxplot.stats()$out` | grDevices | Lists the values beyond the boxplot whiskers |
 | `grubbs.test()` | outliers | Tests whether the most extreme value is an outlier |
+| `median()`, `mad()` | stats | Robust centre and spread, for robust z-scores |
+| `cov.rob(method = "mcd")`, `mahalanobis()` | MASS, stats | Robust centre and covariance, and Mahalanobis distances |
+| `qchisq()` | stats | Cut-off for squared Mahalanobis distances |
 | `AnomalyDetectionVec()` | AnomalyDetection | Seasonal Hybrid ESD on a single series |
 | `scale()` | base R | Puts all numeric columns on the same scale |
 | `get.knn()` | FNN | Finds the k nearest neighbours and their distances |
@@ -840,5 +1179,7 @@ An anomaly is only *unusual*. It is not necessarily *wrong*. Many anomalies have
 | `daisy(metric = "gower")` | cluster | Distance for mixed numeric and categorical data |
 | `prcomp()` | stats | Principal components, used here for plotting |
 | `tk_anomaly_diagnostics()`, `plot_anomaly_diagnostics()` | timetk | Time series anomalies after removing trend and season |
+| `cpt.mean()`, `cpt.meanvar()`, `cpts()` | changepoint | Find change points in the mean (and variance) of a series |
+| `percent_rank()` | dplyr | Percentile ranks, for combining scores of different methods |
 
 : Functions used in this chapter {#tbl-anofunctions}
