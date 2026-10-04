@@ -689,11 +689,112 @@ bill_register |>
 
 The last column is a basic validity test. A bill cannot be paid before it is received. Any such case is either a data entry error or a payment made in advance of the bill, and both need explanation. Here, `r sum(bill_register$paid < bill_register$received, na.rm = TRUE)` of the planted holiday payments is dated before its bill was received, which makes it doubly suspicious.
 
+### Transactions by the hour of the day {#sec-lubri-hours}
+
+Dates tell us *which day* something happened. Date-times also tell us *what time*, and that can be just as revealing. Most computerised systems, like the treasury's e-payment system, an ERP, or core banking, record a time stamp for every transaction: when a bill was passed, a payment approved, or a record changed. Government offices work roughly from 9:30 in the morning to 6 in the evening on working days. A payment approved at two in the morning, or on a Sunday, is not necessarily wrong, but it deserves a question. Was the approver really at work then? Was someone else using the approver's login?
+
+Let us take the system log of e-payment approvals of a treasury for one quarter.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the approval log"
+set.seed(915)
+work_days <- seq(as.Date("2024-10-01"), as.Date("2024-12-31"), by = "day")
+work_days <- work_days[!wday(work_days) %in% c(1, 7)]       # Monday to Friday
+users <- sprintf("USR%02d", 1:12)
+n_log <- 6000
+approval_log <- tibble(
+  user = sample(users, n_log, TRUE),
+  # mostly between 10 am and 6 pm, peaking before lunch and in the late afternoon
+  time = force_tz(as_datetime(sample(work_days, n_log, TRUE)), "Asia/Kolkata") +
+         round(3600 * pmin(pmax(rnorm(n_log, 14, 2.1), 9.6), 19.5) * 60) / 60,
+  amount = round(rlnorm(n_log, log(40000), 1))
+)
+# Planted. One user approves payments late at night and at weekends
+odd_days <- seq(as.Date("2024-10-01"), as.Date("2024-12-31"), by = "day")
+odd <- tibble(
+  user = "USR07",
+  time = force_tz(as_datetime(sample(odd_days, 45, TRUE)), "Asia/Kolkata") +
+         3600 * sample(c(22, 23, 0, 1, 2), 45, TRUE) + 60 * sample(0:59, 45, TRUE),
+  amount = round(rlnorm(45, log(180000), 0.6))
+)
+approval_log <- bind_rows(approval_log, odd) |> arrange(time)
+```
+
+```{r}
+approval_log
+```
+
+`hour()` extracts the hour from a date-time, from 0 (midnight to 1 am) to 23. Counting approvals by hour, and colouring the hours outside office time, gives the picture at once.
+
+```{r}
+#| fig-cap: "E-payment approvals by hour of the day"
+#| fig-height: 3.5
+approval_log |>
+  mutate(hour = hour(time),
+         office_hours = if_else(hour >= 9 & hour < 19, "Office hours", "Outside office hours")) |>
+  count(hour, office_hours) |>
+  ggplot(aes(hour, n, fill = office_hours)) +
+  geom_col() +
+  scale_x_continuous(breaks = 0:23) +
+  scale_fill_manual(values = c("Office hours" = "grey60", "Outside office hours" = "firebrick")) +
+  labs(x = "Hour of the day", y = "Approvals", fill = NULL) +
+  theme_minimal() +
+  theme(legend.position = "top")
+```
+
+The bulk of approvals fall in office hours, as they should. But there is a small, separate cluster late at night, between 10 pm and 3 am, which no ordinary working pattern explains. A **heat map** of the day of the week against the hour adds the weekends to the picture. `wday(label = TRUE, week_start = 1)` gives the day names, starting the week on Monday.
+
+```{r}
+#| fig-cap: "Approvals by day of the week and hour"
+#| fig-height: 3.5
+approval_log |>
+  mutate(hour = hour(time), day = wday(time, label = TRUE, week_start = 1)) |>
+  count(day, hour) |>
+  complete(day, hour = 0:23, fill = list(n = 0)) |>
+  ggplot(aes(hour, fct_rev(day), fill = n)) +
+  geom_tile(colour = "white") +
+  scale_fill_gradient(low = "grey95", high = "darkred", transform = "sqrt") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(x = "Hour of the day", y = NULL, fill = "Approvals") +
+  theme_minimal()
+```
+
+The working week shows as a solid block from about 9 am to 7 pm, Monday to Friday. Outside it, faint cells are scattered through the night, and on Saturdays and Sundays, when there should be nothing at all. (We used `complete()` from @sec-tidyr so that hours with no approvals appear as empty cells, rather than gaps, and a square-root colour scale so that the faint cells remain visible beside the busy ones.)
+
+Who approved these payments?
+
+```{r}
+off_hours <- approval_log |>
+  filter(hour(time) < 9 | hour(time) >= 19 | wday(time) %in% c(1, 7))
+
+off_hours |>
+  summarise(approvals = n(), amount_lakh = round(sum(amount) / 1e5, 1), .by = user) |>
+  arrange(desc(approvals))
+```
+
+```{r}
+#| include: false
+oh <- off_hours |> summarise(approvals = n(), amount = sum(amount), .by = user) |> arrange(desc(approvals))
+```
+
+One user, `r oh$user[1]`, stands out: `r oh$approvals[1]` approvals worth ₹`r round(oh$amount[1] / 1e5, 1)` lakh, far larger than the typical payment. Every other user has only a handful, mostly just after 7 pm, when an office sometimes works late. The next steps would be to compare these times with the user's attendance and leave records, to check where the logins came from, and to examine the payments themselves.
+
+::: callout-tip
+## Audit tip
+
+Before reading anything into the hours, check the **time zone** of the time stamps. Systems often store time in UTC, which is five and a half hours behind Indian Standard Time. Read in the wrong zone, a 3 pm approval appears as 9:30 am, and every pattern shifts. Use `with_tz(time, "Asia/Kolkata")` to show a stored time in Indian time, and `force_tz()` when a time was recorded without a zone and is known to be Indian time. The trap is easy to fall into. Even `as.POSIXct()` on a date gives midnight in UTC, which is 5:30 am in India. While preparing the data for this very section, that one slip moved every approval five and a half hours later, and made the whole office look as if it worked through the night. The code above uses `force_tz(as_datetime(date), "Asia/Kolkata")`, which gives midnight in Indian time.
+:::
+
 ::: callout-tip
 ## Audit tip
 
 Always fix the *as-on date* of an ageing analysis, as we did with `as_on`, instead of using `today()`. The analysis is then reproducible, and matches the date of the accounts being audited. And make the age groups match the rules in force, like the time limit for paying bills or adjusting advances, so that the groups beyond the limit are the exceptions to report.
 :::
+
+## Where next
+
+Dates are also the backbone of two later chapters. When the question is about how a measure *moves over time*, its trend, its seasons and what to expect next month, see the chapter on time series analysis (@sec-ts). When the question is whether a particular month is *unusual*, or when a series *shifted* to a new level, see the time series methods of the anomaly detection chapter (@sec-ano-ts and @sec-ano-changepoint).
 
 ## Summary of functions used
 
@@ -702,12 +803,14 @@ Always fix the *as-on date* of an ageing analysis, as we did with `as_on`, inste
 | `as.Date()`, `as.POSIXct()`, `difftime()` | base R | Dates, date-times and time differences |
 | `ymd()`, `dmy()`, `mdy()` and others | lubridate | Read dates written in the given order of year, month and day |
 | `make_date()`, `make_datetime()` | lubridate | Build dates from year, month and day columns |
-| `year()`, `month()`, `day()`, `wday()`, `quarter()` | lubridate | Extract parts of a date, including the fiscal quarter |
+| `year()`, `month()`, `day()`, `wday()`, `quarter()`, `hour()` | lubridate | Extract parts of a date or date-time, including the fiscal quarter and the hour |
+| `with_tz()`, `force_tz()` | lubridate | Show a date-time in another time zone, or set its zone |
 | `years()`, `months()`, `dyears()`, `interval()`, `%--%`, `%within%` | lubridate | Periods, durations and intervals |
 | `%m+%`, `add_with_rollback()` | lubridate | Add months without going past the month's last day |
 | `floor_date()`, `ceiling_date()`, `round_date()` | lubridate | Round dates to a unit, like the start of the month |
 | `format()`, `strftime()`, `stamp()` | base R, lubridate | Show dates in a chosen format |
 | `cut()` | base R | Sort numbers, like days pending, into groups |
 | `scale_x_date()` | ggplot2 | Date axes in charts |
+| `geom_col()`, `geom_tile()` | ggplot2 | Bar chart by hour, and heat map of day against hour |
 
 : Functions used in this chapter {#tbl-lubrifunctions}
