@@ -3,11 +3,13 @@
 source("_common.R")
 ```
 
-# Large Data with DuckDB {#sec-duckdb}
+# Large Data with DuckDB and data.table {#sec-duckdb}
 
 Audit data keeps getting bigger. A year of treasury vouchers of a State, the GST returns of a commissionerate, the billing records of an electricity distribution company, or the transactions of a scheme paid through PFMS easily run into crores of rows. Excel stops at 10,48,576 rows. R does better, but it normally reads the whole data into the computer's memory (RAM) before doing anything. With a few crore rows, that is slow, and on an ordinary office laptop it may not be possible at all.
 
 **DuckDB** solves this problem. It is a database engine that runs *inside* R, with nothing to set up, no server, and no database administrator. It can read CSV and Parquet files directly from the disk, without loading them into R, and it is remarkably fast. Best of all, with the package **dbplyr** we use the same `dplyr` verbs we already know (@sec-DPLYRR). We write `filter()`, `summarise()` and `left_join()` as usual, and dbplyr quietly translates them into SQL, the language of databases, for DuckDB to run.
+
+Later in the chapter we also meet **data.table**, a package that makes work on data in memory very fast, and compare the approaches.
 
 Think of it like this. R is the officer who decides what is to be examined. DuckDB is a very fast assistant in the record room. Instead of having every register carried to the officer's table, the officer sends instructions, the assistant goes through the registers where they lie, and brings back only the summary asked for.
 
@@ -366,32 +368,175 @@ This query took `r round(pq_time["elapsed"], 2)` seconds.
 When a large data set arrives, keep the original files untouched, record their hashes as in @sec-file-hash, and convert a working copy to Parquet once. All further analysis then runs on the Parquet file, which is smaller and much faster, and the original files remain as received, for evidence.
 :::
 
-## How much faster? {#sec-duckdb-speed}
+## data.table, fast in memory {#sec-duckdb-datatable}
 
-Let us compare with the usual way, reading all the CSV files into R with `read_csv()` and then summarising.
+DuckDB is one answer to large data. The other well-known answer in R is the package **data.table**. It takes a different approach. It *does* load the data into memory, like `read_csv()`. It reads files somewhat faster, but its real strength is what comes after: summaries over many groups, joins and new columns, computed at remarkable speed. For data that fits in the computer's memory, which with today's laptops means up to a few crore rows, data.table is often the fastest tool in R. Many government and research teams use it for exactly that reason.
 
 ```{r}
-readr_time <- system.time({
-  all_rows <- read_csv(csv_files, show_col_types = FALSE)
-  all_rows |> count(bill_type)
-})
+#| message: false
+#| warning: false
+library(data.table)
+```
+
+::: callout-caution
+`data.table` has its own functions named `year()`, `month()`, `quarter()` and a few others, which *mask* the lubridate functions of the same names once it is loaded. They give the same answers for dates, so nothing breaks here, but R prints a message about the conflict. If you need to be sure which one is used, write `lubridate::year()` or `data.table::year()`, as in @sec-doublec.
+:::
+
+### Reading files with `fread()`
+
+`fread()`, "fast read", reads a CSV file using all the processor cores of the computer, and works out the column types by itself. To read our 12 files, we read each with `fread()` and stack them with `rbindlist()`, the data.table version of `bind_rows()`.
+
+```{r}
+fread_time <- system.time(
+  dt <- rbindlist(lapply(csv_files, fread))
+)
+fread_time["elapsed"]
+dim(dt)
+```
+
+```{r}
+#| include: false
+dt_mb <- as.numeric(object.size(dt)) / 1e6
+```
+
+All 24 lakh rows were read in `r round(fread_time["elapsed"], 1)` seconds, and take about `r round(dt_mb)` MB of memory. The result is a *data.table*, which is also a data frame, so every function that works on data frames works on it too.
+
+### The `DT[i, j, by]` syntax
+
+data.table has a compact syntax of its own, inside square brackets.
+
+```
+DT[i, j, by]
+```
+
+Read it as: take the data.table `DT`, keep the rows `i`, compute `j`, grouped `by`. Those who know SQL will see `WHERE`, `SELECT` and `GROUP BY`. Inside the brackets, column names are used directly, without `$`, and `.N` stands for the number of rows. `.()` is a short form of `list()`, used to name the results.
+
+Our monthly summary becomes
+
+```{r}
+dt[, .(payments = .N, crore = sum(amount) / 1e7),
+   by = .(year = year(voucher_date), month = month(voucher_date))][order(year, month)]
+```
+
+The second pair of brackets, `[order(year, month)]`, works on the result of the first. This *chaining* of brackets plays the part of the pipe.
+
+### The same audit tests
+
+The duplicate payments test. `%chin%` is a fast version of `%in%` for text.
+
+```{r}
+dt_dups <- dt[bill_type %chin% c("Contingent", "Works"),
+              .(times_paid = .N),
+              by = .(payee_account, amount, voucher_date)][times_paid > 1]
+dt_dups[, .(groups = .N, excess_paid = sum(amount * (times_paid - 1)))]
+```
+
+One bank account, many employees. Here we work in two steps. First we keep the distinct pairs of account and payee with `unique()`, and count the payees of each account with `.N`. Then, only for the few accounts with more than one payee, we compute the details. `uniqueN()` counts distinct values, like `n_distinct()`.
+
+```{r}
+account_payee <- unique(dt[bill_type == "Salary", .(payee_account, payee_id)])
+shared <- account_payee[, .N, by = payee_account][N > 1]
+
+dt[bill_type == "Salary" & payee_account %chin% shared$payee_account,
+   .(employees = uniqueN(payee_id), ddos = uniqueN(ddo_code), amount = sum(amount)),
+   by = payee_account][order(-employees)]
+```
+
+::: callout-tip
+Why two steps? data.table computes `sum()`, `mean()` and `.N` within groups with special optimised code, but not `uniqueN()`. With about four lakh accounts, `uniqueN()` would be called four lakh times, which takes close to a minute. Counting the distinct pairs first takes a fraction of a second. When a grouped calculation is unexpectedly slow, see whether the work can be reduced first, like this.
+:::
+
+The results are the same as from DuckDB, as they must be. Joining with the DDO master can be done with `merge()`, which works like `left_join()` when `all.x = TRUE`.
+
+```{r}
+merge(dt, as.data.table(ddo_master), by = "ddo_code", all.x = TRUE)[
+  , .(crore = sum(amount) / 1e7), by = department][order(-crore)]
+```
+
+### Adding columns by reference with `:=`
+
+In `dplyr`, `mutate()` returns a *new copy* of the data with the extra column. With 24 lakh rows, every copy costs time and memory. data.table's `:=` operator adds or changes a column *in place*, without copying. Here we add the financial year, using `fifelse()`, data.table's fast `if_else()`.
+
+```{r}
+dt[, fy_start := fifelse(month(voucher_date) >= 4, year(voucher_date), year(voucher_date) - 1)]
+dt[, .N, by = fy_start]
+```
+
+Notice that we did not write `dt <- ...`. The column was added to `dt` itself.
+
+::: callout-caution
+Because `:=` changes the data in place, the change also shows up in any other name that points to the same data. `dt2 <- dt` does *not* make a copy in data.table. Use `dt2 <- copy(dt)` when you need a separate copy to modify.
+:::
+
+### dplyr and data.table side by side
+
+| Task | dplyr | data.table |
+|----------------|------------------------|------------------------|
+| Keep rows | `filter(df, amount > 1e5)` | `dt[amount > 1e5]` |
+| Choose columns | `select(df, ddo_code, amount)` | `dt[, .(ddo_code, amount)]` |
+| Summarise by group | `summarise(df, total = sum(amount), .by = ddo_code)` | `dt[, .(total = sum(amount)), by = ddo_code]` |
+| Count rows by group | `count(df, bill_type)` | `dt[, .N, by = bill_type]` |
+| Add a column | `mutate(df, lakh = amount / 1e5)` | `dt[, lakh := amount / 1e5]` |
+| Sort | `arrange(df, desc(amount))` | `dt[order(-amount)]` |
+| Join | `left_join(df, ddo, by = "ddo_code")` | `merge(dt, ddo, by = "ddo_code", all.x = TRUE)` |
+
+: The same tasks in dplyr and data.table {#tbl-dt-dplyr}
+
+If you prefer `dplyr`'s verbs but want data.table's speed, the package `dtplyr` translates `dplyr` code into data.table code, much as dbplyr translates it into SQL.
+
+## How much faster? {#sec-duckdb-speed}
+
+Let us compare the approaches on two jobs: reading the 12 CSV files, and then running the duplicate payments test, which groups 24 lakh rows by three columns.
+
+```{r}
+dup_test_dplyr <- function(df) {
+  df |>
+    filter(bill_type %in% c("Contingent", "Works")) |>
+    count(payee_account, amount, voucher_date) |>
+    filter(n > 1)
+}
+
+# readr and dplyr
+read_readr <- system.time(all_rows <- read_csv(csv_files, show_col_types = FALSE))
+dup_dplyr  <- system.time(dup_test_dplyr(all_rows))
 in_memory_mb <- as.numeric(object.size(all_rows)) / 1e6
 rm(all_rows)
 
-duck_time <- system.time(
-  vouchers |> count(bill_type) |> collect()
+# data.table
+read_dt <- system.time(dt <- rbindlist(lapply(csv_files, fread)))
+dup_dt  <- system.time(
+  dt[bill_type %chin% c("Contingent", "Works"), .N, by = .(payee_account, amount, voucher_date)][N > 1]
 )
+rm(dt)
+
+# DuckDB, on the CSV files and on the Parquet file
+dup_duck <- system.time(vouchers |> dup_test_dplyr() |> collect())
+dup_pq   <- system.time(vouchers_pq |> dup_test_dplyr() |> collect())
 ```
 
-| Approach | Time (seconds) | Memory used by R |
-|----------|---------------|------------------|
-| `read_csv()`, then `count()` | `r round(readr_time["elapsed"], 2)` | about `r round(in_memory_mb)` MB for the data |
-| DuckDB on the CSV files | `r round(duck_time["elapsed"], 2)` | only the small result |
-| DuckDB on the Parquet file | `r round(pq_time["elapsed"], 2)` | only the small result |
+Notice that the same function, `dup_test_dplyr()`, ran on a tibble in memory and on the DuckDB tables. That is the convenience of dbplyr.
 
-: Reading 24 lakh rows, three ways {#tbl-duckdb-speed}
+| Approach | Reading the files (seconds) | Duplicate test (seconds) | Memory used by R |
+|----------|---------------|---------------|------------------|
+| readr and dplyr | `r round(read_readr["elapsed"], 1)` | `r round(dup_dplyr["elapsed"], 2)` | about `r round(in_memory_mb)` MB |
+| data.table | `r round(read_dt["elapsed"], 1)` | `r round(dup_dt["elapsed"], 2)` | about `r round(dt_mb)` MB |
+| DuckDB on the CSV files | not needed | `r round(dup_duck["elapsed"], 2)` | only the result |
+| DuckDB on the Parquet file | not needed | `r round(dup_pq["elapsed"], 2)` | only the result |
 
-The times will differ on your computer, but the pattern will not. And the difference grows with the data. With a few crore rows, `read_csv()` may fail for lack of memory, while DuckDB works through the files on disk without trouble.
+: Reading 24 lakh rows and testing them for duplicate payments {#tbl-duckdb-speed}
+
+The times will differ on your computer, but the pattern will not. Reading is only somewhat faster with `fread()`, because most of the time goes in turning text into columns. The grouping is where data.table shines, many times faster than dplyr on the same data in memory. DuckDB needs no reading step at all, since it works on the files where they lie, and it is fastest of all on Parquet. As the data grows to several crore rows, `read_csv()` and even `fread()` may fail for lack of memory, while DuckDB works through the files on disk without trouble.
+
+**Which one to use?**
+
+| Situation | Good choice |
+|------------------------|------------------------|
+| Data fits comfortably in memory, and you like dplyr | dplyr, as in the rest of this book |
+| Data fits in memory, but dplyr feels slow, or the same heavy job is run often | data.table |
+| Data is larger than memory, or arrives as many large files | DuckDB with dbplyr |
+| Data will be queried repeatedly over weeks | DuckDB, with the data in Parquet or a database file |
+
+: Choosing a tool for large data {#tbl-large-choice}
 
 ## A database file for repeated work {#sec-duckdb-file}
 
@@ -432,6 +577,7 @@ dbDisconnect(con)
 - Let DuckDB cut the data down, and bring only the result into R.
 - Missing values are silently left out of SQL sums; check for them separately.
 - Parquet files are smaller and faster than CSV; keep the originals for evidence.
+- data.table is the fastest choice when the data fits in memory; DuckDB when it does not.
 :::
 
 ## Summary of functions used
@@ -447,6 +593,10 @@ dbDisconnect(con)
 | `show_query()` | dplyr | Show the SQL that dbplyr has written |
 | `copy_to()` | dplyr | Send a small R table to the database, for joins |
 | `!!` | rlang | Insert the value of an R object into a database query |
+| `fread()`, `rbindlist()` | data.table | Read CSV files fast, and stack a list of tables |
+| `DT[i, j, by]`, `.N`, `.()`, `uniqueN()`, `%chin%` | data.table | Filter, compute and group; count rows and distinct values |
+| `:=`, `fifelse()`, `copy()` | data.table | Add columns in place, fast `if_else()`, and make a true copy |
+| `merge()` | base R, data.table | Join two tables |
 | `normalizePath()` | base R | Write a folder path with forward slashes for DuckDB |
 | `system.time()` | base R | Time a piece of code |
 
