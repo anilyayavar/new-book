@@ -1,0 +1,399 @@
+```{r}
+#| include: false
+source("_common.R")
+# p-values in prose, without scientific notation
+fmt_p <- function(p) if (p < 0.0001) "less than 0.0001" else format(signif(p, 2), scientific = FALSE)
+```
+
+# Statistical Tests for Auditors {#sec-tests}
+
+An auditor finds that one office approves 91 out of every 100 medical claims, while the rest of the department approves 84. Is that office lax in its checks, or is the difference just the kind of variation we should expect between any two offices? One dealing officer's claims are larger on average than everyone else's. Is that a pattern worth an inquiry, or a coincidence?
+
+These are the questions a *statistical test* answers. It tells us whether a difference we see is larger than chance alone would usually produce. A test does not prove an irregularity. But it helps us decide where to spend our limited audit time, and it protects us from two embarrassments: chasing differences that mean nothing, and missing ones that matter.
+
+In this chapter we learn the idea of a test in plain words, and then the tests an auditor needs most often. Each answers a question that comes up in real audits.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(broom)   # turns test results into tidy tables
+```
+
+All the tests themselves come with base R, in the package `stats`, which is always loaded.
+
+## The idea of a test {#sec-tests-idea}
+
+Every test follows the same reasoning, which is very close to how an auditor already thinks.
+
+1. **Start by assuming nothing is unusual.** This assumption is called the *null hypothesis*. For example, "this office approves claims at the same rate as the others". It is like presuming an auditee innocent until the evidence says otherwise.
+2. **Ask how surprising the data would be, if nothing were unusual.** The answer is the *p-value*, a probability between 0 and 1. A p-value of 0.30 means that, if nothing were unusual, a difference at least this large would turn up 30% of the time by chance alone. Not surprising at all. A p-value of 0.001 means it would turn up only once in a thousand times. Very surprising.
+3. **Decide.** If the p-value is small, below a limit we fix in advance, we conclude that chance is an unlikely explanation, and call the difference *statistically significant*. The usual limit is 0.05, or 5%.
+
+A test can go wrong in two ways, and both have an audit meaning.
+
+| | Nothing is actually unusual | Something is actually unusual |
+|-------------------|--------------------------|--------------------------|
+| **Test says significant** | *Type I error*, a false alarm. Time wasted on an inquiry, and an auditee questioned unfairly. | Correct. A real issue found. |
+| **Test says not significant** | Correct. No time wasted. | *Type II error*, a miss. A real issue goes unreported. This is audit risk. |
+
+: The two errors of a test, in audit terms {#tbl-test-errors}
+
+The 5% limit is the chance of a false alarm we are willing to accept. A smaller limit means fewer false alarms but more misses. With a small sample, a test may miss even a large difference, as we will see.
+
+::: callout-note
+## What if we have the whole population?
+
+Auditors often analyse 100% of the data, not a sample. If one office approved 94% of its claims and another 86%, that difference is a *fact*. Why test it? Because claims are approved or rejected for many reasons, and even two identical offices would not show identical rates in a year. The test asks whether the difference is larger than this ordinary variation in the process. So tests are useful on full data too, as long as we read "significant" as "unlikely to be ordinary variation", and not as a finding in itself.
+:::
+
+## Our data
+
+We use one data set through most of the chapter. It is a year's register of medical reimbursement claims of a department with six offices, each office with two dealing officers. For each claim we have the amount, whether it was approved, and the days taken to settle it.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the claims register"
+set.seed(6)
+n <- 3000
+offices <- c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur", "Rampur")
+claims <- tibble(
+  claim_id = sprintf("MR-%04d", 1:n),
+  office   = sample(offices, n, TRUE, prob = c(0.2, 0.18, 0.17, 0.16, 0.15, 0.14)),
+  desk     = sample(1:2, n, TRUE),
+  amount   = round(rlnorm(n, log(18000), 0.8), -1)
+) |>
+  mutate(officer = paste0(toupper(substr(office, 1, 3)), "-", desk),
+         # Planted. Officer RAM-2 approves almost everything
+         approved = runif(n) < if_else(officer == "RAM-2", 0.97, 0.86),
+         # Planted. Chandpur is slow to settle claims
+         days_to_settle = round(rgamma(n, shape = 4,
+                                       rate = 4 / if_else(office == "Chandpur", 27, 21))),
+         # Planted. Claims handled by DEV-2 are inflated
+         amount = if_else(officer == "DEV-2", round(amount * 1.4, -1), amount)) |>
+  select(claim_id, office, officer, amount, approved, days_to_settle)
+```
+
+```{r}
+claims
+```
+
+## Is the error rate above the tolerable rate? {#sec-tests-binom}
+
+Let us start with a question from a test of controls. The auditor checks a random sample of 60 claims, and finds 6 settled without the required verification. The tolerable deviation rate is 5%. The sample's rate is 10%, twice the tolerable rate. Can we conclude that the control is failing?
+
+`binom.test()` compares a count of "successes" (here, deviations) in a number of trials with an expected proportion. Since we only care whether the rate is *above* 5%, we use `alternative = "greater"`.
+
+```{r}
+dev_test <- binom.test(x = 6, n = 60, p = 0.05, alternative = "greater")
+dev_test
+```
+
+The p-value is `r round(dev_test$p.value, 3)`, above 0.05. Surprisingly, a sample of 60 with 6 deviations is *not* enough to conclude that the true rate exceeds 5%. With 60 claims, a true rate of 5% would give 6 or more deviations about `r round(100 * dev_test$p.value)`% of the time. The confidence interval says the same: the true rate could be as low as `r round(100 * dev_test$conf.int[1], 1)`%.
+
+What if the auditor had found 9 deviations instead?
+
+```{r}
+binom.test(x = 9, n = 60, p = 0.05, alternative = "greater")$p.value
+```
+
+Now the conclusion is clear. This is the reason why sample sizes for tests of controls are planned in advance, as we did in @sec-samplesize. A test on a sample too small to detect the difference we care about can only end in "not proven".
+
+::: callout-caution
+"Not significant" does not mean "no problem". It means the data are not strong enough to rule out chance. Never report a control as effective only because a test was not significant, least of all on a small sample. Report what was found, 6 deviations in 60, and the limit of what the sample can tell.
+:::
+
+## Comparing two rates {#sec-tests-prop}
+
+Back to the full register. Rampur approves more claims than the rest of the department. Is the difference more than chance?
+
+```{r}
+claims |>
+  summarise(claims = n(), n_approved = sum(approved),
+            approval_rate = round(mean(approved), 3),
+            .by = office) |>
+  arrange(desc(approval_rate))
+```
+
+`prop.test()` compares two (or more) proportions. We give it the number approved and the number of claims in each group.
+
+```{r}
+rampur <- claims$office == "Rampur"
+rampur_test <- prop.test(x = c(sum(claims$approved[rampur]), sum(claims$approved[!rampur])),
+                         n = c(sum(rampur), sum(!rampur)))
+rampur_test
+```
+
+Rampur approved `r round(100 * rampur_test$estimate[1], 1)`% of its claims, against `r round(100 * rampur_test$estimate[2], 1)`% elsewhere. The p-value is `r fmt_p(rampur_test$p.value)`, far below 0.05. A difference this large would almost never arise by chance. The confidence interval says that Rampur's rate is higher by somewhere between `r round(100 * rampur_test$conf.int[1], 1)` and `r round(100 * rampur_test$conf.int[2], 1)` percentage points.
+
+## Comparing many groups at once {#sec-tests-chisq}
+
+Rampur caught our eye because we looked at the table first. A fairer way is to test all six offices together, without picking one in advance. The *chi-square test of independence* checks whether two categorical variables, here office and approval, are related. If approval did not depend on the office, every office would approve about the same share.
+
+```{r}
+approval_table <- table(claims$office, claims$approved)
+approval_table
+office_test <- chisq.test(approval_table)
+office_test
+```
+
+The p-value of `r round(office_test$p.value, 3)` is below 0.05, so approval rates do differ between offices. But the test does not say *which* office is different. For that, look at the *standardised residuals*. Each says how far an office's count is from what we would expect if all offices were alike, in units of standard deviation. Values beyond about 2 (or below -2) deserve attention.
+
+```{r}
+round(office_test$stdres, 2)
+```
+
+Only Rampur stands out, with `r round(office_test$stdres["Rampur", "TRUE"], 1)` standard deviations more approvals than expected. Every other office is within 2.
+
+::: callout-tip
+## Audit tip
+
+The chi-square test with its residuals is one of the most useful tests in audit. It works on any cross-table of counts: rejections by inspector, tenders won by bidder and department, cases disposed of by officer and type, or exceptions by branch. The residuals point straight at the cells which are out of line.
+:::
+
+The chi-square test needs enough data in every cell. If any *expected* count, `office_test$expected`, is below 5, R gives a warning that the result may be inaccurate. Then use `fisher.test()`, which is exact, or combine small groups.
+
+## Drilling down, and the problem of many tests {#sec-tests-multiple}
+
+Rampur has two dealing officers. Is the high approval rate the office's, or one officer's? A natural step is to test every officer against the rest. But with many tests, a new problem appears.
+
+**Many tests mean some false alarms.** Each test at the 5% level has a 5% chance of a false alarm. Run 20 tests where nothing is unusual, and on average one will come out "significant" anyway. Let us see this with 40 imaginary offices which all approve at exactly the same true rate of 86%.
+
+```{r}
+set.seed(1)
+p_values <- map_dbl(1:40, \(i) {
+  approved_here <- rbinom(1, size = 300, prob = 0.86)    # this office, 300 claims
+  approved_rest <- rbinom(1, size = 12000, prob = 0.86)  # all the others
+  prop.test(c(approved_here, approved_rest), c(300, 12000))$p.value
+})
+sum(p_values < 0.05)
+```
+
+`r sum(p_values < 0.05)` of the 40 identical offices look "significantly" different, purely by chance. Reporting them would be unfair to their staff. The remedy is to *adjust* the p-values for the number of tests. `p.adjust()` does this. The Holm method is a safe general choice.
+
+```{r}
+sum(p.adjust(p_values, method = "holm") < 0.05)
+```
+
+After adjustment, no false alarms remain. Now the real drill-down. We test each of the 12 officers against all the others, collect the results with `broom::tidy()`, and adjust.
+
+```{r}
+officer_tests <- map(sort(unique(claims$officer)), \(o) {
+  mine <- claims$officer == o
+  prop.test(x = c(sum(claims$approved[mine]), sum(claims$approved[!mine])),
+            n = c(sum(mine), sum(!mine))) |>
+    tidy() |>
+    mutate(officer = o, claims = sum(mine), .before = 1)
+}) |>
+  list_rbind() |>
+  mutate(p_adjusted = p.adjust(p.value, method = "holm")) |>
+  select(officer, claims, own_rate = estimate1, rest_rate = estimate2, p.value, p_adjusted) |>
+  arrange(p.value)
+
+officer_tests |> mutate(across(c(own_rate, rest_rate), \(x) round(x, 3)),
+                        across(c(p.value, p_adjusted), \(x) signif(x, 2)))
+```
+
+```{r}
+#| include: false
+ram1 <- officer_tests |> filter(officer == "RAM-1")
+ram2 <- officer_tests |> filter(officer == "RAM-2")
+```
+
+The picture is clear. Officer RAM-2 approved `r round(100 * ram2$own_rate, 1)`% of claims, and stays significant even after adjustment (adjusted p-value `r fmt_p(ram2$p_adjusted)`). The other Rampur officer, RAM-1, approved `r round(100 * ram1$own_rate, 1)`%, in line with the department. So the office's high rate comes from one desk. That is where the audit should look, at a sample of the claims RAM-2 approved, to see whether the checks were actually done.
+
+::: callout-tip
+## Audit tip
+
+`broom::tidy()` turns the output of almost any test into a one-row table. Together with `map()` and `list_rbind()`, it lets us run the same test over every officer, vendor or district, and get one table to sort, filter and attach to working papers. Always add a column of adjusted p-values when you do this.
+:::
+
+## Comparing averages {#sec-tests-t}
+
+Rates are about counts. Many audit questions are about amounts and times instead. Is Chandpur slower to settle claims than the other offices? The *t-test* compares the means of two groups.
+
+```{r}
+claims |>
+  summarise(mean_days = round(mean(days_to_settle), 1),
+            median_days = median(days_to_settle), .by = office)
+```
+
+```{r}
+chandpur_test <- t.test(days_to_settle ~ (office == "Chandpur"), data = claims)
+chandpur_test
+```
+
+```{r}
+#| include: false
+cm <- chandpur_test$estimate
+```
+
+Chandpur takes `r round(cm[2], 1)` days on average, against `r round(cm[1], 1)` days elsewhere, and the p-value is extremely small. The difference is real, not chance. R uses *Welch's* t-test by default, which does not assume that the two groups vary equally. Keep this default.
+
+The formula `days_to_settle ~ (office == "Chandpur")` reads "days to settle, by whether the office is Chandpur". The group `FALSE` (the other offices) comes first in the output.
+
+## When amounts are skewed {#sec-tests-wilcox}
+
+The t-test compares *means*. Money amounts are usually skewed, with many small values and a few very large ones, as we saw in @sec-descriptive. A handful of large claims can pull a mean up or down, and make the t-test unreliable. The *Wilcoxon rank-sum test* (also called the Mann-Whitney test) avoids this. It ranks all the values together, and asks whether one group's values tend to rank higher than the other's. A single huge claim is then just "the highest rank", whatever its size.
+
+Are the claims handled by officer DEV-2 larger than everyone else's?
+
+```{r}
+claims |>
+  mutate(group = if_else(officer == "DEV-2", "DEV-2", "Others")) |>
+  summarise(claims = n(), mean_amount = round(mean(amount)),
+            median_amount = median(amount), .by = group)
+
+dev2_test <- wilcox.test(amount ~ (officer == "DEV-2"), data = claims)
+dev2_test
+```
+
+The p-value is `r fmt_p(dev2_test$p.value)`, so DEV-2's claims are systematically larger. The median tells the same story more plainly than the mean. A follow-up might compare the hospitals, bills and rates in DEV-2's claims with the others.
+
+::: callout-note
+Tests like Wilcoxon's, which work on ranks, are called *non-parametric*, because they do not assume the data follow a normal distribution. For audit data, which are rarely normal, they are often the safer choice. When both tests are run and they agree, as they usually do on large data, we can be confident. When they disagree, trust the rank test and look for extreme values.
+:::
+
+## More than two groups {#sec-tests-kruskal}
+
+To compare settlement times across all six offices at once, rather than one office against the rest, use the *Kruskal-Wallis test*, the rank-based version for several groups.
+
+```{r}
+kruskal.test(days_to_settle ~ office, data = claims)
+```
+
+It says the offices differ, but not which ones. To find out, compare every pair with `pairwise.wilcox.test()`, which adjusts the p-values for the many comparisons, just as we learnt above.
+
+```{r}
+pairwise.wilcox.test(claims$days_to_settle, claims$office, p.adjust.method = "holm")
+```
+
+Every pair involving Chandpur has a tiny p-value, while the other pairs do not differ. (The classic test for comparing the means of several groups is *analysis of variance*, `aov()`. It is closely related to linear regression, which we meet in @sec-regression.)
+
+## Does the data follow an expected pattern? {#sec-tests-gof}
+
+Sometimes we know what pattern the data *should* follow, and want to test whether it does. This is the *chi-square goodness-of-fit test*. The number of claims from each office should be roughly in proportion to its staff strength.
+
+```{r}
+staff <- c(Amarpur = 400, Belapur = 360, Chandpur = 340,
+           Devgarh = 320, Fatehpur = 300, Rampur = 280)
+observed <- table(claims$office)[names(staff)]
+rbind(observed = observed, expected = round(sum(observed) * staff / sum(staff)))
+
+fit_test <- chisq.test(observed, p = staff / sum(staff))
+fit_test
+```
+
+The p-value of `r round(fit_test$p.value, 2)` is large. The claims follow the staff strength well, and there is nothing to report. This, too, is a useful audit result. Not every test should find something, and a clean result lets us move on with confidence.
+
+We have already used goodness-of-fit tests in this book without calling them that. The Benford chi-square in @sec-chis and the digit tests in @sec-nigrini compare observed counts of digits with the counts expected under a known pattern.
+
+## Are two things related? {#sec-tests-cor}
+
+Do larger claims take longer to settle? `cor.test()` tests whether a correlation is different from zero. For skewed amounts, use Spearman's rank correlation, `method = "spearman"`.
+
+```{r}
+cor_test <- cor.test(claims$amount, claims$days_to_settle, method = "spearman", exact = FALSE)
+cor_test
+```
+
+The correlation is `r round(cor_test$estimate, 3)`, practically zero, and not significant (p = `r round(cor_test$p.value, 2)`). Settlement time does not depend on the claim amount here. If it did, say if large claims were settled much faster than small ones, it would be worth asking why.
+
+## Significant is not the same as important {#sec-tests-effect}
+
+A p-value measures how sure we are that a difference is not chance. It does not measure how *large* or how *important* the difference is. Two points follow, and both matter in audit.
+
+**With very large data, tiny differences become significant.** Two districts, each with two lakh claims, approve 85.0% and 85.4% of them.
+
+```{r}
+prop.test(x = c(170000, 170800), n = c(200000, 200000))$p.value
+```
+
+The difference is highly significant, but 0.4 percentage points is unlikely to matter to anyone. Always look at the size of the difference, the *effect size*, alongside the p-value. For rates, that is the difference in percentage points, and for amounts, the difference in rupees.
+
+**With small data, even large differences may not be significant.** Two small offices, each with 12 claims, approve 10 and 7 of them, 83% against 58%. With counts this small, `prop.test()` warns that its approximation may be inaccurate, so we use the exact `fisher.test()` on the cross-table of approved and rejected claims.
+
+```{r}
+small_offices <- matrix(c(10, 2,    # office 1: approved, rejected
+                          7, 5),    # office 2: approved, rejected
+                        nrow = 2, byrow = TRUE)
+small_test <- fisher.test(small_offices)
+small_test$p.value
+```
+
+A large difference, but far from significant (p = `r round(small_test$p.value, 2)`), because 12 claims are too few to tell. As in @sec-tests-binom, the honest conclusion is "not proven", not "no difference".
+
+**How much data is enough?** The function `power.prop.test()` answers this before the analysis. How many claims per office do we need to detect a difference between an approval rate of 86% and one of 95%, with an 80% chance of catching it (the *power*)?
+
+```{r}
+power.prop.test(p1 = 0.86, p2 = 0.95, power = 0.80)
+```
+
+About `r ceiling(power.prop.test(p1 = 0.86, p2 = 0.95, power = 0.80)$n)` claims in each group. For smaller differences, many more are needed. `power.t.test()` does the same for comparing means.
+
+## Choosing a test {#sec-tests-choose}
+
+| Question | Data | Test | R function |
+|---------------------------|-------------------|-------------------|-------------------|
+| Is a rate above (or below) a benchmark? | One count out of a total | Binomial test | `binom.test()` |
+| Do two groups have different rates? | Counts and totals of two groups | Test of proportions | `prop.test()` |
+| Do rates differ across several groups? | Cross-table of counts | Chi-square test of independence | `chisq.test()`, or `fisher.test()` for small counts |
+| Do counts follow an expected pattern? | Counts and expected proportions | Chi-square goodness of fit | `chisq.test(x, p = )` |
+| Do two groups have different averages? | Amounts or times, roughly symmetric | Welch t-test | `t.test()` |
+| Do two groups have different typical values? | Skewed amounts | Wilcoxon rank-sum test | `wilcox.test()` |
+| Do several groups differ? | Amounts or times | Kruskal-Wallis test, then pairwise tests | `kruskal.test()`, `pairwise.wilcox.test()` |
+| Are two measures related? | Two numeric columns | Correlation test | `cor.test(method = "spearman")` |
+| Many tests at once? | p-values | Adjust for multiple testing | `p.adjust()` |
+| How much data do I need? | Expected rates or means | Power calculation | `power.prop.test()`, `power.t.test()` |
+
+: Choosing a statistical test {#tbl-choose-test}
+
+::: callout-tip
+## Audit tip
+
+Decide the test, and the limit for significance, *before* looking at the results. If we try test after test until one gives a small p-value, the result means nothing, because with enough attempts chance alone will oblige. Write down the question, the test and the limit in the audit plan, just as we fix the sample size in advance.
+:::
+
+## A suggested workflow
+
+1. **State the question in plain words**, such as "does this officer approve more claims than the others?", and the null hypothesis it implies.
+2. **Look at the data first.** Summarise by group and plot. A test should confirm what you see, not replace looking.
+3. **Choose the test** from @tbl-choose-test. Prefer rank tests for money amounts, and check that the chi-square test has enough data in each cell.
+4. **Fix the significance limit in advance**, usually 5%.
+5. **When testing many groups, adjust the p-values** with `p.adjust()`.
+6. **Report the size of the difference** with the p-value, in percentage points or rupees.
+7. **Treat a significant result as a lead, not a finding.** Follow it up by examining the actual records, as with RAM-2's approved claims.
+8. **Treat a non-significant result as "not proven"**, especially on small samples, and say what the data could and could not show.
+
+::: callout-important
+## Remember
+
+- A test asks one question: is this difference larger than chance would usually produce?
+- The p-value is the chance of seeing a difference at least this large if nothing were unusual. Small means surprising.
+- A false alarm wastes effort and is unfair to the auditee; a miss is audit risk. The significance limit balances the two.
+- Many tests produce false alarms by chance. Adjust the p-values with `p.adjust()`.
+- For skewed amounts, prefer rank-based tests like `wilcox.test()` and `kruskal.test()`.
+- Significant does not mean important, and not significant does not mean no problem.
+:::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `binom.test()` | stats | Test a count of events against an expected proportion |
+| `prop.test()` | stats | Compare proportions of two or more groups |
+| `chisq.test()` | stats | Chi-square test of independence for a cross-table, or goodness of fit with `p =`; `$stdres` gives standardised residuals |
+| `fisher.test()` | stats | Exact test for a cross-table with small counts |
+| `t.test()` | stats | Compare the means of two groups (Welch's test by default) |
+| `wilcox.test()` | stats | Compare two groups by ranks, safe for skewed amounts |
+| `kruskal.test()` | stats | Compare several groups by ranks |
+| `pairwise.wilcox.test()` | stats | Compare every pair of groups, with adjusted p-values |
+| `aov()` | stats | Analysis of variance, comparing the means of several groups |
+| `cor.test()` | stats | Test whether a correlation differs from zero |
+| `p.adjust()` | stats | Adjust p-values for multiple testing |
+| `power.prop.test()`, `power.t.test()` | stats | Sample size needed to detect a given difference |
+| `tidy()` | broom | Turn a test result into a one-row table |
+
+: Functions used in this chapter {#tbl-testfunctions}
