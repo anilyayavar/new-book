@@ -366,6 +366,97 @@ We take the 120 highest-risk claims, and 30 more chosen at random from the rest,
 - **Watch for perfect separation.** If some feature predicts the outcome perfectly in the training data, say every claim from one district was irregular, `glm()` warns that "fitted probabilities numerically 0 or 1 occurred", and the coefficients become unreliable. Merge such small groups, or drop the feature.
 :::
 
+## More than two outcomes, multinomial regression {#sec-logistic-multinom}
+
+So far each claim was either regular or irregular. Real audit results are often richer. Suppose last year's audit party had recorded three outcomes for each claim examined.
+
+- **Clean**, nothing wrong.
+- **Procedural lapse**, such as a missing document or a wrongly filled form. The refund is due, but the claim needs correcting.
+- **Fraudulent**, a refund claimed on fake input tax credit.
+
+These call for very different responses. A procedural lapse calls for a letter, a fraud for an investigation. And they may have quite different causes. Lumping them together as "irregular" throws this information away. **Multinomial logistic regression** extends logistic regression to an outcome with three or more categories.
+
+The idea is a small step from what we know. One category is chosen as the *baseline*, here *Clean*. The model then fits one logistic regression for each other category against the baseline: *lapse* against *clean*, and *fraud* against *clean*, at the same time. Each feature gets one coefficient for each comparison. So a feature can raise the risk of fraud while having no effect on lapses, or the other way round.
+
+Let us give last year's claims such three-way outcomes. Unknown to the auditor, procedural lapses are commoner among new registrants and among small claims, while fraud goes with merchant exporters, large claims and credit from non-filers, as before.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the three-way outcomes"
+set.seed(2030)
+outcomes <- past |>
+  mutate(lp_lapse = -1.6 + 1.3 * new_registrant - 0.35 * log(amount_lakh),
+         lp_fraud = -4.6 + 1.2 * (exporter_type == "Merchant") + 0.3 * log(amount_lakh) +
+                    0.09 * nonfiler_pct,
+         # probabilities of the three outcomes, from the two log-odds
+         p_lapse = exp(lp_lapse) / (1 + exp(lp_lapse) + exp(lp_fraud)),
+         p_fraud = exp(lp_fraud) / (1 + exp(lp_lapse) + exp(lp_fraud)),
+         u = runif(n()),
+         outcome = case_when(u < p_fraud ~ "Fraudulent",
+                             u < p_fraud + p_lapse ~ "Procedural lapse",
+                             .default = "Clean"),
+         outcome = factor(outcome, levels = c("Clean", "Procedural lapse", "Fraudulent"))) |>
+  select(claim_id, exporter_type, new_registrant, amount_lakh, nonfiler_pct, outcome)
+```
+
+```{r}
+count(outcomes, outcome) |> mutate(pct = round(100 * n / sum(n), 1))
+```
+
+The first level of the factor, *Clean*, is the baseline. Multinomial regression is fitted with `multinom()` from the package `nnet`, which comes with every installation of R. The formula is written as before. (`trace = FALSE` stops it printing the progress of its calculations.)
+
+```{r}
+library(nnet)
+multi_model <- multinom(outcome ~ exporter_type + new_registrant + log(amount_lakh) + nonfiler_pct,
+                        data = outcomes, trace = FALSE)
+```
+
+`broom::tidy()` works here too, with one row for each feature *and* each comparison. With `exponentiate = TRUE`, the estimates are again odds ratios, now the odds of that outcome *rather than a clean claim*. We show them side by side.
+
+```{r}
+multi_or <- tidy(multi_model, exponentiate = TRUE, conf.int = TRUE)
+
+multi_or |>
+  filter(term != "(Intercept)") |>
+  mutate(result = paste0(round(estimate, 2), " (", round(p.value, 3), ")")) |>
+  select(term, y.level, result) |>
+  pivot_wider(names_from = y.level, values_from = result)
+```
+
+```{r}
+#| include: false
+mor <- function(term_, level_) multi_or$estimate[multi_or$term == term_ & multi_or$y.level == level_]
+```
+
+Each cell shows the odds ratio, with its p-value in brackets. Reading across a row tells a clear story.
+
+- **New registrants** have `r round(mor("new_registrantTRUE", "Procedural lapse"), 1)` times the odds of a procedural lapse, but their odds of fraud (`r round(mor("new_registrantTRUE", "Fraudulent"), 2)`) are not clearly different from others'. Newcomers make mistakes; they are not, on this evidence, more dishonest.
+- **Merchant exporters** have `r round(mor("exporter_typeMerchant", "Fraudulent"), 1)` times the odds of fraud, and a smaller rise, `r round(mor("exporter_typeMerchant", "Procedural lapse"), 1)` times, in the odds of a lapse. (We did not plant this second effect. Even in simulated data, chance produces patterns, which is one more reason to confirm a model's findings on fresh data.)
+- **Credit from non-filers** raises the odds of fraud by a factor of `r round(mor("nonfiler_pct", "Fraudulent"), 3)` for each percentage point, and has little to do with lapses.
+- **Larger claims** are more likely to be fraudulent, and *less* likely to have lapses, perhaps because large claimants employ professionals to file their claims.
+
+A two-way logistic regression on "irregular" would have mixed these opposite patterns together, and blurred both.
+
+**Predictions.** `predict()` with `type = "probs"` gives the probability of each outcome for each claim, and the three add up to 1.
+
+```{r}
+multi_probs <- predict(multi_model, newdata = outcomes, type = "probs")
+head(round(multi_probs, 3))
+```
+
+These support two separate selections from the same list of claims: the highest probabilities of *fraud* for the investigation wing, and the highest probabilities of a *procedural lapse* for a compliance drive by letter. Each can be judged with the AUC and gains table, exactly as before, using its own column.
+
+```{r}
+c(fraud_auc = round(auc(multi_probs[, "Fraudulent"], outcomes$outcome == "Fraudulent"), 3),
+  lapse_auc = round(auc(multi_probs[, "Procedural lapse"], outcomes$outcome == "Procedural lapse"), 3))
+```
+
+(These are measured on the same claims the model learnt from, to keep the example short. In practice, use a training and test split, as earlier in the chapter.)
+
+::: callout-note
+If the categories have a natural *order*, such as *nil*, *minor* and *major* irregularity, an *ordinal* logistic regression uses that order and needs fewer coefficients. It is fitted with `polr()` from the package `MASS`. When the categories are simply different kinds, as here, multinomial regression is the right choice.
+:::
+
 ## A suggested workflow
 
 1. **Define the outcome** clearly, such as "irregularity of more than ₹1 lakh found on examination", and collect past cases with known outcomes.
@@ -386,6 +477,7 @@ We take the 120 highest-risk claims, and 30 more chosen at random from the rest,
 - Judge a model on data it has not seen. Use the AUC and a gains table, not accuracy, when "yes" is rare.
 - Good features come from audit knowledge and from looking at the data.
 - Select mostly by risk, partly at random, and treat a score as a lead, never as evidence.
+- For three or more kinds of outcome, multinomial regression fits one comparison per outcome against a baseline, and shows how the drivers differ.
 :::
 
 ## Summary of functions used
@@ -393,6 +485,8 @@ We take the 120 highest-risk claims, and 30 more chosen at random from the rest,
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
 | `glm(family = binomial)` | stats | Fit a logistic regression |
+| `multinom()` | nnet | Fit a multinomial logistic regression, for three or more outcomes |
+| `predict(type = "probs")` | stats | Probability of each outcome, from a multinomial model |
 | `summary()` | base R | Coefficients, standard errors and p-values of a model |
 | `tidy(exponentiate = TRUE, conf.int = TRUE)` | broom | Odds ratios with confidence intervals, as a table |
 | `predict(type = "response")` | stats | Predicted probabilities (risk scores) for new data |
