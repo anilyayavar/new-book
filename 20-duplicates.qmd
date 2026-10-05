@@ -133,7 +133,7 @@ So, before running any test, the auditor must decide the key. Forensic auditors 
 
 The names *Same-Same-Same* and *Same-Same-Different* are commonly used in forensic analytics literature. They are easy to remember. Three key columns are compared. The name tells us which of the three should match and which should not.
 
-## Exact duplicates
+## Exact duplicates {#sec-dup-exact}
 
 Let us begin with the easiest case. Are there rows which are the same in every column?
 
@@ -217,7 +217,7 @@ So, in our small data, ₹ 4,08,824 has been paid in excess on just three invoic
 Why did we not use `invoice_date` in the key? We could have. But dates are often entered differently by different clerks, so adding more columns to the key can make us *miss* duplicates. On the other hand, too few columns produce too many false alarms. Start with a small key. Then add columns if the output is too long to examine.
 :::
 
-## Same-Same-Different test
+## Same-Same-Different test {#sec-dup-ssd}
 
 A clever fraudster knows that most accounting software rejects an invoice number already entered for a vendor. So they change the invoice number a little. They may add a suffix, or change one digit. The Same-Same-Same test above will not catch this.
 
@@ -298,7 +298,7 @@ A few other useful combinations are given in @tbl-ssdmore.
 
 : Some other Same-Same-Different combinations {#tbl-ssdmore}
 
-## Hidden duplicates, and why cleaning matters
+## Hidden duplicates, and why cleaning matters {#sec-dup-hidden}
 
 Look again at the groups found by the Same-Same-Different test. `INV-9665` and `INV9665` are the same invoice. So are `inv-3601` and `INV-3601`. But the Same-Same-Same test missed them, because to a computer these strings are different.
 
@@ -332,7 +332,7 @@ Similar cleaning applies to other key columns too. Remove spaces from PAN and ba
 
 Our last test found two invoices paid to look-alike vendors. Such vendors are often the root of the problem. A fictitious vendor is created with a name very close to a genuine one. Bills of the genuine vendor are then paid again, to the fictitious one. A casual reader of the payment register will not notice the difference.
 
-Cleaning alone cannot catch these. *Sharma Traders* and *Sharma Trader's* differ by an apostrophe. *Gupta* and *Guptha* differ by one letter. We need a way to measure how *similar* two names are. We discussed several such measures in @sec-strsim. Here we will use the Jaro-Winkler distance. It is `0` for identical strings and close to `1` for completely different ones.
+Cleaning alone cannot catch these. *Sharma Traders* and *Sharma Trader's* differ by an apostrophe. *Gupta* and *Guptha* differ by one letter. We need a way to measure how *similar* two names are. @sec-strsim, which follows this chapter, explains several such measures in detail. Here we will use the Jaro-Winkler distance. It is `0` for identical strings and close to `1` for completely different ones.
 
 The idea is simple. We compare every vendor name in the vendor master with every other vendor name. Then we look at the pairs with the smallest distance.
 
@@ -385,7 +385,7 @@ There is no fixed rule. Sort the pairs by distance and read down the list. You w
 
 ### Trying other similarity measures
 
-Jaro-Winkler is not the only choice. In @sec-strsim we learnt about several other measures. These include Levenshtein distance, Q-grams and Soundex. All of them are available in the same `stringdist()` function. We only change the `method` argument. Let us calculate a few of them on our vendor pairs and compare.
+Jaro-Winkler is not the only choice. @sec-strsim explains several other measures. These include Levenshtein distance, Q-grams and Soundex. All of them are available in the same `stringdist()` function. We only change the `method` argument. Let us calculate a few of them on our vendor pairs and compare.
 
 ```{r}
 vendor_pairs |>
@@ -425,7 +425,7 @@ All three vendors starting with "Sharma Tr..." are treated as the same. Soundex 
 
 ### A better phonetic measure, Double Metaphone
 
-Double Metaphone is a more refined way to check whether two names *sound* alike. It gives two codes for each name, a *primary* and a *secondary* code. We learnt in @sec-strsim that comparing these codes gives three levels of match. These are strong, normal and weak. We also saw there that the package `cagmetaphone` keeps the full code, while other packages keep only the first four characters. Full codes matter here, because firm names are long.
+Double Metaphone is a more refined way to check whether two names *sound* alike. It gives two codes for each name, a *primary* and a *secondary* code. Comparing these codes gives three levels of match. These are strong, normal and weak, as @sec-strsim explains. The package `cagmetaphone` keeps the full code, while other packages keep only the first four characters. Full codes matter here, because firm names are long.
 
 Let us calculate the codes for all our vendors. `double_metaphone_vec()` returns a data frame with two columns, `primary` and `secondary`. We attach these to the vendor master.
 

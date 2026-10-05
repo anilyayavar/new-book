@@ -10,18 +10,19 @@
 
 A practical guide to data analytics for auditors, in government and elsewhere, using the free and open-source R language. No knowledge of programming is assumed. Every technique is explained in plain language and shown at work on an audit problem, with Indian examples and realistic simulated data in which irregularities are planted for the analysis to find.
 
-The book is in ten parts:
+The book follows the course of an audit, in nine parts:
 
-1. **R Basics**: the R language from the beginning
-2. **Getting and Shaping Data**: reading files, including PDFs and messy Excel; cleaning, joining and reshaping; dates; data too large for Excel
-3. **Exploring Data, Statistics and Sampling**: charts, descriptive statistics, audit sampling and statistical tests
-4. **Working with Strings**: text, regular expressions, validating PAN, GSTIN and Aadhaar, and fuzzy name matching
-5. **Forensic Tests for Audit**: rule-based validation, Benford's law, Nigrini's tests, duplicates, record linkage, gaps and process mining
-6. **Patterns and Anomalies**: regression, logistic regression, decision trees, random forests, PCA, clustering, association rules, time series, anomaly detection and DEA
-7. **Text Analytics**
-8. **Network Analytics**
-9. **Geospatial Analytics**
-10. **Reporting**: reproducible audit reports and working papers
+1. **R Foundations**. The R language from the beginning.
+2. **Getting Data Ready**. Reading files, including PDFs and messy Excel. Cleaning, joining and reshaping. Dates, and data too large for Excel.
+3. **Working with Text Fields**. Cleaning text, regular expressions, and validating PAN, GSTIN and Aadhaar.
+4. **Exploring and Sampling**. Charts, descriptive statistics, audit sampling and statistical tests.
+5. **Forensic Tests**. Rule-based validation, Benford's law, Nigrini's tests, duplicates, fuzzy matching, record linkage, gaps and process mining.
+6. **Modelling and Risk Scoring**. Regression, logistic regression, decision trees, random forests and DEA.
+7. **Finding Hidden Patterns**. PCA, clustering, association rules, time series and anomaly detection.
+8. **Beyond Tables**. Text analytics, networks and maps.
+9. **Reporting**. Reproducible audit reports and working papers.
+
+An **Audit Question Finder** in the appendices lists common audit questions and the section that answers each one.
 
 ## Building the book
 
