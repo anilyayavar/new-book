@@ -4,14 +4,16 @@ source("_common.R")
 ```
 
 # Useful Base R Functions {#sec-basefuns}
-R comes with a large number of built-in functions, and it pays to know the useful ones. In this chapter we go through those most used in data analysis. Treat it as a reference, to come back to. Later chapters use the tidyverse for most work, but these base R functions remain the everyday tools underneath.
+A voucher register arrives from a treasury. Before any detailed analysis, an auditor wants quick answers. Does any bill number repeat? Are all amounts positive? How many bills fall in each value slab? Are any cheque numbers missing from the series? Which records have no office code? Base R, the part of R that comes installed, answers every one of these questions with a single short function.
+
+R comes with a large number of built-in functions, and it pays to know the useful ones. In this chapter we go through those most used in data analysis, with small examples drawn from audit work. Treat it as a reference, to come back to. Later chapters use the tidyverse for most work, but these base R functions remain the everyday tools underneath. At the end, an audit use case runs them together as a first check of a voucher register.
 
 First, the operators used to check conditions. An *operator* is just a special kind of function, usually with two arguments, written between them, like `5 > 2` instead of `greater(5, 2)`.
 
-## Conditions and logical operators/operands
+## Conditions and logical operators
 | Operator/ function | Meaning | Example |
 |:-------------:|:-----------------------------|:--------------------------------------------|
-| `==` | Is LHS equal to RHS? | `5 == 2` is `FALSE`; `'Anil' == 'anil'` is `FALSE` |
+| `==` | Is LHS equal to RHS? | `5 == 2` is `FALSE`. `'Anil' == 'anil'` is `FALSE` |
 | `!=` | Is LHS not equal to RHS? | `'ABCD' != 'abcd'` is `TRUE` |
 | `>=` | Is LHS greater than or equal to RHS? | `5 >= 2` is `TRUE` |
 | `<=` | Is LHS less than or equal to RHS? | `15 <= 2` is `FALSE` |
@@ -23,15 +25,15 @@ First, the operators used to check conditions. An *operator* is just a special k
 | `&` | Logical AND, element by element | `TRUE & FALSE` is `FALSE` |
 | `!` | Logical NOT | `!TRUE` is `FALSE` |
 | `xor()` | Exclusive OR, one or the other but not both | `xor(TRUE, TRUE)` is `FALSE` |
-| <code>&#124;&#124;</code> | Logical OR for a *single* value | Used in `if()` conditions; gives an error if given a longer vector |
-| `&&` | Logical AND for a *single* value | Used in `if()` conditions; gives an error if given a longer vector |
+| <code>&#124;&#124;</code> | Logical OR for a *single* value | Used in `if()` conditions. Gives an error if given a longer vector |
+| `&&` | Logical AND for a *single* value | Used in `if()` conditions. Gives an error if given a longer vector |
 | `%in%` | Is LHS __in__ RHS? | Checks whether each element of LHS is present in the RHS vector |
 
 : Conditions and logical operators {#tbl-table2}
 
 ## Vectorisation of operations and functions {-}
 
-All the above operators, except `||` and `&&`, are __vectorised__. They compare the vectors element by element, and return a vector of the same length. Check
+All the above operators, except `||` and `&&`, are __vectorised__. They compare the vectors element by element, and return a vector of the same length. Check these.
 ```{r}
 LETTERS[1:4] == letters[1:4]
 10:1 >= 1:10
@@ -45,6 +47,15 @@ x | y
 
 # character strings may be checked for alphabetic order
 'ABCD' >= 'AACD'
+```
+
+In audit, the same comparison runs over every record at once. Here we check four bills against a sanction limit of ₹50,000, and both a limit and a date.
+
+```{r}
+amount <- c(42000, 51500, 49990, 75000)
+bill_date <- as.Date(c("2025-03-28", "2025-04-02", "2025-03-31", "2025-03-15"))
+amount > 50000
+amount > 50000 & bill_date <= as.Date("2025-03-31")   # large bills of 2024-25
 ```
 
 ## Recycling
@@ -64,13 +75,20 @@ LETTERS %in% LETTERS[1:4]
 
 In audit, `%in%` checks membership of a list, like whether each vendor code is in the approved list. Its negation, `!(x %in% list)`, finds those *not* in the list.
 
-## Handling Missing values `NA` in these operations
+```{r}
+approved <- c("V-011", "V-024", "V-037", "V-052")
+paid_to  <- c("V-024", "V-011", "V-099", "V-052", "V-024")
+paid_to %in% approved
+paid_to[!(paid_to %in% approved)]   # paid to a vendor not on the approved list
+```
+
+## Handling missing values `NA` in these operations
 When checking conditions, missing values `NA` (and `NaN`) need care, or they introduce bugs. Any comparison with `NA` gives `NA`. See these examples.
 ```{r}
 FALSE != NA
 TRUE != NA
 ```
-So a condition checked on a vector can give `NA` in the output, along with `TRUE` and `FALSE`. See this example
+So a condition checked on a vector can give `NA` in the output, along with `TRUE` and `FALSE`.
 ```{r}
 x <- c(1, 5, 15, NA, 2, 3)
 x <= 5
@@ -87,29 +105,29 @@ TRUE & NA
 `NA == NA` is `NA`, not `TRUE`. To check for missing values, always use `is.na()`, never `== NA`.
 :::
 
-## Use of above logical operators for subsetting
+## Use of logical operators for subsetting
 Since these operations give a `logical` vector, they can be used for subsetting, as we saw in @sec-subset. See these examples.
 ```{r}
-my_ages <- c(40, 45, 31, 51, 25, 27, 59, 45)
-# filter ages greater than or equal to 30
-my_ages[my_ages >= 30]
+bill_amounts <- c(40000, 45000, 31000, 51000, 25000, 27000, 59000, 45000)
+# bills of ₹45,000 or more
+bill_amounts[bill_amounts >= 45000]
 
-my_names <- c("Andrew", "Bob", "Carl", "Daven", "Earl")
-# filter names which start with alphabet either A, B or C
-my_names[my_names <= "D"]
+vendors <- c("Arora Traders", "Bansal & Sons", "Chopra Supplies", "Dutta Enterprises", "Elite Agencies")
+# vendors whose names start with A, B or C
+vendors[vendors <= "D"]
 ```
 
 ## Conditions with `ifelse`
-`ifelse(test, yes, no)` returns a vector of the same length as `test`, taking each element from `yes` where `test` is `TRUE`, and from `no` where it is `FALSE`. See this example
+`ifelse(test, yes, no)` returns a vector of the same length as `test`. It takes each element from `yes` where `test` is `TRUE`, and from `no` where it is `FALSE`.
 ```{r}
-x <- c(1:5, NA, 16:20)
-ifelse(x>5, 'Greater than 5', 'Upto 5')
+amount <- c(42000, 51500, NA, 49990, 75000)
+ifelse(amount > 50000, 'Needs higher sanction', 'Within powers')
 ```
 
 Notice that where `test` is `NA`, the result is `NA` too. The tidyverse version, `dplyr::if_else()`, has an argument `missing` to say what to return then, and is stricter about types. For more than two outcomes, `dplyr::case_when()` is used. Both are covered in @sec-DPLYRR.
 
 ## Functions `all()` and `any()`
-These tell us whether `all` or `any` of the elements of a logical vector are `TRUE`. See this example
+These tell us whether `all` or `any` of the elements of a logical vector are `TRUE`.
 ```{r}
 x <- 11:20
 all(x > 5)
@@ -118,7 +136,15 @@ any(x > 20)
 
 They make quick checks on data. `any(duplicated(bill_no))` asks whether any bill number repeats, and `all(amount >= 0)` whether all the amounts are non-negative. Remember `na.rm = TRUE` if the data may have missing values.
 
-All of the above mentioned operators (along with those listed in @sec-calculator) are __vectorised__. Check these examples.
+```{r}
+amount
+all(amount > 0)
+all(amount > 0, na.rm = TRUE)
+```
+
+The first answer is `NA`, because one amount is missing and R cannot say. The second leaves out the missing amount.
+
+All of the above operators, along with those listed in @sec-calculator, are __vectorised__. Check these examples.
 ```{r}
 x <- 1:5
 y <- 6:10
@@ -151,7 +177,7 @@ mat1 * 10
 mat1 + mat1
 ```
 
-## Common arithmetical Functions
+## Common arithmetic functions
 | Function | Meaning | Output |
 |:-------------:|:----------------------|:-------------------------------|
 | `sum()` | Adds all the elements | A single value |
@@ -184,6 +210,16 @@ log10(Mat1)
 factorial(10:1)
 ```
 
+A few of these are used every day on amounts.
+
+```{r}
+bills <- c(12450.60, 98000, 4999.99, 250000)
+max(bills)
+ceiling(bills)            # up to the next whole rupee
+floor(log10(bills)) + 1   # number of digits before the decimal point
+abs(c(-2500, 1800))       # size of a difference, whichever way it goes
+```
+
 **Rounding.** R's `round()` rounds an exact half to the nearest *even* number, as the international standard (IEC 60559) requires. So `round(2.5)` is `2`, and `round(3.5)` is `4`. The rounding taught in school, and used in most accounts, always rounds a half up. Where this matters, use `janitor::round_half_up()`, as explained in @sec-DPLYRR.
 
 ```{r}
@@ -191,7 +227,7 @@ round(c(0.5, 1.5, 2.5, 3.5))
 ```
 
 ### Missing values
-If the vector has missing values, functions like `sum()` and `mean()` return `NA`, unless we use the argument `na.rm = TRUE`. (Check the help of each function, as a few work differently.) See these examples.
+If the vector has missing values, functions like `sum()` and `mean()` return `NA`, unless we use the argument `na.rm = TRUE`. Check the help of each function, as a few work differently. See these examples.
 ```{r}
 x <- c(1:50, NA)
 sum(x)
@@ -199,7 +235,7 @@ sum(x, na.rm = TRUE)
 mean(x, na.rm = TRUE)
 ```
 
-## Some Statistical functions
+## Some statistical functions
 | Function | Meaning | Output |
 |:-------------:|:----------------------|:-------------------------------|
 | `sd()` | Standard deviation | A single value |
@@ -211,21 +247,24 @@ mean(x, na.rm = TRUE)
 
 : Some commonly used statistical functions {#tbl-table5}
 
-Examples:
+Here they are on the amounts of twelve bills.
 ```{r}
-median(1:100)
-range(1:100, 45, 789)
-quantile(1:100)
-quantile(0:100, probs = 1:10 / 10)
+amounts <- c(4500, 12000, 18500, 22000, 25000, 31000, 38000, 41500, 47000, 49500, 49900, 185000)
+median(amounts)
+range(amounts)
+quantile(amounts)
+quantile(amounts, probs = c(0.9, 0.95))
 ```
+
+The median is ₹34,500, but the largest bill is ₹1,85,000, far above the rest. The 90th percentile is just under ₹50,000, because three of the twelve bills sit between ₹47,000 and ₹50,000. If ₹50,000 is a sanction limit, those three deserve a look. These ideas are developed in @sec-descriptive.
 
 ## Functions related to sampling and probability distributions {#sec-prob}
 
 ### Set the random seed with `set.seed()`
 Random numbers in a computer are not truly random. They come from a formula, which starts from a number called the *seed*. `set.seed()` fixes the seed, so that the same "random" numbers come out every time the code is run. It gives no output, but makes your code reproducible.
 
-### Generate random numbers with `rnorm()` / `runif()` / `rpois()` etc.
-These generate random numbers from the normal, uniform and Poisson distributions respectively. There are similar functions for other distributions, and functions for their probabilities and quantiles, like `pnorm()` and `qnorm()`, which we use in the statistics chapters. E.g.
+### Generate random numbers with `rnorm()`, `runif()` and `rpois()`
+These generate random numbers from the normal, uniform and Poisson distributions respectively. There are similar functions for other distributions, and functions for their probabilities and quantiles, like `pnorm()` and `qnorm()`, which we use in @sec-probability. For example, see these.
 ```{r}
 rnorm(n=10) #default mean is 0 and SD is 1
 rnorm(n=10) # notice these will produce different results each time.
@@ -236,8 +275,8 @@ set.seed(123)
 runif(10)
 ```
 
-### Random Sample with `sample()`
-`sample()` takes a sample of the given `size` from the elements of a vector, with or without replacement. E.g.
+### Random sample with `sample()`
+`sample()` takes a sample of the given `size` from the elements of a vector, with or without replacement.
 ```{r}
 set.seed(123)
 sample(LETTERS, 5, replace = FALSE)
@@ -263,17 +302,26 @@ vouchers[picked, ]
 ::: callout-tip
 ## Audit tip
 
-Always set a seed before drawing an audit sample, and record it in your working papers. Anyone can then re-run the code and get exactly the same sample, which shows that the selection was random and not chosen. Sampling methods for audit are covered in detail in the chapter on sampling.
+Always set a seed before drawing an audit sample, and record it in your working papers. Anyone can then re-run the code and get exactly the same sample, which shows that the selection was random and not chosen. Sampling methods for audit are covered in detail in @sec-sampling.
 :::
 
-## Other Mathematical functions
+## Other mathematical functions
 
-### Progressive calculations with `cumsum()` /`cumprod()`
+### Running totals with `cumsum()` and `cumprod()`
 These give the running total or product. The output is as long as the input.
 ```{r}
 cumsum(1:10)
 cumprod(-5:5)
 ```
+
+A running total of monthly releases shows when a budget allotment was used up.
+
+```{r}
+releases <- c(Apr = 12, May = 8, Jun = 15, Jul = 20, Aug = 18, Sep = 11)   # ₹ lakh
+cumsum(releases)
+cumsum(releases) > 60   # months after the allotment of ₹60 lakh was crossed
+```
+
 The similar functions `cummax()` (running maximum) and `cummin()` (running minimum) are also useful.
 ```{r}
 set.seed(1)
@@ -282,8 +330,8 @@ cummin(x)
 cummax(x)
 ```
 
-### Progressive difference `diff()`
-`diff()` gives the difference between each element and the one before it. The output is shorter by one element. E.g.
+### Differences with `diff()`
+`diff()` gives the difference between each element and the one before it. The output is shorter by one element.
 ```{r}
 set.seed(123)
 x <- rnorm(10)
@@ -292,7 +340,7 @@ diff(x)
 length(diff(x))
 ```
 
-A use in audit: if cheque numbers are issued in order, `diff()` of the sorted numbers should be all `1`. Any other value shows a gap, or a repeat.
+A use in audit. If cheque numbers are issued in order, `diff()` of the sorted numbers should be all `1`. Any other value shows a gap, or a repeat.
 
 ```{r}
 cheques <- c(500101, 500102, 500103, 500106, 500107, 500107, 500108)
@@ -300,19 +348,21 @@ diff(cheques)
 cheques[which(diff(cheques) != 1)]   # the cheque after which the break occurs
 ```
 
-Cheques 500104 and 500105 are missing after 500103, and 500107 appears twice. Both need explanation, as cancelled, spoilt, or misused cheques.
+Cheques 500104 and 500105 are missing after 500103, and 500107 appears twice. Both need explanation, as cancelled, spoilt, or misused cheques. @sec-gaps takes this further.
 
-## String Manipulation functions
+## String manipulation functions
 
-### Concatenate strings with `paste()` and `paste0()`
+### Join strings with `paste()` and `paste0()`
 The function `paste()` joins the elements of one or more vectors, element by element. The argument `sep` gives the separator, a space `" "` by default. `paste0()` joins them with no separator.
 ```{r}
 paste(LETTERS, letters)
 paste0(letters, '_', 1:26) # check replication here
+paste0("DTO-", c("JPR", "AJM", "KOT"), "/", 2025)   # office codes
 ```
-_Note_ that both `paste()` and `paste0()` return a vector as long as the longest input. __To join all the elements into a single string, use the argument `collapse`. See this example.__
+Both `paste()` and `paste0()` return a vector as long as the longest input. __To join all the elements into a single string, use the argument `collapse`.__
 ```{r}
 paste0(letters, 1:26, collapse = '+')
+paste(c("B-102", "B-117", "B-130"), collapse = ", ")   # a list of bills for a report
 ```
 
 ::: callout-warning
@@ -324,109 +374,117 @@ paste("Bill", c("101", NA))
 ```
 :::
 
-### Functions `startsWith()` / `endsWith()`
-To check whether the strings in `x` start with a `prefix` or end with a `suffix`, we use `startsWith(x, prefix)` or `endsWith(x, suffix)` respectively. E.g.
+### Functions `startsWith()` and `endsWith()`
+To check whether the strings in `x` start with a `prefix` or end with a `suffix`, we use `startsWith(x, prefix)` or `endsWith(x, suffix)` respectively.
 ```{r}
-x <- c('apples', 'oranges', 'apples and oranges', 'oranges and apples', 'apricots')
-startsWith(x, 'apples')
-startsWith(x, 'ap')
-endsWith(x, 'oranges')
-
+x <- c('PWD/2024/0113', 'PWD/2025/0007', 'HLT/2025/0042', 'PWD/2025/0015A', 'EDU/2024/0098')
+startsWith(x, 'PWD')
+startsWith(x, 'PWD/2025')
+endsWith(x, 'A')
 ```
-Note that both these functions return logical vectors having same length as `x`.
+Both these functions return logical vectors of the same length as `x`. The last check finds a file number with a suffix `A`, which may be a bill raised a second time.
 
-### Check number of characters in string vector using `nchar()`
-`nchar(x)` counts the characters in each element of `x`. It is a quick validity check on codes of fixed length, like a 10-character PAN or a 6-digit PIN code. E.g.
+### Count the characters with `nchar()`
+`nchar(x)` counts the characters in each element of `x`. It is a quick validity check on codes of fixed length, like a 10-character PAN or a 6-digit PIN code.
 ```{r}
 nchar(x)
+pan <- c("ABCPK1234Q", "AAAPX1234", "BBDPS5678R1")
+nchar(pan) == 10
 y <- c('', ' ', '   ', NA)
 nchar(y)
 ```
 
-### Change case using `toupper()` / `tolower()`
+### Change case with `toupper()` and `tolower()`
 These change text to all UPPER or all lower case. Converting both sides to one case before comparing names avoids false mismatches, like `"Sharma"` against `"SHARMA"`.
-Example:
 ```{r}
 x <- c('Andrew', 'Bob')
 tolower(x)
 toupper(x)
+"Sharma Traders" == "SHARMA TRADERS"
+toupper("Sharma Traders") == "SHARMA TRADERS"
 ```
 
 
-### Extract a portion of string using `substr()` {-}
-`substr(x, start, stop)` extracts the characters from position `start` to position `stop`. E.g.
+### Extract a part of a string with `substr()` {-}
+`substr(x, start, stop)` extracts the characters from position `start` to position `stop`.
 ```{r}
 substr(x, 2, 8)
 substr("27AAPFU0939F1ZV", 3, 12)   # the PAN inside a GSTIN
 ```
 
-### Split a character vector using `strsplit()`
-`strsplit()` splits each element of a character vector into pieces, wherever the `split` string occurs. E.g.
+### Split strings with `strsplit()`
+`strsplit()` splits each element of a character vector into pieces, wherever the `split` string occurs.
 ```{r}
 x <- c('Anand Kumar', 'Bob', 'Chandan Lal Sharma')
 strsplit(x, split = ' ')
 ```
-**Notice that output will be of `list` type.**
+**Notice that the output is a `list`.**
 
-### Replace portions of string vectors `sub()` / `gsub()`
+### Replace parts of strings with `sub()` and `gsub()`
 
-These two functions replace the first match, and all matches, respectively. E.g.
+These two functions replace the first match, and all matches, respectively.
 ```{r}
 #Replace only first match
 sub(pattern = 'B', replacement = '12', x, ignore.case = TRUE)
 # Replace all matches
 gsub(pattern = 'B', replacement = '12', x, ignore.case = TRUE)
+# Remove the commas in amounts typed as text
+gsub(",", "", c("1,25,000", "48,500"))
 ```
 
-### Match patterns using `grep()` / `grepl()` / `regexpr()` / `gregexpr()`
-These functions look for the `pattern` in each element of a string vector. They differ in what they return. E.g.
+### Match patterns with `grep()`, `grepl()`, `regexpr()` and `gregexpr()`
+These functions look for the `pattern` in each element of a string vector. They differ in what they return.
 ```{r}
-grep(pattern = 'an', x) # will give indices.
-#                         Output will be integer vector and length may be shorter than that of `x`
-grepl(pattern = 'an', x) # will give a logical vector of same length as `x`
-regexpr(pattern = 'an', x) # output will have multiple attributes
+grep(pattern = 'an', x) # gives the positions of the matches
+#                         an integer vector, which may be shorter than `x`
+grepl(pattern = 'an', x) # gives a logical vector of the same length as `x`
+regexpr(pattern = 'an', x) # output has several attributes
 ```
-Note that `regexpr()` gives the position of the first match in each element (`-1` if there is none). `gregexpr()` finds all the matches, and returns a list. E.g.
+`regexpr()` gives the position of the first match in each element, and `-1` if there is none. `gregexpr()` finds all the matches, and returns a list.
 ```{r}
 gregexpr(pattern = 'an', x)
 ```
 
-The `pattern` in these functions is a *regular expression*, a powerful way of describing text patterns, which has its own chapter later in the book. The package `stringr` offers the same functions with a more consistent design, also covered later.
+The `pattern` in these functions is a *regular expression*, a powerful way of describing text patterns, which has its own chapter, @sec-regex. The package `stringr` offers the same functions with a more consistent design, covered in @sec-strng.
 
 ## Other functions
 
-### Transpose a matrix using `t()`
-`t()` returns the transpose of a matrix, turning rows into columns. E.g.
+### Transpose a matrix with `t()`
+`t()` returns the transpose of a matrix, turning rows into columns.
 ```{r}
 mat <- outer(1:5, 1:5, FUN = \(x, y) paste0('A', x, y))
 mat
 t(mat)
 ```
 
-### Generate a frequency table using `table()`
-`table()` counts how many times each value occurs. With two vectors, it counts each combination, giving a cross-table. E.g.
+### Count values with `table()`
+`table()` counts how many times each value occurs. With two vectors, it counts each combination, giving a cross-table. Here are the districts of 100 bills.
 ```{r}
 set.seed(123)
-x <- sample(LETTERS[1:5], 100, replace = TRUE)
+x <- sample(c("Ajmer", "Alwar", "Bikaner", "Jaipur", "Kota"), 100, replace = TRUE)
 table(x)
 ```
-If more than one argument is passed,
+If more than one argument is passed, we get a cross-table, here of district against the status of the bill.
 ```{r}
 set.seed(1234)
-df <- data.frame(State_code = x,
-                 Code2 = sample(LETTERS[11:15], 100, replace = TRUE))
-my_table <- table(df$State_code, df$Code2)
+df <- data.frame(district = x,
+                 status = sample(c("Paid", "Pending", "Returned"), 100, replace = TRUE,
+                                 prob = c(0.7, 0.2, 0.1)))
+my_table <- table(df$district, df$status)
 my_table
 ```
 
-### Generate proportion of frequencies using `prop.table()`
+### Proportions with `prop.table()`
 This function takes a table and converts the counts into proportions of the total. With `margin = 1` the proportions are of each row's total, and with `margin = 2` of each column's.
 ```{r}
 prop.table(my_table)
 round(prop.table(my_table, margin = 1), 2)
 ```
 
-::: callout-caution
+With `margin = 1`, each row shows how a district's bills are split between paid, pending and returned. A district with a much larger share pending than the others deserves a question.
+
+::: callout-warning
+## Caution
 `table()` leaves out missing values silently. In audit data, the number of records with a missing category is often the most interesting count. Use `useNA = "ifany"` to include them.
 
 ```{r}
@@ -436,8 +494,8 @@ table(c("Paid", "Pending", NA, "Paid", NA), useNA = "ifany")
 :::
 
 
-### Column-wise or Row-wise sums using `colSums()` / `rowSums()`
-These sum the rows or the columns of a matrix or data frame. E.g.
+### Row and column totals with `rowSums()` and `colSums()`
+These sum the rows or the columns of a matrix or data frame.
 ```{r}
 # Row sums
 rowSums(my_table)
@@ -449,19 +507,19 @@ Similarly, `colMeans()` and `rowMeans()` give the means.
 rowMeans(my_table)
 ```
 
-### Extract unique values using `unique()`
-`unique()` returns the distinct values, in the order they first appear. E.g.
+### Distinct values with `unique()`
+`unique()` returns the distinct values, in the order they first appear.
 ```{r}
-unique(x) # note the output
+unique(x) # note the order
 ```
 
-### Check if two vectors are identical using `identical()`
+### Check if two objects are the same with `identical()`
 `identical()` checks whether two objects are exactly the same.
 ```{r}
-identical(unique(x), LETTERS)
+identical(sort(unique(x)), c("Ajmer", "Alwar", "Bikaner", "Jaipur", "Kota"))
 ```
 
-### Retrieve duplicate items in a vector using `duplicated()`
+### Find repeated items with `duplicated()`
 `duplicated()` marks each element which has already appeared *earlier* in the vector.
 ```{r}
 set.seed(123)
@@ -479,10 +537,10 @@ duplicated(bill_no) | duplicated(bill_no, fromLast = TRUE)
 bill_no[duplicated(bill_no) | duplicated(bill_no, fromLast = TRUE)]
 ```
 
-The chapter on finding duplicates takes this much further.
+@sec-dup takes this much further.
 
-### Generate sequences using other objects with `seq_len()` / `seq_along()`
-These generate the sequence `1, 2, ...` up to a given length, or up to the length of a given vector, respectively. E.g.
+### Sequences from other objects with `seq_len()` and `seq_along()`
+These generate the sequence `1, 2, ...` up to a given length, or up to the length of a given vector, respectively.
 ```{r}
 seq_len(5)
 x <- c('Andrew', 'Bob')
@@ -491,19 +549,18 @@ seq_along(x)
 
 They are safer than `1:length(x)` in loops. If `x` is empty, `1:length(x)` gives `1 0`, a sequence of two numbers, while `seq_along(x)` correctly gives nothing.
 
-### Divide a vector into categories (factor) using `cut()` {#sec-cutt}
+### Divide a vector into categories with `cut()` {#sec-cutt}
 `cut()` divides the range of `x` into intervals, and tells which interval each value falls in. The lowest interval is the first level, the next the second, and so on. The output is a `factor`.
 
-Example-1:
+In its simplest form, we give only the number of intervals.
 ```{r}
 x <- c(1,2,3,4,5,2,3,4,5,6,7)
 cut(x, 3)
 ```
-Example-2:
+The output can also be an ordered factor.
 ```{r}
 cut(x, 3, dig.lab = 1, ordered_result = TRUE)
 ```
-**Note** that the output `factor` above is ordered.
 
 In practice we usually give our own `breaks`, and `labels` for the groups. Let us group bills into value slabs. By default, intervals include their right end, so `(10000, 50000]` covers amounts above ₹10,000 up to and including ₹50,000. Values exactly on the lowest break, or outside all the breaks, become `NA`, so use `-Inf` and `Inf` at the ends.
 
@@ -516,87 +573,237 @@ cut(amounts,
 
 With `right = FALSE`, the intervals include their left end instead, as in "₹10,000 and above". Check which is needed, because a value exactly on a limit, like a bill of exactly ₹50,000, is the one that matters most when the limit is a financial power.
 
-### Scale the columns of a matrix using `scale()`
+### Standardise with `scale()`
 `scale()` standardises each column of a numeric matrix, by subtracting its mean and dividing by its standard deviation. The results, called *z-scores*, tell how many standard deviations a value is from the mean.
 ```{r}
 x <- matrix(1:10, ncol = 2)
 x
 scale(x)
 ```
-**Note:** The output is always a matrix, with two extra attributes, the means and standard deviations used. See this example
+The output is always a matrix, with two extra attributes, the means and standard deviations used.
 ```{r}
 scale(1:5)
 ```
 
-### Output the results using `cat()` {#sec-cat}
+On bill amounts, a large z-score picks out a bill that is unusually large for the set. Here the bill of ₹96,000 has a z-score of about 2, while all the others are below zero.
+
+```{r}
+round(scale(c(18000, 22000, 19500, 21000, 96000, 20500))[, 1], 2)
+```
+
+### Print text with `cat()` {#sec-cat}
 `cat()` prints its arguments joined together, without quotes or the index `[1]`. It does much less formatting than `print()`.
 ```{r}
 cat('ABCD')
 ```
-**Note** that the index `[1]` is _not printed_. `cat()` can print vectors too. Example-2:
+Notice that the index `[1]` is _not printed_. `cat()` can print vectors too.
 ```{r}
 cat(month.name)
 ```
 
-`cat()` is useful for printing _special characters_, written with escape codes. Example-3:
+`cat()` is useful for printing _special characters_, written with escape codes, like the rupee symbol.
 ```{r}
-cat('Budget Allocation is \u20b91.5 crore')
+cat('Budget Allocation is ₹1.5 crore')
 ```
 
-### Sort a vector using `sort()`
-`sort()` **sorts** a vector. Example-1:
+### Sort a vector with `sort()`
+`sort()` **sorts** a vector, in ascending order by default.
 ```{r}
 vec <- c(5, 8, 4, 1, 6)
 sort(vec)
 ```
-The argument `decreasing = TRUE` sorts in descending order, instead of the default ascending order.
-Example-2:
+The argument `decreasing = TRUE` sorts in descending order instead.
 ```{r}
 sort(vec, decreasing =  TRUE)
 ```
 
 
-### Arrange the elements of a vector using `order()`
-Unlike `sort()`, `order()` returns the *positions* of the elements in sorted order. Example
+### Positions in sorted order with `order()`
+Unlike `sort()`, `order()` returns the *positions* of the elements in sorted order.
 ```{r}
 order(vec)
 ```
-Thus, `sort(vec)` is the same as `vec[order(vec)]`. We may check,
+Thus, `sort(vec)` is the same as `vec[order(vec)]`. We may check.
 ```{r}
 identical(vec[order(vec)], sort(vec))
 ```
 
 `order()` is what we use to sort the rows of a data frame, as `df[order(df$amount), ]`. It can take several columns, for ties, and `-` for descending numbers, like `df[order(df$dept, -df$amount), ]`. With dplyr, `arrange()` does this more readably.
 
-### Check structure using `str()`
-`str` is short for *structure*, not for strings. It shows the structure of an object compactly. Example
+### Check the structure with `str()`
+`str` is short for *structure*, not for strings. It shows the structure of an object compactly.
 ```{r}
 str(vec)
 ```
 
-It is extremely useful to inspect a data frame, showing the type and the first few values of every column. Run it on every file you read.
+It is extremely useful to inspect a data frame, showing the type and the first few values of every column. Run it on every file you read. Here it is on the `vouchers` table created above.
 ```{r}
-str(iris)
+str(vouchers)
 ```
 
-### Generate a summary using `summary()` {-}
-`summary()` gives a summary of an object. Example-1: a numeric vector
+### Summarise with `summary()` {-}
+`summary()` gives a summary of an object. For a numeric vector, it gives the minimum, quartiles, mean and maximum.
 ```{r}
 summary(vec)
 ```
-For a numeric vector, it gives the minimum, quartiles, mean and maximum. Example-2: a data frame.
+For a data frame, it summarises each column.
 ```{r}
-summary(iris)
+summary(vouchers)
 ```
 
 `summary()` of a data frame is a good first look at audit data. Negative or zero amounts show up in the minimum, absurdly large ones in the maximum, and the count of `NA`s is given for each column which has any.
+
+## Audit use case, a first look at a voucher register {#sec-basefuns-audit}
+
+Let us put these functions to work together. A district treasury has sent its register of 400 vouchers for the last quarter of 2024-25. The financial power of the drawing officers is ₹50,000 per bill. Before any detailed audit, we want a quick first look. The code below creates the register and plants a few problems in it, as such registers often have.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the voucher register"
+set.seed(2025)
+n <- 400
+register <- data.frame(
+  voucher_no = 7001:(7000 + n),
+  bill_no    = sprintf("B/%04d", sample(1000:9999, n)),
+  office     = sample(c("DTO Ajmer", "DTO Alwar", "DTO Bikaner", "DTO Kota"), n,
+                      replace = TRUE, prob = c(0.3, 0.25, 0.2, 0.25)),
+  vendor     = sample(c("Arora Traders", "Bansal & Sons", "Chopra Supplies",
+                        "Dutta Enterprises", "Elite Agencies", "Gupta Stationers"), n, replace = TRUE),
+  amount     = round(exp(rnorm(n, log(18000), 0.8))),
+  cheque_no  = 610001:(610000 + n)
+)
+# Planted. Five bills split to stay just below the power of ₹50,000
+r_split <- sample(n, 5)
+register$amount[r_split] <- c(49900, 49750, 49999, 49500, 49850)
+# Planted. Three bill numbers entered twice, with the same amount
+r_dup <- sample(setdiff(1:n, r_split), 6)
+register$bill_no[r_dup[4:6]] <- register$bill_no[r_dup[1:3]]
+register$amount[r_dup[4:6]]  <- register$amount[r_dup[1:3]]
+register$vendor[r_dup[4:6]]  <- register$vendor[r_dup[1:3]]
+register$office[r_dup[4:6]]  <- register$office[r_dup[1:3]]
+# Planted. A negative amount and two missing offices
+r_neg <- sample(setdiff(1:n, c(r_split, r_dup)), 1)
+register$amount[r_neg] <- -12500
+register$office[sample(setdiff(1:n, c(r_split, r_dup, r_neg)), 2)] <- NA
+# Planted. Four cheques missing from the series
+register <- register[-c(87, 88, 233, 301), ]
+```
+
+```{r}
+str(register)
+head(register)
+```
+
+**Step 1. A first look.** `summary()` shows the range of the amounts and any missing values.
+
+```{r}
+summary(register)
+```
+
+```{r}
+#| include: false
+n_reg <- nrow(register)
+n_neg <- sum(register$amount < 0)
+n_na_office <- sum(is.na(register$office))
+```
+
+The minimum amount is negative, which no payment should be. The register has `r n_reg` rows, not 400, so some vouchers are missing from the extract. Step 6 shows which.
+
+**Step 2. Quick checks.** `all()` and `any()` put the questions directly.
+
+```{r}
+all(register$amount > 0)
+register[register$amount <= 0, ]
+any(duplicated(register$bill_no))
+any(is.na(register$office))
+```
+
+**Step 3. Every copy of a repeated bill number.**
+
+```{r}
+dup_rows <- duplicated(register$bill_no) | duplicated(register$bill_no, fromLast = TRUE)
+dups <- register[dup_rows, ]
+dups[order(dups$bill_no), ]
+```
+
+```{r}
+#| include: false
+n_dup_bills <- length(unique(dups$bill_no))
+dup_excess <- sum(register$amount[duplicated(register$bill_no)])
+# Format a rupee amount in the Indian style, as 1,23,456
+inr <- function(x) {
+  s <- as.character(round(x))
+  n <- nchar(s)
+  if (n <= 3) return(s)
+  head_part <- gsub("(\\d)(?=(\\d\\d)+$)", "\\1,", substr(s, 1, n - 3), perl = TRUE)
+  paste0(head_part, ",", substr(s, n - 2, n))
+}
+```
+
+The register has `r n_dup_bills` bill numbers that appear twice, each time with the same vendor and amount. If both copies were paid, ₹`r inr(dup_excess)` was paid twice.
+
+**Step 4. Bills by value slab, and close to the limit.**
+
+```{r}
+slab <- cut(register$amount,
+            breaks = c(-Inf, 0, 10000, 45000, 50000, Inf),
+            labels = c("Zero or negative", "Up to 10,000", "10,001 to 45,000",
+                       "45,001 to 50,000", "Above 50,000"))
+table(slab)
+near_limit <- register[register$amount > 49000 & register$amount <= 50000, ]
+near_limit
+```
+
+A cluster of bills just under ₹50,000 suggests that larger purchases may have been split to stay within the officer's power. The genuine bills above ₹50,000 also need a check that a higher authority sanctioned them.
+
+**Step 5. Offices, with the missing ones counted.**
+
+```{r}
+table(register$office, useNA = "ifany")
+round(prop.table(table(register$office, useNA = "ifany")) * 100, 1)
+```
+
+The office is missing for `r n_na_office` vouchers. Without `useNA = "ifany"` they would have vanished from the count.
+
+**Step 6. Gaps in the cheque series.**
+
+```{r}
+chq <- sort(register$cheque_no)
+breaks_at <- which(diff(chq) != 1)
+data.frame(after_cheque = chq[breaks_at], next_cheque = chq[breaks_at + 1],
+           missing = diff(chq)[breaks_at] - 1)
+```
+
+```{r}
+#| include: false
+n_missing_chq <- sum(diff(chq)[breaks_at] - 1)
+```
+
+The series has `r n_missing_chq` cheques missing. The treasury must account for each, as cancelled, spoilt or still in hand.
+
+**Step 7. A reproducible sample of the rest.** For detailed vouching, we draw a random sample of 10 from the remaining vouchers, with a recorded seed.
+
+```{r}
+flagged <- register$amount <= 0 | dup_rows | (register$amount > 49000 & register$amount <= 50000) |
+  is.na(register$office)
+set.seed(31032025)
+sample_rows <- sample(which(!flagged), 10)
+register[sample_rows, c("voucher_no", "bill_no", "office", "amount")]
+```
+
+```{r}
+#| include: false
+n_flagged <- sum(flagged)
+```
+
+In a few minutes, and without any package, we have `r n_flagged` vouchers to examine first and a random sample for the rest. Every one of these is a lead, not yet a finding. The next step is to call for the vouchers, the cheque issue register and the sanction orders, and put the results in the working papers.
 
 ## A suggested workflow
 
 When a file of vouchers or payments arrives from the auditee, an auditor may follow these steps.
 
 1.  **Take a first look.** Run `str()` and `summary()` on the data. Note negative amounts, very large amounts and the count of `NA`s.
-2.  **Run quick checks.** Use `any()` and `all()` to ask simple questions, like whether any bill number repeats or whether all amounts are non-negative.
+2.  **Run quick checks.** Use `any()` and `all()` to ask simple questions, like whether any bill number repeats or whether all amounts are positive.
 3.  **Count by category.** Use `table()` with `useNA = "ifany"`, so that records with a missing category are counted too. Use `prop.table()` to see the shares.
 4.  **Group amounts into slabs.** Use `cut()` with your own `breaks` and `labels`. Check that a value exactly on a limit falls in the right group.
 5.  **Look for gaps and repeats.** Sort serial numbers, like cheque numbers, and use `diff()` to find breaks. Use `duplicated()` with `fromLast = TRUE` to list every copy of a repeated bill number.
@@ -606,21 +813,25 @@ When a file of vouchers or payments arrives from the auditee, an auditor may fol
 ::: callout-important
 ## Remember
 
-Missing values hide in many base R functions. `sum()` and `mean()` give `NA`, `table()` leaves them out silently, and a comparison with `NA` gives `NA`. Always look for them with `is.na()`, never with `== NA`.
+- Missing values hide in many base R functions. `sum()` and `mean()` give `NA`, `table()` leaves them out silently, and a comparison with `NA` gives `NA`.
+- Always look for missing values with `is.na()`, never with `== NA`.
+- `duplicated()` alone misses the first copy. Combine it with `fromLast = TRUE` to see every copy.
+- A value exactly on a limit decides which slab a bill falls in. Check the `right` argument of `cut()`.
+- Record the seed of every sample.
 :::
 
 ## Summary of functions used
 
 | Purpose | Functions |
 |-----------------------|--------------------------------|
-| Comparison and logic | `==`, `!=`, `<`, `>`, `<=`, `>=`, `&`, <code>&#124;</code>, `!`, `xor()`, `&&`, <code>&#124;&#124;</code>, `%in%`, `is.na()`, `all()`, `any()`, `ifelse()` |
-| Arithmetic | `sum()`, `prod()`, `mean()`, `max()`, `min()`, `round()`, `signif()`, `ceiling()`, `floor()`, `trunc()`, `abs()`, `sqrt()`, `log()`, `exp()` |
+| Comparison and logic | `==`, `!=`, `<`, `>`, `<=`, `>=`, `&`, <code>&#124;</code>, `!`, `xor()`, `&&`, <code>&#124;&#124;</code>, `%in%`, `is.na()`, `all()`, `any()`, `ifelse()`, `which()` |
+| Arithmetic | `sum()`, `prod()`, `mean()`, `max()`, `min()`, `round()`, `signif()`, `ceiling()`, `floor()`, `trunc()`, `abs()`, `sqrt()`, `log()`, `log10()`, `exp()`, `factorial()` |
 | Statistics | `sd()`, `var()`, `median()`, `range()`, `IQR()`, `quantile()`, `scale()`, `summary()` |
 | Random numbers and samples | `set.seed()`, `rnorm()`, `runif()`, `rpois()`, `sample()` |
 | Running calculations | `cumsum()`, `cumprod()`, `cummax()`, `cummin()`, `diff()` |
-| Strings | `paste()`, `paste0()`, `startsWith()`, `endsWith()`, `nchar()`, `toupper()`, `tolower()`, `substr()`, `strsplit()`, `sub()`, `gsub()`, `grep()`, `grepl()`, `regexpr()`, `gregexpr()` |
+| Strings | `paste()`, `paste0()`, `sprintf()`, `startsWith()`, `endsWith()`, `nchar()`, `toupper()`, `tolower()`, `substr()`, `strsplit()`, `sub()`, `gsub()`, `grep()`, `grepl()`, `regexpr()`, `gregexpr()` |
 | Tables and counts | `table()`, `prop.table()`, `rowSums()`, `colSums()`, `rowMeans()`, `colMeans()` |
-| Vectors | `unique()`, `duplicated()`, `identical()`, `seq_len()`, `seq_along()`, `cut()`, `sort()`, `order()`, `t()` |
-| Looking at objects | `cat()`, `str()`, `summary()` |
+| Vectors | `unique()`, `duplicated()`, `identical()`, `seq_len()`, `seq_along()`, `cut()`, `sort()`, `order()`, `t()`, `outer()` |
+| Looking at objects | `cat()`, `str()`, `head()`, `summary()`, `data.frame()` |
 
 : Functions used in this chapter, all from base R {#tbl-basefunctions}

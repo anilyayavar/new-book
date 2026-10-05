@@ -9,6 +9,12 @@ source("_common.R")
 library(knitr)
 ```
 
+A Public Works department has dozens of divisions. Each sends its voucher file every month. The auditor wants to run the same checks on every file. What did the division spend? How much of it was spent in March? Which vouchers are above the limit? Doing this by hand, file by file, is slow. Copying the code for each file and editing it is quicker, but risky. One forgotten edit, and one division is checked against the wrong limit, without anyone noticing.
+
+The better way is to write the check *once*, as a function, and then tell R to apply it to every file. This idea, applying a function to each element of a collection, is the heart of *functional programming*. R is very good at it.
+
+In this chapter we learn the base R tools for this, the `apply` family, and then the more consistent tools of the package `purrr`. We practise on the voucher register of four sub-division offices, and on its quarter-wise expenditure. At the end, we check every office for a rush of expenditure in March, with one function applied to all four.
+
 ## What is functional programming?
 
 Conceptually functional programming philosophy is based on lambda calculus. Lambda calculus is a framework developed by Alonzo Church^[Alan Turing, who created Turing machine which in turn laid the foundation of imperative programming style, was a student of __Alonzo Church__.] to study computations with functions.
@@ -19,9 +25,52 @@ Functional programming uses *higher-order functions*, functions which take anoth
 
 Let us learn a bit more here.
 
+## Our data, vouchers of four offices {#sec-fp-data}
+
+Our data is the voucher register of a Public Works division for the financial year 2024-25. It has four sub-division offices, at Pune, Nashik, Nagpur and Kolhapur. Each row is one voucher, with its office, date, amount and the GST in it. One office has a rush of large payments in the last fortnight of March, which we find at the end of the chapter. From the vouchers we also make a small matrix, `qexp`, of the expenditure of each office in each quarter, in lakh. All names are made up, and the code is folded.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the vouchers and the quarter-wise expenditure"
+set.seed(7)
+offices <- c("Pune", "Nashik", "Nagpur", "Kolhapur")
+n <- 160
+vouchers <- data.frame(
+  office       = sample(offices, n, replace = TRUE),
+  voucher_date = as.Date("2024-04-01") + sample(0:364, n, replace = TRUE),
+  amount       = round(runif(n, 20000, 200000), -2)
+)
+
+# Planted. A rush of large payments at Nagpur in the second half of March 2025
+march_rush <- data.frame(
+  office       = "Nagpur",
+  voucher_date = as.Date("2025-03-17") + c(0, 3, 5, 8, 10, 12, 13),
+  amount       = c(480000, 520000, 450000, 610000, 395000, 560000, 470000)
+)
+
+vouchers <- rbind(vouchers, march_rush)
+vouchers <- vouchers[order(vouchers$voucher_date), ]
+vouchers$voucher_no <- sprintf("TV/24-25/%03d", seq_len(nrow(vouchers)))
+vouchers$gst <- round(vouchers$amount * 18 / 118)
+vouchers <- vouchers[, c("voucher_no", "office", "voucher_date", "amount", "gst")]
+rownames(vouchers) <- NULL
+
+# Quarter of the financial year. April to June is Q1, January to March is Q4
+quarter <- paste0("Q", (as.integer(format(vouchers$voucher_date, "%m")) - 4) %% 12 %/% 3 + 1)
+# Expenditure of each office in each quarter, in lakh
+qexp <- round(tapply(vouchers$amount, list(vouchers$office, quarter), sum) / 1e5, 2)
+```
+
+```{r}
+head(vouchers)
+qexp
+```
+
+The register has `r nrow(vouchers)` vouchers, worth ₹`r round(sum(vouchers$amount) / 1e5, 2)` lakh in all.
+
 ### Usage of functional programming in R
 
-Strictly speaking, R is not a pure functional programming language, but it supports the style well. We have seen that most functions work on whole vectors at once. But what about lists? Many functions do not work on them. Check this example.
+Strictly speaking, R is not a pure functional programming language, but it supports the style well. We have seen that most functions work on whole vectors at once. But what about lists? Many functions do not work on them. Suppose three amounts have been kept in a list. Check this example.
 ```{r error=TRUE}
 list1 <- list(50000, 5000, 56)
 sum(list1)
@@ -36,16 +85,16 @@ for(i in seq_along(list1)){
 }
 sum(x)
 ```
-Consider another list, where we want to calculate mean of each element of that list.
+Consider another list, the bills passed by three offices in one week, where we want the average bill of each office.
 ```{r}
-list2 <- list(
-  1:10,
-  11:20,
-  21:30
+office_bills <- list(
+  Pune   = c(42000, 18500, 61000, 27500),
+  Nashik = c(99500, 98000, 99900),
+  Nagpur = c(12500, 230000, 45000, 8800, 76000)
 )
 ```
 
-We may use a `for` loop again, but in R such operations are done more simply with the *apply* family of functions, one of the best known features of R. We will come back to `list2` shortly.
+We may use a `for` loop again, but in R such operations are done more simply with the *apply* family of functions, one of the best known features of R. We will come back to `office_bills` shortly.
 
 ## `apply` family of functions
 
@@ -69,47 +118,59 @@ An illustrative construction of `apply` function can be seen in @fig-applyimage.
 knitr::include_graphics('images/apply.png')
 ```
 
-Check this example
+Let us find the average quarterly expenditure of each office, from our matrix `qexp`. Each row is an office, so `MARGIN` is `1`.
 ```{r}
-(mat <- matrix(1:10, nrow = 5))
-apply(mat, 1, mean)
+apply(qexp, 1, mean)
 ```
-**Note:** `rowMeans(mat)` would have given the same result. We use a simple example to show the idea.
+**Note:** `rowMeans(qexp)` would have given the same result. We use a simple example to show the idea.
 
-**We may also pass our own function.** In this example, we take the sum of squares of each row. We define a function for the purpose and then `apply` it.
+**We may also pass our own function.** Government instructions discourage a rush of expenditure at the end of the year. A common yardstick is that not more than a third, 33%, of the year's spending should fall in the last quarter. Let us write a function which gives the share of the last quarter, Q4, in a row, and then `apply` it to every office.
 ```{r}
-my_fun <- function(x){
-  sum(x^2)
+q4_share <- function(x){
+  round(x[4] / sum(x) * 100, 1)
 }
-apply(mat, 1, my_fun)
+apply(qexp, 1, q4_share)
 ```
+
+```{r}
+#| include: false
+q4 <- apply(qexp, 1, q4_share)
+```
+
+`r names(q4)[q4 > 33]` spent `r q4[q4 > 33]`% of its year's money in the last quarter. The other offices are within the yardstick.
+
 If the function is not needed elsewhere, there is no need to define it beforehand. We may write an anonymous function directly inside `apply()`.
 
 ```{r}
-apply(mat, 1, FUN = function(x) sum(x^2))
+apply(qexp, 1, FUN = function(x) round(x[4] / sum(x) * 100, 1))
 ```
 
 ::: callout-note
 **Since R 4.1, a function can be written with a backslash `\` in place of the word `function`** (see @sec-func). We could have written the above as
 ```{r collapse=TRUE}
-apply(mat, 1, FUN = \(x) sum(x^2))
+apply(qexp, 1, FUN = \(x) round(x[4] / sum(x) * 100, 1))
 ```
 :::
 
 #### `apply()` need not necessarily output vectors only {-}
-If `FUN` returns more than one value for each row or column, the output is a matrix. The thing to note is that the result for each row or column is always placed in a *column* of the output, whether `MARGIN` is `1` or `2`. (A function like `sqrt` would not show this well, since `apply(m, 1, sqrt)` gives the same values as `sqrt(m)`.) Suppose we want the column-wise running total of a matrix.
+If `FUN` returns more than one value for each row or column, the output is a matrix. The thing to note is that the result for each row or column is always placed in a *column* of the output, whether `MARGIN` is `1` or `2`. (A function like `sqrt` would not show this well, since `apply(m, 1, sqrt)` gives the same values as `sqrt(m)`.)
+
+Suppose we want the *progressive* expenditure of each office, that is, its running total at the end of each quarter. The running total is given by `cumsum()`. First, let us do it on each column, with `MARGIN = 2`.
 ```{r}
-apply(mat, 2, cumsum)
+apply(qexp, 2, cumsum)
 ```
-The output is exactly what we wanted. But what if we wanted the row-wise running total?
+The layout is the same as that of `qexp`. But a running total down a column adds up the offices, which means nothing to us. We want the running total along each row, over the quarters.
 ```{r}
-apply(mat, 1, cumsum)
+apply(qexp, 1, cumsum)
 ```
-The output is the _transpose_ of what we expected, because the result for each row has gone into a column. Wrap it in `t()` to get the expected layout. Let us check our understanding with one more example, using a function whose output length does not depend on the input.
+The numbers are right, but the output is the _transpose_ of what we expected. The offices are now columns, because the result for each row has gone into a column. Wrap it in `t()` to get the expected layout.
+```{r}
+t(apply(qexp, 1, cumsum))
+```
+Let us check our understanding with one more example, using a function whose output length does not depend on the input. `range()` always gives two values, the smallest and the largest.
 
 ```{r}
-set.seed(1)
-apply(mat, 1, sample, 4, TRUE)
+apply(qexp, 1, range)
 ```
 
 Thus we may conclude that
@@ -134,14 +195,22 @@ Table: Relation between input and output data structure in `apply` {#tbl-apply}
 So we have to be careful with the output of `apply()`, or it may introduce a bug in our code.
 
 #### `apply()` on data frames {-}
-Data frames, though a kind of list, also behave like matrices, so we may use `apply()` on them too. See this example.
+Data frames, though a kind of list, also behave like matrices, so we may use `apply()` on them too. Let us turn `qexp` into a data frame, and total each quarter.
 ```{r}
-(my_df <- as.data.frame(mat))
-apply(my_df, 2, sum)
+(qexp_df <- as.data.frame(qexp))
+apply(qexp_df, 2, sum)
 ```
 
-::: callout-caution
-`apply()` first converts a data frame into a matrix. If the data frame has even one text column, *every* value becomes text, and numeric functions fail or give wrong results. Use `apply()` only on all-numeric data, and prefer `lapply()`, `sapply()` or, in the tidyverse, `across()` (@sec-across) for data frames.
+::: callout-warning
+## Caution
+`apply()` first converts a data frame into a matrix. If the data frame has even one text column, *every* value becomes text, and numeric functions fail or give wrong results. See what happens when we try to add GST to each amount, row by row, while the voucher number is also in the data.
+
+```{r error=TRUE}
+small <- vouchers[1:4, c("voucher_no", "amount")]
+apply(small, 1, \(r) r["amount"] * 1.18)
+```
+
+The amounts had become text, and text cannot be multiplied. Use `apply()` only on all-numeric data, and prefer `lapply()`, `sapply()` or, in the tidyverse, `across()` (@sec-across) for data frames.
 :::
 
 
@@ -157,9 +226,9 @@ where
 - `FUN` is the function to apply
 - `f_args` are any further arguments to be passed to `FUN`.
 
-Note that there is no `MARGIN` argument here. See these examples.
+Note that there is no `MARGIN` argument here. Let us total each quarter again, this time with `lapply()`.
 ```{r}
-lapply(my_df, sum)
+lapply(qexp_df, sum)
 ```
 You may have noticed two things here.
 
@@ -172,37 +241,36 @@ Thus `lapply()`
 - then _applies_ the function `FUN` to each element
 - and then returns a list.
 
-Example-2: Let us find the type of each column of a data frame.
+The first thing to check in any file received from an auditee is the type of each column. Is the date really a date? Is the amount a number, or text? `lapply()` with `class()` tells us at once.
 ```{r}
-lapply(iris, typeof)
+lapply(vouchers, class)
 ```
 
-As with `apply()`, we can write `FUN` inline (anonymously). Example-3:
+As with `apply()`, we can write `FUN` inline (anonymously). This gives the share of each office in each quarter's expenditure, in per cent.
 ```{r}
-lapply(my_df, \(a) a^2)
+lapply(qexp_df, \(a) round(a / sum(a) * 100, 1))
 ```
 
-Example-4:
+The element of the list goes to the *first* argument of `FUN` which is not already named. Suppose we want to pick 3, 2 and 4 voucher numbers at random from the range 1001 to 1050, for three audit teams. `sample()` takes the values to pick from as `x`, and the number to pick as `size`. Since we have named `x`, each number goes to `size`.
 ```{r}
 set.seed(1)
-lapply(1:4, runif, min=0, max=10)
+lapply(c(3, 2, 4), sample, x = 1001:1050)
 ```
 
-**Note** that even when `lapply()` is applied to a vector, it returns a list. In Example-4, each number `1:4` was passed as the first argument of `runif()`, giving 1, 2, 3 and 4 random numbers.
+**Note** that even when `lapply()` is applied to a vector, it returns a list.
 
-And now `list2`, from the beginning of the chapter. The mean of each element is simply
+And now `office_bills`, from the beginning of the chapter. The average bill of each office is simply
 
 ```{r}
-lapply(list2, mean)
+lapply(office_bills, mean)
 ```
 
 ### Function `sapply()`
 `sapply()` is a `s`implified `lapply()`. It works the same way, but simplifies the result as much as possible, usually into a vector or a matrix.
 
-Example:
 ```{r}
-sapply(my_df, sum)
-sapply(list2, mean)
+sapply(qexp_df, sum)
+sapply(office_bills, mean)
 ```
 
 ::: callout-warning
@@ -224,15 +292,17 @@ where
  - `expr` is the expression to evaluate repeatedly
  - `simplify` says whether the results should be simplified into a vector, matrix or array.
 
-Example:
+Suppose we draw a random sample of 10 vouchers, and work out their average amount. How much would that average change from one sample to another? `replicate()` draws five such samples, and gives the five averages. Then, with `simplify = FALSE`, it draws three samples of four voucher numbers each, and keeps each sample as an element of a list.
 
 ```{r}
 set.seed(123)
 # Default value of simplify will simplify the results as much possible
-replicate(5, runif(3))
+replicate(5, mean(sample(vouchers$amount, 10)))
 # Notice the difference with simplify=FALSE
-replicate(3, runif(5), simplify = FALSE)
+replicate(3, sample(vouchers$voucher_no, 4), simplify = FALSE)
 ```
+
+Audit sampling itself is the subject of @sec-sampling.
 
 ### Function `split()`
 
@@ -246,18 +316,18 @@ where
 - `f` is a factor, or a list of factors. Anything else is converted to a factor.
 - `drop` says whether groups with no data should be dropped.
 
-Example: to divide a vector into alternate elements,
+For example, to share the first ten vouchers between two audit teams, alternately,
 ```{r}
-split(LETTERS, rep(1:2, 13))
+split(vouchers$voucher_no[1:10], rep(c("Team A", "Team B"), 5))
 ```
-Example-2: the sums of the even and odd numbers from 1 to 100,
+The total expenditure of each office,
 ```{r}
-split(1:100, (1:100) %% 2) |> lapply(sum)
+split(vouchers$amount, vouchers$office) |> lapply(sum)
 ```
 
-Example-3: the mean of the `mpg` column of `mtcars` for each value of `cyl`,
+And the largest voucher of each office,
 ```{r}
-split(mtcars$mpg, mtcars$cyl) |> sapply(mean)
+split(vouchers$amount, vouchers$office) |> sapply(max)
 ```
 
 ### `tapply()`
@@ -274,23 +344,23 @@ where
 - `...` are any further arguments for `FUN`
 - `simplify`, if `TRUE`, simplifies the result.
 
-See this example
+The largest voucher of each office again, in one step.
 ```{r}
-tapply(mtcars$mpg, mtcars$cyl, mean)
+tapply(vouchers$amount, vouchers$office, max)
 ```
 
-If `simplify` is `FALSE`, the results are not simplified. See this example
+If `simplify` is `FALSE`, the results are not simplified. See this example, the average voucher of each office.
 ```{r}
-# month-wise mean of temperatures from `airquality` data
-tapply(airquality$Temp, airquality$Month, mean, simplify = FALSE)
+tapply(vouchers$amount, vouchers$office, mean, simplify = FALSE)
 ```
+
+With a list of two factors as `INDEX`, `tapply()` gives a cross-table. This is how the matrix `qexp` was made from the vouchers, with the office and the quarter as the two factors.
 
 ### `by()` function
 
-`by()`\index{by() function} works like `tapply()`, but on a whole data frame, passing each group's rows to the function. See this example
+`by()`\index{by() function} works like `tapply()`, but on a whole data frame, passing each group's rows to the function. Let us see the voucher with the largest amount in each office. `which.max()` gives the position of the largest value.
 ```{r}
-# Split the data by `cyl` column and subset first six rows only
-by(mtcars, mtcars$cyl, head)
+by(vouchers, vouchers$office, \(d) d[which.max(d$amount), ])
 ```
 
 ### Specifying the output type with `vapply()`
@@ -298,17 +368,17 @@ by(mtcars, mtcars$cyl, head)
 ```
 vapply(X, FUN, FUN.VALUE, ..., USE.NAMES = TRUE)
 ```
- - In the argument `FUN.VALUE` we give a template of each result. See this example.
+ - In the argument `FUN.VALUE` we give a template of each result. See this example, the largest amount and the largest GST.
 ```{r}
-vapply(mtcars, max, FUN.VALUE = double(1))
+vapply(vouchers[c("amount", "gst")], max, FUN.VALUE = double(1))
 ```
 With `FUN.VALUE = double(1)` we have said that each result should be a single `double`. To find the `range` of each column, which has two values,
 ```{r}
-vapply(mtcars, range, FUN.VALUE = double(2))
+vapply(vouchers[c("amount", "gst")], range, FUN.VALUE = double(2))
 ```
-If we try this on a data set with a non-numeric column, like the `Species` column of `iris`, `vapply()` stops with an error, as we want it to.
+If we try this on the whole register, which has text columns like the voucher number and the office, `vapply()` stops with an error, as we want it to.
 ```{r, error=TRUE}
-vapply(iris, range, FUN.VALUE = double(2))
+vapply(vouchers, range, FUN.VALUE = double(2))
 ```
 ## Functional Programming in `purrr` {#sec-purrr}
 The package `purrr`^[[https://purrr.tidyverse.org/](https://purrr.tidyverse.org/)], part of the core `tidyverse`, gives a complete and consistent set of tools for functional programming. Its functions do the job of the apply family, with consistent names and arguments, and a guaranteed type of output.
@@ -322,9 +392,9 @@ library(purrr)
 ### Iterate over single list/vector with `map_*()` family of functions
 The most important family of functions in purrr is `map`. The `map_*()` functions work much like `vapply()`, with control over the type of output. They all take a list or vector as the argument `.x` and a function as `.f`, and return an output of the stated type.
 
-Example
+Let us total each quarter of `qexp_df` once more.
 ```{r}
-map(mtcars, .f = sum)
+map(qexp_df, .f = sum)
 ```
 Note that the output is a list, just as with `lapply()`. If each result is a single value, we use one of these functions, depending on its type, to get a vector.
 
@@ -336,20 +406,20 @@ Note that the output is a list, just as with `lapply()`. If each result is a sin
 `map()` always returns a list.
 See these further examples.
 
-Example-1:
+The largest amount and the largest GST, as a vector of doubles.
 ```{r}
-map_dbl(mtcars, max)
+map_dbl(vouchers[c("amount", "gst")], max)
 ```
 
-Example-2: an anonymous function, written with `\(x)`. (Older code often uses a formula instead, like `~ mean(.x)`. It still works, but `\(x)` is now recommended.)
+An anonymous function, written with `\(x)`. (Older code often uses a formula instead, like `~ mean(.x)`. It still works, but `\(x)` is now recommended.) The first line gives the average bill of each office. The second turns month numbers into names.
 ```{r}
-map_dbl(list2, \(x) mean(x))
+map_dbl(office_bills, \(x) mean(x))
 map_chr(c(2, 7, 12), \(m) month.name[m])
 ```
 
 ### Iterate over two or more lists/vectors using `map2_*()`/ `pmap_*()` family
 
-So far, `map_*()` has iterated over the elements of one list. Any extra arguments are passed unchanged, the same in every iteration, as in the first illustration in @fig-map2^[Source: [Advanced R](https://adv-r.hadley.nz/functionals.html) by Hadley Wickham].
+So far, `map_*()` has iterated over the elements of one list. Any extra arguments are passed unchanged, the same in every iteration, as in the first illustration in @fig-map2^[Image from [Advanced R](https://adv-r.hadley.nz/functionals.html) by Hadley Wickham].
 
 ::: {#fig-map2}
 
@@ -361,13 +431,14 @@ Working of map vs map2 family of functions \hspace{\textwidth} Source Advanced R
 :::
 To iterate over two vectors or lists *together*, taking their elements in pairs, we need the `map2_*()` family of functions (see the second illustration in @fig-map2).
 
-See the following example
+See the following example. Each office has its own limit for a single bill, and `map2()` takes the bills of each office together with its own limit.
 ```{r}
-x <- list(1, 2, 3)
-y <- list(11, 12, 13)
-map2(x, y, `*`)
+office_limits <- c(Pune = 50000, Nashik = 100000, Nagpur = 100000)
+map2(office_bills, office_limits, \(x, lim) x[x > lim])
 ```
-Here is an audit use. Claims under three schemes are to be checked against each scheme's own limit. `map2()` takes each scheme's claims together with its limit.
+Pune has one bill above its limit, and Nagpur has one above its own. Nashik has none. Its three bills are all a little below ₹1 lakh, which is itself worth a second look (@sec-dplyr-split).
+
+Here is another audit use. Claims under three schemes are to be checked against each scheme's own limit. `map2()` takes each scheme's claims together with its limit.
 
 ```{r}
 claims <- list(Health    = c(12000, 155000, 8000, 140000),
@@ -411,8 +482,8 @@ Here, plain vector arithmetic, `qty * rate * (1 + gst / 100)`, would have done t
 
 ### Other useful purrr functions
 
-- `walk()`, `walk2()` and `iwalk()` work like `map()`, but for functions called for their *side effects*, like saving files or drawing plots, rather than for a result. We used `iwalk()` to save one file per district in @sec-merge.
-- `list_rbind()` binds a list of data frames into one, as when reading many files with `map()`. Its argument `names_to` adds a column with the names of the list elements, like the file each row came from.
+- `walk()`, `walk2()` and `iwalk()` work like `map()`, but for functions called for their *side effects*, like saving files or drawing plots, rather than for a result. We use `iwalk()` to save one file per district in @sec-merge.
+- `list_rbind()` binds a list of data frames into one, as when reading many files with `map()`. Its argument `names_to` adds a column with the names of the list elements, like the file each row came from. We use it in the audit use case below.
 - `keep()` and `discard()` keep or drop the elements of a list which meet a condition, like `keep(claims, \(x) any(x > 100000))`.
 - `imap()` passes each element along with its name, or position, as a second argument.
 
@@ -421,6 +492,56 @@ Here, plain vector arithmetic, `qty * rate * (1 + gst / 100)`, would have done t
 
 Whenever you find yourself running the same analysis on several files, districts, years or schemes, put them in a list and `map()` over it. One function, tested once, then runs on all of them alike. That is both quicker and more reliable than copying and editing code for each, where one small slip can go unnoticed.
 :::
+
+## Audit use case, the March rush in each office {#sec-fp-march}
+
+A rush of expenditure in the last month of the year is a classic audit concern. Money spent in a hurry, to avoid its lapse, is often spent badly. Government of India instructions ask departments to keep spending in March within 15% of the budget, and in the last quarter within 33%. We have no budget figures here. So we use each office's actual spending for the year as a rough yardstick instead.
+
+Let us check every office in the same way. We split the vouchers into a list, one data frame per office. We write one function which checks one office. We test it on one office, and then `map()` it over all four.
+
+```{r}
+office_list <- split(vouchers, vouchers$office)
+
+march_check <- function(d) {
+  in_march <- format(d$voucher_date, "%Y-%m") == "2025-03"
+  in_q4    <- d$voucher_date >= as.Date("2025-01-01")
+  data.frame(vouchers   = nrow(d),
+             total_lakh = round(sum(d$amount) / 1e5, 2),
+             q4_pct     = round(100 * sum(d$amount[in_q4]) / sum(d$amount), 1),
+             march_pct  = round(100 * sum(d$amount[in_march]) / sum(d$amount), 1))
+}
+
+# Test on one office first
+march_check(office_list$Pune)
+```
+
+The function works on one office. Now let us run it on all of them, and bind the results into one table with `list_rbind()`. Its argument `names_to` adds the name of each office as a column.
+
+```{r}
+march_result <- office_list |>
+  map(march_check) |>
+  list_rbind(names_to = "office")
+march_result
+```
+
+```{r}
+#| include: false
+flag <- subset(march_result, q4_pct > 33 | march_pct > 15)
+nag <- subset(march_result, office == "Nagpur")
+other <- subset(flag, office != "Nagpur")
+```
+
+Let us keep the offices which cross either yardstick.
+
+```{r}
+subset(march_result, q4_pct > 33 | march_pct > 15)
+```
+
+Nagpur stands out. It spent `r nag$march_pct`% of its year's money in March, and `r nag$q4_pct`% in the last quarter. `r if (nrow(other) > 0) paste0(paste(other$office, collapse = " and "), " is also above the March yardstick, but only just, at ", paste(other$march_pct, collapse = " and "), "%. That may be no more than the normal ups and downs of payments.") else ""`
+
+The auditor would next look at the Nagpur vouchers of March. Were the goods received, and the works done, before payment? Were any payments made in advance, only to avoid the lapse of funds? The March vouchers, with these questions, go into the working papers.
+
+Note that the same function ran on every office alike. Had there been forty offices, the code would not have changed at all.
 
 ## A suggested workflow
 
@@ -447,11 +568,14 @@ Test the function on one item before mapping it over all. Ask for the output typ
 | `replicate()` | base R | Evaluate an expression many times |
 | `split()` | base R | Divide an object into a list of groups |
 | `tapply()`, `by()` | base R | Apply a function to each group of a vector or data frame |
+| `t()`, `cumsum()`, `range()`, `which.max()` | base R | Transpose a matrix; running total; smallest and largest values; position of the largest value |
+| `class()` | base R | The class of an object, like numeric, character or Date |
 | `map()`, `map_lgl()`, `map_int()`, `map_dbl()`, `map_chr()` | purrr | Apply a function to each element, returning a list or a vector of the stated type |
 | `map2()`, `pmap()` | purrr | Apply a function to elements of two, or more, lists taken together |
 | `walk()`, `iwalk()` | purrr | Like `map()`, for side effects like saving files |
 | `list_rbind()` | purrr | Bind a list of data frames into one |
 | `keep()`, `discard()`, `imap()` | purrr | Keep or drop elements, or map with names |
 | `unlist()`, `setdiff()` | base R | Flatten a list into a vector; values in one vector but not another |
+| `subset()` | base R | Keep the rows of a data frame which meet a condition |
 
 : Functions used in this chapter {#tbl-fpfunctions}

@@ -5,6 +5,10 @@ source("_common.R")
 
 # Functions and Operators {#sec-func}
 
+Every audit check we run on data does the same small job again and again. Convert an amount to lakh. Work out the GST on a bill. Find the percentage change in a district's expenditure over last year. Total a column while leaving out the missing values. In R, each such job is done by a *function*. Most of the functions we need are already in R. When one is missing, we can write it ourselves in a few lines, test it once, and use it in every audit.
+
+In this chapter we learn what a function is, how to read its arguments and defaults, and how to write our own. A silent default can change an audit total, so we pay attention to defaults throughout. We end with a few small functions that every auditor will find useful.
+
 What is a function? Mathematically, a function $f$ is a rule which maps an input $x$ to a specific output, denoted $f(x)$. Every input must have an output, and the same input must give the same output every time. So if $x=y$, then $f(x)=f(y)$.
 
 ```{r echo=FALSE, fig.show='hold', fig.align='center', fig.cap="Author's illustration of a function", out.width="99%"}
@@ -19,9 +23,9 @@ R calculates the output as per the definition of the function. If the output is 
 
 Every programming language comes with ready-made functions. In this chapter we will see how to use them, and how to write our own, in @sec-cust. The next chapter lists the most useful built-in ones.
 
-As an example, `sum()` is a built-in function, which adds up all the numbers given to it.
+As an example, `sum()` is a built-in function, which adds up all the numbers given to it. Here it totals the amounts of two batches of bills.
 ```{r}
-sum(1:10, 15:45)
+sum(c(45000, 12500, 9800), c(62000, 18750))
 ```
 
 To see the arguments of a function, we can use the function `args()`, which takes a _function name_ and returns its arguments.
@@ -31,8 +35,8 @@ args(sum)
 
 We see an argument `na.rm`, with the default value `FALSE`. Unless we say otherwise, the function uses this default silently, and a single missing value makes the whole sum missing. If we want missing values left out, we must say `na.rm = TRUE` explicitly.
 ```{r}
-sum(1:10, NA)
-sum(1:10, NA, na.rm = TRUE)
+sum(c(45000, 12500, NA, 9800))
+sum(c(45000, 12500, NA, 9800), na.rm = TRUE)
 ```
 
 
@@ -42,9 +46,9 @@ To see the code of a function, type its name without parentheses in the console.
 sum
 ```
 
-To get further help about any existing function, refer @sec-help.
+For more help on any existing function, see @sec-help.
 
-## Custom Functions {#sec-cust}
+## Custom functions {#sec-cust}
 
 One of R's greatest strengths is that users can write their own functions\index{custom function}. In fact, many of the functions in R are built from other functions. If you find yourself copying the same few lines of code again and again, changing only a value or two, it is time to write a function. The structure of a function looks like this:
 
@@ -54,36 +58,37 @@ myfunctionname <- function(arg1, arg2, ... ){
   return(object)
 }
 ```
-**Note:** Objects created inside a function are local to it. The object returned can be of any type, from a single value to a list. If there is no `return()`, the function returns the value of its last line, which is the usual style in R.
+Objects created inside a function are local to it. The object returned can be of any type, from a single value to a list. If there is no `return()`, the function returns the value of its last line, which is the usual style in R.
 
 Let us take an example. We create a function which takes 3 numbers, and adds three times the first, the second, and twice the third.
 ```{r}
 my_fun1 <- function(first,second,third){
   first*3+second+third*2
 }
-# let's check whether it is working as desired
+# let us check whether it works as desired
 my_fun1(3,1,10)
 ```
 - If the arguments are not named, they are taken in the order in which they are defined.
-- Named arguments can be given in any order. See this
+- Named arguments can be given in any order.
 ```{r}
 my_fun1(second=3, first=1, third=10)
 ```
-- Partial names are also matched. Example
+- Partial names are also matched.
 ```{r}
 my_fun1(sec=3,fir=1,thi=10)
 ```
   This works, but avoid it in code you keep. A partial name may match a different argument if the function is changed later.
 - We can give default values to any argument. The default is used only when no value is given. See this example.
 ```{r}
-# let's create a new function which adds twice the second argument to first argument, which in turn by default is 10
+# a function which adds twice the second argument to the first
+# the first argument is 10 by default
 my_fun2 <- function(first=10, second){
   first+second*2
 }
 my_fun2(second = 10)
 my_fun2(1, 10)
 ```
-- A function may need no argument at all. See this example
+- A function may need no argument at all.
 ```{r}
 my_fun3 <- function(){
   print('Hi')
@@ -100,7 +105,7 @@ The point to note is that any argument which comes *after* `...` must be given b
 sum(1:100, NA, TRUE)
 sum(1:100, NA, na.rm = TRUE)
 ```
-In the first line, `TRUE` was not taken as the value of `na.rm`. It became one more number to add (as `1`), so the result is still `NA`. Only the named `na.rm = TRUE` works.
+In the first line, `TRUE` was not taken as the value of `na.rm`. It became one more number to add, as `1`, so the result is still `NA`. Only the named `na.rm = TRUE` works.
 
 We can use the three dots in our own functions too. Inside the function, `list(...)` collects whatever was passed. See this simple example.
 ```{r}
@@ -113,7 +118,7 @@ my_ellipsis_func(1:10, 11:20, 'a string') # we are passing three arguments
 
 ### Environment issues {-}
 
-- A function works on its own copies of the arguments. Changing them inside the function does not change anything in the global environment\index{global environment}. See this example
+- A function works on its own copies of the arguments. Changing them inside the function does not change anything in the global environment\index{global environment}.
 ```{r}
 x <- 10
 my_fun4 <- function(x){
@@ -132,7 +137,7 @@ my_fun5 <- function(){
 my_fun5()
 y
 ```
-- To create or change an object outside the function deliberately, there is the *super-assignment* operator `<<-`. See this example
+- To create or change an object outside the function deliberately, there is the *super-assignment* operator `<<-`.
 ```{r}
 y <- 5
 my_fun5 <- function(){
@@ -143,14 +148,14 @@ my_fun5()
 y
 ```
   Use `<<-` rarely, if ever. A function which changes things outside itself is hard to follow and to check. It is better for a function to *return* its result, which is then assigned.
-- As already stated, a function can return an object of any type. Here it returns a list.
+- As already stated, a function can return an object of any type. Here it returns a list, with a few summary figures of a set of bill amounts.
 ```{r}
 my_list_fun <- function(x){
   list(sum=sum(x),
        mean = mean(x),
        sd = sd(x))
 }
-my_list_fun(1:10)
+my_list_fun(c(45000, 12500, 9800, 62000, 18750))
 ```
 
 ### Short functions with `\(x)` {-}
@@ -161,9 +166,9 @@ Since R 4.1, a short function can be written with a backslash in place of the wo
 (\(x) x * 2)(21)
 ```
 
-## Functions for audit work
+## Audit use case, a small toolkit of audit functions {#sec-func-audit}
 
-Let us write three small functions which come in handy in audit analysis.
+Let us write three small functions which come in handy in audit analysis. Each is a few lines long, and each is tested on figures whose answer we already know.
 
 **Amounts in lakh.** Reports in India often show amounts in lakh or crore.
 
@@ -175,16 +180,17 @@ in_lakh(c(1250000, 87500, 31415926))
 in_lakh(31415926, digits = 0)
 ```
 
-**Percentage change.** Comparing a figure with the previous year is an everyday task.
+**Percentage change.** Comparing a figure with the previous year is an everyday task. Here are the expenditures of three districts on a scheme, in ₹ lakh, for two years.
 
 ```{r}
 pct_change <- function(old, new, digits = 1) {
   round(100 * (new - old) / old, digits)
 }
-pct_change(old = c(120, 80, 50), new = c(150, 60, 50))
+pct_change(old = c(Alwar = 120, Bharatpur = 80, Churu = 50),
+           new = c(Alwar = 150, Bharatpur = 60, Churu = 50))
 ```
 
-Since R works on whole vectors, the function works on all three pairs at once, without any extra code.
+Since R works on whole vectors, the function works on all three districts at once, without any extra code. Alwar's expenditure rose by a quarter, Bharatpur's fell by a quarter, and Churu's did not change. A large rise or fall is a reason to ask the district for an explanation.
 
 ::: callout-warning
 ## Caution
@@ -237,5 +243,7 @@ A function is only as good as its testing. Check it on values whose answer you k
 | `<<-` | base R | Assign to an object outside the function (use rarely) |
 | `stopifnot()` | base R | Stop with an error if a condition is not met |
 | `source()` | base R | Run the code in an R file, like a file of your functions |
+| `sum()`, `mean()`, `sd()`, `round()` | base R | Total, average, standard deviation and rounding, used inside our functions |
+| `print()` | base R | Print a value |
 
 : Functions used in this chapter {#tbl-funcfunctions}

@@ -5,61 +5,98 @@ source("_common.R")
 
 # Combining Many Similar Files {#sec-merge}
 
-Preparing data for analysis can take more time than the analysis itself, because data rarely comes in the form we need. Audit data, in particular, often comes in pieces. One Excel file with a sheet for each State, one file for each district or each month, or one file for each office. In this chapter we will see how to combine such pieces into one data frame with a few lines of code, and also the reverse, how to split one data frame into many files.
+Audit data often comes in pieces. A State directorate sends one Excel workbook with a sheet for each district. A district sends the returns of its blocks, one file for each block and each quarter. A department sends twelve monthly files of its pay bills. Before any analysis, the pieces must be put together into one table. Done by hand, by copying and pasting sheets, this is slow, and it is easy to miss a sheet, paste one twice, or shift a column. And nobody can check afterwards what was done.
 
-## **Case-1**: Merging multiple excel sheets into one data frame
+There is also an audit question hidden in the pieces themselves. Has every office sent its return? Has any file been sent twice? Does each file agree with the total the office reported? These checks are part of the audit trail, and R can do them as it combines the files.
 
-As an example, let us say that we have the data of several States, each on a different sheet of one Excel file, `DauR1.xlsx`. See the preview in @fig-prevexcel.
+In this chapter we will see how to combine such pieces into one data frame with a few lines of code, keeping a record of where each row came from. We will also see the reverse, how to split one data frame into many files, for example to send each district its own list of exceptions. We end with a complete example, combining the returns of the blocks of a district and reconciling them with the district's statement.
 
-```{r fig-prevexcel, fig.show='hold', echo=FALSE, fig.cap="Preview of example excel file", fig.align='center', out.width="100%"}
-knitr::include_graphics("images/excel.png")
-```
-
-We will use the library `readxl` to read Excel files. It is installed along with `tidyverse`, but is not part of the core tidyverse, so it has to be loaded separately.
+**Prerequisites**
 
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(readxl)
+library(writexl)
+library(janitor)
+```
+
+`readxl` reads Excel files. It is installed along with `tidyverse`, but is not part of the core tidyverse, so it has to be loaded separately. `writexl` writes Excel files, and `janitor` cleans column names (@sec-clean).
+
+## Merging the sheets of one Excel file
+
+The Directorate of Social Welfare of a State has sent the payments of social security pension for 2024-25. It is one Excel workbook, with a sheet for each of four districts. Each sheet has a row for each month and each scheme, with the number of beneficiaries paid and the amount paid in rupees. The code below creates the workbook in a temporary folder.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the pension workbook"
+set.seed(15)
+districts <- c("Amarpur", "Belapur", "Chandpur", "Devipur")
+fy_months <- month.abb[c(4:12, 1:3)]
+rates <- c("Old age" = 1200, "Widow" = 1000)
+
+make_sheet <- function(district) {
+  expand_grid(month = fy_months, scheme = names(rates)) |>
+    mutate(beneficiaries = round(runif(n(), 3500, 9000)),
+           amount_paid   = beneficiaries * rates[scheme])
+}
+pension_sheets <- map(set_names(districts), make_sheet)
+# Planted. Chandpur has not reported January
+pension_sheets$Chandpur <- pension_sheets$Chandpur |> filter(month != "Jan")
+
+pension_file <- file.path(tempdir(), "pension_2024-25.xlsx")
+write_xlsx(pension_sheets, pension_file)
 ```
 
 The following steps are used.
 
-  Step-1: Store the path of the file.
-
-  Step-2: Collect the names of all sheets with `excel_sheets()`.
-
-  Step-3: Name the elements of this vector with the sheet names themselves, using `set_names()`. The names will travel with the data, and later become a column.
-
-  Step-4: Read all the sheets with `purrr::map()`, and combine them into one table with `purrr::list_rbind()`.
+1.  Store the path of the file.
+2.  Collect the names of all sheets with `excel_sheets()`.
+3.  Name the elements of this vector with the sheet names themselves, using `set_names()`. The names will travel with the data, and later become a column.
+4.  Read all the sheets with `purrr::map()`, and combine them into one table with `purrr::list_rbind()`.
 
 ```{r}
-# Step-1
-path <- "Data/DauR1.xlsx"
-# Step-2 and Step-3
-states_data <- excel_sheets(path) |>
+# Step 1
+path <- pension_file
+# Step 2 and Step 3
+pension_data <- excel_sheets(path) |>
   set_names() |>
-# Step-4
+# Step 4
   map(\(sheet) read_excel(path, sheet = sheet)) |>
-  list_rbind(names_to = 'State_name')
+  list_rbind(names_to = "district")
 # print the data
-states_data
+pension_data
 ```
 
-We can see that the data of all the sheets have been merged into one table, and one extra column has been created from the sheet names. The name of that column has been given through the `names_to` argument of `list_rbind()`. If the new column is not required, simply leave out this argument. `set_names()` with a single vector names each element by its own value, so the sheet names become the names of the list.
+The data of all the sheets have been merged into one table, and one extra column has been created from the sheet names. The name of that column has been given through the `names_to` argument of `list_rbind()`. If the new column is not required, simply leave out this argument. `set_names()` with a single vector names each element by its own value, so the sheet names become the names of the list.
+
+Now that the sheets are one table, a quick count shows whether every district has reported every month.
+
+```{r}
+pension_data |>
+  summarise(months = n_distinct(month), rows = n(),
+            amount_crore = round(sum(amount_paid) / 1e7, 2), .by = district)
+```
+
+```{r}
+#| include: false
+short <- pension_data |> summarise(months = n_distinct(month), .by = district) |>
+  filter(months < 12)
+not_reported <- setdiff(fy_months, pension_data$month[pension_data$district == short$district])
+```
+
+`r short$district` has only `r short$months` months. The month missing is `r month.name[match(not_reported, month.abb)]`. Either no pension was paid in `r short$district` that month, or the payments have been left out of the return. The auditor asks the directorate which, before using these figures.
 
 ::: callout-note
 Older code often uses `purrr::map_dfr()`, which reads and binds in one step. It still works, but purrr now recommends `map()` followed by `list_rbind()`, which is clearer about what happens.
 :::
 
-## **Case-2**: Merging multiple files into one data frame
+## Merging many files into one data frame
 
-Often the source data is split into many files, which we have to combine into one data frame. For example, each district sends its monthly expenditure in a separate file. We collect all such files in one folder and follow these steps.
+Often the source data is split into many files, which we have to combine into one data frame. For example, each district treasury sends its monthly salary expenditure in a separate file. We collect all such files in one folder and follow these steps.
 
-Step-1: Get the names of all the files with `list.files()`.
-
-Step-2: Read all the files into a list with `purrr::map()`.
-
-Step-3: Bind them into one data frame with `list_rbind()`.
+1.  Get the names of all the files with `list.files()`.
+2.  Read all the files into a list with `purrr::map()`.
+3.  Bind them into one data frame with `list_rbind()`.
 
 Let us first create a few such files in a temporary folder, to try this out.
 
@@ -77,6 +114,8 @@ for (d in c("Amarpur", "Belapur", "Chandpur")) {
     write_csv(file.path(folder, paste0(d, "_2024.csv")))
 }
 ```
+
+Each file has the salary expenditure of one district for the six months from April to September 2024, in ₹ lakh.
 
 ```{r}
 files <- list.files(folder, pattern = "\\.csv$", full.names = TRUE)
@@ -97,7 +136,7 @@ Let us reconcile the number of rows and totals of each file.
 
 ```{r}
 district_data |>
-  summarise(rows = n(), total = sum(amount), .by = source_file)
+  summarise(rows = n(), total_lakh = sum(amount), .by = source_file)
 ```
 
 ::: callout-tip
@@ -106,46 +145,44 @@ district_data |>
 Always keep a column recording which file each row came from. When a figure looks wrong later, it tells us at once where to look. And reconcile the rows and totals of each file with the covering letter or the summary sent by the office, so that a missing or duplicated file is noticed before the analysis, not after.
 :::
 
-If the files have different column names for the same thing, like `Amount` in one and `amount_rs` in another, clean the names of each file with `janitor::clean_names()` inside the `map()`, and rename them to a common form before binding.
+If the files have different column names for the same thing, like `Amount` in one and `amount` in another, clean the names of each file with `janitor::clean_names()` inside the `map()`, and rename them to a common form before binding. We do this in the audit use case at the end of the chapter.
 
-## **Case-3**: Split and save one data frame into multiple excel/csv files simultaneously
+## Splitting one data frame into many files
 
-Sometimes we need the reverse, for example to send each State or each office its own list of exceptions. Let us use `states_data` created in Case-1, and save the data of each State in a separate csv file. We use the following steps.
+Sometimes we need the reverse, for example to send each district or each office its own data, or its own list of exceptions. Let us use `pension_data` created above, and save the data of each district in a separate csv file. We use the following steps.
 
-Step-1: Split the data frame into a list, with a separate data frame for each State, using base R's `split()`. The elements of the list are named by the State.
-
-Step-2: Write each element to a file named after its State, using `purrr::iwalk()`. `iwalk()` passes each element *and its name* to the function. It is used when we want the side effect, here writing a file, rather than a result.
+1.  Split the data frame into a list, with a separate data frame for each district, using base R's `split()`. The elements of the list are named by the district.
+2.  Write each element to a file named after its district, using `purrr::iwalk()`. `iwalk()` passes each element *and its name* to the function. It is used when we want the side effect, here writing a file, rather than a result.
 
 ```{r}
-states_data |>
-  split(states_data$State_name) |>
-  iwalk(\(df, state) write_csv(df, paste0("Data/", state, ".csv")))
+out_folder <- file.path(tempdir(), "by_district")
+dir.create(out_folder, showWarnings = FALSE)
+
+pension_data |>
+  split(pension_data$district) |>
+  iwalk(\(df, district) write_csv(df, file.path(out_folder, paste0(district, ".csv"))))
 ```
 
-We can check that 3 new files, named after the States, have been created in the `Data` folder.
+We can check that four new files, named after the districts, have been created in the folder.
 
 ```{r}
-list.files("Data", pattern = "^(Andhra|Assam|Bihar).*\\.csv$")
+list.files(out_folder)
 ```
 
 ::: callout-warning
 ## Caution
 
-Keep each piece of data together with its name, as `split()` and `iwalk()` do. A common mistake is to make a vector of file names with `unique()`, and split the data with `group_split()`. `unique()` keeps the order in which the names first appear, while `group_split()` sorts the groups alphabetically. If the two orders differ, each file gets another State's data, without any error.
+Keep each piece of data together with its name, as `split()` and `iwalk()` do. A common mistake is to make a vector of file names with `unique()`, and split the data with `group_split()`. `unique()` keeps the order in which the names first appear, while `group_split()` sorts the groups alphabetically. If the two orders differ, each file gets another district's data, without any error.
 :::
 
-## **Case-4**: Splitting one data into multiple files having multiple sheets
+## Splitting one data frame into files with many sheets
 
-Sometimes we need to split the data into several files, and also each file into several sheets. For example, data of States and districts may have to be split into one file for each State, with a separate sheet for each district.
+Sometimes we need to split the data into several files, and also each file into several sheets. For example, the pension data may have to be split into one file for each district, with a separate sheet for each scheme.
 
 The library `writexl` writes a named list of data frames into one Excel file, one sheet for each. So we can write a small function which does the job.
 
 ```{r}
-#| message: false
-#| warning: false
-library(writexl)
-
-book_and_sheets <- function(df, x, y){
+book_and_sheets <- function(df, x, y, folder){
   df_by_x <- df |>
     split(df[[x]])
 
@@ -153,7 +190,7 @@ book_and_sheets <- function(df, x, y){
     a |>
       split(a[[y]]) |>
       writexl::write_xlsx(
-        path = paste0("Data/data_by_", b, "_", x, ".xlsx")
+        path = file.path(folder, paste0("data_by_", b, "_", x, ".xlsx"))
       )
   }
 
@@ -161,28 +198,145 @@ book_and_sheets <- function(df, x, y){
 }
 ```
 
-The function `book_and_sheets()` writes a data frame `df` into separate files based on the column `x`, and divides each file into sheets based on the column `y`. Note that `x` and `y` are given as character strings, the names of the columns.
+The function `book_and_sheets()` writes a data frame `df` into separate files based on the column `x`, and divides each file into sheets based on the column `y`. The files are saved in `folder`. Note that `x` and `y` are given as character strings, the names of the columns.
 
-Example - splitting `mtcars` into files based on `cyl`, and sheets based on `gear`.
+Let us split `pension_data` into files based on `district`, and sheets based on `scheme`.
 
 ```{r}
-book_and_sheets(mtcars, 'cyl', 'gear')
-list.files("Data", pattern = "^data_by_.*_cyl\\.xlsx$")
+book_and_sheets(pension_data, "district", "scheme", out_folder)
+list.files(out_folder, pattern = "^data_by_.*\\.xlsx$")
+excel_sheets(file.path(out_folder, "data_by_Amarpur_district.xlsx"))
 ```
 
-Three Excel files have been created in the folder `Data`, one for each number of cylinders, and each has a sheet for each number of gears.
+Four Excel files have been created, one for each district, and each has a sheet for each scheme.
+
+## Audit use case, combining the returns of many blocks {#sec-merge-audit}
+
+A district runs a rural employment scheme in six blocks. Each block sends a quarterly return of the wages paid, one row for each muster roll, as a csv file. The district's own statement lists, for each block, the number of muster rolls and the wages paid in the first quarter of 2024-25. We have received a folder of block files, and the district statement. Our task is to combine the files and check them against the statement.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the block returns and the district statement"
+set.seed(31)
+blocks <- c("Lalganj", "Madhopur", "Nayagaon", "Rampur", "Kherwa", "Sonpur")
+
+make_return <- function(block) {
+  k <- sample(18:30, 1)
+  tibble(muster_roll_no = sprintf("MR/%s/%03d", toupper(substr(block, 1, 3)), 1:k),
+         work_id        = sample(sprintf("W-%02d", 1:8), k, replace = TRUE),
+         workers        = sample(8:25, k, replace = TRUE),
+         days           = sample(6:14, k, replace = TRUE),
+         wage_rate      = 255) |>
+    mutate(amount = workers * days * wage_rate)
+}
+returns <- map(set_names(blocks), make_return)
+
+# The district statement, made from the complete returns
+statement <- tibble(block  = blocks,
+                    rolls  = map_int(returns, nrow),
+                    amount = map_dbl(returns, \(d) sum(d$amount)))
+
+# Planted. Madhopur's file has left out its last muster roll
+returns$Madhopur <- head(returns$Madhopur, -1)
+# Planted. Rampur's file uses its own column headings
+names(returns$Rampur) <- c("Muster Roll No.", "Work ID", "Workers", "Days",
+                           "Wage Rate", "Amount")
+
+block_folder <- file.path(tempdir(), "block_returns")
+dir.create(block_folder, showWarnings = FALSE)
+# Planted. Kherwa's file has not been received
+for (b in setdiff(blocks, "Kherwa")) {
+  write_csv(returns[[b]], file.path(block_folder, paste0(b, "_Q1_2024-25.csv")))
+}
+# Planted. Sonpur's file has been saved twice, under two names
+invisible(file.copy(file.path(block_folder, "Sonpur_Q1_2024-25.csv"),
+          file.path(block_folder, "Sonpur_Q1_2024-25 (2).csv")))
+```
+
+```{r}
+statement
+```
+
+**Step 1, check which files have come.** We list the files, and take the block name from the start of each file name.
+
+```{r}
+files <- list.files(block_folder, pattern = "\\.csv$", full.names = TRUE)
+basename(files)
+
+received <- str_remove(basename(files), "_Q1.*$")
+setdiff(statement$block, received)   # blocks with no file
+received[duplicated(received)]       # blocks with more than one file
+```
+
+There are `r length(files)` files for `r nrow(statement)` blocks. `r setdiff(statement$block, received)` has sent no file, and `r received[duplicated(received)]` has two.
+
+**Step 2, are the two files the same?** Two files with the same name may hold different data, like a first and a corrected return. We compare their contents with a *hash*, a short code computed from every byte of a file (@sec-file). Files with the same hash are identical.
+
+```{r}
+hashes <- tools::md5sum(files)
+tibble(file = basename(files), hash = unname(hashes)) |>
+  filter(hash %in% hash[duplicated(hash)])
+```
+
+The two Sonpur files are identical, so we keep only one of them. Had they differed, we would have had to ask the district which one is final.
+
+```{r}
+files <- files[!duplicated(hashes)]
+```
+
+**Step 3, read and bind, cleaning the names.** Let us first see what happens if we bind the files as they are.
+
+```{r}
+files |>
+  set_names(str_remove(basename(files), "_Q1.*$")) |>
+  map(\(f) read_csv(f, col_types = cols(.default = col_character()))) |>
+  list_rbind(names_to = "block") |>
+  names()
+```
+
+There are now twelve columns of data, besides `block`, instead of six. Rampur's file has its own headings, like `Muster Roll No.` and `Amount`, so `list_rbind()` has kept them as separate columns, with `NA` for every other block. The amounts of Rampur would be lost from any total of `amount`. Cleaning the names of each file inside `map()` fixes this.
+
+```{r}
+block_data <- files |>
+  set_names(str_remove(basename(files), "_Q1.*$")) |>
+  map(\(f) read_csv(f, col_types = cols(.default = col_character())) |> clean_names()) |>
+  list_rbind(names_to = "block") |>
+  mutate(amount = parse_number(amount))
+
+glimpse(block_data)
+```
+
+**Step 4, reconcile each block with the statement.** We count the muster rolls and add the wages of each block, and set them beside the statement. `left_join()` matches the rows of the two tables by block. We learn it properly in @sec-joins.
+
+```{r}
+reconciliation <- statement |>
+  left_join(block_data |> summarise(file_rolls = n(), file_amount = sum(amount), .by = block),
+            by = "block") |>
+  mutate(difference = amount - file_amount)
+reconciliation
+```
+
+```{r}
+#| include: false
+mismatch <- reconciliation |> filter(!is.na(file_amount), difference != 0)
+absent   <- reconciliation |> filter(is.na(file_amount))
+```
+
+Four blocks agree exactly. `r mismatch$block`'s file has `r mismatch$file_rolls` muster rolls against `r mismatch$rolls` in the statement, and is short by ₹`r format(mismatch$difference, big.mark = ",")`. `r absent$block` has no file at all, so wages of ₹`r round(absent$amount / 1e5, 2)` lakh in the statement have no supporting return.
+
+What would the auditor do next? Ask the district for `r absent$block`'s return, and for the muster roll missing from `r mismatch$block`'s file. Note that Sonpur's return was received twice, and that the copies were identical. Keep the reconciliation table in the working papers. Only when every block agrees should the combined data be used for the analysis of wages.
 
 ## A suggested workflow
 
-When data arrives in pieces, like one sheet for each State or one file for each district, an auditor may follow these steps.
+When data arrives in pieces, like one sheet for each district or one file for each block, an auditor may follow these steps.
 
 1.  **Collect the pieces in one place.** Keep all the files in one folder, and list them with `list.files()` using `pattern` and `full.names = TRUE`. For one Excel file, list its sheets with `excel_sheets()`.
-2.  **Check that nothing is missing.** Compare the list of files or sheets with the covering letter, so that a missing or extra file is noticed at once.
+2.  **Check that nothing is missing or repeated.** Compare the list of files or sheets with the covering letter, using `setdiff()` and `duplicated()`. Compare repeated files with `tools::md5sum()` to see whether they are identical.
 3.  **Name each piece.** Use `set_names()` so that the file or sheet name travels with the data.
-4.  **Read every piece the same way.** Use `map()` and read all columns as text, so that small differences in type do not stop the binding. Clean and rename the columns if the files use different names.
+4.  **Read every piece the same way.** Use `map()` and read all columns as text, so that small differences in type do not stop the binding. Clean the names with `clean_names()` if the files use different headings.
 5.  **Bind with a source column.** Use `list_rbind(names_to = )` so that each row records the file or sheet it came from.
-6.  **Reconcile each piece.** Convert the amounts, then compare the rows and totals of each file with the summary sent by the office.
-7.  **Split the results back when needed.** Use `split()` and `iwalk()` to write one file for each State or office, or `write_xlsx()` for one sheet each.
+6.  **Reconcile each piece.** Convert the amounts, then compare the rows and totals of each file with the statement sent by the office.
+7.  **Split the results back when needed.** Use `split()` and `iwalk()` to write one file for each district or office, or `write_xlsx()` for one sheet each.
 
 ::: callout-important
 ## Remember
@@ -196,10 +350,17 @@ Always keep a column showing which file each row came from. Reconcile the rows a
 |-----------------------|----------------|--------------------------------|
 | `excel_sheets()`, `read_excel()` | readxl | List and read the sheets of an Excel file |
 | `list.files()`, `basename()` | base R | List files in a folder, and take the file name from a path |
+| `tempdir()`, `file.path()`, `dir.create()`, `file.copy()` | base R | Make and use a temporary folder, and copy a file |
+| `setdiff()`, `duplicated()` | base R | Items missing from a list, and items repeated in it |
+| `tools::md5sum()` | tools (base R) | A hash of each file, to find identical files |
 | `set_names()` | purrr (rlang) | Name the elements of a vector or list |
 | `map()`, `list_rbind(names_to = )` | purrr | Read each piece, and bind them into one data frame with a source column |
 | `split()` | base R | Split a data frame into a named list, by a column |
 | `iwalk()` | purrr | Do something, like writing a file, with each element and its name |
+| `read_csv()`, `parse_number()` | readr | Read a csv file, and take numbers from text |
+| `clean_names()` | janitor | Bring the column names of each file to one form |
+| `summarise()`, `n_distinct()`, `left_join()`, `glimpse()` | dplyr | Count and total each piece, match it with the statement, and look at the data |
+| `str_remove()` | stringr | Take the block name out of a file name |
 | `write_csv()`, `write_xlsx()` | readr, writexl | Write data frames to csv or Excel files |
 
 : Functions used in this chapter {#tbl-mergefunctions}

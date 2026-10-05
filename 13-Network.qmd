@@ -6,11 +6,13 @@ source("_common.R")
 
 # Networks and Graph Theory {#sec-graph}
 
-Network analysis has become a powerful tool in audit analytics. It lets auditors uncover relationships and patterns hidden in large datasets. Which beneficiaries share a bank account? Which firms always bid together? Does money go round in a circle between a few companies? These are questions about *connections*, and network analysis is built to answer them. Using R, auditors can construct, visualise and analyse such networks with ease, detect anomalies, and identify the key players.
+Suppose we audit the works contracts of a Public Works Division. Sixty contractors are registered with it. On paper they are sixty separate firms, and every tender gets three or four bids. But some of these firms may share a partner, an office address, a mobile number or a bank account. If such linked firms bid against each other, the competition is only on paper. A table of sixty firms will not show this. A picture of who is linked to whom shows it at once.
 
-In this chapter we will learn the concepts of graph theory and the tools to work with networks in R. In the next chapter (@sec-netaudit), we will apply them to real audit problems. So let us dive in.
+Many audit questions are like this. Which beneficiaries of a scheme share one bank account? Which firms always bid together? Does money go round in a circle between a few companies? Is a vendor linked to the clerk who passes its bills? These are questions about *connections*. Network analysis is built to answer them. With R, we can build such networks from ordinary audit data, draw them, find the key players, and find the hidden groups.
 
-## An introduction to Graph theory
+In this chapter we learn the ideas of graph theory and the tools to work with networks in R. We start with small examples to learn the words, like vertex, edge, directed and bipartite. We then learn to create graphs, add details to them, and draw them. Finally we build a network of linked contractors of an imaginary Division. We find its key firms and its hidden groups, and we check the Division's tenders for bids from linked firms. In @sec-netaudit, we apply the same tools to more audit problems.
+
+## An introduction to graph theory
 
 Network analysis applies the concepts of *graph theory*, a branch of mathematics, to understand complex systems like social networks, transport networks and financial transactions. Graph theory studies the properties of graphs, such as paths, cycles and connectivity.
 
@@ -18,19 +20,22 @@ Network analysis applies the concepts of *graph theory*, a branch of mathematics
 
 A graph is a mathematical structure consisting of a set of *vertices* (also called nodes or actors) and a set of *edges* (also called connections or links) between these vertices. Mathematically, a graph $G = (V, E)$ consists of a set $V$ of vertices and a set $E$ of edges, as illustrated in @fig-gra1. A vertex may represent a real-world object, like a person, a computer, a firm or a bank account. An edge represents the *relationship* between the two vertices it connects, like friendship between two persons, a cable between two computers, or a payment from one firm to another.
 
-```{r fig-gra1, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An Example Graph", out.width="100%"}
+```{r fig-gra1, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An example graph", out.width="100%"}
 library(igraph)
 library(igraphdata)
 data("kite")
 kite <- upgrade_graph(kite)
+set.seed(123)
 plot(kite, vertex.size = 25)
 ```
 
+In audit terms, think of the ten vertices of @fig-gra1 as ten firms, and each edge as a detail two firms share, like a partner or an address.
+
 ### Types of graph {.unnumbered}
 
-The graph in @fig-gra1 is an **undirected graph**, in which the edges have no direction. A cable connecting two computers is an example. If the edges have a direction, from one vertex to another, the graph is called a **directed graph**. For example, on X (formerly Twitter) a user may follow another user without being followed back. A payment from one firm to another is also directed. See @fig-gra2.
+The graph in @fig-gra1 is an **undirected graph**, in which the edges have no direction. A shared address is an example. If firm A shares an address with firm B, then B shares it with A. If the edges have a direction, from one vertex to another, the graph is called a **directed graph**. For example, on X (formerly Twitter) a user may follow another user without being followed back. A payment from one firm to another is also directed. See @fig-gra2.
 
-```{r fig-gra2, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An Example Directed Graph", out.width="100%", out.height="33%"}
+```{r fig-gra2, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="An example directed graph", out.width="100%", out.height="33%"}
 library(tidyverse)
 set.seed(123)
 igraph::as_data_frame(kite) %>%
@@ -41,7 +46,7 @@ igraph::as_data_frame(kite) %>%
 
 Sometimes an edge connects a vertex with itself. Such an edge is called a **self-loop**. Graphs which allow self-loops are sometimes called **pseudographs**. For a real-world example, think of transactions between firms. A firm usually transacts with other firms, but it may also transfer money between two of its own accounts. In @fig-gra3 (left), vertex `E` is connected with itself.
 
-Further, there may be more than one edge connecting the same pair of vertices (in the same direction). These are called **multi-edges**. In @fig-gra3 (right) there are two edges from `B` to `E`. In the real world, think of flights by different airlines between the same pair of airports, or many invoices from the same seller to the same buyer.
+Further, there may be more than one edge connecting the same pair of vertices (in the same direction). These are called **multi-edges**. In @fig-gra3 (right) there are two edges from `B` to `E`. In audit data, multi-edges are common. One seller raises many invoices on the same buyer, and one Division makes many payments to the same contractor.
 
 ::: {#fig-gra3}
 
@@ -59,7 +64,7 @@ igraph::as_data_frame(kite) %>%
   plot(vertex.size = 45)
 ```
 
-Examples of Self Edge and Multi Edge
+Examples of a self-loop (left) and a multi-edge (right)
 :::
 
 **Complete graphs** are graphs in which every pair of vertices is connected by an edge. Examples are shown in @fig-gra4. Complete graphs are rare in the real world. But a few vertices of a bigger graph may all be connected with each other. Such a group, which is a complete graph in itself, is called a **clique**. For example, the vertices `B, D, E and G` in @fig-gra1 form a clique. Every one of them is connected with the other three. In audit, a clique of firms which all trade with each other, or of bidders who all bid together, deserves attention.
@@ -67,21 +72,22 @@ Examples of Self Edge and Multi Edge
 ::: {#fig-gra4}
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', out.width="49%", out.height="31%"}
+set.seed(123)
 plot(make_full_graph(4), vertex.size = 45)
 plot(make_full_graph(6), vertex.size = 45)
 ```
 
-Examples of Complete Graphs
+Examples of complete graphs
 :::
 
-Let us learn about two more types of graph. The first is the **bipartite graph**. Its vertices are divided into two separate sets, and edges connect only vertices of *different* sets, never two vertices of the same set. The graph in @fig-gra5 (left) is bipartite. Think of officials of two departments, where an edge shows correspondence between two officials of different departments. In audit, bipartite graphs are very common. Beneficiaries and their bank accounts, or bidders and tenders, form two sets with edges only between the sets. The idea can be extended to *k-partite* graphs, with `k` such sets.
+Let us learn about two more types of graph. The first is the **bipartite graph**. Its vertices are divided into two separate sets, and edges connect only vertices of *different* sets, never two vertices of the same set. The graph in @fig-gra5 (left) is bipartite. Think of four firms (A1 to A4) and five tenders (B1 to B5). An edge shows that a firm bid in a tender. A firm never "bids" in another firm, and a tender never bids in a tender. In audit, bipartite graphs are very common. Beneficiaries and their bank accounts, or employees and the bills they passed, also form two sets with edges only between the sets. The idea can be extended to *k-partite* graphs, with `k` such sets.
 
-The second is the **tree**, which represents a hierarchy. A graph is a tree if there is exactly one path between any pair of vertices (ignoring direction). The bipartite graph in @fig-gra5 (left) is also a tree, since it meets this condition. In @fig-gra5 (right) the same graph has been redrawn as a tree.
+The second is the **tree**, which represents a hierarchy. The offices of a department form a tree, with the head office at the top, then the circles, then the divisions. A graph is a tree if there is exactly one path between any pair of vertices (ignoring direction). The bipartite graph in @fig-gra5 (left) is also a tree, since it meets this condition. In @fig-gra5 (right) the same graph has been redrawn as a tree.
 
 ::: {#fig-gra5}
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', out.width="49%", out.height="40%"}
-# Officials of department A (A1 to A4) and department B (B1 to B5)
+# Firms (A1 to A4) and the tenders they bid in (B1 to B5)
 g <- graph_from_literal(A1-B1, A1-B2, A2-B2, A2-B3, A3-B3, A3-B4, A4-B4, A4-B5)
 V(g)$type <- startsWith(V(g)$name, "B")
 
@@ -104,14 +110,16 @@ plot(g,
 )
 ```
 
-Bipartite and Tree Graph example
+A bipartite graph (left) and a tree (right)
 :::
 
-### Vertex and Edge attributes
+### Vertex and edge attributes
 
-Recall that a graph consists of two sets $(V, E)$, where $V$ is a set of vertices and $E$ is a set of edges. In their simplest form, these sets are just lists. But both can carry additional *attributes*. For example, if a graph consists of airports and flights between them, each airport in $V$ could have attributes like (i) its name, (ii) whether it is domestic or international, (iii) its geographical coordinates, and (iv) the State in which it is located. Similarly, each edge in $E$ could have attributes like (i) the number of flights between the two airports, (ii) the airlines operating them, and (iii) the aerial distance. An example may be seen in @fig-gra6. In audit data, typical edge attributes are the amount and date of a transaction.
+Recall that a graph consists of two sets $(V, E)$, where $V$ is a set of vertices and $E$ is a set of edges. In their simplest form, these sets are just lists. But both can carry additional *attributes*.
 
-```{r fig-gra6, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Examples of Vertex and Edge properties", out.width="98%", out.height="32%"}
+Let us take an example from the audit of travelling allowance (TA). Officers of a department travel between four cities on tour, and claim TA for the distance travelled. An auditor may keep the routes as a graph. Each city is a vertex, with attributes like (i) its name, (ii) its airport, and (iii) its country. Each route is an edge, with attributes like (i) the airlines operating it, and (ii) the distance in kilometres. A claim for more than the distance of the route can then be spotted. The graph is shown in @fig-gra6. In other audit data, typical edge attributes are the amount and the date of a payment.
+
+```{r fig-gra6, echo=FALSE, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Vertex and edge attributes in a graph of tour routes", out.width="98%", out.height="32%"}
 library(ggraph)
 airtrans <- data.frame(
   from = c("A", "A", "A", "B", "C"),
@@ -124,14 +132,15 @@ V(airtransgraph)$country <- rep("India", 4)
 E(airtransgraph)$dist <- c(1750, 1150, 1200, 850, 120)
 E(airtransgraph)$airline <- c(rep("Air India", 3), "IndiGo", "Akasa Air")
 
+set.seed(123)
 ggraph(airtransgraph, layout = 'kk') +
-  geom_edge_fan(aes(label = paste0("Operating Airlines:", airline, ", Distance:", dist, " Kms")),
+  geom_edge_fan(aes(label = paste0("Airline: ", airline, ", Distance: ", dist, " km")),
                 angle_calc = "along",
                 label_dodge = unit(2.5, 'mm'),
                 label_size = 4
   ) +
   geom_node_point(size = 20, color = "#D4E7C5") +
-  geom_node_text(aes(label = paste0(name, " \n(Airport:", loc, ")\n", country)), size = 3) +
+  geom_node_text(aes(label = paste0(name, " \n(Airport: ", loc, ")\n", country)), size = 3) +
   scale_x_continuous(expand = expansion(mult = 0.1)) +
   theme_void()
 ```
@@ -160,7 +169,7 @@ Version 2 of `igraph` renamed many functions to a consistent `snake_case` style.
 
 Let us now learn how to create graph objects in R. Graphs can be created in many ways. We will learn three methods, which will serve our purpose most of the time.
 
-### Creating a graph from data frame
+### Creating a graph from a data frame
 
 In data analysis, data frames are our primary tool. So the most common and practical way to create a graph is from a `data.frame`. The data frame should have at least two columns, where each row is one edge. The first column is taken as the `'from'` vertex and the second as the `'to'` vertex, whatever their column names. We use the function `graph_from_data_frame()` from `igraph`. Its syntax is
 
@@ -172,17 +181,17 @@ graph_from_data_frame(
 )
 ```
 
-Example-1: Let us construct a graph from a data frame containing four edges.
+Let us construct a graph from a data frame of four edges. Think of the numbers as codes of five bank accounts. Each row is a transfer from one account to another.
 
 ```{r gra7}
-# Example data frame of edges
+# Example data frame of edges, one row per transfer
 df <- data.frame(
   from = c(1, 1, 3, 3),
   to = c(2, 3, 5, 4)
 )
 # Creating graph object
 gr1 <- graph_from_data_frame(df)
-# Let's print it
+# Let us print it
 gr1
 ```
 
@@ -205,12 +214,12 @@ All four edges of our `df` are in `gr1`. Notice that the vertex names are charac
 In audit, vertices are often account numbers, PANs or vendor codes. Read such columns as text, not numbers. If an account number like `00123` is read as a number, it becomes `123`. It may then fail to match the same account in another table, or two different accounts may end up as one vertex.
 :::
 
-The argument `directed` is `TRUE` by default, so the graph is directed, as confirmed by the first letter `D`. Let us create an undirected graph.
+The argument `directed` is `TRUE` by default, so the graph is directed, as confirmed by the first letter `D`. For transfers, this is right, because money goes from one account to the other. But if we only want to know which accounts have dealt with each other, the direction does not matter. Let us create an undirected graph.
 
 ```{r gra8}
 # Creating graph object
 gr2 <- graph_from_data_frame(df, directed = FALSE)
-# Let's print it
+# Let us print it
 gr2
 ```
 
@@ -222,24 +231,24 @@ as_undirected(gr1)
 
 Now what about the last argument, `vertices`? In most cases, the edge data is enough. But a graph may contain *isolates*, that is, vertices not connected to any edge. These do not appear in the edge data, so to include them we use the `vertices` argument. Its first column must contain the vertex IDs used in the edge data. Any other columns become vertex attributes. Similarly, any columns of the edge data frame after the first two become edge attributes.
 
-Example-2: Let us add an isolated vertex `"6"` to our graph, along with a `label` for each vertex.
+Let us add a sixth account, `"6"`, which made no transfer during the period. It is an isolated vertex. Let us also add the name of each account holder as a `label`.
 
 ```{r gra10}
 df_v <- data.frame(
   id = c(1, 2, 3, 4, 5, 6),
-  label = c("Ram", "Shyam", "Alex", "Bob", "Charlie", "Kumar")
+  label = c("Ramesh", "Suresh", "Anil", "Kavita", "Bimla", "Mohan")
 )
 # Creating graph object
 gr3 <- graph_from_data_frame(df, directed = FALSE, vertices = df_v)
-# Let's print it
+# Let us print it
 gr3
 ```
 
-The number of vertices is now 6, though there are still 4 edges. The vertex attribute `label` has also been added, shown as `label (v/c)`.
+The number of vertices is now 6, though there are still 4 edges. The vertex attribute `label` has also been added, shown as `label (v/c)`. In audit, isolated vertices matter. A contractor who shares nothing with anyone is still a contractor, and must stay in the count.
 
 Readers may try adding more columns to the edge data frame, like an amount or a date, and see how they become edge attributes.
 
-### Creating a graph from Edge list
+### Creating a graph from an edge list
 
 Creating a graph from an edge list is nearly the same as creating it from a data frame. The differences are that the input must be a two column *matrix*, character or numeric, and that there is no `vertices` argument. The syntax is
 
@@ -247,13 +256,15 @@ Creating a graph from an edge list is nearly the same as creating it from a data
 graph_from_edgelist(el, directed = TRUE)
 ```
 
+Here each edge joins two claimants of a scheme who stood as witness for each other.
+
 ```{r gra11}
 edges <- data.frame(
-  origin = c("Ram", "Ram", "Alex", "Alex"),
-  dest = c("Shyam", "Alex", "Charlie", "Bob")
+  origin = c("Ramesh", "Ramesh", "Anil", "Anil"),
+  dest = c("Suresh", "Anil", "Kavita", "Bimla")
 )
 edges <- as.matrix(edges)
-# Now let's create a graph
+# Now let us create a graph
 gr4 <- graph_from_edgelist(edges, directed = FALSE)
 # And print it
 gr4
@@ -261,38 +272,38 @@ gr4
 
 We have created an undirected graph with `5` vertices and `4` edges.
 
-### Creating a graph from adjacency matrix
+### Creating a graph from an adjacency matrix
 
 An adjacency matrix is a square $n \times n$ matrix, where both the rows and the columns stand for the $n$ vertices. The $(i, j)$-th entry of this matrix means
 
 *   In a graph without weights, `1` means there is an edge from vertex $v_{i}$ to $v_j$, and `0` means there is none.
 *   In a weighted graph, the entry is the weight of the edge from vertex $v_{i}$ to $v_j$, and `0` means there is no edge.
 
-Example: Let us create the graph of @fig-gra6 through its adjacency matrix. First, without weights.
+Let us create the graph of tour routes in @fig-gra6 through its adjacency matrix. First, without weights.
 
 ```{r gra12}
-# Let's create the matrix
+# Let us create the matrix
 adj_mat <- structure(c(0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0), dim = c(4L,
 4L), dimnames = list(c("DEL", "BNG", "BOM", "PNQ"), c("DEL",
 "BNG", "BOM", "PNQ")))
 adj_mat
-# Let's create the graph
+# Let us create the graph
 gr5 <- graph_from_adjacency_matrix(adj_mat)
-# Let's print it
+# Let us print it
 gr5
 ```
 
-A directed graph (the default) has been created, with 10 edges. Since our matrix is symmetric, each route appears twice, once in each direction, like `DEL->BNG` and `BNG->DEL`. For a symmetric matrix, we would usually set `mode = "undirected"` to get one edge per route. Now let us create a weighted graph of the same data, where the weights are the distances between the airports.
+A directed graph (the default) has been created, with 10 edges. Since our matrix is symmetric, each route appears twice, once in each direction, like `DEL->BNG` and `BNG->DEL`. For a symmetric matrix, we would usually set `mode = "undirected"` to get one edge per route. Now let us create a weighted graph of the same data, where the weights are the distances between the cities, in kilometres.
 
 ```{r gra13}
-# Let's create the matrix
+# Let us create the matrix
 adj_mat2 <- structure(c(0, 1750, 1150, 1200, 1750, 0, 850, 0, 1150, 850,
 0, 120, 1200, 0, 120, 0), dim = c(4L, 4L), dimnames = list(c("DEL",
 "BNG", "BOM", "PNQ"), c("DEL", "BNG", "BOM", "PNQ")))
 adj_mat2
-# Let's create the graph
+# Let us create the graph
 gr6 <- graph_from_adjacency_matrix(adj_mat2, weighted = TRUE)
-# Let's print it
+# Let us print it
 gr6
 ```
 
@@ -302,7 +313,7 @@ This time an edge attribute named `weight`, of `numeric` type, has been added to
 
 Once a graph has been created, getting the data back as a `data.frame` or an adjacency `matrix` is easy. We use the `igraph` functions `as_data_frame()` and `as_adjacency_matrix()`.
 
-1. `as_data_frame()`: Since older versions of the package `tibble` also had a function of the same name, it is safest to write `igraph::as_data_frame()`. It takes a graph and returns a `data.frame`. Let us get the data back from `gr6`, which we created from an adjacency matrix.
+1. `as_data_frame()`. Since older versions of the package `tibble` also had a function of the same name, it is safest to write `igraph::as_data_frame()`. It takes a graph and returns a `data.frame`. Let us get the data back from `gr6`, which we created from an adjacency matrix.
 
 ```{r gra14}
 igraph::as_data_frame(gr6)
@@ -328,7 +339,7 @@ This function has another argument, `what`. It can be `"edges"` (the default), `
 igraph::as_data_frame(gr7, what = "vertices")
 ```
 
-2. `as_adjacency_matrix()`: This function takes a graph and returns its adjacency `matrix`.
+2. `as_adjacency_matrix()`. This function takes a graph and returns its adjacency `matrix`.
 
 ```{r gra18}
 as_adjacency_matrix(gr7)
@@ -340,7 +351,7 @@ The adjacency matrix has been returned, but without weights. The dots are zeros.
 as_adjacency_matrix(gr7, attr = "weight")
 ```
 
-## Adding vertex and/or edge attributes to an existing `igraph` object
+## Adding attributes to an existing graph
 
 We have seen how vertex and edge attributes can be included while creating a graph. But often we need to add attributes to a graph which already exists. Let us first see how to get the existing vertices, edges and their attributes.
 
@@ -368,12 +379,12 @@ E(gr7)$weight
 4. Adding a vertex or edge attribute, also using `$`
 
 ```{r gra23}
-# adding vertex attribute say "airport_name"
+# Adding the vertex attribute "airport_name"
 V(gr7)$airport_name <- c("New Delhi", "Bengaluru", "Mumbai", "Pune")
 # A single value will be repeated for all vertices
 V(gr7)$country <- "India"
 
-## Let's check it
+# Let us check it
 igraph::as_data_frame(gr7, what = "vertices")
 ```
 
@@ -389,9 +400,11 @@ E(gr7)$route <- case_when(
   TRUE ~ "Long"
 )
 
-## Let's check it
+# Let us check it
 igraph::as_data_frame(gr7)
 ```
+
+With the distance stored on each route, a TA claim can be joined to its route by the two cities. Any claim for more kilometres than the `weight` of the route then stands out.
 
 ## Visualising graphs
 
@@ -413,12 +426,12 @@ igraph::as_data_frame(kite) %>%
 
 ```
 
-Two layouts of a same graph
+Two layouts of the same graph
 :::
 
 Many packages in R can plot graphs. We will learn two of them here, (i) `igraph` itself, which draws static plots, and (ii) `visNetwork`, which draws interactive plots. We used `ggraph` above for @fig-gra6. Visualising networks on a map is discussed in the geospatial chapters.
 
-## Plotting using `plot()` in `igraph`
+## Plotting with `plot()` in igraph
 
 Plotting a graph in R is very simple. We just use `plot()`, which calls the `plot.igraph()` method with default values for all its other arguments. As we have seen, the layout is important, and we can set it with the argument `layout`.
 
@@ -438,12 +451,12 @@ set.seed(54321)
 plot(my_gr, vertex.size = 25, layout = layout_randomly)
 ```
 
-Two Other layouts of a same graph
+Two random layouts of the same graph
 :::
 
 Many layouts involve randomness, so the same layout may place the vertices differently every time. By setting a random number seed with `set.seed()`, we can fix the layout and reproduce it.
 
-Let us now load a famous network, the *Zachary karate club*, and learn to plot networks effectively. Wikipedia describes it thus. *A social network of a karate club was studied by Wayne W. Zachary for a period of three years from 1970 to 1972. The network captures 34 members of a karate club, documenting links between pairs of members who interacted outside the club. During the study a conflict arose between the administrator "John A" and instructor "Mr. Hi" (pseudonyms), which led to the split of the club into two. Half of the members formed a new club around Mr. Hi; members from the other part found a new instructor or gave up karate. Based on collected data Zachary correctly assigned all but one member of the club to the groups they actually joined after the split.*
+To learn the plotting options, let us use a small and famous network, the *Zachary karate club*. It is used in almost every book on networks, so it is worth knowing. Wayne W. Zachary studied a karate club of 34 members from 1970 to 1972. He recorded which pairs of members met outside the club. During the study, the administrator ("John A") and the instructor ("Mr Hi") fell out, and the club split into two. Each member joined one side or the other. Later in this chapter we will use the same tools on audit data, a network of contractors.
 
 This graph is available in the package `igraphdata`, from which we can load it.
 
@@ -454,6 +467,7 @@ karate <- upgrade_graph(karate)
 karate
 karate_data <- igraph::as_data_frame(karate)
 head(karate_data)
+set.seed(123)
 plot(karate, layout = layout_nicely)
 ```
 
@@ -479,46 +493,50 @@ Network layouts are algorithms which return coordinates for each vertex. `igraph
 
 Readers are advised to try these layouts to get a fair understanding of them. Let us see a few useful ones on the `karate` data.
 
-- Circular layout: @fig-gra28 Left.
-- Fruchterman Reingold: @fig-gra28 Right.
-- Kamada Kawai: @fig-gra29 Left.
-- Sugiyama: @fig-gra29 Right.
-- Tree layouts (two representations): @fig-gra30.
+- Circular layout, @fig-gra28 left.
+- Fruchterman-Reingold, @fig-gra28 right.
+- Kamada-Kawai, @fig-gra29 left.
+- Sugiyama, @fig-gra29 right.
+- Tree layouts (two representations), @fig-gra30.
 
-```{r fig-gra28, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+Some of these layouts start from random positions. So we set a seed before each plot, to get the same picture every time.
+
+```{r fig-gra28, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two layouts of the karate club network", out.height="34%", out.width="48%"}
 igraph_options(vertex.size = 18)
 par(mfrow = c(1, 2))
+set.seed(123)
 
 plot(karate, layout = layout_in_circle)
 title("Circular layout")
 
 plot(karate, layout = layout_with_fr)
-title("Fruchterman - Reingold")
+title("Fruchterman-Reingold")
 ```
 
-```{r fig-gra29, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two Other layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+```{r fig-gra29, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two more layouts of the karate club network", out.height="34%", out.width="48%"}
 par(mfrow = c(1, 2))
+set.seed(123)
 
 plot(karate, layout = layout_with_kk)
-title("Kamada Kawai")
+title("Kamada-Kawai")
 
 plot(karate, layout = layout_with_sugiyama)
 title("Sugiyama")
 ```
 
-```{r fig-gra30, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two Tree layouts of Zachary Karate Club Network", out.height="34%", out.width="48%"}
+```{r fig-gra30, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Two tree layouts of the karate club network", out.height="34%", out.width="48%"}
 par(mfrow = c(1, 2))
 
 plot(karate, layout = layout_as_tree)
-title("Default Tree layout")
+title("Default tree layout")
 
 plot(karate, layout = layout_as_tree(karate, circular = TRUE))
-title("circular Tree")
+title("Circular tree")
 ```
 
 For a social network like this, the force-directed layouts (Fruchterman-Reingold and Kamada-Kawai) show the structure best. The two groups around Mr Hi and John A can be seen clearly. The circular and tree layouts hide it.
 
-### Displaying Vertex/Edge properties
+### Showing vertex and edge properties
 
 Besides the layout, we can show vertex and edge attributes, like their categories or amounts, through colour, size, width and shape. Our `karate` graph is already coloured. How? The vertices of a graph are coloured by its vertex attribute `color`. Let us see it.
 
@@ -528,39 +546,40 @@ V(karate)$color
 
 It contains the integers 1 and 2, which `plot()` maps to its default colours. Let us replace them with colours of our choice.
 
-```{r fig-gra32, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Vertex coloring in Network", out.height="34%", out.width="98%"}
+```{r fig-gra32, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Vertices coloured by our choice of colours", out.height="34%", out.width="98%"}
 V(karate)$color <- c("red", "dodgerblue")[V(karate)$color]
 head(V(karate)$color)
+set.seed(123)
 plot(karate, layout = layout_nicely)
 ```
 
 Similarly, we can use the following attributes to display properties of vertices and edges in an `igraph` plot.
 
-+ **Vertex Properties**
-  - `size` - Size of the vertex. Default is 15
-  - `color` - Fill colour of the vertex
-  - `frame.color` - Border colour of the vertex
-  - `shape` - Shape of the vertex, like `"circle"`, `"square"`, `"rectangle"` or `"none"`
-  - `label` - A character vector used to label the vertices
-  - `label.family` - Font family of the label. Default is `serif`
-  - `label.font` - Font of the label. `1` means plain (default), `2` bold, `3` italic, `4` bold italic and `5` symbol
-  - `label.cex` - Font size of the label
++ **Vertex properties**
+  - `size`. Size of the vertex. Default is 15.
+  - `color`. Fill colour of the vertex.
+  - `frame.color`. Border colour of the vertex.
+  - `shape`. Shape of the vertex, like `"circle"`, `"square"`, `"rectangle"` or `"none"`.
+  - `label`. A character vector used to label the vertices.
+  - `label.family`. Font family of the label. Default is `serif`.
+  - `label.font`. Font of the label. `1` means plain (default), `2` bold, `3` italic, `4` bold italic and `5` symbol.
+  - `label.cex`. Font size of the label.
 
 + **Edge properties**
-  - `color` - Colour of the edge
-  - `width` - Edge width
-  - `lty` - Line type for edges (`0` or `"blank"`; `1` or `"solid"`; `2` or `"dashed"`; `3` or `"dotted"`; `4` or `"dotdash"`; `6` or `"twodash"`)
-  - `label` - Label of the edge (with `label.family`, `label.font` and `label.cex` for font family, font type and font size respectively)
-  - `curved` - Edge curvature, from `0` to `1`
-  - `arrow.size` - Arrow size (default is 1), for directed graphs
-  - `arrow.width` - Arrow width, default is `1`
-  - `arrow.mode` - Arrow mode (`0` means no arrow, `1` backward, `2` forward and `3` both)
+  - `color`. Colour of the edge.
+  - `width`. Edge width.
+  - `lty`. Line type for edges (`0` or `"blank"`; `1` or `"solid"`; `2` or `"dashed"`; `3` or `"dotted"`; `4` or `"dotdash"`; `6` or `"twodash"`).
+  - `label`. Label of the edge (with `label.family`, `label.font` and `label.cex` for font family, font type and font size respectively).
+  - `curved`. Edge curvature, from `0` to `1`.
+  - `arrow.size`. Arrow size (default is 1), for directed graphs.
+  - `arrow.width`. Arrow width, default is `1`.
+  - `arrow.mode`. Arrow mode (`0` means no arrow, `1` backward, `2` forward and `3` both).
 
 Instead of storing these as attributes in the graph, we can also give them as arguments to `plot()`, by adding `vertex.` or `edge.` before the property name, like `vertex.size = 18`.
 
-Let us see some of these through the following example.
+In audit networks, we may size vendors by the amount paid, colour them by type, and draw thicker edges for larger payments. Let us see some of these properties through the following example.
 
-```{r fig-gra33, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Edge and Vertex properties in Network", out.width="98%"}
+```{r fig-gra33, message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', fig.cap="Vertex shapes, labels and edge widths", out.width="98%"}
 # set reproducible layout
 set.seed(123)
 l_s <- layout_nicely(karate)
@@ -571,13 +590,91 @@ V(karate)$label <- stringr::str_remove(V(karate)$name, "Actor ")
 # Change shapes of two prominent actors
 V(karate)$shape <- ifelse(V(karate)$name %in% c("Mr Hi", "John A"), "rectangle", "circle")
 
-# Change Edge width as per "weight"
+# Change edge width as per "weight"
 E(karate)$width <- E(karate)$weight
 
 plot(karate, layout = l_s, edge.label.cex = 0.7)
 ```
 
-## Using `visNetwork` for interactive visualizations
+## Our audit data, linked contractors {#sec-graph-contractors}
+
+The karate club taught us how to draw a network. For the rest of the chapter, let us work on audit data. We audit the works contracts of an imaginary Public Works Division for the financial year 2024-25. The Division has 60 registered contractors, `C01` to `C60`. From the registration papers, we have listed every pair of contractors who share some detail, a partner, an office address, a mobile number, an email ID or a bank account. Each such pair is one row of a table `links`. Its column `weight` is the number of details the two firms share.
+
+Most firms share nothing with anyone. A few pairs share one detail for a genuine reason, like two family firms or two firms in the same market building. But we have planted two hidden groups.
+
+- **Group A.** Eight firms around `C07`, which share partners, addresses and accounts among themselves.
+- **Group B.** Six firms around `C33`, linked in the same way.
+- **A bridge.** Firm `C21` shares one detail with `C07` and one with `C33`, and nothing else.
+
+The code to create the data is folded.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the contractor master and the links"
+set.seed(2024)
+prefix <- c("Shree Balaji", "Maa Durga", "Om Sai", "Jai Ambe", "Ganpati", "Kaveri",
+            "Narmada", "Shiv Shakti", "Laxmi", "Sai Krupa", "Annapurna", "Bharat",
+            "Vishwakarma", "Gayatri", "Sri Venkatesh")
+suffix <- c("Constructions", "Builders", "Infra", "Enterprises", "Engineers", "Contractors")
+
+# Contractor master
+firms <- tibble(
+  firm_id   = sprintf("C%02d", 1:60),
+  firm_name = sample(as.vector(outer(prefix, suffix, paste)), 60),
+  class     = sample(c("Class I", "Class II", "Class III"), 60, TRUE, prob = c(0.2, 0.3, 0.5))
+)
+
+# A link between two firms, sharing k details
+details <- c("partner", "address", "mobile", "bank account", "email")
+link <- function(a, b, k) {
+  tibble(firm_a = a, firm_b = b,
+         shared = map_chr(k, \(i) paste(sort(sample(details, i)), collapse = ", ")),
+         weight = k)
+}
+
+# A hidden group. The first firm is linked to all, the others to some of each other
+group_links <- function(g, p) {
+  hub <- link(g[1], g[-1], sample(1:3, length(g) - 1, TRUE))
+  pairs <- t(combn(g[-1], 2))
+  keep <- runif(nrow(pairs)) < p
+  bind_rows(hub, link(pairs[keep, 1], pairs[keep, 2], sample(1:2, sum(keep), TRUE)))
+}
+
+# Planted. Two hidden groups and a bridge between them
+group_a <- c("C07", "C12", "C15", "C19", "C26", "C40", "C44", "C52")
+group_b <- c("C33", "C03", "C09", "C28", "C47", "C55")
+bridge  <- "C21"
+
+# Genuine. A few pairs of other firms share one detail
+others  <- setdiff(firms$firm_id, c(group_a, group_b, bridge))
+genuine <- t(replicate(22, sample(others, 2)))
+
+links <- bind_rows(
+  group_links(group_a, 0.35),
+  group_links(group_b, 0.35),
+  link(bridge, c("C07", "C33"), c(1, 1)),
+  link(genuine[, 1], genuine[, 2], rep(1, nrow(genuine)))
+) |>
+  distinct(firm_a, firm_b, .keep_all = TRUE)
+```
+
+Let us look at the two tables.
+
+```{r}
+glimpse(firms)
+head(links)
+```
+
+Let us build the graph. Sharing a detail has no direction, so the graph is undirected. We give the contractor master as `vertices`, so that firms with no links stay in the graph, and the firm name and class become vertex attributes.
+
+```{r}
+cg <- graph_from_data_frame(links, directed = FALSE, vertices = firms)
+cg
+```
+
+The graph has `r vcount(cg)` vertices, one for each registered firm, and `r ecount(cg)` edges, one for each linked pair.
+
+## Interactive networks with visNetwork
 
 Static plots are fine for small graphs and for printed reports. But while *exploring* a network, we want to zoom in, drag vertices around, and click on a vertex to see its details. The package `visNetwork` does exactly this. It draws interactive networks in a web browser, in RStudio's viewer, and in HTML documents like this book.
 
@@ -586,205 +683,333 @@ Static plots are fine for small graphs and for printed reports. But while *explo
 - `nodes` must have a column `id`. Optional columns control the look, like `label` (text shown), `group` (for colouring), `title` (tooltip shown on hover), `value` (size), `shape` and `color`.
 - `edges` must have the columns `from` and `to`. Optional columns include `value` or `width` (thickness), `label`, `title`, `arrows` and `color`.
 
-Let us draw the karate network interactively. We colour the members by the faction they joined, and size them by their number of connections. Try hovering over a member, clicking one to highlight its neighbours, choosing a member from the drop-down list, and dragging a member around.
+Let us draw the contractor network interactively. We colour the firms by their class of registration, and size them by their number of links. The tooltip of a firm shows its name, and the tooltip of an edge shows what the two firms share. Try hovering over a firm, clicking one to highlight its neighbours, choosing a firm from the drop-down list, and dragging a firm around.
 
 ```{r}
 #| label: fig-vis1
-#| fig-cap: "Interactive karate club network with visNetwork"
+#| fig-cap: "Interactive network of the Division's contractors"
 library(visNetwork)
 
-kar_nodes <- data.frame(
-  id    = V(karate)$name,
-  label = V(karate)$label,
-  group = ifelse(V(karate)$Faction == 1, "Mr Hi's group", "John A's group"),
-  value = degree(karate),
-  title = paste0("<b>", V(karate)$name, "</b><br>Connections: ", degree(karate))
+cg_nodes <- tibble(
+  id    = V(cg)$name,
+  label = V(cg)$name,
+  group = V(cg)$class,
+  value = degree(cg) + 1,
+  title = paste0("<b>", V(cg)$name, "</b><br>", V(cg)$firm_name,
+                 "<br>Links: ", degree(cg))
 )
 
-kar_edges <- igraph::as_data_frame(karate) |>
-  select(from, to, weight) |>
-  mutate(value = weight, title = paste("Interactions:", weight))
+cg_edges <- links |>
+  transmute(from = firm_a, to = firm_b, value = weight,
+            title = paste("Shared:", shared))
 
-visNetwork(kar_nodes, kar_edges, width = "100%", height = "500px") |>
+visNetwork(cg_nodes, cg_edges, width = "100%", height = "450px") |>
+  visIgraphLayout(layout = "layout_with_fr", randomSeed = 11) |>
   visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) |>
   visLegend()
 ```
+
+Even at a glance, two tight clusters of firms stand out from the scattered pairs. We will find them with R shortly.
 
 A few more useful functions of `visNetwork` are
 
 - `visIgraph(g)` draws an `igraph` object directly, using its attributes.
 - `toVisNetworkData(g)` converts an `igraph` object into the `nodes` and `edges` data frames which `visNetwork()` needs. We can then add or change columns before drawing.
-- `visIgraphLayout()` calculates the layout in R with `igraph`, instead of in the browser. The network then appears instantly and does not keep moving. This is very useful for bigger networks.
+- `visIgraphLayout()` calculates the layout in R with `igraph`, instead of in the browser. The network then appears instantly and does not keep moving. This is very useful for bigger networks. Its argument `randomSeed` fixes the layout, like `set.seed()`.
 - `visEdges(arrows = "to")` draws arrows on directed edges.
 - `visSave(network, file = "network.html")` saves the interactive network as a standalone HTML file, which can be shared with colleagues who do not use R.
 
 ::: callout-tip
-## Tip
+## Keep interactive networks small
 
-The browser has to draw every vertex and edge of a `visNetwork`. A few hundred vertices are fine. With many thousands, the page becomes slow, and the picture is a hairball that nobody can read anyway. So first reduce the network in R, as explained in the next section and in the next chapter, and then draw only the part that matters.
+The browser has to draw every vertex and edge of a `visNetwork`. A few hundred vertices are fine. With many thousands, the page becomes slow, and the picture is a hairball that nobody can read anyway. So first reduce the network in R, as explained in the next section and in @sec-netaudit. Then draw only the part that matters.
 :::
 
-## Subgraphs, adding or deleting edges/vertices
+## Parts of a graph, and adding or deleting vertices and edges
 
 Real networks are big. Usually we are interested in only a part of them. Let us see how to take out parts of a graph, and how to add or delete vertices and edges.
 
 **Selecting vertices and edges.** We can select vertices and edges by a condition on their attributes, inside `V()` and `E()`.
 
 ```{r}
-# Members with more than 10 connections
-V(karate)[degree(karate) > 10]
+# Firms linked with more than 4 other firms
+V(cg)[degree(cg) > 4]
 
-# Edges with 5 or more interactions
-E(karate)[weight >= 5]
+# Pairs of firms sharing 3 or more details
+E(cg)[weight >= 3]
 ```
+
+Only `r sum(degree(cg) > 4)` firms are linked with more than four others. And `r sum(E(cg)$weight >= 3)` pairs share three or more details. Sharing so much is hard to explain for two independent firms.
 
 **Neighbours.** `neighbors()` gives the vertices directly connected to a vertex.
 
 ```{r}
-neighbors(karate, "John A")
+neighbors(cg, "C07")
 ```
 
-**Subgraphs.** `induced_subgraph()` keeps the chosen vertices and all the edges *between* them. `subgraph_from_edges()` keeps the chosen edges and their vertices.
+**Subgraphs.** `induced_subgraph()` keeps the chosen vertices and all the edges *between* them. `subgraph_from_edges()` keeps the chosen edges and their vertices. Let us keep only the firms which share something with at least one other firm.
 
 ```{r}
-# The graph of Mr Hi's faction only
-mrhi_group <- induced_subgraph(karate, V(karate)[Faction == 1])
-mrhi_group
+linked <- induced_subgraph(cg, V(cg)[degree(cg) > 0])
+linked
 ```
 
-**Ego networks.** The *ego network* of a vertex is the vertex itself, its neighbours, and the edges between them. The argument `order` sets how many steps away we go. `make_ego_graph()` returns a list of such graphs, one for each vertex we ask for. In audit, the ego network of a suspicious entity is often the first thing we look at.
+`r vcount(cg) - vcount(linked)` firms share nothing with anyone, and have dropped out.
 
-```{r fig-ego, fig.cap="Ego network of Actor 20, up to 2 steps", fig.align='center', out.width="80%"}
-ego20 <- make_ego_graph(karate, order = 2, nodes = "Actor 20")[[1]]
-plot(ego20, layout = layout_with_fr)
+**Ego networks.** The *ego network* of a vertex is the vertex itself, its neighbours, and the edges between them. The argument `order` sets how many steps away we go. `make_ego_graph()` returns a list of such graphs, one for each vertex we ask for. In audit, the ego network of a doubtful entity is often the first thing we look at. Let us look at firm `C21`, up to two steps away (@fig-ego).
+
+```{r fig-ego, fig.cap="Ego network of firm C21, up to 2 steps", fig.align='center', out.width="80%"}
+ego21 <- make_ego_graph(cg, order = 2, nodes = "C21")[[1]]
+set.seed(123)
+plot(ego21, layout = layout_with_fr, vertex.size = 20, vertex.color = "orange")
 ```
 
-**Deleting.** `delete_vertices()` and `delete_edges()` remove vertices and edges. When a vertex is deleted, all its edges go with it.
+`C21` has only two links. But two steps away, it reaches `r vcount(ego21) - 1` firms, on both sides.
+
+**Deleting.** `delete_vertices()` and `delete_edges()` remove vertices and edges. When a vertex is deleted, all its edges go with it. Let us remove `C21`, and see whether `C07` and `C33` are still connected.
 
 ```{r}
-# Remove the two leaders and see whether the club stays connected
-without_leaders <- delete_vertices(karate, c("Mr Hi", "John A"))
-components(without_leaders)$csize
+without_c21 <- delete_vertices(cg, "C21")
+components(cg)$membership[c("C07", "C33")]
+components(without_c21)$membership[c("C07", "C33")]
 ```
 
-Without its two leaders, the club falls apart into `r components(without_leaders)$no` separate pieces. Those leaders were holding it together.
+With `C21`, the two firms fall in the same connected piece (component) of the network. Without it, they fall in different pieces. So `C21` is the only link between the two groups. We will meet this idea again as *betweenness*.
 
-**Adding.** `add_vertices()` and `add_edges()` add new vertices and edges. A convenient alternative is the `+` operator with `vertices()` and `edges()`.
+**Adding.** `add_vertices()` and `add_edges()` add new vertices and edges. A convenient alternative is the `+` operator with `vertices()` and `edges()`. Suppose a new firm, `C61`, registers with the Division, and we find that it gives the same mobile number as `C07`.
 
 ```{r}
-small <- make_graph(c("A", "B", "B", "C"), directed = FALSE)
-small <- small + vertices("D") + edges("C", "D", "D", "A")
-small
+cg_new <- cg + vertices("C61") + edges("C61", "C07", shared = "mobile", weight = 1)
+neighbors(cg_new, "C61")
 ```
 
-## Describing network/graph for edges and nodes therein
+## Describing a network
 
-Once we have a network, we want to describe it. How big and how dense is it? Which vertices are the most important? Are there groups within it? Let us answer these questions for the karate club.
+Once we have a network, we want to describe it. How big and how dense is it? Which vertices are the most important? Are there groups within it? Let us answer these questions for the contractors.
 
 ### Measures for the whole network
 
 ```{r}
 # Number of vertices and edges
-vcount(karate)
-ecount(karate)
+vcount(cg)
+ecount(cg)
 
 # Density, the share of all possible edges which exist
-edge_density(karate)
+edge_density(cg)
+
+# Connected pieces, and their sizes
+components(cg)$no
+table(components(cg)$csize)
 
 # Diameter, the longest of all shortest paths (counting steps)
-diameter(karate, weights = NA)
+diameter(cg, weights = NA)
 
-# Average number of steps between two members
-mean_distance(karate, weights = NA)
+# Average number of steps between two firms, where a path exists
+mean_distance(cg, weights = NA)
 
-# Transitivity, the chance that two friends of a member are friends too
-transitivity(karate)
+# Transitivity, the chance that two firms linked to a firm are linked to each other too
+transitivity(cg)
 ```
 
-Only `r round(edge_density(karate) * 100)`% of all possible pairs of members are connected. Yet any member can reach any other in at most `r diameter(karate, weights = NA)` steps, and on average in `r round(mean_distance(karate, weights = NA), 1)` steps. Most real networks, from friendships to company shareholdings, are like this, sparse but closely knit.
+```{r}
+#| include: false
+comp <- components(cg)
+```
+
+Only `r round(edge_density(cg) * 100, 1)`% of all possible pairs of firms are linked. The network falls into `r comp$no` pieces. Of these, `r sum(comp$csize == 1)` are single firms with no links. The biggest piece has `r max(comp$csize)` firms. Within a piece, any firm can reach any other in at most `r diameter(cg, weights = NA)` steps. A transitivity of `r round(transitivity(cg), 2)` is high for such a sparse network. It means that linked firms tend to come in closely knit groups.
 
 ::: callout-note
 ## Weights and distances
 
-`igraph` treats the `weight` attribute as a *distance* in path-based measures like `diameter()`, `distances()`, `betweenness()` and `closeness()`. In the karate data, a larger weight means a *stronger* relation, which should mean a *shorter* distance. So here we use `weights = NA` to ignore the weights and simply count steps. Always check what the weights in your data mean before using them in such measures.
+`igraph` treats the `weight` attribute as a *distance* in path-based measures like `diameter()`, `distances()`, `betweenness()` and `closeness()`. In our data, a larger weight means more shared details, that is, a *stronger* link. A stronger link should mean a *shorter* distance, not a longer one. So here we use `weights = NA` to ignore the weights and simply count steps. Always check what the weights in your data mean before using them in such measures.
 :::
 
 ### Paths
 
-`shortest_paths()` gives the shortest path between two vertices, and `distances()` gives the number of steps between every pair. In audit, the path tells us *how* two entities are connected, for example how a vendor is linked to an employee.
+`shortest_paths()` gives the shortest path between two vertices, and `distances()` gives the number of steps between pairs of vertices. In audit, the path tells us *how* two entities are connected. Let us see how firm `C40` of one group is linked with firm `C55` of the other.
 
 ```{r}
-shortest_paths(karate, from = "Actor 17", to = "John A", weights = NA)$vpath
+shortest_paths(cg, from = "C40", to = "C55", weights = NA)$vpath
+distances(cg, v = c("C40", "C07"), to = c("C33", "C55"), weights = NA)
 ```
+
+The path runs through `C07`, `C21` and `C33`. Firms with no path between them are shown at a distance of `Inf`, that is, infinite.
 
 ### Importance of vertices (centrality)
 
-Which members are the most important? There are several ways to measure this, called *centrality* measures.
+Which firms are the most important? There are several ways to measure this, called *centrality* measures.
 
 - **Degree** is the number of edges of a vertex. For a directed graph, *in-degree* and *out-degree* count incoming and outgoing edges separately. A bank account receiving money from 40 beneficiaries has a high in-degree.
-- **Strength** is the sum of the weights of the edges of a vertex, for example the total amount paid or received.
+- **Strength** is the sum of the weights of the edges of a vertex, for example the total amount paid or received. Here, it is the total number of details a firm shares.
 - **Betweenness** counts how often a vertex lies on the shortest paths between other vertices. A vertex with high betweenness is a *bridge* or a middleman between groups.
 - **Closeness** measures how close a vertex is to all others. A vertex with high closeness can reach everyone quickly.
 - **Eigenvector centrality** and **PageRank** give high scores to vertices connected to other important vertices. Being connected to the boss matters more than being connected to many juniors.
 
-Let us calculate these for the karate club and look at the top members.
+Let us calculate these for the contractors and look at the top firms.
 
 ```{r}
 centrality <- tibble(
-  member      = V(karate)$name,
-  degree      = degree(karate),
-  strength    = strength(karate),
-  betweenness = round(betweenness(karate, weights = NA), 1),
-  closeness   = round(closeness(karate, weights = NA), 3),
-  eigen       = round(eigen_centrality(karate)$vector, 2)
+  firm        = V(cg)$name,
+  degree      = degree(cg),
+  strength    = strength(cg),
+  betweenness = round(betweenness(cg, weights = NA), 1),
+  closeness   = round(closeness(cg, weights = NA), 3),
+  eigen       = round(eigen_centrality(cg)$vector, 2)
 ) |>
   arrange(desc(betweenness))
 
-head(centrality)
+head(centrality, 8)
 ```
 
-Mr Hi and John A, the two leaders, are at or near the top of every measure. That is what we would expect. But look at members like Actor 33, Actor 3 and Actor 32 too. They are not leaders, but they connect many others. Actor 3 even ranks above Mr Hi in eigenvector centrality, because it is connected to well-connected members of both groups, like Mr Hi, Actor 2 and Actor 33. In an investigation, such vertices are worth a look.
+```{r}
+#| include: false
+c21 <- centrality |> filter(firm == "C21")
+```
+
+`C07` and `C33`, the centres of the two groups, have the most links and the highest betweenness. That is what we would expect. Now look at `C21`. It has only `r c21$degree` links, as few as many ordinary firms. Yet its betweenness is `r c21$betweenness`, close to that of the two group leaders. Every path between the two groups passes through it. A degree count alone would never have picked it out.
+
+Look also at the closeness of firms like `C02` and `C30`. It is higher than that of `C07`. This is because `igraph` measures closeness only over the firms a vertex can reach. In a network of many separate pieces, firms in a small piece look "close" to everything. So use closeness within one connected piece, not across the whole network.
+
+::: callout-tip
+## Audit tip
+
+Sort by betweenness, not only by degree. A firm, account or person with few links but high betweenness is a go-between. In real cases, this is often a common accountant, an agent, or a relative who connects firms that claim to be independent. Find out who is behind that vertex.
+:::
 
 ### Communities
 
-A *community* is a group of vertices which are densely connected with each other, and only loosely connected with the rest. Finding communities is called *community detection* or *clustering*. `igraph` has several algorithms for it. The Louvain method, `cluster_louvain()`, is fast and works well for most networks.
+A *community* is a group of vertices which are densely connected with each other, and only loosely connected with the rest. Finding communities is called *community detection* or *clustering*. `igraph` has several algorithms for it. The Louvain method, `cluster_louvain()`, is fast and works well for most networks. It starts from a random order, so we set a seed.
 
 ```{r}
 set.seed(42)
-kar_comm <- cluster_louvain(karate, weights = NA)
-sizes(kar_comm)
+cg_comm <- cluster_louvain(cg, weights = NA)
+sizes(cg_comm)
 ```
-
-Let us compare the communities found with the faction each member actually joined after the split.
 
 ```{r}
-table(community = membership(kar_comm), faction = V(karate)$Faction)
+#| include: false
+n_single <- sum(sizes(cg_comm) == 1)
 ```
 
-Louvain has found `r length(kar_comm)` communities. Each of them lies almost entirely within one faction. Only `r sum(apply(table(membership(kar_comm), V(karate)$Faction), 1, min))` member is placed in a community dominated by the other faction. Just from the pattern of friendships, the algorithm has predicted the split of the club, as Zachary did in 1977. @fig-comm shows the communities.
+Louvain has found `r length(cg_comm)` communities. Of these, `r n_single` are single firms with no links. Let us see the communities of `C07` and `C33`.
 
-```{r fig-comm, fig.cap="Communities found by the Louvain method", fig.align='center', out.width="90%"}
-plot(kar_comm, karate, layout = l_s)
+```{r}
+cg_comm[[membership(cg_comm)["C07"]]]
+cg_comm[[membership(cg_comm)["C33"]]]
 ```
 
-In audit, communities point to groups like bidders who bid together, firms which trade mostly among themselves, or beneficiaries who share agents. We will see this in the next chapter.
+```{r}
+#| include: false
+comm_a <- cg_comm[[membership(cg_comm)["C07"]]]
+comm_b <- cg_comm[[membership(cg_comm)["C33"]]]
+```
+
+The community of `C07` has all `r sum(group_a %in% comm_a)` firms of Group A, along with the bridge firm `C21`. The community of `C33` has all `r sum(group_b %in% comm_b)` firms of Group B. Just from the pattern of shared details, the algorithm has found both hidden groups. @fig-comm shows the linked firms, coloured by community.
+
+```{r}
+#| label: fig-comm
+#| fig-cap: "Linked contractors coloured by the community found by the Louvain method"
+comm_nodes <- tibble(
+  id    = V(linked)$name,
+  label = V(linked)$name,
+  group = paste("Community", membership(cg_comm)[V(linked)$name]),
+  title = V(linked)$firm_name
+)
+
+visNetwork(comm_nodes, cg_edges, width = "100%", height = "450px") |>
+  visIgraphLayout(layout = "layout_with_fr", randomSeed = 11) |>
+  visOptions(highlightNearest = TRUE)
+```
+
+Communities point to groups like bidders who bid together, firms which trade mostly among themselves, or beneficiaries who share agents. Let us now use them on the Division's tenders.
+
+## Audit use case, linked firms bidding against each other {#sec-graph-tenders}
+
+A tender is competitive only if the bidders are independent. If every bid in a tender comes from one hidden group, the group can decide the winner and the rate among themselves. Let us check the Division's 40 tenders of 2024-25. The table `bids` has one row for each bid, and the table `tenders` gives the estimated cost of each work. We have planted seven tenders in which all the bidders come from one of the two hidden groups.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the tenders and bids"
+set.seed(7)
+n_t <- 40
+bids <- map_dfr(1:n_t, function(t) {
+  b <- sample(firms$firm_id, sample(3:5, 1))
+  # Planted. All bidders from Group A, or all from Group B
+  if (t %in% c(4, 11, 18, 26, 33)) b <- sample(group_a, sample(3:4, 1))
+  if (t %in% c(8, 29)) b <- sample(group_b, 3)
+  tibble(tender_no = sprintf("PWD/%02d/2024-25", t), firm_id = b)
+})
+tenders <- tibble(
+  tender_no = sprintf("PWD/%02d/2024-25", 1:n_t),
+  est_cost  = round(rlnorm(n_t, log(60e5), 0.6), -3)
+)
+```
+
+```{r}
+head(bids)
+head(tenders)
+```
+
+We attach the community of each bidder, and count, for each tender, the bidders and the different communities they come from.
+
+```{r}
+firm_comm <- tibble(firm_id   = V(cg)$name,
+                    community = as.integer(membership(cg_comm)))
+
+tender_check <- bids |>
+  left_join(firm_comm, by = "firm_id") |>
+  group_by(tender_no) |>
+  summarise(bidders     = n(),
+            communities = n_distinct(community),
+            firms       = paste(sort(firm_id), collapse = ", ")) |>
+  left_join(tenders, by = "tender_no")
+
+flagged <- tender_check |>
+  filter(communities == 1)
+flagged
+```
+
+```{r}
+#| include: false
+partly <- tender_check |> filter(communities > 1, communities < bidders)
+```
+
+In `r nrow(flagged)` tenders, every bidder comes from the same community. These are exactly the seven tenders we planted. Their estimated cost adds up to ₹`r round(sum(flagged$est_cost) / 1e7, 2)` crore. In these tenders, the "competition" was among firms that share partners, addresses or bank accounts. In `r nrow(partly)` more tenders, two or more of the bidders come from the same community, but at least one bidder is from outside. These are weaker leads, and may be looked at after the first seven.
+
+What should the auditor do next? For each flagged tender, the auditor would
+
+1. pull the tender file, and see who won, at what rate, and how far the losing bids were above the winning bid;
+2. ask the Division for the registration papers of the linked firms, and confirm the shared partner, address or bank account from the documents;
+3. check whether the Division had any declaration from the bidders that they were not related;
+4. record the linked firms, the tenders and the amounts in the working papers, and raise an audit query to the Division.
+
+::: callout-warning
+## Caution
+
+A community is a group found by an algorithm, not a fact. Louvain may put a loosely linked firm into a group, as it did with `C21` here, and a different seed may move such a firm. So before raising a query, look at the actual links between the bidders of a tender, with `induced_subgraph()` or `shortest_paths()`. Report what the firms share, not the community number.
+:::
 
 ## A suggested workflow
 
-1.  **Build an edge list.** From the payment register or beneficiary list, make a data frame in which each row is one link, like a beneficiary and a bank account, or a payment from one firm to another. Keep the amount and the date as further columns, so they become edge attributes.
+1.  **Build an edge list.** From the payment register, the beneficiary list or the registration papers, make a data frame in which each row is one link. Examples are a beneficiary and a bank account, a payment from one firm to another, or two firms sharing a partner. Keep the amount, the date or the shared detail as further columns, so they become edge attributes.
 2.  **Create the graph.** Use `graph_from_data_frame()`. Keep it directed for payments, and use `directed = FALSE` for shared details like a common account. Give a `vertices` table to keep entities with no links, and their attributes.
 3.  **Check the graph object.** Print it and confirm the number of vertices and edges, and the attributes. Get the data back with `igraph::as_data_frame()` whenever you need to inspect it.
 4.  **Describe the whole network.** Use `vcount()`, `ecount()`, `edge_density()` and `components()` to see how big the network is and whether it falls into separate pieces.
 5.  **Find the important entities.** Calculate `degree()`, `strength()` and `betweenness()`. A bank account receiving money from many beneficiaries, or a firm acting as a bridge between groups, deserves a look.
-6.  **Find the groups.** Run `cluster_louvain()` to find communities, such as bidders who bid together or firms which trade mostly among themselves.
+6.  **Find the groups.** Set a seed and run `cluster_louvain()` to find communities, such as firms that share partners or bidders who bid together.
 7.  **Zoom into doubtful cases.** Take the ego network of a doubtful entity with `make_ego_graph()`, or a part of the graph with `induced_subgraph()`. Use `shortest_paths()` to see how two entities are linked.
-8.  **Show only what matters.** Draw the reduced network with `plot()` or `visNetwork()`. Save the interactive version with `visSave()` to share with colleagues who do not use R.
+8.  **Join the findings back to the transactions.** Attach the community or centrality of each entity to the tenders, bills or payments, and value the doubtful ones in rupees.
+9.  **Show only what matters.** Draw the reduced network with `plot()` or `visNetwork()`. Set a seed before any random layout. Save the interactive version with `visSave()` to share with colleagues who do not use R.
 
 ::: callout-important
 ## Remember
 
-A connection in a network is a lead, not a finding. Two beneficiaries may share an account for a genuine reason, so examine the records before reporting. Also check what the weights in your data mean, because `igraph` treats `weight` as a distance in measures like `betweenness()`.
+A connection in a network is a lead, not a finding. Two firms may share an address because they sit in the same market building, so examine the records before reporting. Set a seed before any layout or community detection that has randomness in it, so that the result can be reproduced. Also check what the weights in your data mean, because `igraph` treats `weight` as a distance in measures like `betweenness()`.
 :::
+
+## Where next
+
+In @sec-netaudit, we apply these tools to more audit problems. We find one person behind many registrations of a scheme, a cartel of bidders, circular trading between firms, and vendors linked with employees.
 
 ## Summary of functions used
 
@@ -796,13 +1021,16 @@ A connection in a network is a lead, not a finding. Two beneficiaries may share 
 | `igraph::as_data_frame()`, `as_adjacency_matrix()` | igraph | Get the data back from a graph |
 | `V()`, `E()` | igraph | Vertices and edges of a graph, with their attributes via `$` |
 | `plot()`, `layout_*()` | igraph | Static plot of a graph, with a chosen layout |
-| `visNetwork()`, `visOptions()`, `visIgraphLayout()`, `visSave()` | visNetwork | Interactive network plots |
-| `neighbors()`, `induced_subgraph()`, `make_ego_graph()` | igraph | Parts of a graph around chosen vertices |
-| `delete_vertices()`, `delete_edges()`, `add_vertices()`, `add_edges()` | igraph | Remove or add vertices and edges |
+| `ggraph()`, `geom_edge_fan()`, `geom_node_point()`, `geom_node_text()` | ggraph | Plots a graph in the style of `ggplot2` |
+| `set.seed()` | base | Fixes random layouts and community detection, so that results can be reproduced |
+| `visNetwork()`, `visOptions()`, `visLegend()`, `visIgraphLayout()`, `visSave()` | visNetwork | Interactive network plots |
+| `neighbors()`, `induced_subgraph()`, `subgraph_from_edges()`, `make_ego_graph()` | igraph | Parts of a graph around chosen vertices or edges |
+| `delete_vertices()`, `delete_edges()`, `add_vertices()`, `add_edges()`, `vertices()`, `edges()` | igraph | Remove or add vertices and edges |
 | `components()` | igraph | Splits a graph into connected pieces |
-| `edge_density()`, `diameter()`, `mean_distance()`, `transitivity()` | igraph | Measures of the whole network |
+| `vcount()`, `ecount()`, `edge_density()`, `diameter()`, `mean_distance()`, `transitivity()` | igraph | Measures of the whole network |
 | `shortest_paths()`, `distances()` | igraph | Paths and number of steps between vertices |
 | `degree()`, `strength()`, `betweenness()`, `closeness()`, `eigen_centrality()` | igraph | Importance (centrality) of each vertex |
-| `cluster_louvain()`, `membership()` | igraph | Finds communities in a network |
+| `cluster_louvain()`, `sizes()`, `membership()` | igraph | Finds communities in a network, their sizes and members |
+| `glimpse()`, `left_join()`, `n_distinct()` | dplyr | Look at the data, and attach communities to the bids |
 
 : Functions used in this chapter {#tbl-graphfunctions}

@@ -4,14 +4,16 @@ source("_common.R")
 ```
 
 # Conditions and Loops {#sec-control}
+Audit rules are full of conditions. If the bill is above ₹50,000, it needs the sanction of a higher authority. If the work is not completed by the due date, liquidated damages are to be recovered. If a pensioner has not submitted a life certificate, the pension is to be stopped. And audit work is full of repetition. The same checks are run on the accounts of every district, and the same file is read for every month. In R, conditions are written with `if` and `else`, and repetition with *loops*.
+
 So far our code has run line by line, from top to bottom. *Control statements* change this flow. `if` and `else` run some code only when a condition holds, and *loops* (`for`, `while` and `repeat`) run some code again and again. Together with functions (@sec-func), they let us automate any task.
 
 In data analysis we need them less than in other programming, because R's functions work on whole vectors at once, and the tidyverse handles most repetition for us. Still, they are core concepts of any programming language, and are needed often enough, for example to process a folder of files one by one, or inside our own functions.
 
-## Control flow/Loops
+## Control flow and loops
 
 ### `if else` {-}
-The basic form(s) of `if else` \index{if else statement}statement in R are
+The basic forms of the `if else` \index{if else statement}statement in R are these.
 ```
 if (test) do_this_if_true
 if (test) do_this_if_true else else_do_this
@@ -23,6 +25,15 @@ if(x < 10){
   'Smaller than 10'
 } else {
   '10 or more'
+}
+```
+The same pattern answers a simple audit question about one bill.
+```{r}
+bill_amount <- 62000
+if (bill_amount > 50000) {
+  'Check the sanction of the higher authority'
+} else {
+  'Within the powers of the drawing officer'
 }
 ```
 Several conditions can be chained with `else if`. They are checked in order, and the first one which is `TRUE` decides. Let us write a function which tells the authority competent to sanction an expenditure, under some made-up financial powers.
@@ -76,7 +87,7 @@ fund_name("XYZ")
 ```
 
 ### `for` loop {-}
-A `for` loop \index{for loops} runs some code once for each item of a vector. The basic structure is
+A `for` loop \index{for loops} runs some code once for each item of a vector. The basic structure is this.
 
 ```
 for(item in vector) perform_some_action
@@ -113,21 +124,20 @@ x
 knitr::include_graphics("images/for_loop.png")
 ```
 
-We can loop over positions, to work with as many elements as we want. See these two examples.
+We can loop over positions, to work with as many elements as we want. See these two examples. The first loops over the first four offices only.
 
-Example-1
 ```{r}
-my_names <- c('Andrew', 'Bob', 'Charles', 'Dylan', 'Edward')
+my_offices <- c('DTO Ajmer', 'DTO Alwar', 'DTO Bikaner', 'DTO Jaipur', 'DTO Kota')
 # If we want first 4 elements
 for(i in 1:4){
-  print(my_names[i])
+  print(my_offices[i])
 }
 ```
-Example-2
+The second loops over all of them.
 ```{r}
 # if we want all elements
-for(i in seq_along(my_names)){
-  print(my_names[i])
+for(i in seq_along(my_offices)){
+  print(my_offices[i])
 }
 ```
 
@@ -142,14 +152,13 @@ for (i in seq_along(amounts)) {
 authority
 ```
 
-There are 2 ways to end an iteration, or the loop, early.
+There are two ways to end an iteration, or the loop, early.
 
-- `next` skips the rest of the current iteration, and moves to the next item\index{next}
+- `next` skips the rest of the current iteration, and moves to the next item.\index{next}
 - `break` ends the entire loop.\index{break}
 
-See these examples.
+See these examples. With `next`, the loop skips the fourth item and carries on.
 
-Example-1
 ```{r}
 for(i in 1:5){
   if (i == 4){
@@ -158,7 +167,7 @@ for(i in 1:5){
   print(i)
 }
 ```
-Example-2
+With `break`, the loop stops at the fourth item.
 ```{r}
 for(i in 1:5){
   if (i == 4){
@@ -167,17 +176,25 @@ for(i in 1:5){
   print(i)
 }
 ```
+In audit, `next` is handy to skip records that should not be checked, like cancelled vouchers.
+```{r}
+voucher <- c("V-101", "V-102", "V-103", "V-104")
+status  <- c("Paid", "Cancelled", "Paid", "Paid")
+for (i in seq_along(voucher)) {
+  if (status[i] == "Cancelled") next
+  print(paste("Checking", voucher[i]))
+}
+```
 
 ### `while` loop {-}
 A `for` loop runs over known values, a known number of times. To repeat something an *unknown* number of times, we use a `while` loop\index{while loop}, which repeats as long as a `condition` is `TRUE`. Another option is the `repeat` loop\index{repeat loop}, which repeats until it meets a `break`.
 
-The basic syntax of `while` loop is
+The basic syntax of the `while` loop is this.
 ```
 while (condition) action
 ```
-See these examples.
+See these examples. The first counts up.
 
-Example-1
 ```{r}
 i <- 1
 while(i <=4){
@@ -185,11 +202,11 @@ while(i <=4){
   i <- i+1
 }
 ```
-We may check the value of `i` here after executing the loop
+We may check the value of `i` after the loop has run.
 ```{r}
 i
 ```
-Example-2:
+The second counts down.
 ```{r}
 i <- 4
 while(i >= 1){
@@ -197,9 +214,9 @@ while(i >= 1){
   i <- i-1
 }
 ```
-**Note:** The code inside the loop must change something in the condition, so that sooner or later it is no longer `TRUE`. Otherwise the loop never ends. (If that happens, press `Esc` in RStudio to stop it.)
+The code inside the loop must change something in the condition, so that sooner or later it is no longer `TRUE`. Otherwise the loop never ends. If that happens, press `Esc` in RStudio to stop it.
 
-Here is a `while` loop with a real use. How many years will a deposit of ₹10 lakh at 7% compound interest take to double?
+Here is a `while` loop with a real use. How many years will a deposit of ₹10 lakh at 7% compound interest take to double? An auditor may ask this when checking the maturity value claimed for a fixed deposit of idle scheme funds.
 
 ```{r}
 balance <- 1000000
@@ -211,7 +228,7 @@ while (balance < 2000000) {
 years
 ```
 
-The same with `repeat` and `break`:
+The same can be written with `repeat` and `break`.
 
 ```{r}
 balance <- 1000000
@@ -231,7 +248,7 @@ knitr::include_graphics("images/while_loop.png")
 ::: callout-note
 ## Loops or vectors?
 
-Before writing a loop over the rows of a table, check whether a vectorised function can do the job, as it usually can. `amounts * 1.18` adds GST to every amount at once, and `ifelse()` or `dplyr::case_when()` classify every row at once. Such code is shorter, clearer, and much faster on large data. Where repetition is really needed, like reading many files, the functions of the `apply` family and of `purrr`, discussed in the next chapter, are usually neater than a loop. Loops are not wrong, though. A clear loop is better than clever code you cannot check.
+Before writing a loop over the rows of a table, check whether a vectorised function can do the job, as it usually can. `amounts * 1.18` adds GST to every amount at once, and `ifelse()` or `dplyr::case_when()` classify every row at once. Such code is shorter, clearer, and much faster on large data. Where repetition is really needed, like reading many files, the functions of the `apply` family and of `purrr`, discussed in @sec-fp, are usually neater than a loop. Loops are not wrong, though. A clear loop is better than clever code you cannot check.
 :::
 
 ## A suggested workflow
@@ -261,5 +278,6 @@ Before writing a loop over the rows of a table, check whether a vectorised funct
 | `while`, `repeat` | base R | Repeat code while a condition holds, or until `break` |
 | `next`, `break` | base R | Skip to the next iteration, or leave the loop |
 | `seq_along()`, `character()`, `numeric()` | base R | Positions to loop over, and empty vectors to store results |
+| `print()`, `paste()` | base R | Print a value inside a loop, and join text |
 
 : Functions used in this chapter {#tbl-controlfunctions}

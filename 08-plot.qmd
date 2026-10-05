@@ -5,227 +5,414 @@ source("_common.R")
 
 
 # Charts in Base R {#sec-baseplot}
-It is good practice to look at data as soon as we start analysing it. Small data can be looked at row by row, say in a spreadsheet, but that becomes impossible as the data grows. Visualisation is an essential tool of data analysis, because it shows patterns and relationships that a numerical summary may hide. For example, a histogram shows the distribution of a variable, and can reveal outliers or skewness hidden in the summary statistics. A scatter plot shows the relationship between two variables. It can reveal a correlation, though, by itself, it can never prove that one causes the other.
 
-Visualization also plays a crucial role in communicating data analysis results to others. A well-designed graph or chart can convey information more effectively than a table of numbers or a lengthy report. It can also help identify errors or anomalies in the data and facilitate better decision-making.
+Suppose a Public Works Division gives us its bill register for the year. It has three thousand bills. Officers of the division may approve a bill up to ₹1 lakh. Anything above needs sanction from a higher authority. We want to know whether some bills were kept just below that limit on purpose. We also want to know whether spending rushed up in March, and whether one office pays much larger bills than the others.
 
-In R, the base graphics system provides a powerful set of functions for creating various types of graphs and plots. In this chapter, we will cover the most commonly used functions for creating visualisations in base R, including `plot()`, `boxplot()`, `barplot()`, `hist()`, `pie()`, `dotchart()` and kernel density plots.
+A table of three thousand rows will not answer these questions. Totals and averages will not answer them either. A chart will. A histogram of the bill amounts shows a pile of bills just under ₹1 lakh at a glance. A line chart of monthly spending shows the March rush. A box plot puts the offices side by side. This is why we look at the data before we summarise it.
+
+Charts also help us tell others what we found. A well drawn chart in an audit report says more than a table of numbers. It also helps us spot errors and odd values in the data.
+
+In this chapter we learn the charts that come with base R, without any extra package. We will use `plot()`, `barplot()`, `hist()`, `boxplot()` and density plots, and arrange several charts on one page with `par()`. All the examples use audit data. At the end we use a histogram to find bills split to stay below the limit.
 
 ::: callout-note
-In the next chapter we will cover visualisation with the `ggplot2` library, which is very extensive, and is built on a theoretical framework known as the 'grammar of graphics'.  This grammar, created by Leland Wilkinson, has been implemented in a variety of data visualisation software like Tableau^[[https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/](https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/)], Plotly, etc.
+In @sec-ggplot2 we will learn the `ggplot2` package. It is very flexible, and is built on a theory known as the "grammar of graphics". This grammar was created by Leland Wilkinson. It is also used by other software, such as Tableau^[[https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/](https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/)] and Plotly. Base R charts are still worth learning. They need no package and are very quick for a first look at the data.
 :::
 
-## Using `plot()`
-The `plot()` function in R is a very versatile function that can create a wide variety of visualisations. Its primary purpose is to create scatterplots, but it can also create line plots, bar plots, box plots, and many other types of plots. The "plot" function can be customized in many ways, allowing users to create high-quality visualisations that are tailored to their specific needs.
+## Our data, a bill register and a scheme {#sec-baseplot-data}
 
-The basic syntax of the "plot" function is as follows:
+We will use two small datasets in this chapter.
+
+The first, `bills`, is the bill register of a Public Works Division for the financial year 2024-25. The division has five sub-divisional offices. Each bill has a number, a date, the office, the head of expenditure and the amount in rupees. We have planted two irregularities in it. Our charts should bring both out.
+
+The second, `blocks`, gives the number of beneficiaries and the expenditure of a state scheme in 40 blocks of a district. The scheme pays about ₹6,000 a year to each beneficiary. So the expenditure of a block should rise in step with its beneficiaries. One block does not follow this rule.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the bill register and the block data"
+set.seed(77)
+offices <- c("Nandgaon", "Sonpur", "Bhimtal", "Kesarganj", "Rajnagar")
+heads   <- c("Repairs", "Supplies", "Electricity", "Travel", "Office expenses")
+fy_days <- seq(as.Date("2024-04-01"), as.Date("2025-03-31"), by = "day")
+
+# Planted. Days in March are three times as likely to get a bill (a March rush)
+day_wt <- ifelse(format(fy_days, "%m") == "03", 3, 1)
+
+n <- 3000
+bills <- data.frame(
+  office    = sample(offices, n, TRUE),
+  head      = sample(heads, n, TRUE, prob = c(3, 3, 2, 1, 2)),
+  bill_date = sample(fy_days, n, TRUE, prob = day_wt),
+  amount    = round(rlnorm(n, log(30000), 0.9))
+)
+
+# Planted. 60 repair bills of Kesarganj kept just below the limit of Rs 1 lakh
+split_bills <- data.frame(
+  office    = "Kesarganj",
+  head      = "Repairs",
+  bill_date = sample(fy_days, 60, TRUE),
+  amount    = round(runif(60, 94000, 99999))
+)
+
+bills <- rbind(bills, split_bills)
+bills <- bills[order(bills$bill_date), ]
+rownames(bills) <- NULL
+bills$bill_no <- sprintf("BL/24-25/%04d", seq_len(nrow(bills)))
+fy_months <- month.abb[c(4:12, 1:3)]
+bills$month <- factor(month.abb[as.integer(format(bills$bill_date, "%m"))],
+                      levels = fy_months)
+bills$quarter <- paste0("Q", (as.integer(bills$month) - 1) %/% 3 + 1)
+bills <- bills[, c("bill_no", "bill_date", "month", "quarter", "office", "head", "amount")]
+
+# Scheme data of 40 blocks, at about Rs 6,000 per beneficiary
+blocks <- data.frame(
+  block         = sprintf("Block %02d", 1:40),
+  beneficiaries = round(runif(40, 800, 5000))
+)
+blocks$expenditure_lakh <- round(blocks$beneficiaries * 6000 * runif(40, 0.92, 1.08) / 1e5, 1)
+# Planted. Block 27 spends far more than its beneficiaries justify
+blocks$expenditure_lakh[27] <- round(blocks$expenditure_lakh[27] * 1.7, 1)
+```
+
+Let us look at the first few rows of each.
+
+```{r}
+head(bills)
+head(blocks)
+```
+
+The register has `r format(nrow(bills), big.mark = ",")` bills worth ₹`r round(sum(bills$amount) / 1e7, 2)` crore in all.
+
+## Using `plot()`
+
+The `plot()` function is very versatile. Its main use is to draw scatter plots. It can also draw line charts, box plots and other charts, depending on the data we give it. Its basic syntax is:
+
 ```
 plot(x, y, ...)
 ```
-The `x` and `y` arguments specify the variables to be plotted on the x-axis and y-axis, respectively. The `...` argument can include a wide range of optional arguments that customize the plot. Some of the most commonly used optional arguments include:
 
-- `xlab`: Specifies the label for the x-axis.
-- `ylab`: Specifies the label for the y-axis.
-- `main`: Specifies the main title for the plot.
-- `xlim`: Specifies the limits for the x-axis.
-- `ylim`: Specifies the limits for the y-axis.
-- `type`: Specifies the type of plot to be created (e.g., `"p"` for points, `"l"` for lines,`"b"` for both points and lines, etc.).
-- `col`: Specifies the color of the plot elements (e.g., points, lines, etc.).
-- `pch`: Specifies the symbol used for the points in the plot.
-- `cex`: Specifies the size of the plot elements (e.g., points, lines, etc.).
+The `x` and `y` arguments are the values for the x-axis and the y-axis. The `...` can hold many optional arguments that change how the chart looks. The most common are listed here.
+
+- `xlab` is the label of the x-axis.
+- `ylab` is the label of the y-axis.
+- `main` is the main title of the chart.
+- `xlim` and `ylim` set the limits of the x-axis and the y-axis.
+- `type` is the type of chart. `"p"` draws points, `"l"` draws lines and `"b"` draws both.
+- `col` is the colour of the points or lines.
+- `pch` is the symbol used for the points.
+- `cex` is the size of the points and text.
 
 ::: callout-note
-Here `x` and `y` refer to vectors instead of column names, as we will see in next chapter on ggplot2 where we will use column names, instead of individual vectors.  You'll understand the difference in the following example.
+Here `x` and `y` are vectors, such as `blocks$beneficiaries`. In @sec-ggplot2 we will give column names instead. The examples below make this clear.
 :::
 
-Example of scatterplot: (This will create a scatterplot with "wt" on the x-axis and "mpg" on the y-axis, with axis labels and a main title.)
-```{r p1, fig.align='center', out.height="55%", fig.show='hold'}
-plot(mtcars$wt,
-     mtcars$mpg,
-     xlab = "Car Weight (1000 lbs)",
-     ylab = "Miles per Gallon",
-     main = "Scatterplot of MPG vs Car Weight")
+### A scatter plot
+
+Let us plot the expenditure of each block against its number of beneficiaries.
+
+```{r}
+#| label: fig-bp-scatter
+#| fig-cap: "Expenditure of each block against its beneficiaries"
+plot(blocks$beneficiaries,
+     blocks$expenditure_lakh,
+     xlab = "Number of beneficiaries",
+     ylab = "Expenditure (Rs lakh)",
+     main = "Expenditure and beneficiaries of 40 blocks",
+     pch = 19)
 ```
 
-Example-2: Line plot. The `pressure`^[The `pressure` dataset contains 19 measurements of the vapour pressure of mercury, in millimetres of mercury, at temperatures from 0 to 360 degrees Celsius.] data has two columns, `temperature` and `pressure`. When a data frame of two columns is given to `plot()`, the first column goes on the x-axis and the second on the y-axis.
-```{r p2, fig.align='center', out.height="55%", fig.show='hold'}
-plot(pressure,
-     type = "l",
-     xlab = "Temperature (degrees Celsius)",
-     ylab = "Pressure (mm of mercury)",
-     main = "Vapour pressure of mercury")
-
+```{r}
+#| include: false
+blocks$per_head <- blocks$expenditure_lakh * 1e5 / blocks$beneficiaries
+odd <- which.max(blocks$per_head)
 ```
-Note in above example that, the "type" argument is set to "l" to specify that a line plot should be created.
 
-Example-3: Bar-Plot (bar plot of the number of cars by "cyl" i.e. number of cylinders)
-```{r p3, fig.align='center', out.height="55%", fig.show='hold'}
-barplot(table(mtcars$cyl),
-        xlab = "Number of Cylinders",
-        ylab = "Frequency",
-        main = "Barplot of Number of Cars by Cylinders")
+The points lie close to a straight line, as they should. One point sits well above the line. It is `r blocks$block[odd]`. It spent ₹`r format(round(blocks$per_head[odd]), big.mark = ",")` per beneficiary, against a median of ₹`r format(round(median(blocks$per_head)), big.mark = ",")` for all blocks.
 
+We can mark that point in red with `points()`, and name it with `text()`. Both add to a chart that is already drawn.
+
+```{r}
+#| label: fig-bp-scatter2
+#| fig-cap: "The odd block marked in red"
+plot(blocks$beneficiaries, blocks$expenditure_lakh,
+     xlab = "Number of beneficiaries", ylab = "Expenditure (Rs lakh)",
+     pch = 19, col = "grey50")
+points(blocks$beneficiaries[odd], blocks$expenditure_lakh[odd],
+       pch = 19, col = "red", cex = 1.5)
+text(blocks$beneficiaries[odd], blocks$expenditure_lakh[odd],
+     labels = blocks$block[odd], pos = 2)
 ```
-Note: In above example we have used `table()` function to get the frequency table of `mtcars$cyl`.
 
-Example-4: Boxplot ()
-```{r p4, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a boxplot of "Sepal.Length" by "Species" in the iris dataset
-plot(x = iris$Species,
-     y = iris$Sepal.Length,
-     main = "Boxplot of Sepal Length by Species",
-     xlab = "Species",
-     ylab = "Sepal Length",
+A scatter plot shows that two columns move together. It cannot prove that one causes the other. Here, though, the rule of the scheme tells us they *should* move together. So a point far from the line is a lead to follow up.
+
+### A line chart
+
+Let us total the bills of each month with `tapply()`, in lakh. Then we draw the totals as a line.
+
+```{r}
+#| label: fig-bp-line
+#| fig-cap: "Monthly total of bills"
+monthly <- tapply(bills$amount, bills$month, sum) / 1e5
+round(monthly, 1)
+
+plot(1:12, monthly,
+     type = "b",
+     xlab = "Month of the financial year (1 = April)",
+     ylab = "Amount (Rs lakh)",
+     main = "Monthly total of bills, 2024-25")
+```
+
+Here `type = "b"` draws both points and lines. With `type = "l"` we would get lines only. The total for March is ₹`r round(monthly["Mar"], 1)` lakh. That is about `r round(monthly["Mar"] / median(monthly[-12]), 1)` times the median of the other months. This is the March rush we planted.
+
+### A bar chart of counts
+
+`table()` counts the bills under each head. `barplot()` draws the counts as bars.
+
+```{r}
+#| label: fig-bp-count
+#| fig-cap: "Number of bills under each head"
+barplot(table(bills$head),
+        xlab = "Head of expenditure",
+        ylab = "Number of bills",
+        main = "Bills by head of expenditure")
+```
+
+### A box plot
+
+When `x` is a factor and `y` is numeric, `plot()` draws one box plot for each level of the factor. Let us compare the bill amounts under each head.
+
+```{r}
+#| label: fig-bp-plotbox
+#| fig-cap: "Bill amounts under each head, on a log scale"
+plot(x = factor(bills$head),
+     y = bills$amount,
+     log = "y",
+     main = "Bill amounts by head",
+     xlab = "Head of expenditure",
+     ylab = "Amount (Rs, log scale)",
      col = "darkgray")
-
 ```
 
-Example-5: density plot
-```{r p5, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a density plot of "Sepal.Length" in the iris dataset
-plot(density(iris$Sepal.Length), main = "Density Plot of Sepal Length in the iris dataset",
-     xlab = "Sepal Length", ylab = "Density", col = "blue")
+Bill amounts are skewed. Most bills are small and a few are very large. On an ordinary scale the boxes would be squashed at the bottom. So we used `log = "y"`. On a log scale, each step up the axis multiplies the amount, rather than adding to it. The boxes now have room to show their spread.
 
+### A density plot
+
+A density plot is a smooth version of a histogram. We make it with `density()`, and draw it with `plot()`.
+
+```{r}
+#| label: fig-bp-density
+#| fig-cap: "Density of bill amounts"
+plot(density(bills$amount / 1000),
+     main = "Density of bill amounts",
+     xlab = "Amount (Rs thousand)", ylab = "Density", col = "blue")
 ```
-Note that we have used `density()` function within `plot()` to create a density plot.
 
-Let us learn about other plotting functions in base R.
+The curve rises sharply near zero and has a long tail to the right. That is the usual shape of amounts in accounts.
+
+Let us now learn the other chart functions of base R.
 
 ## Bar plots using `barplot()`
-As the name suggests `barplot()` function is used to create bar charts in R. The basic syntax is `barplot(height, ...)` where `height` should be a vector providing heights of each bar.  Other arguments in ellipsis `...` can be checked by using `?barplot()`.
 
-Here are a few examples of how to use the function:
+As the name suggests, `barplot()` draws bar charts. Its basic syntax is `barplot(height, ...)`. Here `height` is a vector giving the height of each bar. The other arguments can be seen with `?barplot`.
 
-Example: Basic Bar Chart
-```{r p6, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a basic bar chart of the "mpg" dataset
+### A basic bar chart
 
-barplot(mtcars$mpg, names.arg = rownames(mtcars), main = "Miles Per gallon - mtcars", xlab = "Car Model", ylab = "MPG")
+We already have the monthly totals in `monthly`. The argument `names.arg` gives the label under each bar.
 
+```{r}
+#| label: fig-bp-bar1
+#| fig-cap: "Monthly totals as bars"
+barplot(monthly,
+        names.arg = levels(bills$month),
+        main = "Monthly total of bills, 2024-25",
+        xlab = "Month", ylab = "Amount (Rs lakh)",
+        las = 2)
 ```
 
-Example- Bar chart with summarised data
-```{r p7, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a summarised bar chart of the "PlantGrowth" dataset
-data(PlantGrowth)
-barplot(height = t(tapply(PlantGrowth$weight,
-                          list(PlantGrowth$group),
-                          mean)),
-        main = "Mean Weight of Plants by Group",
-        ylab = "Group",
-        xlab = "Weight",
-        col = c("red", "green", "blue"),
-        beside = TRUE,
-        horiz = TRUE)
+The argument `las = 2` turns the labels on the x-axis so that they all fit.
+
+### A bar chart of summarised data
+
+Let us find the average bill of each office with `tapply()`, and draw the averages as horizontal bars.
+
+```{r}
+#| label: fig-bp-bar2
+#| fig-cap: "Average bill of each office"
+office_mean <- tapply(bills$amount, bills$office, mean) / 1000
+round(office_mean, 1)
+
+old_par <- par(mar = c(5, 7, 4, 2))   # wider left margin for the names
+barplot(height = office_mean,
+        main = "Average bill by office",
+        xlab = "Average bill (Rs thousand)",
+        col = "steelblue",
+        horiz = TRUE,
+        las = 1,
+        cex.names = 0.8)
+par(old_par)
 ```
 
-Example- Grouped Bar Chart
-```{r p8, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a grouped bar chart of the "ChickWeight" dataset
-data(ChickWeight)
-barplot(height = tapply(ChickWeight$weight,
-                        list(ChickWeight$Diet, ChickWeight$Time),
-                        mean),
-        main = "Mean Weight of Chicks by Diet and Time",
-        xlab = "Time (days)", ylab = "Weight (grams)",
-        col = c("red", "green", "blue", "yellow"),
-        beside = TRUE,
-        legend.text = c("Diet 1", "Diet 2", "Diet 3", "Diet 4"),
-        args.legend = list(x = "topleft"))
+`horiz = TRUE` draws the bars sideways. `las = 1` keeps the office names upright, and `cex.names = 0.8` makes them a little smaller. The office names need more room on the left than R leaves by default. So we widened the left margin with `par(mar = )`, and restored it afterwards. We learn more about `par()` later in this chapter.
+
+The averages are close. Kesarganj is a little ahead, at ₹`r round(office_mean["Kesarganj"], 1)` thousand. An average alone does not show why. We will find out at the end of this chapter.
+
+### A grouped bar chart
+
+Next, let us total the bills by head *and* by quarter. When `tapply()` gets two grouping columns in a `list()`, it gives a matrix. Each row is a head and each column a quarter.
+
+```{r}
+head_qtr <- tapply(bills$amount, list(bills$head, bills$quarter), sum) / 1e5
+round(head_qtr, 1)
 ```
 
-`tapply()` gives a matrix of mean weights, with one row for each diet and one column for each day. `barplot()` draws one group of bars for each *column*, and one bar, in its own colour, for each *row*. So we get a group for each day, with one bar per diet, and the legend names the rows.
-
-
-Example: Stacked Bar Chart
-```{r p9, fig.align='center', out.height="55%", fig.show='hold'}
-# Create a stacked bar chart of the "VADeaths" dataset
-data(VADeaths)
-barplot(VADeaths,
-        main = "Death Rates in Virginia (1940) by Age Group and Population Group",
-        xlab = "Population group",
-        ylab = "Death rate (per 1000)",
+```{r}
+#| label: fig-bp-grouped
+#| fig-cap: "Spending under each head, quarter by quarter"
+barplot(height = head_qtr,
+        main = "Spending by head and quarter",
+        xlab = "Quarter", ylab = "Amount (Rs lakh)",
         col = c("red", "green", "blue", "yellow", "purple"),
-        legend.text = rownames(VADeaths),
-        args.legend = list(x = "topright", title = "Age group", ncol = 2),
-        ylim = c(0, 300),
-        beside = FALSE)
-
+        beside = TRUE,
+        legend.text = rownames(head_qtr),
+        args.legend = list(x = "topleft", cex = 0.8))
 ```
 
-`VADeaths` is already a matrix, with five age groups as rows and four population groups (rural and urban, male and female) as columns. With `beside = FALSE`, the rows are *stacked* in each column. So each bar is a population group, and each coloured piece an age group.
+`barplot()` draws one group of bars for each *column* of the matrix. Inside a group, it draws one bar, in its own colour, for each *row*. So we get a group for each quarter, with one bar per head. The legend names the rows. Every head rises in the fourth quarter, because of the March rush.
 
-In fact, we can also create barplots using formula directly.  See this example
-```{r p10, fig.align='center', out.height="55%", fig.show='hold'}
-barplot(GNP ~ Year, data = longley)
+### A stacked bar chart
+
+The same matrix with `beside = FALSE` *stacks* the rows inside each column. Now each bar is a quarter, and each coloured piece is a head.
+
+```{r}
+#| label: fig-bp-stacked
+#| fig-cap: "Spending in each quarter, made up of the heads"
+barplot(head_qtr,
+        main = "Spending by quarter and head",
+        xlab = "Quarter", ylab = "Amount (Rs lakh)",
+        col = c("red", "green", "blue", "yellow", "purple"),
+        legend.text = rownames(head_qtr),
+        args.legend = list(x = "topleft", cex = 0.8),
+        beside = FALSE)
+```
+
+A stacked bar shows the total of each quarter, and how the heads make it up. A grouped bar is better for comparing one head across quarters.
+
+### A bar chart from a formula
+
+We can also give `barplot()` a formula and a data frame. `aggregate()` makes the data frame of totals. Then `amount ~ office` means "amount for each office".
+
+```{r}
+#| label: fig-bp-formula
+#| fig-cap: "Total of bills of each office"
+office_total <- aggregate(amount ~ office, data = bills, FUN = sum)
+office_total$amount <- office_total$amount / 1e5
+barplot(amount ~ office, data = office_total,
+        ylab = "Amount (Rs lakh)")
 ```
 
 ## Histograms using `hist()`
-The `hist()` function in R is used to create a histogram, which is a graphical representation of the distribution of a numeric variable. The basic syntax for `hist()` is as follows:
+
+The `hist()` function draws a histogram. A histogram shows how the values of a numeric column are spread. The basic syntax is:
 
 ```
 hist(x, breaks = "Sturges", freq = TRUE, main = NULL,
      xlab = NULL, ylab = "Frequency", ...)
 ```
-where -
 
-- `x`: The data to be plotted, which should be a numeric vector or a matrix.
-- `breaks`: The number of bins to use in the histogram. By default, R uses the Sturges formula to determine the number of bins, but you can also specify a different number of bins or a vector of breakpoints.
-- `freq`: A logical value indicating whether to plot the frequency or density of the data. If `TRUE`, the y-axis represents the number of observations in each bin. If `FALSE`, the y-axis represents the density of the data.
-- `main`: A character string specifying the title of the histogram.
-- `xlab`: A character string specifying the label of the x-axis.
-- `ylab`: A character string specifying the label of the y-axis.
-- `...`: Additional arguments passed to the `plot()` function, such as `col`, `border`, and `xlim`.
+The arguments are these.
 
-Example -
-```{r p11, fig.align='center', out.height="55%", fig.show='hold'}
-hist(iris$Sepal.Length, breaks = 10, col = "blue",
-     xlab = "Sepal Length", ylab = "Frequency",
-     main = "Histogram of Sepal Length in Iris Dataset")
+- `x` is the numeric vector to be plotted.
+- `breaks` sets the bins. By default R chooses the number of bins by the Sturges formula. We can give a different number of bins, or a vector of break points.
+- `freq` chooses what the y-axis shows. If `TRUE`, it shows the number of values in each bin. If `FALSE`, it shows the density.
+- `main` is the title of the histogram.
+- `xlab` and `ylab` are the labels of the axes.
+- `...` holds more arguments for the chart, such as `col`, `border` and `xlim`.
+
+Let us draw a histogram of the bill amounts, in thousands of rupees.
+
+```{r}
+#| label: fig-bp-hist1
+#| fig-cap: "Histogram of bill amounts"
+hist(bills$amount / 1000, breaks = 50, col = "lightblue",
+     xlab = "Amount (Rs thousand)", ylab = "Number of bills",
+     main = "Histogram of bill amounts")
 ```
 
-Another example using two layers
-```{r p12, fig.align='center', out.height="55%", fig.show='hold'}
-hist(mtcars$mpg,
-     freq=FALSE,
-     breaks=12,
-     col="red",
-     xlab="Miles Per Gallon",
-     main="Histogram, with density curve")
+Most bills are below ₹50 thousand. A few run to several lakh. A long tail on the right like this is called *right skew*.
+
+Skewed amounts are easier to see on a log scale. `log10()` turns ₹10,000 into 4, ₹1 lakh into 5 and ₹10 lakh into 6. Let us draw the histogram of `log10(amount)` as a density, with `freq = FALSE`. Then we add a density curve on top of it with `lines()`.
+
+```{r}
+#| label: fig-bp-hist2
+#| fig-cap: "Histogram of log10 of bill amounts, with a density curve"
+hist(log10(bills$amount),
+     freq = FALSE,
+     breaks = 40,
+     col = "grey85",
+     xlab = "log10 of amount (4 = Rs 10,000, 5 = Rs 1 lakh)",
+     main = "Histogram, with density curve")
 # add density curve
-lines(density(mtcars$mpg), col="blue", lwd=2)
+lines(density(log10(bills$amount)), col = "blue", lwd = 2)
 ```
 
-In above example we have used `lines()` function to add another layer to existing plot.
+`lines()` adds a layer to the chart already drawn. The bars and the curve now have a smooth, bell-like shape. Look carefully at the bar just to the left of 5, that is, just below ₹1 lakh. It stands a little above the curve, while its neighbour on the right falls below it. The sign is faint here, among three thousand bills. We will come back to it.
 
-## Boxplot(s) and variants using `boxplot()`
+## Box plots using `boxplot()`
 
-A Box-plot is also called box and whiskers plot and is used to show distribution of a numerical variable using graphical summaries.  Deciphering box plot can be understood using the following illustration.
+A box plot is also called a box and whiskers plot. It shows the spread of a numeric column through a few summary values. @fig-boxplots shows how to read one.
+
 ```{r fig-boxplots, echo=FALSE, fig.cap="Understanding boxplots", fig.align='center', fig.show='hold', out.height="45%"}
 knitr::include_graphics('images/boxplots.png')
 ```
 
-Using `boxplot()` function is simple, as the syntax is `boxplot(x, ...)` where `x` is a numeric vector or a list of numeric vectors to be plotted, and `...` represents any additional arguments that can be used to customize the appearance of the box plot.
+The syntax is `boxplot(x, ...)`. Here `x` is a numeric vector, or a list of numeric vectors. The `...` holds more arguments to change how the chart looks.
 
-Example-
-```{r p13, fig.align='center', out.height="55%", fig.show='hold'}
-boxplot(mtcars$mpg)
+```{r}
+#| label: fig-bp-box1
+#| fig-cap: "Box plot of all bill amounts"
+boxplot(bills$amount / 1000, ylab = "Amount (Rs thousand)")
 ```
 
-However, the boxplots are particularly useful when drawn in parallel over several categories.  To draw these, we can directly use formula as we did in example above.  E.g. the following code will create box-plots of for each type of spray, from InsectSprays^[a base R data-set having the counts of insects in agricultural experimental units treated with different insecticides.] data.
-```{r p14, fig.align='center', out.height="55%", fig.show='hold'}
-boxplot(count ~ spray,
-        data = InsectSprays,
-        col = "lightgray")
+```{r}
+#| include: false
+n_out <- length(boxplot.stats(bills$amount)$out)
 ```
+
+The points above the top whisker are values far from the middle of the data. Here there are `r n_out` of them. That is about `r round(100 * n_out / nrow(bills))`% of all bills. With skewed amounts many bills fall beyond the whisker, and most of them are genuine large bills. So a point beyond the whisker is a candidate to look at, not an error.
+
+Box plots are most useful when drawn side by side for several groups. We can give a formula, such as `amount ~ office`, as we did for `barplot()`. Let us compare the offices.
+
+```{r}
+#| label: fig-bp-box2
+#| fig-cap: "Bill amounts of each office, on a log scale"
+boxplot(amount ~ office,
+        data = bills,
+        log = "y",
+        col = "lightgray",
+        xlab = "Office", ylab = "Amount (Rs, log scale)")
+```
+
+```{r}
+#| include: false
+office_median <- tapply(bills$amount, bills$office, median)
+```
+
+The thick line in each box is the median. Kesarganj has the highest median bill, ₹`r format(round(office_median["Kesarganj"]), big.mark = ",")`, against ₹`r format(round(min(office_median)), big.mark = ",")` to ₹`r format(round(max(office_median[names(office_median) != "Kesarganj"])), big.mark = ",")` for the other offices. The difference is not large. A box plot shows the overall spread well, but it can hide a narrow pile of values. We need the histogram for that.
+
+::: callout-warning
+## Caution
+
+A log scale cannot show zero or negative values. With `log = "y"`, R leaves such values out of some charts with a warning. Other charts, like `boxplot()`, stop with an error. Real registers often have zero amounts (cancelled bills) or negative ones (reversals). Count and examine them separately before drawing a chart on a log scale.
+:::
 
 ## Saving and exporting charts
-See the last section of the next chapter.
+
+Charts can be saved from the RStudio menu or through code. Both ways are explained near the end of @sec-ggplot2, including the graphics devices used for base R charts.
 
 ## Use of `par()`
-One of the useful functions of base R graphics is `par()`, which sets or queries graphical **par**ameters. In the following example, its argument `mfrow = c(nr, nc)` draws the next plots in an `nr`-by-`nc` grid on the same page.
 
-The data is *Anscombe's quartet*, four small datasets created by the statistician Francis Anscombe in 1973. Let us first look at their summary statistics.
+One useful function of base R graphics is `par()`. It sets or reads the graphical **par**ameters. In the following example, its argument `mfrow = c(nr, nc)` draws the next charts in a grid of `nr` rows and `nc` columns on the same page.
+
+Here we use a famous built-in dataset, *Anscombe's quartet*. It has four small datasets, created by the statistician Francis Anscombe in 1973 to show why we must look at data. Let us first look at their summary statistics.
 
 ```{r}
 data.frame(set  = 1:4,
@@ -251,34 +438,65 @@ purrr::walk(1:4,
 par(old_par)   # restore the earlier settings
 ```
 
-The pictures are completely different. Only the first is a normal linear relationship. The second is a curve, the third is a straight line spoiled by one outlier, and in the fourth a single point creates the whole correlation. Summary statistics alone would never tell us this. This is the strongest argument for always looking at the data.
+The pictures are completely different. Only the first is a normal straight line relationship. The second is a curve. The third is a straight line spoiled by one outlier. In the fourth, a single point creates the whole correlation. Summary statistics alone would never tell us this. This is the strongest argument for always looking at the data.
 
-`par()` returns the old settings, which we saved in `old_par` and restored at the end. Otherwise, all later plots would also be drawn four to a page.
+`par()` returns the old settings. We saved them in `old_par` and restored them at the end. Otherwise all later charts would also be drawn four to a page.
+
+The same idea is handy in audit. We can draw a histogram, a box plot, a monthly line and a bar chart of a new register on one page, and take in the whole picture at once.
+
+```{r}
+#| label: fig-bp-par
+#| fig-cap: "A first look at the bill register, four charts on one page"
+old_par <- par(mfrow = c(2, 2))
+hist(log10(bills$amount), breaks = 40, main = "Amounts (log10)", xlab = NULL)
+boxplot(amount ~ quarter, data = bills, log = "y", main = "By quarter",
+        xlab = NULL, ylab = NULL)
+plot(1:12, monthly, type = "b", main = "Monthly total (Rs lakh)",
+     xlab = "Month (1 = April)", ylab = NULL)
+barplot(table(bills$office), main = "Bills by office", las = 2, cex.names = 0.7)
+par(old_par)
+```
 
 ## Audit use case, payments just below a limit {#sec-baseplot-audit}
 
-Suppose purchases up to ₹1 lakh can be approved by an officer, and anything above needs a higher authority or a tender. A common irregularity is to *split* a larger purchase into several bills, each just below the limit. A histogram of payment amounts can show this at a glance.
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code to create the payments"
-set.seed(77)
-amounts <- round(rlnorm(3000, log(30000), 0.9))
-# Planted. 60 bills just below the limit of Rs 1 lakh
-amounts <- c(amounts, round(runif(60, 94000, 99999)))
-```
+Officers of our division may approve a bill up to ₹1 lakh. Anything above needs a higher authority, or a tender. A common irregularity is to *split* a larger purchase into several bills, each just below the limit. A histogram of bill amounts can show this at a glance. Let us draw the bills between ₹50,000 and ₹1.5 lakh, in bins of ₹2,500.
 
 ```{r}
 #| label: fig-belowlimit
-#| fig-cap: "Payments between Rs 50,000 and Rs 1.5 lakh, with the approval limit marked in red"
-hist(amounts[amounts >= 50000 & amounts <= 150000],
+#| fig-cap: "Bills between Rs 50,000 and Rs 1.5 lakh, with the approval limit marked in red"
+near_limit <- bills$amount[bills$amount >= 50000 & bills$amount <= 150000]
+hist(near_limit,
      breaks = seq(50000, 150000, by = 2500),
      col = "grey80", border = "white",
-     xlab = "Amount of payment (Rs)", main = NULL)
+     xlab = "Amount of bill (Rs)", main = NULL)
 abline(v = 100000, col = "red", lwd = 2)
 ```
 
-The number of payments falls steadily as amounts rise, as expected, except for a sharp spike just *below* ₹1 lakh, and a drop just above it. The 2,500-rupee bins just under the limit hold far more payments than their neighbours. Such a spike is a strong lead for splitting of purchases. The next step is to look at the payments in that bin, by vendor and date. We test this pattern formally in @sec-nigrini.
+The number of bills falls steadily as amounts rise, as expected. The exception is a sharp spike just *below* ₹1 lakh, and a drop just after it. The bins of ₹2,500 just under the limit hold far more bills than their neighbours. Such a spike is a strong lead for splitting of purchases.
+
+The next step is to see *whose* bills these are. Let us take the bills from ₹95,000 up to the limit and count them by office and head.
+
+```{r}
+just_below <- bills[bills$amount >= 95000 & bills$amount < 100000, ]
+table(just_below$office, just_below$head)
+```
+
+```{r}
+#| include: false
+jb_kes <- sum(just_below$office == "Kesarganj" & just_below$head == "Repairs")
+```
+
+Of the `r nrow(just_below)` bills in this narrow range, `r jb_kes` are repair bills of Kesarganj. The other offices have only a few each, spread over the heads. Let us draw them as bars to show the point in a report.
+
+```{r}
+#| label: fig-bp-justbelow
+#| fig-cap: "Bills of Rs 95,000 up to the limit, by office"
+barplot(sort(table(just_below$office), decreasing = TRUE),
+        col = c("firebrick", rep("grey70", 4)),
+        ylab = "Number of bills", main = "Bills just below Rs 1 lakh")
+```
+
+The auditor would now list the `r jb_kes` repair bills of Kesarganj, sorted by date. Bills for the same work, to the same contractor, on nearby dates point to one job split into many. Ask the office for the estimates and the work orders. Then check who approved each bill and whether the combined value needed higher sanction. Put the chart, the list and the replies in the working papers. We test this pattern more formally in @sec-nigrini.
 
 ::: callout-tip
 ## Audit tip
@@ -289,19 +507,20 @@ Choose the bins carefully. Too wide a bin hides the spike. Here we used bins of 
 ::: callout-warning
 ## Caution
 
-By default, `hist()` counts a value that falls exactly on a break in the bin to its left. So a payment of exactly ₹1 lakh is counted in the bin just *below* the limit. Keep this in mind when the rule says "up to ₹1 lakh", and check the payments exactly at the limit separately.
+By default, `hist()` counts a value that falls exactly on a break in the bin to its left. So a bill of exactly ₹1 lakh is counted in the bin just *below* the limit. Keep this in mind when the rule says "up to ₹1 lakh", and check the bills exactly at the limit separately.
 :::
 
 ## A suggested workflow
 
-1.  **Look before you summarise.** Draw a quick chart of any new data, like a payment register, before you work out totals. Anscombe's quartet showed that summary statistics alone can hide very different patterns.
-2.  **Check the spread of amounts with `hist()`.** A histogram of payment amounts shows skewness, outliers and unusual spikes. Try a few values of `breaks`, since bins that are too wide hide the pattern.
+1.  **Look before you summarise.** Draw a quick chart of any new data, like a bill register, before you work out totals. Anscombe's quartet showed that summary statistics alone can hide very different patterns.
+2.  **Check the spread of amounts with `hist()`.** A histogram of amounts shows skew, outliers and unusual spikes. Try a few values of `breaks`, since bins that are too wide hide the pattern. Use `log10()` for skewed amounts.
 3.  **Mark the limits with `abline()`.** Draw the financial limit, say ₹1 lakh, on the chart. A spike just below the line is a lead for split purchases.
-4.  **Compare groups with `boxplot()`.** Use a formula like `y ~ group` to compare the spread of payments across offices or vendors. Points beyond the whiskers are the cases to look at first.
-5.  **Count categories with `barplot()`.** Count vouchers by department or month with `table()`, and draw them as bars. Use `beside = TRUE` to compare groups side by side, or stacked bars to show the make-up of each total.
-6.  **See relationships with `plot()`.** A scatter plot of two columns shows whether they move together. It shows association, not cause.
-7.  **Put related charts together with `par()`.** Use `par(mfrow = )` to see several charts on one page. Restore the old settings afterwards.
-8.  **Follow up the leads.** Take the payments in the unusual bin or group, and examine them by vendor, date and supporting documents.
+4.  **Compare groups with `boxplot()`.** Use a formula like `amount ~ office` to compare the spread across offices or heads. Points beyond the whiskers are candidates to look at, not errors.
+5.  **Count and total categories with `barplot()`.** Count bills with `table()`, or total them with `tapply()`, and draw them as bars. Use `beside = TRUE` to compare groups side by side, or stacked bars to show the make-up of each total.
+6.  **See trends with a line chart.** Plot the monthly totals with `type = "b"`. A rush in March stands out at once.
+7.  **See relationships with `plot()`.** A scatter plot of two columns shows whether they move together. Mark the odd points with `points()` and `text()`. It shows association, not cause.
+8.  **Put related charts together with `par()`.** Use `par(mfrow = )` to see several charts on one page. Restore the old settings afterwards.
+9.  **Follow up the leads.** Take the bills in the unusual bin or group, and examine them by office, date and supporting documents.
 
 ::: callout-important
 ## Remember
@@ -313,10 +532,13 @@ A chart is the quickest way to see what the numbers hide. Look at the data befor
 
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
-| `plot()` | base R | Scatter plots, line plots and more, depending on the data |
-| `barplot()` | base R | Bar charts, grouped (`beside = TRUE`) or stacked |
+| `plot()` | base R | Scatter plots, line charts (`type = "l"` or `"b"`), and box plots when `x` is a factor |
+| `points()`, `text()` | base R | Add points and labels to an existing chart |
+| `barplot()` | base R | Bar charts, grouped (`beside = TRUE`) or stacked, from a vector, a matrix or a formula |
+| `table()`, `tapply()`, `aggregate()` | base R | Count or total values by group, to feed a chart |
 | `hist()` | base R | Histograms, with `breaks` controlling the bins |
-| `density()`, `lines()` | base R | Density curves, and adding lines to an existing plot |
-| `boxplot()` | base R | Box plots, including by groups with a formula like `y ~ group` |
-| `abline()` | base R | Adds a straight line, like a limit, to an existing plot |
-| `par(mfrow = )` | base R | Several plots on one page, and other graphical settings |
+| `density()`, `lines()` | base R | Density curves, and adding lines to an existing chart |
+| `log10()` | base R | Logarithm to base 10, to spread out skewed amounts |
+| `boxplot()`, `boxplot.stats()` | base R | Box plots, including by groups with a formula like `y ~ group`, and the points beyond the whiskers |
+| `abline()` | base R | Adds a straight line, like a limit, to an existing chart |
+| `par(mfrow = )`, `par(mar = )` | base R | Several charts on one page, the margins, and other graphical settings |

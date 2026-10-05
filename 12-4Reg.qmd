@@ -5,15 +5,27 @@ source("_common.R")
 
 # Linear Regression {#sec-regression}
 
-Regression models are a class of statistical models that let us explore the relationship between a response variable and one or more explanatory variables. If such a relationship exists and we can find it, we can predict the value of the response variable from the explanatory variables.
+Every office of the government spends money. An auditor cannot examine every voucher of every office. So we would like to know, before we start, which offices spend *more than they should*. But what should an office spend? A large office with many staff, a big building and many beneficiaries will naturally spend more than a small one. Comparing raw amounts only tells us which offices are big.
 
-As an example, suppose we establish a relationship between the number of employees in an office and its monthly expenditure on salary. We can then predict the monthly salary expenditure of any office if we know its staff strength. That lets us ask useful questions. How much should an office with 10 employees spend on salary every month? And for the auditor, the more interesting question is the reverse one. Which offices are spending *much more* than their staff strength explains? We will answer exactly this question at the end of this chapter, in @sec-reg-audit.
+Regression solves this problem. It learns, from all the offices together, how expenditure depends on its *drivers*, like staff strength, floor area or number of beneficiaries. It then gives an *expected* expenditure for each office. The difference between what an office actually spent and what was expected is the part its drivers cannot explain. Offices with a large unexplained part are our leads.
 
-Explanatory variables are also called *regressors*, *independent* variables or *predictors*. The response variable is also called the *dependent* or *outcome* variable. When the response variable is numeric and its relationship with the predictors is linear, the regression is called *linear regression*. There are some other assumptions too, which we will discuss later in the chapter.
+As an example, suppose we establish a relationship between the number of employees in an office and its monthly expenditure on salary. We can then predict the salary expenditure of any office if we know its staff strength. How much should an office with 10 employees spend on salary every month? And for the auditor, the more interesting question is the reverse one. Which offices are spending *much more* than their staff strength explains? We will answer exactly this question at the end of this chapter, in @sec-reg-audit.
+
+Formally, regression models are a class of statistical models that let us explore the relationship between a response variable and one or more explanatory variables. Explanatory variables are also called *regressors*, *independent* variables or *predictors*. The response variable is also called the *dependent* or *outcome* variable. When the response variable is numeric and its relationship with the predictors is linear, the regression is called *linear regression*. There are some other assumptions too, which we will discuss later in the chapter.
+
+In this chapter we will learn to
+
+- fit a regression line with one predictor, and read every part of its output,
+- check the assumptions behind it, with diagnostic plots,
+- predict expected amounts, with a range of likely values,
+- use several predictors together, including categories like terrain, and interactions,
+- detect predictors which repeat each other's information (multi-collinearity),
+- avoid being misled by a hidden variable (Simpson's paradox), and
+- finally, flag offices which spend more than expected, and measure the excess in rupees.
 
 ## Prerequisites
 
-Besides `tidyverse`, we will use a few packages in this chapter. `broom` turns model results into tidy data frames. `performance` and `see` draw diagnostic plots. `car` calculates the variance inflation factor. `GGally` draws correlation plots and `moderndive` draws parallel slopes. `palmerpenguins` gives us a dataset for the last example.
+Besides `tidyverse`, we will use a few packages in this chapter. `broom` turns model results into tidy data frames. `performance` and `see` draw diagnostic plots. `car` calculates the variance inflation factor. `GGally` draws correlation plots and `moderndive` draws parallel slopes.
 
 ```{r}
 #| message: false
@@ -24,7 +36,6 @@ library(performance)
 library(car)
 library(GGally)
 library(moderndive)
-library(palmerpenguins)
 ```
 
 ```{r helpfun, echo=FALSE, warning=FALSE, message=FALSE}
@@ -62,34 +73,98 @@ my_fn <- function(data, mapping, method = "p", use = "pairwise", ...){
     theme_void() +
     theme(panel.background = element_rect(fill = fill))
 }
+
+# Small helpers for numbers written in the text
+r2 <- function(x, d = 2) formatC(unname(x), format = "f", digits = d)
+# A term of an equation, with its sign, like "+ 0.45" or "- 0.45"
+term <- function(x, d = 4) paste(if (x < 0) "-" else "+", r2(abs(x), d))
 ```
+
+## Our data, office expenses of block offices {#sec-reg-data}
+
+Most of this chapter runs on one dataset. A state has 120 Block Development Offices (BDOs) in seven districts. Besides salaries, each office spends on electricity, telephone, stationery, vehicle hire, camps for beneficiaries and other contingencies. We call this the *office expenses* of the office. For the financial year 2023-24 we have, for each office,
+
+- `office_id` and `district`,
+- `terrain`, whether the block is in the plains, in the hills or in a tribal area,
+- `staff`, the number of employees in position,
+- `sanctioned`, the number of sanctioned posts,
+- `area_sqm`, the floor area of the office building in square metres,
+- `population`, the population of the block in thousand,
+- `beneficiaries`, the number of beneficiaries of the schemes run by the office, in thousand, and
+- `office_exp`, the office expenses for the year, in ₹ lakh.
+
+Office expenses should grow with staff and with the number of beneficiaries served. Offices in the hills and in tribal areas should spend more on vehicle hire, for the same work. We have also planted two offices whose expenses are inflated by ₹11 lakh each, as if bills for vehicle hire were paid without any vehicle being used. Let us see if regression can find them. As in other chapters, new readers may skip the code which creates the data.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the block office data"
+set.seed(4012)
+n <- 120
+district_terrain <- c(Etawah = "Plain", Sitapur = "Plain", Firozpur = "Plain",
+                      Almora = "Hilly", Chamba = "Hilly",
+                      Bastar = "Tribal", Mayurbhanj = "Tribal")
+bdo <- tibble(
+  office_id = sprintf("BDO-%03d", 1:n),
+  district  = sample(names(district_terrain), n, replace = TRUE,
+                     prob = c(0.17, 0.17, 0.16, 0.13, 0.12, 0.13, 0.12))
+) |>
+  mutate(
+    terrain = factor(district_terrain[district], levels = c("Plain", "Hilly", "Tribal")),
+    # offices in the hills and tribal areas are smaller
+    staff = round(case_when(terrain == "Plain" ~ runif(n, 22, 55),
+                            terrain == "Hilly" ~ runif(n, 12, 38),
+                            TRUE               ~ runif(n, 16, 44))),
+    sanctioned    = round(staff / runif(n, 0.80, 0.95)),
+    # bigger offices have bigger buildings
+    area_sqm      = round(120 + 11 * staff + rnorm(n, 0, 45)),
+    population    = round(runif(n, 60, 200) * if_else(terrain == "Plain", 1.2, 0.8)),
+    beneficiaries = round(population * runif(n, 0.25, 0.35), 1),
+    # office expenses in lakh, driven by staff, beneficiaries and terrain
+    office_exp = round(5 + 0.45 * staff + 0.12 * beneficiaries +
+                       c(Plain = 0, Hilly = 6, Tribal = 3.5)[as.character(terrain)] +
+                       rnorm(n, 0, 1.6), 2)
+  )
+
+# Planted cases. Vehicle hire of Rs 11 lakh paid without any vehicle used
+planted <- c("BDO-027", "BDO-088")
+bdo <- bdo |>
+  mutate(office_exp = if_else(office_id %in% planted, office_exp + 11, office_exp))
+```
+
+```{r}
+glimpse(bdo)
+```
+
+Together these offices spent ₹`r r2(sum(bdo$office_exp) / 100)` crore on office expenses in the year. The smallest spent ₹`r r2(min(bdo$office_exp))` lakh and the largest ₹`r r2(max(bdo$office_exp))` lakh.
 
 ## Basic concepts
 
-Before we build a regression model, it is always good practice to visualise the data. It helps us see the nature of the relationship between the predictors and the response variable, if there is one. To see the relationship between two numeric variables, we use a scatter plot. See the two examples in @fig-concept. In the first plot there is a near perfect linear relationship between GNP and population (correlation `r round(cor(longley$GNP, longley$Population), 2)`). In the second plot there is a strong but negative relationship between mileage and engine displacement (correlation `r round(cor(mtcars$disp, mtcars$mpg), 2)`). The points are more scattered around the line here.
+Before we build a regression model, it is always good practice to visualise the data. It helps us see the nature of the relationship between the predictors and the response variable, if there is one. To see the relationship between two numeric variables, we use a scatter plot. See the two examples in @fig-concept. In the first plot there is a near perfect linear relationship between the sanctioned posts and the staff in position (correlation `r r2(cor(bdo$sanctioned, bdo$staff))`). In the second plot there is a clear positive relationship between office expenses and staff (correlation `r r2(cor(bdo$staff, bdo$office_exp))`). The points are much more scattered around the line here.
 
 ::: {#fig-concept}
 
 ```{r echo=FALSE, fig.align='center', out.height="45%", out.width="47%", fig.show='hold'}
 
-longley |>
-  ggplot(aes(Population, GNP)) +
+bdo |>
+  ggplot(aes(staff, sanctioned)) +
   geom_point(color = 'blue') +
   geom_smooth(method = 'lm', se = FALSE, color = 'red', formula = 'y ~ x') +
-  labs(title = 'Ex-1: Gross Nation Product Vs.\nPopulation in longley dataset') +
+  labs(title = 'Ex-1: Sanctioned posts vs.\nstaff in position',
+       x = "Staff in position", y = "Sanctioned posts") +
   theme_bw()
 
-mtcars |>
-  ggplot(aes(disp, mpg)) +
+bdo |>
+  ggplot(aes(staff, office_exp)) +
   geom_point(color = 'blue') +
   geom_smooth(method = 'lm', se = FALSE, color = 'red', formula = 'y ~ x') +
-  labs(title = 'Ex-2: Mileage in miles per gallon\nvs. Displacement') +
+  labs(title = 'Ex-2: Office expenses (₹ lakh)\nvs. staff in position',
+       x = "Staff in position", y = "Office expenses (₹ lakh)") +
   theme_bw()
 
 
 ```
 
-Linear Regression - Intuition
+The idea behind linear regression
 :::
 
 When the outcome variable has a linear relationship with the explanatory variable, the best prediction lies on a straight line. So the maths behind the prediction is finding the equation of that line, @eq-lr1.
@@ -98,7 +173,7 @@ $$
 y = mx + c
 $$ {#eq-lr1}
 
-Where -
+Where
 
 - `m` is the slope of the line
 - `c` is the intercept on the Y-axis (value of $y$ when $x$ is `0`)
@@ -117,13 +192,17 @@ $$
 y = \beta_0 + \beta_1x + \epsilon
 $$ {#eq-lr3}
 
-The best line is the one which leaves the smallest residuals. We cannot simply add up the residuals, because some are positive and some negative, and they cancel out. See @fig-errors. So we either take their absolute values or their squares. The usual method is to minimise the *sum of squares* of residuals. Squaring gives more weight to large residuals than to small ones. It also gives a simple formula for the best line. That is why this technique is called **Ordinary Least Squares** or **OLS** regression.
+The best line is the one which leaves the smallest residuals. We cannot simply add up the residuals, because some are positive and some negative, and they cancel out. See @fig-errors, which shows the first 25 offices. So we either take their absolute values or their squares. The usual method is to minimise the *sum of squares* of residuals. Squaring gives more weight to large residuals than to small ones. It also gives a simple formula for the best line. That is why this technique is called **Ordinary Least Squares** or **OLS** regression.
 
-```{r fig-errors, echo=FALSE, warning=FALSE, fig.align='center', fig.cap="Residuals - Intuition and Concept", out.height="35%"}
-my_chart(LifeCycleSavings, sr, pop75)
+```{r fig-errors, echo=FALSE, warning=FALSE, fig.align='center', fig.cap="Residuals are the gaps between the points and the line", out.height="35%"}
+bdo25 <- head(bdo, 25)
+my_chart(bdo25, staff, office_exp) +
+  labs(x = "Staff in position", y = "Office expenses (₹ lakh)")
 ```
 
-## Simple Linear Regression in R
+For an auditor, the residual is the most useful number of all. It is the amount which an office spent over and above (or below) what its drivers explain.
+
+## Simple linear regression in R
 
 We do not have to do this minimisation ourselves. Base R has a function `lm()` which fits the best regression line for a given set of variables. The syntax is simple.
 
@@ -131,27 +210,26 @@ We do not have to do this minimisation ourselves. Base R has a function `lm()` w
 lm(formula, data, ...)
 ```
 
-where -
+where
 
 - `formula` is a symbolic description of the model to be fitted. For our example above, we write `y ~ x`, read as "y is explained by x".
 - `data` is the data frame which contains the variables.
 
 `lm()` returns a special object. We can print it directly like other R objects. But it is best printed with the `summary()` function. Let us first see an example of *simple* linear regression, which is linear regression with only one independent variable.
 
-**Problem Statement:** Example-1. `iris` is a famous (Fisher's or Anderson's) dataset, loaded by default in R. It gives the measurements in centimetres of sepal length (`Sepal.Length`), sepal width (`Sepal.Width`), petal length (`Petal.Length`) and petal width (`Petal.Width`) for 50 flowers from each of 3 species (`Species`) of iris. The species are *setosa*, *versicolor*, and *virginica*. Let us try to establish a relationship between `Sepal.Length` and `Sepal.Width` of the *setosa* species, which are the first 50 records of `iris`.
+**Example 1.** Let us try to explain the office expenses (`office_exp`) of our block offices by their staff strength (`staff`). How much does one more employee add to the yearly office expenses?
 
 As already stated, it is good practice to visualise the data first. So let us make a scatter plot, as in @fig-ex1plot.
 
-```{r fig-ex1plot, fig.align='center', fig.cap="Relationship between sepal widths and lengths in setosa species", out.height="30%"}
+```{r fig-ex1plot, fig.align='center', fig.cap="Office expenses and staff strength of block offices", out.height="30%"}
 
-iris %>%
-  # Extract First 50 records
-  head(50) %>%
-  ggplot(aes(Sepal.Length, Sepal.Width)) +
+bdo %>%
+  ggplot(aes(staff, office_exp)) +
   # Scatter plot
   geom_point() +
   # adding a trend line without error bands
   geom_smooth(method = 'lm', se=FALSE, formula = "y~x") +
+  labs(x = "Staff in position", y = "Office expenses (₹ lakh)") +
   # Theme Black and White
   theme_bw()
 
@@ -160,7 +238,7 @@ iris %>%
 The relationship looks fairly linear (@fig-ex1plot), so let us build the model.
 
 ```{r ex1}
-lin_reg1 <- lm(formula = Sepal.Width ~ Sepal.Length, data = iris[1:50,])
+lin_reg1 <- lm(formula = office_exp ~ staff, data = bdo)
 
 # Let us print the object directly
 lin_reg1
@@ -171,7 +249,7 @@ summary(lin_reg1)
 
 Simply printing the object gives us only the coefficients. Printing it with `summary()` gives us a lot of other information. But how do we read it? Before that, let us understand a few assumptions which we made, silently, while fitting the line.
 
-## Assumptions of Linear Regression
+## Assumptions of linear regression
 
 Linear regression makes several assumptions about the data.
 
@@ -215,11 +293,10 @@ data.frame(x = 1:100, y = rnorm(100, 0.5, 0.07)*(1:100)) %>%
 
 ```
 
-Homoskedasticity (left) Vs. Heteroskedasticity (right)
-Sample data created by author for demonstration only
+Homoskedasticity (left) vs. heteroskedasticity (right). Sample data created for demonstration only.
 :::
 
-- **Independence of residuals.** Each observation is assumed to be independent of the others. In our example, the sepal width of one flower does not affect the width of another. Monthly data of the same office, on the other hand, is usually *not* independent, because this month's expenditure is related to last month's. Such data needs time series methods (@sec-ts).
+- **Independence of residuals.** Each observation is assumed to be independent of the others. In our example, the expenses of one block office do not affect the expenses of another. Monthly data of the same office, on the other hand, is usually *not* independent, because this month's expenditure is related to last month's. Such data needs time series methods (@sec-ts).
 
 ## Interpreting the output of `lm`
 
@@ -227,25 +304,24 @@ Let us discuss each section of the `summary()` output, which we will call the mo
 
 ### `Call`
 
-The `Call` section shows the formula used to fit the model. `Sepal.Width` is our response variable and `Sepal.Length` is the predictor. The data is the first 50 rows of `iris`, or `iris[1:50,]`.
+The `Call` section shows the formula used to fit the model. `office_exp` is our response variable and `staff` is the predictor. The data is `bdo`, all `r nrow(bdo)` offices.
 
 ### `Residuals`
 
 This is the five point summary of the residuals. As discussed, residuals are the actual values minus the fitted values. We can get the same numbers ourselves.
 
 ```{r resid}
-summary(iris$Sepal.Width[1:50] - lin_reg1$fitted.values)
+summary(bdo$office_exp - lin_reg1$fitted.values)
 ```
 
-Ideally, the median of the residuals should be close to `0`, and the first and third quartiles should be about equally far from it. That tells us the residuals are roughly symmetrical, and the model is not consistently over-predicting or under-predicting. In our example the median is `r round(median(residuals(lin_reg1)), 3)`, practically zero. The quartiles are also nearly balanced. The histogram in @fig-ex1hist shows that the residuals look fairly normal, as we assumed.
+Ideally, the median of the residuals should be close to `0`, and the first and third quartiles should be about equally far from it. That tells us the residuals are roughly symmetrical, and the model is not consistently over-predicting or under-predicting. In our example the median is `r r2(median(residuals(lin_reg1)), 3)` lakh, practically zero. The quartiles, `r r2(quantile(residuals(lin_reg1), 0.25))` and `r r2(quantile(residuals(lin_reg1), 0.75))`, are nearly balanced too. The histogram in @fig-ex1hist shows that the residuals look fairly normal, as we assumed.
 
-```{r fig-ex1hist, echo=FALSE, fig.align='center', fig.cap="Histogram of Residuals"}
+```{r fig-ex1hist, echo=FALSE, fig.align='center', fig.cap="Histogram of residuals"}
 broom::augment(lin_reg1) %>%
   ggplot(aes(.resid)) +
-  geom_histogram(binwidth = 0.03) +
-  geom_density(linewidth = 1, lty = 2) +
+  geom_histogram(binwidth = 1) +
   theme_bw() +
-  labs(x = "Residuals", y = NULL) + theme(panel.grid.major = element_line(linetype = "blank"),
+  labs(x = "Residuals (₹ lakh)", y = NULL) + theme(panel.grid.major = element_line(linetype = "blank"),
     panel.grid.minor = element_line(linetype = "blank"))
 ```
 
@@ -253,32 +329,32 @@ broom::augment(lin_reg1) %>%
 
 These were the goal of our exercise. There is one coefficient for the predictor (the slope, $\beta_1$) and one for the intercept ($\beta_0$). A positive slope means $y$ goes up when $x$ goes up. A negative slope means $y$ goes down when $x$ goes up. In our example,
 
-- when sepal length is `0`, the sepal width would be `r round(coef(lin_reg1)[1], 4)`. This is only a mathematical value, since no flower has zero length or negative width. The intercept often has no practical meaning when $x = 0$ lies far outside the data.
-- for every `1` cm increase in sepal length, the width increases by `r round(coef(lin_reg1)[2], 4)` cm, on average.
+- when staff strength is `0`, the office expenses would be ₹`r r2(coef(lin_reg1)[1])` lakh. We may think of it as the fixed cost of keeping an office open. But no office in our data has fewer than `r min(bdo$staff)` staff. The intercept often has no practical meaning when $x = 0$ lies far outside the data, so we read it with care.
+- for every additional employee, the office expenses go up by ₹`r r2(coef(lin_reg1)[2], 3)` lakh, or about ₹`r format(round(coef(lin_reg1)[2] * 1e5, -2), big.mark = ",")`, a year on average.
 
 Thus our regression line is
 
 $$
-Sepal.Width = -0.5694 + 0.7985 * Sepal.Length
+\text{Office expenses} = `r r2(coef(lin_reg1)[1], 4)` `r term(coef(lin_reg1)[2])` \times \text{Staff}
 $$ {#eq-lr4}
 
-We fitted the line on a sample of 50 flowers. Another sample of 50 setosa flowers would give slightly different coefficients. So the coefficients are only *estimates*, and each comes with some uncertainty. We can see a range of likely values for each coefficient, called the confidence interval, using the function `confint()`. By default, it gives 95% confidence intervals.
+We fitted the line on the offices of one state in one year. Another year's data would give slightly different coefficients. So the coefficients are only *estimates*, and each comes with some uncertainty. We can see a range of likely values for each coefficient, called the confidence interval, using the function `confint()`. By default, it gives 95% confidence intervals.
 
 ```{r}
 confint(lin_reg1)
 ```
 
-The other columns of the coefficients table measure this uncertainty.
+So each extra employee adds somewhere between ₹`r r2(confint(lin_reg1)[2, 1], 2)` lakh and ₹`r r2(confint(lin_reg1)[2, 2], 2)` lakh a year. The other columns of the coefficients table measure this uncertainty.
 
 - The *standard error* (`Std. Error`) tells us how much the estimate would vary from sample to sample. The confidence intervals above are built from it.
 - The *t value* is simply the estimate divided by its standard error. A large t value (positive or negative) means the estimate is large compared to its uncertainty.
 - The *p-value* (`Pr(>|t|)`) tests the null hypothesis that the true coefficient is zero, that is, $x$ has no effect on $y$. A small p-value, say below 0.05, lets us reject this.
 
-In our example, the p-value of `Sepal.Length` is very small, so sepal length clearly affects width. The p-value of the intercept is `r round(summary(lin_reg1)$coefficients[1, 4], 3)`, so we cannot say the intercept is different from zero. That is fine. We are rarely interested in the intercept.
+In our example, the p-value of `staff` is very small, so staff strength clearly affects office expenses. The p-value of the intercept is very small too. We are rarely interested in the intercept, though.
 
 ### `Signif. codes`
 
-These are just legends for the stars shown next to each p-value. Notice the three stars next to `Sepal.Length`. They mean its p-value is below 0.001, and we can safely reject the null hypothesis that $\beta_1$ is $0$. The stars give a quick visual sense of which coefficients matter.
+These are just legends for the stars shown next to each p-value. Notice the three stars next to `staff`. They mean its p-value is below 0.001, and we can safely reject the null hypothesis that $\beta_1$ is $0$. The stars give a quick visual sense of which coefficients matter.
 
 ### `Residual standard error`
 
@@ -288,31 +364,31 @@ $$
 RSE = \sqrt{\frac{1}{(n-2)} \sum_{i=1}^n (y_i - \hat{y_i})^2}
 $$ {#eq-lr5}
 
-Here the degrees of freedom are $n-2$, because we estimated two coefficients, one slope and one intercept. We can verify @eq-lr5 by calculation.
+Here the degrees of freedom are $n-2$, because we estimated two coefficients, one slope and one intercept. With `r nrow(bdo)` offices, that is `r nrow(bdo) - 2`. We can verify @eq-lr5 by calculation.
 
 ```{r rse}
-sqrt(sum((iris[1:50, "Sepal.Width"] - lin_reg1$fitted.values)^2)/48)
+sqrt(sum((bdo$office_exp - lin_reg1$fitted.values)^2) / (nrow(bdo) - 2))
 ```
 
-The RSE is in the units of $y$. So we can say that the model's predictions of sepal width are typically off by about `r round(sigma(lin_reg1), 2)` cm.
+The RSE is in the units of $y$. So we can say that the model's predictions of office expenses are typically off by about ₹`r r2(sigma(lin_reg1))` lakh.
 
-### `R-Squared`, both Multiple and Adjusted
+### `R-Squared`, both multiple and adjusted
 
-*Multiple R-squared* is also called the coefficient of determination. It is the most cited measure of how well a model fits. It tells us what share of the variation in the response variable is explained by the model. In our example about `r round(summary(lin_reg1)$r.squared * 100)`% of the variation in sepal width is explained by sepal length. We will discuss it in detail in the next section.
+*Multiple R-squared* is also called the coefficient of determination. It is the most cited measure of how well a model fits. It tells us what share of the variation in the response variable is explained by the model. In our example about `r round(summary(lin_reg1)$r.squared * 100)`% of the variation in office expenses is explained by staff strength. We will discuss it in detail in the next section.
 
 *Adjusted R-squared* is R-squared with a penalty for the number of predictors in the model. R-squared never goes down when we add a predictor, even a useless one. Adjusted R-squared goes up only if the new predictor improves the model more than would be expected by chance. So it is the better measure to compare models with different numbers of predictors.
 
 ### `F-Statistic` and `p-value`
 
-Why another p-value? Here the null hypothesis is about the *whole* model. It says that *none* of the predictors has any relationship with the response variable, or that all slopes are zero. The alternative is that at least one slope is not zero. This is tested with the F-statistic. In our example, the p-value is very small. So we reject the null hypothesis and conclude that there is a relationship between `Sepal.Length` and `Sepal.Width`.
+Why another p-value? Here the null hypothesis is about the *whole* model. It says that *none* of the predictors has any relationship with the response variable, or that all slopes are zero. The alternative is that at least one slope is not zero. This is tested with the F-statistic. In our example, the p-value is very small. So we reject the null hypothesis and conclude that there is a relationship between `staff` and `office_exp`.
 
 With one predictor, this test gives the same p-value as the t-test of the slope. With many predictors, the F-test is useful because it tests them all together. If we test twenty coefficients one by one, one or two may look significant just by chance.
 
-## Model Evaluation Metrics
+## Model evaluation metrics
 
 To judge how accurate a model is, we need evaluation metrics. There are several. We will discuss a few of them here.
 
-### MAE - Mean Absolute Error
+### Mean absolute error (MAE)
 
 As the name suggests, it is the mean of the absolute values of the residuals, @eq-lr6.
 
@@ -329,7 +405,9 @@ Once we extract `$residuals` from the model, calculating it is easy. In our exam
 lin_reg1$residuals |> abs() |> mean()
 ```
 
-### MSE - Mean Square Error and RMSE - Root Mean Square Error
+On average, our expected expenses miss the actual expenses by about ₹`r r2(mean(abs(lin_reg1$residuals)))` lakh.
+
+### Mean square error (MSE) and root mean square error (RMSE)
 
 The mean of the squares of the residuals is the mean square error or MSE, @eq-lr7.
 
@@ -359,7 +437,7 @@ lin_reg1$residuals^2 |> mean() |> sqrt()
 
 Notice that RMSE is very close to the residual standard error we saw earlier. The only difference is that RMSE divides by $N$, and RSE divides by the degrees of freedom.
 
-### MAPE - Mean Absolute Percentage Error
+### Mean absolute percentage error (MAPE)
 
 This metric takes each residual as a percentage of the actual value, @eq-lr9.
 
@@ -367,11 +445,11 @@ $$
 {MAPE} = \frac{1}{N}\sum_{i = 1}^{N}{\lvert}\frac{({y_i - \hat{y_i}})}{y_i}\cdot{100}\%{\rvert}
 $$ {#eq-lr9}
 
-Since it is a percentage, MAPE does not depend on the scale of the data. We can compare a model on salaries in rupees with a model on salaries in lakh. In our example,
+Since it is a percentage, MAPE does not depend on the scale of the data. We can compare a model on expenses in rupees with a model on expenses in lakh. In our example,
 
 ```{r}
 # Mean Absolute Percentage Error
-{lin_reg1$residuals/iris$Sepal.Width[1:50]} %>%
+{lin_reg1$residuals/bdo$office_exp} %>%
   {abs(.)*100} %>%
   mean(.) %>%
   sprintf("MAPE is %1.2f%%", .)
@@ -383,7 +461,7 @@ Since it is a percentage, MAPE does not depend on the scale of the data. We can 
 MAPE breaks down when some actual values are zero or close to zero, because we divide by them. A ₹10 error on a ₹20 bill is a 50% error. In audit data, which often has zero or tiny amounts, check for these before using MAPE.
 :::
 
-### R-Squared and adjusted R-squared
+### R-squared and adjusted R-squared
 
 As already discussed, R-squared is the coefficient of determination. Its formula is @eq-lr10.
 
@@ -397,16 +475,16 @@ We can verify the formula with the results we have.
 
 ```{r}
 ## Sum of Squares of Errors
-y_bar <- mean(iris[1:50,"Sepal.Width"])
+y_bar <- mean(bdo$office_exp)
 (SSE <- sum(lin_reg1$residuals^2))
-(TSS <- sum((iris[1:50,"Sepal.Width"] - y_bar)^2))
+(TSS <- sum((bdo$office_exp - y_bar)^2))
 (r_sq <- 1 - SSE/TSS)
 ```
 
 There is one more way to think of $R^2$. It is simply the square of the correlation between the actual and the fitted values. Let us verify.
 
 ```{r}
-(cor(iris[1:50, 'Sepal.Width'], lin_reg1$fitted.values))^2
+(cor(bdo$office_exp, lin_reg1$fitted.values))^2
 ```
 
 As we keep adding predictors to a model, $R^2$ keeps going up, even when the new predictors are useless. The model then starts fitting the noise in our sample, which is called *over-fitting*. Adjusted R-squared corrects for this by penalising the number of predictors, @eq-lr11.
@@ -415,17 +493,18 @@ $$
 {Adjusted}\;{ R^2} = 1 - \frac{(1-R^2)(N - 1)}{(N - p - 1)}
 $$ {#eq-lr11}
 
-where $p$ is the number of predictors in the model. The `summary()` function gives both these metrics. We can verify the calculation.
+where $p$ is the number of predictors in the model. The `summary()` function gives both these metrics. We can verify the calculation. Here $N$ is `r nrow(bdo)` and $p$ is 1.
 
 ```{r}
-1 - ((1-r_sq)*(50-1)/(50-1-1))
+N <- nrow(bdo)
+1 - ((1 - r_sq) * (N - 1) / (N - 1 - 1))
 ```
 
 ## Plotting the results and their interpretation
 
 We can pass the output of `lm()` to `plot()` to see six diagnostic plots. We choose them with the `which` argument. By default, R shows plots 1, 2, 3 and 5. The six plots are
 
-1. Residuals Vs. Fitted Values
+1. Residuals vs. fitted values
 2. Normal Q-Q
 3. Scale-Location
 4. Cook's distance
@@ -439,18 +518,24 @@ par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
 plot(lin_reg1, which = 1:2, sub.caption = "")
 ```
 
-1. **Residuals Vs. Fitted Values.** This plot checks the first assumption, linearity. If the red line across the plot is roughly flat, the relationship is linear and a straight line is a fair choice. If the red line shows a clear curve, a straight line is missing some pattern. In our example the red line bends a little at the ends, where there are only a few points, but there is no clear curve. So linear regression is appropriate.
-2. **Normal Q-Q.** This plot checks whether the residuals are normally distributed. If the points fall roughly along the straight diagonal line, they are. In our example, they do.
+```{r}
+#| include: false
+top3 <- head(order(-abs(rstandard(lin_reg1))), 3)
+top3_planted <- intersect(top3, match(planted, bdo$office_id))
+```
 
-Notice also that R labels the three most extreme residuals with their row numbers. Here rows `r paste(head(order(-abs(rstandard(lin_reg1))), 3), collapse = ", ")` are labelled.
+1. **Residuals vs. fitted values.** This plot checks the first assumption, linearity. If the red line across the plot is roughly flat, the relationship is linear and a straight line is a fair choice. If the red line shows a clear curve, a straight line is missing some pattern. In our example the red line wanders a little, but there is no clear curve. So linear regression is appropriate.
+2. **Normal Q-Q.** This plot checks whether the residuals are normally distributed. If the points fall roughly along the straight diagonal line, they are. In our example, they follow the line closely.
+
+Notice also that R labels the three most extreme residuals with their row numbers. Here rows `r paste(top3, collapse = ", ")` are labelled. Row `r top3_planted` is `r bdo$office_id[top3_planted]`, one of the two offices we planted. Already, with just one predictor, it stands out. We will come back to it.
 
 ```{r fig-plots2, fig.align='center', fig.cap="Next two diagnostic plots", out.height="40%"}
 par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
 plot(lin_reg1, which = 3:4, sub.caption = "")
 ```
 
-3. **Scale-Location.** This plot checks the assumption of equal variance or homoskedasticity. If the red line is roughly flat and the points are spread evenly around it, the assumption is met. A line going up from left to right is the usual sign of heteroskedasticity.
-4. **Cook's Distance.** An *influential* point is one which, if removed, would change the regression line noticeably. Not every outlier is influential. A point with a large residual but an ordinary $x$ value often moves the line very little. A point with an extreme $x$ value has more power to pull the line towards itself. This power is called *leverage*. Cook's distance combines the size of the residual and the leverage into one measure of influence. A common rule of thumb is to look closely at any point with Cook's distance above 0.5, or well above the others. In our example, row `r which.max(cooks.distance(lin_reg1))` has the largest Cook's distance, `r round(max(cooks.distance(lin_reg1)), 2)`, which is not alarming.
+3. **Scale-Location.** This plot checks the assumption of equal variance or homoskedasticity. If the red line is roughly flat and the points are spread evenly around it, the assumption is met. A line going up from left to right is the usual sign of heteroskedasticity. In our example the red line has a gentle hump in the middle, but no steady rise. So the assumption is reasonably met.
+4. **Cook's distance.** An *influential* point is one which, if removed, would change the regression line noticeably. Not every outlier is influential. A point with a large residual but an ordinary $x$ value often moves the line very little. A point with an extreme $x$ value has more power to pull the line towards itself. This power is called *leverage*. Cook's distance combines the size of the residual and the leverage into one measure of influence. A common rule of thumb is to look closely at any point with Cook's distance above 0.5, or well above the others. In our example, row `r which.max(cooks.distance(lin_reg1))` has the largest Cook's distance, `r r2(max(cooks.distance(lin_reg1)))`, which is not alarming.
 
 ```{r fig-plots3, fig.align='center', fig.cap="Last two diagnostic plots", out.height="40%"}
 par(mfrow = c(1, 2), oma = c(0, 0, 2, 0))
@@ -462,7 +547,7 @@ plot(lin_reg1, which = 5:6, sub.caption = "")
 
 Base R's `plot()` can draw all these plots. The package `performance` draws all the relevant diagnostic plots together, nicely, and writes under each plot what to look for. See @fig-perf.
 
-```{r fig-perf, fig.align='center', fig.cap="Output from package-performance", fig.height=8.5, fig.width=10}
+```{r fig-perf, fig.align='center', fig.cap="Output from the performance package", fig.height=8.5, fig.width=10}
 check_model(lin_reg1)
 ```
 
@@ -484,64 +569,81 @@ We may extract any of these as needed. For example,
 lin_reg1$coefficients
 ```
 
-The package `broom` gives all this information as a tidy data frame. Its function `augment()` gives the fitted value, residual, leverage (`.hat`), Cook's distance (`.cooksd`) and standardised residual (`.std.resid`) for every row. We will use these columns a lot in the audit example at the end of the chapter.
+The package `broom` gives all this information as a tidy data frame. Its function `augment()` gives the fitted value, residual, leverage (`.hat`), Cook's distance (`.cooksd`) and standardised residual (`.std.resid`) for every row. If we pass the original data as `data = `, it keeps all the other columns too, like `office_id`. Let us sort the offices by their standardised residual, which we will explain in @sec-reg-audit.
 
 ```{r aug}
-augment(lin_reg1)
+augment(lin_reg1, data = bdo) |>
+  select(office_id, terrain, staff, office_exp, .fitted, .resid, .std.resid, .hat, .cooksd) |>
+  arrange(desc(.std.resid)) |>
+  head()
 ```
+
+```{r}
+#| include: false
+aug1 <- augment(lin_reg1, data = bdo) |> arrange(desc(.std.resid))
+rank027 <- which(aug1$office_id == "BDO-027")
+hilly_top <- sum(aug1$terrain[2:6] != "Plain")
+```
+
+The planted office `r aug1$office_id[1]` is at the top. It spent ₹`r r2(aug1$.resid[1])` lakh more than offices of its size usually do. But where is the other planted office, `BDO-027`? It is only at number `r rank027` when all the offices are sorted this way. We will find out why in @sec-reg-bdoflags. Notice also that the other five offices at the top are all in the hills. Our model does not know about terrain yet. We will add it soon.
 
 Let us also visualise the predicted values against the actual values and residuals, in @fig-predvsact.
 
 ::: {#fig-predvsact}
 
 ```{r echo=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
-newdata <- iris[1:50, ]
+newdata <- bdo
 newdata$predictions <- predict(lin_reg1)
-ggplot(newdata, aes(predictions, y = Sepal.Width)) +
+ggplot(newdata, aes(predictions, y = office_exp)) +
   geom_point() +
   geom_abline(color = "blue") +
-  labs(x = "Predicted Values",
-       y = "Actual Values",
-       title = "Predicted Values Vs. Actual Values") +
+  labs(x = "Predicted values",
+       y = "Actual values",
+       title = "Predicted values vs. actual values") +
   theme_bw()
 
 newdata$residuals <- lin_reg1$residuals
 ggplot(newdata, aes(predictions, y = residuals)) +
   geom_pointrange(aes(ymin = 0, ymax = residuals), alpha = 0.5) +
   geom_hline(yintercept = 0, linetype = 3, color = "blue") +
-  labs(x = "Predicted Values",
+  labs(x = "Predicted values",
        y = "Residuals",
-       title = "Predicted Values Vs. Residuals") +
+       title = "Predicted values vs. residuals") +
   theme_bw()
 
 
 ```
 
-Predicted Vs. Actual Values (Left) and Residuals (Right)
+Predicted vs. actual values (left) and residuals (right)
 :::
 
-To predict for new data, we use the base R function `predict()`. The new data must be a data frame with a column of the *same name* as the predictor. Let us predict sepal widths for three new flowers.
+To predict for new data, we use the base R function `predict()`. The new data must be a data frame with a column of the *same name* as the predictor. Suppose three new block offices are being opened, with 15, 30 and 45 staff. Let us predict their yearly office expenses, which can help to check the budget estimates they send.
 
 ```{r preds}
-new_vals <- data.frame(Sepal.Length = c(4.5, 5.0, 5.5))
+new_vals <- data.frame(staff = c(15, 30, 45))
 predict(lin_reg1, new_vals)
 ```
 
-A prediction is never exact. We can ask `predict()` for a *prediction interval*, the range in which the width of a new flower is likely to fall, 95 times out of 100.
+A prediction is never exact. We can ask `predict()` for a *prediction interval*, the range in which the expenses of a new office are likely to fall, 95 times out of 100.
 
 ```{r}
 predict(lin_reg1, new_vals, interval = "prediction")
 ```
 
-So a flower with a sepal length of 5 cm will most likely have a sepal width between about `r round(predict(lin_reg1, data.frame(Sepal.Length = 5), interval = "prediction")[2], 1)` cm and `r round(predict(lin_reg1, data.frame(Sepal.Length = 5), interval = "prediction")[3], 1)` cm.
+```{r}
+#| include: false
+pi30 <- predict(lin_reg1, data.frame(staff = 30), interval = "prediction")
+```
+
+So an office with 30 staff will most likely spend between about ₹`r r2(pi30[2], 1)` lakh and ₹`r r2(pi30[3], 1)` lakh a year. An office of that size which spends well beyond this range deserves a question.
 
 ::: callout-warning
 ## Caution
 
-Predict only within the range of the data used to build the model. Our setosa flowers have sepal lengths from `r min(iris$Sepal.Length[1:50])` to `r max(iris$Sepal.Length[1:50])` cm. The model knows nothing about a flower with a 7 cm sepal, and its prediction there may be nonsense. Predicting outside the range is called *extrapolation*. In audit, a model built on small offices should not be used to judge a very large one.
+Predict only within the range of the data used to build the model. Our block offices have from `r min(bdo$staff)` to `r max(bdo$staff)` staff. The model knows nothing about an office with 300 staff, and its prediction there may be nonsense. Predicting outside the range is called *extrapolation*. In audit, a model built on block offices should not be used to judge a district headquarters office.
 :::
 
-## Multiple Linear Regression
+## Multiple linear regression
 
 In multiple linear regression, several independent variables together explain the dependent variable. The regression equation becomes
 
@@ -555,26 +657,26 @@ With two predictors, this equation is no longer a line but a flat *plane* in thr
 
 As already stated, there is one more assumption now. **The independent variables should not be strongly related to each other, that is, there should be no multi-collinearity.** Let us build an example. We just add the predictors to the formula using the `+` operator.
 
-**Problem Statement:** Example-2. Let us try to explain cars' mileage (`mpg` in the `mtcars` dataset) using engine displacement `disp`, horse power `hp` and weight `wt`. First, let us visualise each relationship separately, in @fig-ex2vis.
+**Example 2.** Staff strength alone explained about `r round(summary(lin_reg1)$r.squared * 100)`% of the variation in office expenses. Let us try to explain office expenses using staff strength `staff`, floor area of the building `area_sqm` and the number of beneficiaries `beneficiaries` together. First, let us visualise each relationship separately, in @fig-ex2vis.
 
 ::: {#fig-ex2vis}
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="31%", fig.show='hold'}
 
-mtcars %>%
-  ggplot(aes(disp, mpg)) +
+bdo %>%
+  ggplot(aes(staff, office_exp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
   theme_bw()
 
-mtcars %>%
-  ggplot(aes(hp, mpg)) +
+bdo %>%
+  ggplot(aes(area_sqm, office_exp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
   theme_bw()
 
-mtcars %>%
-  ggplot(aes(wt, mpg)) +
+bdo %>%
+  ggplot(aes(beneficiaries, office_exp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE , formula = "y ~ x") +
   theme_bw()
@@ -582,178 +684,182 @@ mtcars %>%
 
 ```
 
-Relationship between regressors and outcome variables
+Relationship between each predictor and office expenses
 :::
 
 Let us also visualise the correlation between all these variables. See @fig-ex2vis2.
 
-```{r fig-ex2vis2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.cap="Correlation between the variables in Example-2"}
+```{r fig-ex2vis2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.cap="Correlation between the variables in Example 2"}
 ggpairs(
-  mtcars[, c("mpg", "disp", "hp", "wt")],
+  bdo[, c("office_exp", "staff", "area_sqm", "beneficiaries")],
   upper = list(continuous = my_fn),
   lower = list(continuous = 'smooth', wrap=c(colour="blue")))
 ```
 
-Notice that the predictors are strongly correlated with each other too. Displacement and weight, for example, have a correlation of `r round(cor(mtcars$disp, mtcars$wt), 2)`. Heavy cars have big engines. Keep this in mind. Now let us build the model.
+Notice that two of the predictors are strongly correlated with each other too. Staff strength and floor area have a correlation of `r r2(cor(bdo$staff, bdo$area_sqm))`. Offices with more staff need bigger buildings. Keep this in mind. Now let us build the model.
 
 ```{r mult}
-data <- mtcars[, c("mpg", "disp", "hp", "wt")]
-lin_reg2 <- lm(mpg ~ .,
-               data = data)
+data2 <- bdo[, c("office_exp", "staff", "area_sqm", "beneficiaries")]
+lin_reg2 <- lm(office_exp ~ .,
+               data = data2)
 summary(lin_reg2)
 ```
 
 In the formula, we used `.` instead of naming all the variables. The `.` is a shorthand for "all other columns of the data". There is now one slope for each predictor and one intercept. The equation can be written as @eq-lr13.
 
 $$
-{mpg} = -0.000937\cdot{disp} - 0.031157\cdot{hp} - 3.800891\cdot{wt} + 37.105505
+\text{Office expenses} = `r r2(coef(lin_reg2)[1], 4)` `r term(coef(lin_reg2)["staff"])` \cdot \text{Staff} `r term(coef(lin_reg2)["area_sqm"], 6)` \cdot \text{Area} `r term(coef(lin_reg2)["beneficiaries"])` \cdot \text{Beneficiaries}
 $$ {#eq-lr13}
 
-**Interpretation:** All the slopes are negative, so mileage drops as weight, displacement and horse power increase. Each slope is read *keeping the other variables constant*. For example, if two cars have the same horse power and weight, the one with 1 cubic inch more displacement gives 0.000937 miles per gallon less. "Keeping other variables constant" is important. If the other variables also change, the effect on mileage is different.
+**Interpretation.** The slopes of staff and beneficiaries are positive, so office expenses rise with both. Each slope is read *keeping the other variables constant*. For example, if two offices have the same floor area and the same number of beneficiaries, the one with 1 more employee spends ₹`r r2(coef(lin_reg2)["staff"], 3)` lakh more a year. Similarly, 1,000 more beneficiaries add ₹`r r2(coef(lin_reg2)["beneficiaries"], 3)` lakh, for the same staff and floor area. "Keeping other variables constant" is important. If the other variables also change, the effect on expenses is different.
 
-**Results:** The model explains about `r round(summary(lin_reg2)$r.squared * 100)`% of the variation in mileage (Multiple R-squared). Adjusted R-squared is a little lower, at `r round(summary(lin_reg2)$adj.r.squared * 100)`%, after the penalty for three predictors. The F-test p-value is very small, so at least one slope is not zero.
+**Results.** The model explains about `r round(summary(lin_reg2)$r.squared * 100)`% of the variation in office expenses (Multiple R-squared), against `r round(summary(lin_reg1)$r.squared * 100)`% with staff alone. Adjusted R-squared is a little lower, at `r round(summary(lin_reg2)$adj.r.squared * 100)`%, after the penalty for three predictors. The F-test p-value is very small, so at least one slope is not zero.
 
-Look at `disp`, however. On its own, displacement is strongly related to mileage (@fig-ex2vis, left). In this model, its slope is tiny and its p-value is `r round(summary(lin_reg2)$coefficients["disp", 4], 2)`, not significant at all. This is because `disp` carries almost the same information as `wt` and `hp`. Once they are in the model, `disp` has little new to say. We could remove `disp` and re-run the model. We will come back to this when we discuss multi-collinearity.
+Look at `area_sqm`, however. On its own, floor area is clearly related to office expenses (@fig-ex2vis, middle). In this model, its slope is `r r2(coef(lin_reg2)["area_sqm"], 4)`, slightly *negative*, as if a bigger building cost less to run. Its p-value is `r r2(summary(lin_reg2)$coefficients["area_sqm", 4])`, not significant at all. This is because `area_sqm` carries almost the same information as `staff`. Once staff is in the model, area has little new to say, and its slope is left to chance. We could remove `area_sqm` and re-run the model. We will come back to this when we discuss multi-collinearity.
 
 ## Including categorical or factor variables in `lm`
 
-So far, both our response variable and our predictors were numeric. But what if a predictor is categorical, like the city class of an office, or the type of a contract?
+So far, both our response variable and our predictors were numeric. But what if a predictor is categorical, like the terrain of a block, the city class of an office, or the type of a contract?
 
-In such a case, we should make sure that the categorical variable is of type `factor` before building the model. We learnt about factors in @sec-factors.
+In such a case, we should make sure that the categorical variable is of type `factor` before building the model. We learnt about factors in @sec-factors. The first level of the factor matters, as we will see. We created `terrain` with the levels in the order `r paste(levels(bdo$terrain), collapse = ", ")`.
 
-**Problem Statement:** Example-3. Let us try to explain `Sepal.Width` by `Species` in the `iris` dataset. This time we take the complete dataset. `Species` is already a factor, so we need not convert it. Before moving on, let us visualise the relationship. Box plots are best suited here.
+**Example 3.** Let us try to explain `office_exp` by `terrain` alone. Offices in the hills and tribal areas need more vehicle hire to cover the same block, so we would expect them to spend more. `terrain` is already a factor, so we need not convert it. Before moving on, let us visualise the relationship. Box plots are best suited here.
 
-```{r fig-fact1, echo=FALSE, fig.align='center', fig.cap="Species Vs. Sepal Width", warning=FALSE, fig.show='hold', out.height="30%"}
-ggplot(iris, aes(Species, Sepal.Width)) +
+```{r fig-fact1, echo=FALSE, fig.align='center', fig.cap="Office expenses by terrain", warning=FALSE, fig.show='hold', out.height="30%"}
+ggplot(bdo, aes(terrain, office_exp)) +
   geom_boxplot() +
   stat_summary(fun = mean, shape = 15) +
-  labs(x = "Species",
-       y = "Sepal.Width") +
+  labs(x = "Terrain",
+       y = "Office expenses (₹ lakh)") +
   theme_bw()
 ```
 
 Now let us build the model.
 
 ```{r}
-lm_fact <- lm(Sepal.Width ~ Species, data = iris)
+lm_fact <- lm(office_exp ~ terrain, data = bdo)
 summary(lm_fact)
 ```
 
-We now got one intercept and *two* slopes for a single predictor `Species`. What happened?
+We now got one intercept and *two* slopes for a single predictor `terrain`. What happened?
 
-**Interpretation:** R converts a factor into *dummy variables*. A dummy variable is 1 when a row belongs to a category and 0 otherwise. Being numeric, the dummies can be used in linear regression as before. The first level of the factor is taken as the *baseline*. It gets no dummy of its own. `Species` has three levels, so it is encoded as two dummy variables. To see this, we can use the `contrasts()` function.
-
-```{r}
-contrasts(iris$Species)
-```
-
-We can also see the actual numbers that went into the model with `model.matrix()`. Let us look at one flower of each species.
+**Interpretation.** R converts a factor into *dummy variables*. A dummy variable is 1 when a row belongs to a category and 0 otherwise. Being numeric, the dummies can be used in linear regression as before. The first level of the factor is taken as the *baseline*. It gets no dummy of its own. `terrain` has three levels, so it is encoded as two dummy variables. To see this, we can use the `contrasts()` function.
 
 ```{r}
-model.matrix(Sepal.Width ~ Species, data = iris)[c(1, 51, 101), ]
+contrasts(bdo$terrain)
 ```
 
-When the flower is *versicolor*, `Speciesversicolor` is `1` and `Speciesvirginica` is `0`, and the other way round for *virginica*. When both are `0`, the flower is *setosa*, the baseline. That is why there is no separate coefficient for *setosa*. Now we can write the regression equation as @eq-lr14.
+We can also see the actual numbers that went into the model with `model.matrix()`. Let us look at the first office of each terrain.
+
+```{r}
+first_rows <- match(levels(bdo$terrain), bdo$terrain)
+model.matrix(office_exp ~ terrain, data = bdo)[first_rows, ]
+```
+
+When the office is in the hills, `terrainHilly` is `1` and `terrainTribal` is `0`, and the other way round for a tribal area. When both are `0`, the office is in the plains, the baseline. That is why there is no separate coefficient for `Plain`. Now we can write the regression equation as @eq-lr14.
 
 $$
-{Sepal.Width} = 3.428 + (-0.658)\cdot{Speciesversicolor} + (-0.454)\cdot{Speciesvirginica}
+\text{Office expenses} = `r r2(coef(lm_fact)[1], 3)` `r term(coef(lm_fact)["terrainHilly"], 3)` \cdot \text{terrainHilly} `r term(coef(lm_fact)["terrainTribal"], 3)` \cdot \text{terrainTribal}
 $$ {#eq-lr14}
 
-Reading this equation is now easy. For *versicolor*, the predicted `Sepal.Width` is `3.428 - 0.658`, or `r 3.428 - 0.658`. When both dummy variables are zero, the predicted width is just the intercept. So the intercept is the prediction for the baseline level, *setosa*, and each slope is the *difference* from the baseline. If we remove the intercept by adding `- 1` to the formula, R gives us one coefficient for each level directly.
+Reading this equation is now easy. For an office in the hills, the predicted expense is `r r2(coef(lm_fact)[1], 3)` `r term(coef(lm_fact)["terrainHilly"], 3)`, or `r r2(coef(lm_fact)[1] + coef(lm_fact)["terrainHilly"], 3)`. When both dummy variables are zero, the predicted expense is just the intercept. So the intercept is the prediction for the baseline level, `Plain`, and each slope is the *difference* from the baseline. If we remove the intercept by adding `- 1` to the formula, R gives us one coefficient for each level directly.
 
 ```{r}
-lm_fact0 <- lm(Sepal.Width ~ Species -1, data = iris)
+lm_fact0 <- lm(office_exp ~ terrain -1, data = bdo)
 summary(lm_fact0)
 ```
 
-**Results:** Compare these coefficients with @fig-fact1. They are nothing but the mean sepal width of each species, which is logical. The equation without intercept is @eq-lr15.
+**Results.** Compare these coefficients with @fig-fact1. They are nothing but the mean office expenses of each terrain, which is logical. The equation without intercept is @eq-lr15.
 
 $$
-{Sepal.Width} = 3.428\cdot{Speciessetosa} + (2.77)\cdot{Speciesversicolor} + (2.974)\cdot{Speciesvirginica}
+\text{Office expenses} = `r r2(coef(lm_fact0)["terrainPlain"], 3)` \cdot \text{terrainPlain} + `r r2(coef(lm_fact0)["terrainHilly"], 3)` \cdot \text{terrainHilly} + `r r2(coef(lm_fact0)["terrainTribal"], 3)` \cdot \text{terrainTribal}
 $$ {#eq-lr15}
 
 Since these coefficients are not slopes in the true sense, we will call them intercepts in the next examples.
 
+There is a surprise here. Offices in the hills and tribal areas seem to spend *less* than offices in the plains, not more. And the p-values of the two slopes in `lm_fact`, `r r2(summary(lm_fact)$coefficients["terrainHilly", 4])` and `r r2(summary(lm_fact)$coefficients["terrainTribal", 4])`, say that terrain makes no real difference at all. Should we conclude that terrain does not matter? Not yet. We will find the answer in the next section.
+
 ::: callout-warning
 ## Caution
 
-Look at the R-squared of the two models. With an intercept it is `r round(summary(lm_fact)$r.squared, 3)`. Without an intercept it jumps to `r round(summary(lm_fact0)$r.squared, 3)`. The fit has not improved at all, since the predictions are exactly the same. Without an intercept, R measures R-squared against zero instead of against the mean, which makes it look much larger. So use `- 1` to *read* the coefficients easily, but compare models using the version with an intercept.
+Look at the R-squared of the two models. With an intercept it is `r r2(summary(lm_fact)$r.squared, 3)`. Without an intercept it jumps to `r r2(summary(lm_fact0)$r.squared, 3)`. The fit has not improved at all, since the predictions are exactly the same. Without an intercept, R measures R-squared against zero instead of against the mean, which makes it look much larger. So use `- 1` to *read* the coefficients easily, but compare models using the version with an intercept.
 :::
 
 ### Parallel slopes regression
 
 To understand how a categorical predictor works together with a numeric one, let us build a model step by step.
 
-**Problem statement:** Example-4. We take the `mpg` dataset, which comes with the `ggplot2` package. It has *fuel economy data from 1999 to 2008 for 38 popular models of cars*. Let us explain highway mileage `hwy` by engine displacement `displ` and the year of the model `year`. Let us visualise the variables first. From @fig-ex4vis it is clear that highway mileage falls linearly as displacement increases, in both years.
+**Example 4.** Let us explain office expenses `office_exp` by staff strength `staff` and terrain `terrain` together. Let us visualise the variables first. From @fig-ex4vis it is clear that office expenses rise linearly with staff, in all three terrains. Notice also that the offices in the hills and tribal areas are generally smaller.
 
-```{r fig-ex4vis, fig.align='center', fig.cap="Highway Mileage Vs. Displacement over cars manufactured in 1999 Vs. 2008", fig.show='hold', out.height="35%"}
-ggplot(mpg, aes(displ, hwy)) +
+```{r fig-ex4vis, fig.align='center', fig.cap="Office expenses vs. staff, for each terrain", fig.show='hold', out.height="35%"}
+ggplot(bdo, aes(staff, office_exp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = "y ~ x") +
-  facet_wrap(.~ year) +
+  facet_wrap(.~ terrain) +
+  labs(x = "Staff in position", y = "Office expenses (₹ lakh)") +
   theme_bw()
 ```
 
 
-**Step-1:** Let us first use only the numeric variable `displ` to explain highway mileage `hwy`, and look at the coefficients.
+**Step 1.** Let us first use only the numeric variable `staff` to explain office expenses, and look at the coefficients. This is the same model as Example 1.
 
 ```{r}
-par_slop1 <- lm(hwy ~ displ, data = mpg)
+par_slop1 <- lm(office_exp ~ staff, data = bdo)
 coef(par_slop1)
 ```
 
 We got one intercept and one slope. We can see the line in @fig-parrslop (left).
 
-**Step-2:** Now let us explain mileage by `year` of manufacture only. We need to convert it into a factor, which we can do directly in the formula. *We also add `- 1` to the formula, which removes the common intercept and gives one intercept for each year.* Now see the coefficients.
+**Step 2.** Now let us explain office expenses by `terrain` only. *We also add `- 1` to the formula, which removes the common intercept and gives one intercept for each terrain.* This is the model `lm_fact0` of Example 3. If a variable is not yet a factor, like a year stored as a number, we can convert it inside the formula with `factor()`. Now see the coefficients.
 
 ```{r}
-par_slop2 <- lm(hwy ~ factor(year) - 1, data = mpg)
+par_slop2 <- lm(office_exp ~ factor(terrain) - 1, data = bdo)
 coef(par_slop2)
 ```
 
-We got one intercept for each year. As @fig-parrslop (right) shows, these are nothing but the mean mileage for each year. The two means are almost equal.
+We got one intercept for each terrain. As @fig-parrslop (right) shows, these are nothing but the mean expenses for each terrain. The three means are close to each other.
 
 ::: {#fig-parrslop}
 
 ```{r warning=FALSE, echo=FALSE, fig.align='center', out.width="47%", fig.show='hold'}
 
-ggplot(mpg, aes(displ, hwy)) +
+ggplot(bdo, aes(staff, office_exp)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = 'y ~ x') +
-  labs(x = "Engine Displacement in Litres",
-       y = "Highway Mileage in Miles per Gallon") +
+  labs(x = "Staff in position",
+       y = "Office expenses (₹ lakh)") +
   theme_bw()
 
 
-ggplot(mpg, aes(factor(year), hwy)) +
+ggplot(bdo, aes(terrain, office_exp)) +
   geom_boxplot() +
   stat_summary(fun = mean, shape = 15) +
-  labs(x = "Year of Manufacture",
-       y = "Highway Mileage in Miles per Gallon") +
+  labs(x = "Terrain",
+       y = "Office expenses (₹ lakh)") +
   theme_bw()
 
 
 ```
 
-Mileage vs. Displacement (Left) and Year (right)
+Office expenses vs. staff (left) and terrain (right)
 :::
 
-**Step-3:** Now we build the complete model with both variables together, and look at the coefficients.
+**Step 3.** Now we build the complete model with both variables together, and look at the coefficients.
 
 ```{r}
-par_slop <- lm(hwy ~ displ + factor(year) - 1, data = mpg)
+par_slop <- lm(office_exp ~ staff + terrain - 1, data = bdo)
 coef(par_slop)
 ```
 
-There is one slope for the numeric variable and a separate intercept for each year. If we draw these, we get two *parallel* lines with the same slope. See @fig-parrslop2.
+There is one slope for the numeric variable and a separate intercept for each terrain. If we draw these, we get three *parallel* lines with the same slope. See @fig-parrslop2.
 
-```{r fig-parrslop2, echo=FALSE, fig.align='center', fig.cap="Parallel Slopes", out.width="95%", out.height="35%", fig.show='hold'}
-ggplot(mpg, aes(displ, hwy, color = factor(year))) +
+```{r fig-parrslop2, echo=FALSE, fig.align='center', fig.cap="Parallel slopes", out.width="95%", out.height="35%", fig.show='hold'}
+ggplot(bdo, aes(staff, office_exp, color = terrain)) +
   geom_point() +
   geom_parallel_slopes(se = FALSE) +
-  labs(x = "Engine Displacement in Litres",
-       y = "Highway Mileage in Miles per Gallon",
-       color = "Year Manufactured") +
+  labs(x = "Staff in position",
+       y = "Office expenses (₹ lakh)",
+       color = "Terrain") +
   theme_bw() +
   theme(legend.position = "bottom")
 ```
@@ -761,35 +867,35 @@ ggplot(mpg, aes(displ, hwy, color = factor(year))) +
 This is also clear from the equation, @eq-lr16.
 
 $$
-{hwy} = -3.610986\cdot{displ} + 35.275706\cdot{year1999} + 36.677842\cdot{year2008}
+\text{Office expenses} = `r r2(coef(par_slop)["staff"], 4)` \cdot \text{Staff} + `r r2(coef(par_slop)["terrainPlain"], 4)` \cdot \text{Plain} + `r r2(coef(par_slop)["terrainHilly"], 4)` \cdot \text{Hilly} + `r r2(coef(par_slop)["terrainTribal"], 4)` \cdot \text{Tribal}
 $$ {#eq-lr16}
 
-For any car, one of the two dummy variables is 1 and the other is 0. The one with `1` acts as the intercept, but the slope stays the same. In other words, whatever the year, mileage changes with displacement at the same rate.
+For any office, one of the three dummy variables is 1 and the others are 0. The one with `1` acts as the intercept, but the slope stays the same. In other words, whatever the terrain, office expenses change with staff at the same rate.
 
-Notice something interesting. In Step-2, the two years had almost the same mean mileage. But now, for the *same* displacement, a 2008 car gives about `r round(diff(coef(par_slop)[2:3]), 1)` miles per gallon more than a 1999 car. The improvement was hidden because cars in 2008 had bigger engines on average (`r round(mean(mpg$displ[mpg$year == 2008]), 2)` litres against `r round(mean(mpg$displ[mpg$year == 1999]), 2)` litres). This is the power of multiple regression. It separates the effect of one variable from another.
+Notice something interesting. In Step 2, the three terrains had almost the same mean expenses. But now, for the *same* staff strength, an office in the hills spends about ₹`r r2(coef(par_slop)["terrainHilly"] - coef(par_slop)["terrainPlain"], 1)` lakh a year more than an office in the plains. An office in a tribal area spends about ₹`r r2(coef(par_slop)["terrainTribal"] - coef(par_slop)["terrainPlain"], 1)` lakh more. The difference was hidden because offices in the hills are smaller on average (`r r2(mean(bdo$staff[bdo$terrain == "Hilly"]), 1)` staff against `r r2(mean(bdo$staff[bdo$terrain == "Plain"]), 1)` in the plains). This is the power of multiple regression. It separates the effect of one variable from another. It also answers the surprise of Example 3. Terrain does matter, once we compare offices of the same size.
 
-But is it right to force the same slope on both years? Perhaps engines of 2008 lose mileage at a different rate as they grow. How do we allow for that? The answer is `interaction`, discussed next.
+But is it right to force the same slope on all terrains? Perhaps each extra employee in the hills costs more, because each one travels more. How do we allow for that? The answer is `interaction`, discussed next.
 
 ### Extending multiple linear regression by including `interactions`
 
 The parallel slopes model forced a common slope on each category. That is not always the best option.
 
-**Problem Statement:** In the same Example-4, we can allow an `interaction` between the two predictors using the operator `:` in the formula.
+**Example 4, continued.** In the same example, we can allow an `interaction` between the two predictors using the operator `:` in the formula.
 
 ```{r interact}
-new_model <- lm(hwy ~ displ + factor(year) + displ:factor(year) -1 , data = mpg)
+new_model <- lm(office_exp ~ staff + terrain + staff:terrain - 1, data = bdo)
 coef(new_model)
 ```
 
-Notice the extra coefficient. It is the *change* in slope when we move from the baseline year, 1999, to 2008. So the model now has a different slope for each year. See @fig-parrslop3.
+Notice the two extra coefficients. Each is the *change* in slope when we move from the baseline terrain, `Plain`, to `Hilly` or to `Tribal`. So the model now has a different slope for each terrain. See @fig-parrslop3.
 
-```{r fig-parrslop3, echo=FALSE, fig.align='center', fig.cap="Changing Slopes with interaction", out.width="95%", fig.show='hold', out.height="35%"}
-ggplot(mpg, aes(displ, hwy, color = factor(year))) +
+```{r fig-parrslop3, echo=FALSE, fig.align='center', fig.cap="Changing slopes with interaction", out.width="95%", fig.show='hold', out.height="35%"}
+ggplot(bdo, aes(staff, office_exp, color = terrain)) +
   geom_point() +
   geom_smooth(method = "lm", se = FALSE, formula = "y~x") +
-  labs(x = "Engine Displacement in Litres",
-       y = "Highway Mileage in Miles per Gallon",
-       color = "Year Manufactured") +
+  labs(x = "Staff in position",
+       y = "Office expenses (₹ lakh)",
+       color = "Terrain") +
   theme_bw() +
   theme(legend.position = "bottom")
 ```
@@ -800,19 +906,28 @@ Let us see the summary.
 summary(new_model)
 ```
 
+```{r}
+#| include: false
+nm <- coef(new_model)
+nm_p <- summary(new_model)$coefficients[, 4]
+```
+
 We may write the equation now (@eq-lr17).
 
 $$
-{hwy} = -3.7684\cdot{displ} + 35.7922\cdot{year1999} + 36.1367\cdot{year2008} + 0.3052\cdot{displ}\cdot{year2008}
+\begin{aligned}
+\text{Office expenses} = {} & `r r2(nm["staff"], 4)` \cdot \text{Staff} + `r r2(nm["terrainPlain"], 4)` \cdot \text{Plain} + `r r2(nm["terrainHilly"], 4)` \cdot \text{Hilly} + `r r2(nm["terrainTribal"], 4)` \cdot \text{Tribal} \\
+& `r term(nm["staff:terrainHilly"])` \cdot \text{Staff} \cdot \text{Hilly} `r term(nm["staff:terrainTribal"])` \cdot \text{Staff} \cdot \text{Tribal}
+\end{aligned}
 $$ {#eq-lr17}
 
-So for 2008 cars, the slope of `displ` is $-3.7684 + 0.3052$, or `r -3.7684 + 0.3052`. But look at the p-value of the interaction term, `r round(summary(new_model)$coefficients[4, 4], 2)`. It is far above 0.05. So the data does not give us any real evidence that the slopes differ between the two years. The two lines in @fig-parrslop3 are almost parallel too. Here the simpler parallel slopes model is good enough. Always check whether an interaction is significant before reading meaning into it. We will see an interaction which *does* matter in @sec-reg-audit.
+So for offices in the hills, the slope of `staff` is $`r r2(nm["staff"], 4)` `r term(nm["staff:terrainHilly"])`$, or `r r2(nm["staff"] + nm["staff:terrainHilly"], 4)`. But look at the p-values of the two interaction terms, `r r2(nm_p["staff:terrainHilly"])` and `r r2(nm_p["staff:terrainTribal"])`. They are far above 0.05. So the data does not give us any real evidence that the slopes differ between the terrains. The three lines in @fig-parrslop3 are nearly parallel too. Here the simpler parallel slopes model is good enough. Always check whether an interaction is significant before reading meaning into it. We will see an interaction which *does* matter in @sec-reg-audit.
 
 We can add as many interactions as we like using `:`. When there are many, we can use another shorthand, `*`. So `x*z` means `x + z + x:z`, and `x*z*w` means `x + z + w + x:z + x:w + z:w + x:z:w`. It does not change the model, but saves a lot of typing.
 
-## Multi-collinearity and Variance Inflation Factor (VIF)
+## Multi-collinearity and the variance inflation factor (VIF)
 
-Multi-collinearity means that the predictor variables are strongly related to each other. This creates a problem. When two predictors move together, the model cannot tell which of them is really affecting $y$. The coefficient estimates become unstable. A small change in the data can change them a lot, sometimes even flip their sign. Their standard errors become large, so useful variables may look insignificant. We saw this with `disp` in Example-2.
+Multi-collinearity means that the predictor variables are strongly related to each other. This creates a problem. When two predictors move together, the model cannot tell which of them is really affecting $y$. The coefficient estimates become unstable. A small change in the data can change them a lot, sometimes even flip their sign. Their standard errors become large, so useful variables may look insignificant. We saw this with `area_sqm` in Example 2.
 
 Note that multi-collinearity does not spoil the *predictions* of the model much. It spoils our ability to *interpret* the individual coefficients. For an auditor, who usually wants to explain a finding, that matters.
 
@@ -828,62 +943,160 @@ So the closer this $R^2$ is to $1$, the higher the ${VIF}$.
 - ${VIF} = 1$ means the predictor is not related to the other predictors at all.
 - ${VIF}$ above $5$ is commonly taken to indicate a problem, and above $10$ a serious one.
 
-In R, we do not have to calculate ${VIF}$ by hand. The function `vif()` from the package `car` does it. Let us first check our model of Example-2.
+In R, we do not have to calculate ${VIF}$ by hand. The function `vif()` from the package `car` does it. Let us first check our model of Example 2.
 
 ```{r}
 car::vif(lin_reg2)
 ```
 
-The VIF of `disp` is `r round(car::vif(lin_reg2)["disp"], 1)`, above 5. That confirms what we suspected. Now let us try a model on `mtcars` where `mpg` is explained by all the other variables. We again use the shorthand `.` for all other variables.
+The VIFs of `staff` and `area_sqm` are `r r2(car::vif(lin_reg2)["staff"], 1)` and `r r2(car::vif(lin_reg2)["area_sqm"], 1)`, both above 5. That confirms what we suspected. The VIF of `beneficiaries` is close to 1, so it brings its own information. Now let us try a model where office expenses are explained by all the numeric columns of our data. Sanctioned posts move with staff in position, and beneficiaries move with the population of the block. We again use the shorthand `.` for all other variables.
 
 ```{r}
-mod <- lm(mpg ~ . , data = mtcars)
+bdo_num <- bdo |>
+  select(office_exp, staff, sanctioned, area_sqm, population, beneficiaries)
+mod <- lm(office_exp ~ . , data = bdo_num)
 car::vif(mod)
 ```
 
-Several predictors here have a VIF above 10. Such a model would be hard to interpret.
+Four predictors here have a VIF above 10. Such a model would be hard to interpret. In practice, we would keep only one predictor from each related pair, the one which makes more business sense. For office expenses, staff in position matters more than sanctioned posts, because vacant posts spend nothing.
 
-## One Complete Example
+::: callout-tip
+## Audit tip
 
-**Problem Statement:** Example-5. The data pertains to inter-country Life-Cycle Savings 1960-1970. Under the life-cycle savings hypothesis developed by *Franco Modigliani*, the savings ratio `sr` (aggregate personal saving divided by disposable income) is explained by per-capita disposable income `dpi`, the percentage rate of change in per-capita disposable income `ddpi`, and two demographic variables. These are the percentage of population less than 15 years old `pop15`, and the percentage of the population over 75 years old `pop75`. The data are averaged over the decade 1960–1970 to remove the business cycle or other short-term fluctuations.
+Many indicators in government data come in related pairs. Sanctioned posts and staff in position, population and beneficiaries, budget and expenditure, length and cost of a road. Putting both members of a pair in one model rarely helps. Pick the one closer to the actual cause of the expenditure. @sec-pca shows another way, which combines related indicators into one.
+:::
 
-Let us try linear regression on the `LifeCycleSavings` data.
+## Audit use case, block offices with inflated expenses {#sec-reg-bdoflags}
 
-```{r ex2}
-# Visualise first 6 rows
-head(LifeCycleSavings)
+Let us now return to the two block offices we planted. We have learnt a good deal about their data. Office expenses rise with staff and with beneficiaries. Offices in the hills and tribal areas spend more for the same size. Floor area, sanctioned posts and population add little once staff and beneficiaries are in the model. So the model which makes business sense uses staff, beneficiaries and terrain.
 
-# Build a model
-ex1 <- lm(sr ~ . , data = LifeCycleSavings)
+```{r}
+bdo_final <- lm(office_exp ~ staff + beneficiaries + terrain, data = bdo)
+summary(bdo_final)
 ```
 
-In the formula, `.` again means all variables other than `sr`. Let us see the output.
+```{r}
+#| include: false
+bdo_flag <- augment(bdo_final, data = bdo) |>
+  mutate(excess = office_exp - .fitted) |>
+  arrange(desc(.std.resid))
+bdo_top <- bdo_flag |> filter(.std.resid > 3)
+```
+
+All the predictors are significant, and the model explains `r round(summary(bdo_final)$r.squared * 100)`% of the variation in office expenses, against `r round(summary(lin_reg1)$r.squared * 100)`% with staff alone. The residual standard error has come down from ₹`r r2(sigma(lin_reg1))` lakh to ₹`r r2(sigma(bdo_final))` lakh. Now let us find the offices which spend more than expected, with `augment()`.
+
+```{r}
+augment(bdo_final, data = bdo) |>
+  mutate(excess = office_exp - .fitted) |>
+  arrange(desc(.std.resid)) |>
+  select(office_id, district, staff, beneficiaries, office_exp, .fitted, excess, .std.resid) |>
+  head(5)
+```
+
+Two offices, `r paste(bdo_top$office_id, collapse = " and ")`, have standardised residuals above 3. They are exactly the two offices we planted. Together they spent about ₹`r r2(sum(bdo_top$excess), 1)` lakh more than expected. No other office comes close.
+
+Why did `BDO-027` hide in the first model? Let us compare it under both models.
+
+```{r}
+bind_rows(
+  augment(lin_reg1, data = bdo) |> mutate(model = "Staff only"),
+  augment(bdo_final, data = bdo) |> mutate(model = "Staff, beneficiaries, terrain")
+) |>
+  filter(office_id == "BDO-027") |>
+  select(model, staff, beneficiaries, office_exp, .fitted, .std.resid)
+```
+
+```{r}
+#| include: false
+b027 <- bdo |> filter(office_id == "BDO-027")
+```
+
+`BDO-027` serves only `r b027$beneficiaries` thousand beneficiaries, against an average of `r r2(mean(bdo$beneficiaries), 1)` thousand. An office of its size with so few beneficiaries should spend *less* than the average. The model with staff alone did not know this. It expected the expenses of an average office of that size, and the inflated bill looked normal against it. Once beneficiaries are in the model, the expected expenses fall, and the inflation stands out.
+
+::: callout-warning
+## Caution
+
+A model that leaves out an important driver does more than fit badly. It can *hide* an irregularity, as it hid `BDO-027`, or point to innocent offices, as it pointed to the offices in the hills. Before trusting the residuals, make sure the model includes every driver which the business suggests.
+:::
+
+What would the auditor do next? For each of the two offices, we would call for the vehicle hire bills, the log books of the vehicles and the sanction for hiring them. Bills without matching log book entries, or log books written up in one hand at the end of the year, are common signs of payments for vehicles never used. We would ask the office to explain the excess in writing, and record the model, the flagged offices and the replies in the working papers.
+
+## A complete example, cost of rural road works {#sec-reg-roads}
+
+**Example 5.** Let us now go through the whole process on a different audit dataset. A state builds rural roads under a scheme. We have 90 road works completed in five financial years, 2019-20 to 2023-24. For each work we know
+
+- `cost_lakh`, the cost per kilometre, in ₹ lakh,
+- `width_m`, the width of the carriageway in metres,
+- `hilly_pct`, the percentage of the road length in hilly terrain,
+- `lead_km`, the distance from the quarry, from which stone is carried,
+- `rain_cm`, the average annual rainfall of the area, in centimetres,
+- `bitumen_k`, the rate of bitumen in the year of the work, in ₹ thousand per tonne, and
+- `year_no`, the year of the work, from 1 for 2019-20 to 5 for 2023-24.
+
+The cost of a road should depend on its width, the terrain, the lead and the price of bitumen. The auditor would like a model of the *expected* cost per kilometre. Works which cost far more than expected can then be picked for detailed examination of their estimates and measurement books.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the road works data"
+set.seed(2411)
+n <- 90
+roads <- tibble(
+  work_id   = sprintf("RW-%03d", 1:n),
+  fin_year  = sample(2019:2023, n, replace = TRUE),
+  width_m   = sample(c(3, 3.75, 5.5), n, replace = TRUE, prob = c(0.4, 0.4, 0.2)),
+  hilly_pct = round(100 * rbeta(n, 0.7, 1.8)),
+  lead_km   = round(runif(n, 5, 60)),
+  rain_cm   = round(runif(n, 60, 250))
+) |>
+  mutate(
+    # bitumen rate rises every year
+    bitumen_k = round(38 + 3.5 * (fin_year - 2019) + rnorm(n, 0, 1.5), 1),
+    year_no   = fin_year - 2018,
+    # rainfall has no effect on cost in this data
+    cost_lakh = round(20 + 9 * width_m + 0.22 * hilly_pct + 0.12 * lead_km +
+                      0.8 * bitumen_k + rnorm(n, 0, 8), 1)
+  )
+# Keep only the response and the predictors, for the model
+road_vars <- roads |>
+  select(cost_lakh, width_m, hilly_pct, lead_km, rain_cm, bitumen_k, year_no)
+```
+
+```{r ex2}
+# See the first 6 rows
+head(road_vars)
+
+# Build a model
+ex1 <- lm(cost_lakh ~ . , data = road_vars)
+```
+
+In the formula, `.` again means all variables other than `cost_lakh`. Let us see the output.
 
 ```{r summ1}
 summary(ex1)
 ```
 
-Multiple R-squared is about `r round(summary(ex1)$r.squared * 100)`%, so the model explains about a third of the variation in savings ratios. Let us see some diagnostic plots (@fig-perf2).
+Multiple R-squared is about `r round(summary(ex1)$r.squared * 100)`%. But look at `bitumen_k`. Its slope is `r r2(coef(ex1)["bitumen_k"], 3)`, which would mean that roads get `r if (coef(ex1)["bitumen_k"] < 0) "*cheaper*" else "costlier"` as bitumen gets costlier. Its p-value is `r r2(summary(ex1)$coefficients["bitumen_k", 4])`. Something is not right. Let us see some diagnostic plots (@fig-perf2).
 
-```{r fig-perf2, fig.align='center', fig.cap="Diagnostic Plots", fig.height=8.5, fig.width=10}
+```{r fig-perf2, fig.align='center', fig.cap="Diagnostic plots", fig.height=8.5, fig.width=10}
 performance::check_model(ex1)
 ```
 
-We can notice some multi-collinearity between the two population variables in @fig-perf2. It is clearly visible in @fig-multi2. Countries with many children have few old people, and the other way round.
+We can notice high collinearity between `bitumen_k` and `year_no` in @fig-perf2. It is clearly visible in @fig-multi2. The rate of bitumen rose every year, so the two move together.
 
-```{r fig-multi2, fig.align='center', fig.cap="Are pop15 and pop75 correlated?", out.height="30%"}
-LifeCycleSavings %>%
-  ggplot(aes(pop15, pop75)) +
+```{r fig-multi2, fig.align='center', fig.cap="Are the year and the bitumen rate correlated?", out.height="30%"}
+road_vars %>%
+  ggplot(aes(year_no, bitumen_k)) +
   geom_point()+
   geom_smooth(method = 'lm', formula = 'y~x') +
+  labs(x = "Year of work (1 is 2019-20)", y = "Bitumen rate (₹ thousand per tonne)") +
   theme_bw()
 ```
 
 This can also be seen in the correlation plots in @fig-corrp.
 
-```{r fig-corrp, echo=FALSE,fig.align='center', fig.cap="Correlation Plots", out.height="45%", message=FALSE}
+```{r fig-corrp, echo=FALSE,fig.align='center', fig.cap="Correlation plots", out.height="45%", message=FALSE}
 ggpairs(
-  LifeCycleSavings,
+  road_vars,
   upper = list(continuous = my_fn),
   lower = list(continuous = 'smooth', wrap=c(colour="blue")))
 ```
@@ -894,55 +1107,76 @@ Let us see the VIF of the predictors.
 car::vif(ex1)
 ```
 
-Both population variables have a VIF above 5. So let us remove one of them, `pop75`, and re-run the model.
+Both `bitumen_k` and `year_no` have a VIF above 5. The other predictors have a VIF close to 1. So let us remove one of the pair. The bitumen rate is the actual cause of the change in cost, while the year only stands in for it. So we remove `year_no` and re-run the model.
 
 ```{r ex22}
-ex2 <- lm(sr ~ pop15 + dpi + ddpi, data = LifeCycleSavings)
+ex2 <- lm(cost_lakh ~ width_m + hilly_pct + lead_km + rain_cm + bitumen_k, data = road_vars)
 summary(ex2)
 ```
 
-Multiple R-squared has dropped a little, to `r round(summary(ex2)$r.squared * 100, 1)`%. That is expected, since R-squared always falls when we remove a variable. But look at what we gained. The standard error of `pop15` has fallen from `r round(summary(ex1)$coefficients["pop15", 2], 3)` to `r round(summary(ex2)$coefficients["pop15", 2], 3)`. Its estimate is now much more precise. Let us also remove `dpi`, whose coefficient is not significant.
+Multiple R-squared has dropped a little, to `r r2(summary(ex2)$r.squared * 100, 1)`%. That is expected, since R-squared never rises when we remove a variable. But look at what we gained. The slope of `bitumen_k` is now `r r2(coef(ex2)["bitumen_k"], 3)`, positive as it should be. Its standard error has fallen from `r r2(summary(ex1)$coefficients["bitumen_k", 2], 3)` to `r r2(summary(ex2)$coefficients["bitumen_k", 2], 3)`. Its estimate is now much more precise. Let us also remove `rain_cm`, whose coefficient is not significant.
 
 ```{r ex33}
-ex3 <- lm(sr ~ pop15 + ddpi, data = LifeCycleSavings)
+ex3 <- lm(cost_lakh ~ width_m + hilly_pct + lead_km + bitumen_k, data = road_vars)
 summary(ex3)
 ```
 
-Multiple R-squared falls slightly again, to `r round(summary(ex3)$r.squared * 100, 1)`%. But adjusted R-squared stays almost the same (`r round(summary(ex2)$adj.r.squared, 4)` before, `r round(summary(ex3)$adj.r.squared, 4)` now). So `dpi` was adding nothing useful, and the simpler model with two predictors does as well as the one with three. Both of its coefficients are significant. When two models explain the data about equally well, we prefer the simpler one.
+Multiple R-squared falls slightly again, to `r r2(summary(ex3)$r.squared * 100, 1)`%. But adjusted R-squared stays almost the same (`r r2(summary(ex2)$adj.r.squared, 4)` before, `r r2(summary(ex3)$adj.r.squared, 4)` now). So `rain_cm` was adding nothing useful, and the simpler model with four predictors does as well as the one with five. All of its coefficients are significant. When two models explain the data about equally well, we prefer the simpler one.
 
-Let us visualise the main relationship through a scatter plot.
+Now the model reads sensibly. A road 1 metre wider costs about ₹`r r2(coef(ex3)["width_m"], 1)` lakh more per kilometre. Each 10 percentage points of hilly length add about ₹`r r2(10 * coef(ex3)["hilly_pct"], 1)` lakh per kilometre. A rise of ₹1,000 per tonne in the bitumen rate adds about ₹`r r2(coef(ex3)["bitumen_k"], 2)` lakh per kilometre. The auditor can compare these with the schedule of rates. If the model says that terrain or lead adds much more than the rates allow, the estimates deserve a look.
+
+Let us visualise one of the main relationships through a scatter plot.
 
 ```{r fig-ex5scatter, warning=FALSE, fig.align='center', fig.cap="Ascertaining linear relationship", out.height="30%"}
-LifeCycleSavings %>%
-  ggplot(aes(pop15, sr)) +
+road_vars %>%
+  ggplot(aes(hilly_pct, cost_lakh)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x', se = FALSE) +
+  labs(x = "Hilly length (%)", y = "Cost per km (₹ lakh)") +
   theme_bw()
 ```
 
-The relationship between `pop15` and the savings ratio is real but not very strong. The points are widely scattered around the line. That is why the R-squared stays below 30%. Savings depend on many things this data does not have.
+The relationship between hilly length and cost is real, but the points are widely scattered around the line. That is because width, lead and the bitumen rate also vary from work to work. Only the model with all of them together explains about two thirds of the variation. The rest is due to things this data does not have, like soil, culverts and the quality of the contractor's work.
 
 ## Simpson's paradox
 
-Edward Hugh Simpson, a statistician and former cryptanalyst at Bletchley Park, described this phenomenon in a paper in 1951. It is a classic example of how a regression that leaves out an important variable can mislead. The paradox arises when a trend seen in each subgroup of the data *reverses* or *disappears* when the subgroups are combined.
+Edward Hugh Simpson, a statistician and former cryptanalyst at Bletchley Park, described this phenomenon in a paper in 1951. It is a classic example of how a regression that leaves out an important variable can mislead. The paradox arises when a trend seen in each subgroup of the data *reverses* or *disappears* when the subgroups are combined. We saw a mild form of it in Example 4, where terrain seemed not to matter until we compared offices of the same size.
 
-**Problem Statement:** Example-6. Let us take the `penguins` data from `palmerpenguins`, and try to establish a relationship between the depth and length of penguins' bills, `bill_depth_mm` and `bill_length_mm`. See the plots in @fig-ex3.
+**Example 6.** A health department runs 60 hospitals of three types. There are primary health centres (PHCs), community health centres (CHCs) and district hospitals. For each we know the number of patients treated in the year (`patients`, in thousand) and the cost per patient (`cost_pp`, in ₹). Does a hospital that treats more patients spend less per patient? Let us try to establish a relationship between the two. See the plots in @fig-ex3.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the hospital data"
+set.seed(77)
+hosp_types <- c("PHC", "CHC", "District hospital")
+hosp <- tibble(type = factor(rep(hosp_types, each = 20), levels = hosp_types)) |>
+  mutate(
+    patients = round(case_when(type == "PHC" ~ runif(n(), 5, 15),
+                               type == "CHC" ~ runif(n(), 18, 35),
+                               TRUE          ~ runif(n(), 40, 80)), 1),
+    # within each type, cost per patient falls as the number of patients grows
+    base    = c(PHC = 950, CHC = 1700, "District hospital" = 3300)[as.character(type)],
+    centre  = c(PHC = 10, CHC = 26, "District hospital" = 60)[as.character(type)],
+    cost_pp = round(base - 18 * (patients - centre) + rnorm(n(), 0, 80))
+  ) |>
+  select(type, patients, cost_pp)
+```
 
 ::: {#fig-ex3}
 
 ```{r echo=FALSE, fig.align='center', out.width="47%", fig.show='hold'}
-penguins %>%
-  na.omit() %>%
-  ggplot(aes(bill_length_mm, bill_depth_mm)) +
+hosp %>%
+  ggplot(aes(patients, cost_pp)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x') +
+  labs(x = "Patients treated (thousand)", y = "Cost per patient (₹)") +
   theme_bw()
 
-penguins %>%
-  na.omit() %>%
-  ggplot(aes(bill_length_mm, bill_depth_mm, color = species)) +
+hosp %>%
+  ggplot(aes(patients, cost_pp, color = type)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = 'y ~ x') +
+  labs(x = "Patients treated (thousand)", y = "Cost per patient (₹)", color = NULL) +
   theme_bw() +
   theme(legend.position = 'bottom')
 ```
@@ -950,15 +1184,14 @@ penguins %>%
 Regression having variable hidden (left) and exposed (right)
 :::
 
-In the left plot, the relationship is negative. Longer bills seem to be shallower. But when the hidden variable `species` is exposed (right), we see a *positive* relationship within each species. Let us confirm this with two models.
+In the left plot, the relationship is positive. Hospitals treating more patients seem to spend *more* per patient. But when the hidden variable `type` is exposed (right), we see a *negative* relationship within each type. A busier PHC costs less per patient than a quieter PHC, and the same holds for CHCs and district hospitals. Let us confirm this with two models.
 
 ```{r}
-peng <- na.omit(penguins)
-coef(lm(bill_depth_mm ~ bill_length_mm, data = peng))
-coef(lm(bill_depth_mm ~ bill_length_mm + species, data = peng))
+coef(lm(cost_pp ~ patients, data = hosp))
+coef(lm(cost_pp ~ patients + type, data = hosp))
 ```
 
-Without species, the slope of bill length is `r sprintf('%.2f', coef(lm(bill_depth_mm ~ bill_length_mm, data = peng))[2])`. Once species is in the model, it becomes `r sprintf('%.2f', coef(lm(bill_depth_mm ~ bill_length_mm + species, data = peng))[2])`. The sign has flipped. Species is a *confounding* variable here. So before finalising a model, we must make sure that we are not missing an important variable. To avoid being misled by Simpson's paradox, we should
+Without type, the slope of patients is `r r2(coef(lm(cost_pp ~ patients, data = hosp))[2])`. Once type is in the model, it becomes `r r2(coef(lm(cost_pp ~ patients + type, data = hosp))[2])`. The sign has flipped. Type of hospital is a *confounding* variable here. District hospitals treat more patients *and* treat costlier cases. An auditor who compared all hospitals together might wrongly conclude that busy hospitals are wasteful. So before finalising a model, we must make sure that we are not missing an important variable. To avoid being misled by Simpson's paradox, we should
 
 - **Identify confounding variables.** Think about what else could affect both variables under study.
 - **Consider all levels.** Analyse the data at the subgroup level and at the combined level, and compare.
@@ -971,9 +1204,9 @@ Without species, the slope of bill length is `r sprintf('%.2f', coef(lm(bill_dep
 Simpson's paradox is common in audit data. A scheme may show a falling rejection rate in every district, yet a rising rate for the state as a whole, because the mix of districts has changed. Before reporting a trend on combined data, always check it within the main subgroups, like districts, years, or types of contract.
 :::
 
-## An audit example: offices that spend more than expected {#sec-reg-audit}
+## Audit use case, offices that spend more than expected {#sec-reg-audit}
 
-Let us now use regression the way an auditor would. Remember the question we started this chapter with. Salary expenditure of an office should depend mainly on its staff strength. If an office spends far more than its staff strength explains, it may have *ghost employees* on its pay roll, or other irregular payments. Regression gives us an *expected* expenditure for every office. The residual is then the *unexplained* part. Large positive residuals are our leads.
+We have used regression on audit data throughout this chapter. Let us now put it all together on the question with which we started. Salary expenditure of an office should depend mainly on its staff strength. If an office spends far more than its staff strength explains, it may have *ghost employees* on its pay roll, or other irregular payments. Regression gives us an *expected* expenditure for every office. The residual is then the *unexplained* part. Large positive residuals are our leads.
 
 ### Our sample data
 
@@ -984,7 +1217,7 @@ We have planted a few cases.
 - Three offices have salary expenditure inflated by 16%, as if ghost employees were added.
 - In one office, the staff strength was keyed in with an extra zero.
 
-As in other chapters, new readers may skip the code which creates the data.
+As before, new readers may skip the code which creates the data.
 
 ```{r}
 #| code-fold: true
@@ -1126,14 +1359,24 @@ Regression finds only those deviations which are large compared to the normal va
 Offices which spend much *less* than expected may also deserve a look. The reason may be vacant posts, salary not paid on time, or expenditure booked under the wrong head. Here no office has a standardised residual below -3.
 :::
 
+### What the auditor does next
+
+The model has given us `r nrow(top2)` leads and one data quality finding. None of them is yet an audit finding. For each lead, we would
+
+- obtain the pay roll of the office for a few months, and count the employees actually paid against the staff strength reported,
+- match the employees paid with the attendance register, the service books and the bank accounts into which pay was credited, looking for the same account shared by two employees, or employees who never mark attendance,
+- ask the office to explain the excess of about ₹`r round(sum(top2$excess), 1)` lakh a month, in writing, and
+- record the model, the residuals and the replies in the working papers, so that the selection of these offices can be justified later.
+
+The keying error in the staff strength of `SDO-81` should be reported as a weakness in the data, because the same figure may be used elsewhere, for example to sanction posts or to allot funds.
 ## Uses of regression in audit
 
-We have seen that regression analysis is a powerful tool for an auditor. It may be used, inter alia, for
+We have seen that regression analysis is a powerful tool for an auditor. It may be used, among other things, for the following.
 
-- **Detection of anomalies and outliers.** As in our office example, regression gives the *expected* value of an amount based on its drivers. Large residuals point to transactions or units which do not fit, and these may be errors, irregularities or fraud.
+- **Detection of anomalies and outliers.** As in our office examples, regression gives the *expected* value of an amount based on its drivers. Large residuals point to transactions or units which do not fit, and these may be errors, irregularities or fraud.
 - **Analytical procedures.** The auditor can estimate what an expenditure *should* be, say fuel cost from vehicle kilometres, or electricity charges from the connected load, and compare it with what was booked.
 - **Risk assessment.** Units with large unexplained deviations can be ranked and taken up first in the audit plan. This helps the auditor use limited time and staff well.
-- **Benchmarking.** Regression can compare the performance of an organisation with similar ones, after adjusting for size and other factors. Deviations from the expected relationship highlight areas that deserve a closer look.
+- **Benchmarking.** Regression can compare the performance of an organisation with similar ones, after adjusting for size and other factors. Deviations from the expected relationship highlight areas that deserve a closer look. The cost of road works per kilometre, adjusted for width, terrain and lead, is one example.
 
 ## A suggested workflow
 
@@ -1143,8 +1386,8 @@ For any regression analysis in audit, we may follow these steps.
 2. **Visualise first.** Draw scatter plots and box plots to see whether the relationships look linear, and to spot obvious errors.
 3. **Fit a simple model** with `lm()`, and read its `summary()`.
 4. **Check influence.** Look at Cook's distance and leverage. Investigate and correct data entry errors before going further.
-5. **Check the assumptions** with `plot()` or `check_model()`. Check multi-collinearity with `vif()` when there are several predictors.
-6. **Improve the model.** Add factors and interactions that make business sense. Compare models with adjusted R-squared or `anova()`.
+5. **Check the assumptions** with `plot()` or `check_model()`. Check multi-collinearity with `vif()` when there are several predictors, and keep only one predictor from each related pair.
+6. **Improve the model.** Add factors and interactions that make business sense. Watch for hidden variables which can reverse a trend. Compare models with adjusted R-squared or `anova()`.
 7. **Flag the residuals.** Use `augment()` and pick the units with large standardised residuals. Quantify the excess in rupees.
 8. **Verify with records.** Examine the documents of the flagged units before drawing any conclusion.
 
@@ -1153,6 +1396,10 @@ For any regression analysis in audit, we may follow these steps.
 
 A regression model shows association, not cause. A large residual means only that a unit does not fit the pattern of the others. It is a *lead*, not a *finding*. There may be a genuine reason which the model does not know about. Always examine the records before reporting.
 :::
+
+## Where next
+
+Linear regression predicts a number. When the audit question has a yes or no answer, like whether a claim is irregular, we use logistic regression, in @sec-logistic. When many indicators are related to each other, @sec-pca shows how to combine them before modelling.
 
 ## Summary of functions used
 
@@ -1166,11 +1413,14 @@ A regression model shows association, not cause. A large residual means only tha
 | `plot()` on a model | base R | Draws the six diagnostic plots, chosen with `which` |
 | `cooks.distance()`, `rstandard()` | base R (stats) | Gives Cook's distance and standardised residuals |
 | `contrasts()`, `model.matrix()` | base R (stats) | Shows how factors are converted to dummy variables |
+| `factor()` | base R | Converts a variable to a factor, also inside a formula |
 | `anova()` | base R (stats) | Compares two nested models |
+| `names()` | base R | Lists the parts of a model object |
 | `augment()` | broom | Gives fitted values, residuals, leverage and Cook's distance as a data frame |
 | `check_model()` | performance | Draws all diagnostic plots together, with guidance |
 | `vif()` | car | Calculates the variance inflation factor of each predictor |
 | `ggpairs()` | GGally | Draws a matrix of scatter plots and correlations |
 | `geom_parallel_slopes()` | moderndive | Draws a parallel slopes model in ggplot2 |
+| `glimpse()` | dplyr | Shows the columns of a data frame, with their types and first values |
 
 : Functions used in this chapter {#tbl-regfunctions}

@@ -6,7 +6,9 @@ source("_common.R")
 
 # Probability Distributions {#sec-probability}
 
-We will keep this short. Instead of learning all the concepts of probability, we will see how to calculate probabilities, densities, quantiles and random numbers for nearly any distribution. Base R has four functions for each common distribution. Their names start with the prefixes `p`, `q`, `d` and `r`, followed by a short name of the distribution, like `norm` for the normal distribution or `binom` for the binomial.
+An auditor tests a sample of 60 vouchers for a missing sanction and finds none. Can we now say the control works? Or were we simply lucky? A toll plaza reports a day's receipts far below its usual level. Is that day merely unusual, or is it worth a question? Both are questions of *probability*. Every statistical sampling plan, and every judgement that a figure is "too far from normal", rests on a probability distribution.
+
+We will keep this chapter short. Instead of learning all the concepts of probability, we will see how to calculate probabilities, densities, quantiles and random numbers for nearly any distribution. Base R has four functions for each common distribution. Their names start with the prefixes `p`, `q`, `d` and `r`, followed by a short name of the distribution, like `norm` for the normal distribution or `binom` for the binomial.
 
 | Distribution                   | P |  Q | D | R  |
 | ------------------------------ | --------- | ------ | ----- | -----|
@@ -33,19 +35,26 @@ We will keep this short. Instead of learning all the concepts of probability, we
 
 : The p, q, d and r functions of common distributions {#tbl-pqdr}
 
-All these functions are vectorised. Let us explore them one by one.
+All these functions are vectorised. Let us explore them one by one, and then use them on the two questions of sampling that every auditor meets.
 
 ## `p*()` set of functions
 
 These functions give the cumulative **p**robability, that is, the probability that a value is *less than or equal to* a given number.
 
-Example-1. What is the probability of a value being less than or equal to `25` in a normal distribution with `mean = 50` and `sd = 10`?
+Suppose the daily receipts at a toll plaza follow a normal distribution, with a mean of ₹50 thousand and a standard deviation of ₹10 thousand. What is the probability of a day with receipts of ₹25 thousand or less?
 
 ```{r}
 pnorm(25, mean = 50, sd = 10)
 ```
 
-On the contrary, the probability of a value being greater than 25 in the same distribution is
+```{r}
+#| include: false
+p_low <- pnorm(25, mean = 50, sd = 10)
+```
+
+The chance is about `r round(100 * p_low, 2)`%, less than one day in a hundred. A day with such low receipts is unusual enough to ask the plaza for the reason.
+
+On the other hand, the probability of receipts above ₹25 thousand on a day is found in either of two ways.
 
 ```{r}
 # Either deduct probability from 1
@@ -54,7 +63,7 @@ On the contrary, the probability of a value being greater than 25 in the same di
 pnorm(25, mean = 50, sd = 10, lower.tail = FALSE)
 ```
 
-Example-2. What is the probability of getting one or more heads in two tosses of a fair coin? The number of heads follows a binomial distribution with `size = 2` and `prob = 0.5`. "One or more" is the same as "more than zero", so we ask for the upper tail above 0.
+Now a discrete example. What is the probability of getting one or more heads in two tosses of a fair coin? The number of heads follows a binomial distribution with `size = 2` and `prob = 0.5`. "One or more" is the same as "more than zero", so we ask for the upper tail above 0.
 
 ```{r}
 pbinom(0, size = 2, prob = 0.5, lower.tail = FALSE)
@@ -78,17 +87,21 @@ $$
 x = F^{-1}(p)
 $$ {#eq-s2}
 
-Example. In the same normal distribution (`mean = 50` and `sd = 10`), below which value do 90% of the values lie?
+For the same toll plaza (`mean = 50` and `sd = 10`, in ₹ thousand), below which value do the receipts of 90% of the days lie?
 
 ```{r}
 qnorm(0.9, mean = 50, sd = 10)
 ```
+
+So on nine days out of ten, the receipts should be below about ₹`r round(qnorm(0.9, 50, 10), 1)` thousand.
 
 As with the `p` functions, we may use the `lower.tail` argument to find the value *above* which 90% of the values lie.
 
 ```{r}
 qnorm(0.9, mean = 50, sd = 10, lower.tail = FALSE)
 ```
+
+Receipts below about ₹`r round(qnorm(0.9, 50, 10, lower.tail = FALSE), 1)` thousand happen on only one day in ten.
 
 ## `d*()` set of functions
 
@@ -124,7 +137,7 @@ hist(rnorm(10000, 50, 10), breaks = 50, main = NULL, xlab = "Value")
 
 The `r` functions are how we create the simulated data used throughout this book, like the payments and claims with planted irregularities.
 
-## Probability in audit sampling {#sec-prob-audit}
+## Audit use case, probability in audit sampling {#sec-prob-audit}
 
 Why should an auditor care about these functions? Because every statistical sample rests on them. Let us see two questions that come up in every sampling plan.
 
@@ -162,7 +175,7 @@ tibble::tibble(errors_found = 0:5,
                factor_90    = round(qgamma(0.90, 0:5 + 1), 2))
 ```
 
-These are exactly the factors printed in audit sampling tables. The factor 3.00 for zero errors at 95% confidence is the most used number in audit sampling. We will use these factors to calculate sample sizes and evaluate results in the next chapter (@sec-sampling).
+These are exactly the factors printed in audit sampling tables. The factor `r format(round(qgamma(0.95, 1), 2), nsmall = 2)` for zero errors at 95% confidence is the most used number in audit sampling. It gives the familiar rule of thumb. If a sample of $n$ items has no errors, we can be 95% confident that the error rate is below $3/n$. For 60 items, that is `r round(100 * qgamma(0.95, 1) / 60)`%. We will use these factors to calculate sample sizes and evaluate results in the next chapter, @sec-sampling.
 
 ::: callout-note
 ## Why does `qgamma()` give Poisson limits?

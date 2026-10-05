@@ -5,9 +5,15 @@ source("_common.R")
 
 # Random Sampling {#sec-sampling}
 
-International Standard on Auditing (ISA) 530^[[https://www.ifac.org/system/files/publications/files/A028%202012%20IAASB%20Handbook%20ISA%20530.pdf](https://www.ifac.org/system/files/publications/files/A028%202012%20IAASB%20Handbook%20ISA%20530.pdf)] defines audit sampling as _the application of audit procedures to less than 100% of items within a population of audit relevance such that all sampling units have a chance of selection in order to provide the auditor with a reasonable basis on which to draw conclusions about the entire population._ It further defines statistical sampling as _an approach to sampling that has the following characteristics: (a) random selection of the sample items; and (b) the use of probability theory to evaluate sample results, including measurement of sampling risk._
+A district office of a department makes about four thousand payments in a year. The auditor has a few weeks, and cannot examine every voucher. So the auditor examines some of them, and draws a conclusion about all of them. This is audit sampling. Two questions decide whether the conclusion can be trusted. Was the sample selected fairly, so that no voucher was kept out of reach? And were the errors found in the sample projected to the whole population, with an allowance for chance?
 
-Appendix 4 of ISA 530 describes the different methods of selecting a sample. In this chapter, we will see how each of them can be carried out in R, reproducibly. Then we will see how to work out sample sizes, and how to evaluate the results of a monetary unit sample, using the probability functions of @sec-probability.
+International Standard on Auditing (ISA) 530^[[https://www.ifac.org/system/files/publications/files/A028%202012%20IAASB%20Handbook%20ISA%20530.pdf](https://www.ifac.org/system/files/publications/files/A028%202012%20IAASB%20Handbook%20ISA%20530.pdf)] defines audit sampling as follows.
+
+> The application of audit procedures to less than 100% of items within a population of audit relevance such that all sampling units have a chance of selection in order to provide the auditor with a reasonable basis on which to draw conclusions about the entire population.
+
+ISA 530 also describes *statistical sampling*. It has two features. The sample items are selected at random. And probability theory is used to evaluate the results, including a measure of sampling risk.
+
+Appendix 4 of ISA 530 describes the different methods of selecting a sample. In this chapter, we will carry out each of them in R, reproducibly, on the payment vouchers of an imaginary office. Then we will see how to work out sample sizes. Finally, we will select and evaluate a complete monetary unit sample, using the probability functions of @sec-probability.
 
 Why use R for sampling, when audit software and spreadsheets can also draw samples? Because a sample drawn in R is fully documented by its code. Anyone can run the same code, with the same *seed*, and get exactly the same sample. That is the best evidence that the selection was random and was not manipulated.
 
@@ -19,187 +25,198 @@ Why use R for sampling, when audit software and spreadsheets can also draw sampl
 library(tidyverse)
 ```
 
-## Simple Random Sampling (With and without replacement)
+## Our population, a year of payment vouchers {#sec-sampling-data}
 
-In this method, records are selected completely at random, as if by random number tables. Refer to @fig-simple for an illustration. The two functions behind it are `sample()` and `set.seed()`, which we met in @sec-prob. `sample()` works on vectors, so for data frames we use `dplyr::slice_sample()`, which we met in @sec-slice_func.
+Let us create the payment vouchers of an imaginary divisional office for 2024-25. The office makes payments through six district units. Each voucher has a number, a date, the district, the head of expenditure and the amount. The vouchers are numbered in the order of their dates. There are 4,000 vouchers, mostly small, with a few very large ones.
+
+For each voucher we also keep the *audited* amount. This is the correct amount, which the auditor would find on examining the voucher. We have planted misstatements in 240 vouchers, where the amount paid is more than the correct amount. In real audit, of course, we do not know the audited amounts until we examine the sample. We will use them only at the end, in @sec-mus.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the payment vouchers"
+set.seed(530)
+n_pop <- 4000
+districts <- c("Bhopal", "Indore", "Jabalpur", "Gwalior", "Sagar", "Rewa")
+heads <- c("Office expenses", "Materials and supplies", "Minor works",
+           "Hiring of vehicles", "Professional services", "Machinery and equipment")
+
+payments <- tibble(
+  voucher_date = sort(as.Date("2024-04-01") + sample(0:364, n_pop, replace = TRUE)),
+  district     = sample(districts, n_pop, replace = TRUE,
+                        prob = c(0.25, 0.22, 0.18, 0.15, 0.12, 0.08)),
+  head         = sample(heads, n_pop, replace = TRUE),
+  amount       = round(rlnorm(n_pop, log(40000), 1.2))
+) |>
+  mutate(voucher_no = sprintf("PV-%05d", row_number()), .before = 1)
+
+# A few very large payments
+big <- sample(1:n_pop, 6)
+payments$amount[big] <- round(runif(6, 3e6, 8e6))
+payments$head[big] <- "Machinery and equipment"
+
+# Planted misstatements. The audited (correct) amount is less than the amount paid
+payments <- payments |> mutate(audited = amount)
+mis <- sample(1:n_pop, 240)
+payments$audited[mis] <- round(payments$amount[mis] * (1 - runif(240, 0.2, 1)))
+```
+
+```{r}
+payments
+```
+
+```{r}
+#| include: false
+crore <- function(x) round(x / 1e7, 2)
+```
+
+The `r format(nrow(payments), big.mark = ",")` vouchers are worth ₹`r crore(sum(payments$amount))` crore in all. Let us see how they are spread over the districts.
+
+```{r}
+payments |>
+  summarise(vouchers = n(), crore = round(sum(amount) / 1e7, 2), .by = district) |>
+  arrange(desc(vouchers))
+```
+
+## Simple random sampling, with and without replacement
+
+In this method, vouchers are selected completely at random, as if by random number tables. Refer to @fig-simple for an illustration. The two functions behind it are `sample()` and `set.seed()`, which we met in @sec-prob. `sample()` works on vectors. For data frames we use `dplyr::slice_sample()`, which we met in @sec-slice_func.
 
 ```{r fig-simple, echo=FALSE, fig.cap="Illustration of Simple Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
 knitr::include_graphics("images/simple.png")
 ```
 
-Let us draw a sample of `n = 12` records from the `iris` data, without replacement.
+Let us draw a sample of `n = 12` vouchers, without replacement.
 
-```
-dat <- iris # input data
-# set the seed
+```{r}
 set.seed(123)
-# sample n records
-dat |>
+srs <- payments |>
   slice_sample(n = 12, replace = FALSE)
+
+srs |>
+  select(voucher_no, voucher_date, district, head, amount)
 ```
 
-```{r echo=FALSE}
-dat <- iris
-set.seed(123)
-knitr::kable(
-  slice_sample(dat, n=12, replace = FALSE)
-)
-```
-
-The syntax is simple. First we fix the random number seed, so that the same sample can be drawn again. Then `slice_sample()` selects `n = 12` records without replacement (`replace = FALSE`).
+The syntax is simple. First we fix the random number seed, so that the same sample can be drawn again. Then `slice_sample()` selects `n = 12` vouchers without replacement (`replace = FALSE`).
 
 ::: callout-note
-If the sample size is a proportion, we use the argument `prop`, like `prop = 0.10` for 10%, instead of `n`. If sampling is with replacement, we use `replace = TRUE`.
+If the sample size is a proportion, we use the argument `prop`, like `prop = 0.10` for 10%, instead of `n`. If sampling is with replacement, we use `replace = TRUE`. In audit we almost always sample without replacement, since there is no point in examining the same voucher twice.
 :::
 
 ## Systematic random sampling {#sec-srs}
 
-ISA 530 describes this approach as _'Systematic selection, in which the number of sampling units in the population is divided by the sample size to give a sampling interval, for example 50, and having determined a starting point within the first 50, each 50th sampling unit thereafter is selected. Although the starting point may be determined haphazardly, the sample is more likely to be truly random if it is determined by use of a computerized random number generator or random number tables. When using systematic selection, the auditor would need to determine that sampling units within the population are not structured in such a way that the sampling interval corresponds with a particular pattern in the population.'_ Refer to @fig-systematic for an illustration.
+ISA 530 describes this approach in some detail. The number of sampling units in the population is divided by the sample size. This gives a *sampling interval*, say 50. A starting point is chosen within the first 50, and every 50th unit after it is selected. The starting point is best chosen by a random number generator. ISA 530 also warns that the population must not have a pattern which matches the interval. Refer to @fig-systematic for an illustration.
 
 ```{r fig-systematic, echo=FALSE, fig.cap="Illustration of Systematic Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
 knitr::include_graphics("images/systematic.png")
 ```
 
-The selection runs through the population *in its existing order*, for example in the order of voucher numbers. That is the point of the method. It spreads the sample evenly over the whole population, for example over the whole year. We carry it out in two steps.
+The selection runs through the population *in its existing order*, here the order of voucher numbers. That is the point of the method. It spreads the sample evenly over the whole population, which here means over the whole year. We carry it out in two steps.
 
-__Step-1:__ Choose the sample size `n`. Divide the number of rows by `n` to get the sampling interval `s`. Choose a random starting point `s1` between 1 and `s`.
+**Step 1.** Choose the sample size `n`. Divide the number of rows by `n` to get the sampling interval `s`. Choose a random starting point `s1` between 1 and `s`.
 
-__Step-2:__ Select the rows `s1`, `s1 + s`, `s1 + 2s`, and so on, until we have `n` rows. `slice()` selects rows by their position.
-
-```
-set.seed(123)
-n <- 15 # sample size
-s <- floor(nrow(dat) / n)          # sampling interval
-s1 <- sample(1:s, 1)               # random start
-rand_seq <- seq(s1, by = s, length.out = n)
-dat |>
-  slice(rand_seq)
-```
-
-```{r echo=FALSE}
-set.seed(123)
-n <- 15 # sample size
-s <- floor(nrow(dat)/n)
-s1 <- sample(1:s, 1)
-rand_seq <- seq(s1, by = s, length.out = n)
-knitr::kable(
-  dat |>
-    mutate(row = row_number(), .before = 1) |>
-    slice(rand_seq)
-)
-```
+**Step 2.** Select the rows `s1`, `s1 + s`, `s1 + 2s`, and so on, until we have `n` rows. `slice()` selects rows by their position.
 
 ```{r}
-#| include: false
-sys_s <- s; sys_s1 <- s1
+set.seed(123)
+n <- 24                                  # sample size
+s <- floor(nrow(payments) / n)           # sampling interval
+s1 <- sample(1:s, 1)                     # random start
+rand_seq <- seq(s1, by = s, length.out = n)
+
+sys_sample <- payments |>
+  mutate(row = row_number(), .before = 1) |>
+  slice(rand_seq)
+
+sys_sample |>
+  select(row, voucher_no, voucher_date, district, amount)
 ```
 
-The interval here is `r sys_s` and the random start is `r sys_s1`, so rows `r sys_s1`, `r sys_s1 + sys_s`, `r sys_s1 + 2 * sys_s` and so on were selected. Notice that the sample contains flowers of all three species, in equal numbers, because the data is arranged species-wise and the selection is spread evenly through it.
+The interval here is `r s` and the random start is `r s1`. So rows `r s1`, `r s1 + s`, `r s1 + 2 * s` and so on were selected. Let us check how the sample is spread over the months.
+
+```{r}
+sys_sample |>
+  count(month = month(voucher_date, label = TRUE))
+```
+
+Every month of the year is in the sample, with two vouchers each. This happened because the vouchers are arranged by date, and the selection is spread evenly through them. A simple random sample of the same size could, by chance, miss a month altogether.
 
 ::: callout-warning
 ## Caution
 
-Do not shuffle the data before systematic selection. Shuffling destroys the order, and turns the method into simple random sampling. Also check, as ISA 530 says, that the population has no pattern which matches the interval. For example, if a payroll lists employees in groups of 10, with the supervisor always tenth, an interval of 10 would select either all supervisors or none.
+Do not shuffle the data before systematic selection. Shuffling destroys the order, and turns the method into simple random sampling. Also check, as ISA 530 says, that the population has no pattern which matches the interval. For example, if a pay bill lists employees in groups of 10, with the supervisor always tenth, an interval of 10 would select either all supervisors or none.
 :::
 
-## Probability Proportionate to Size (PPS) selection
+## Probability proportionate to size (PPS) selection
 
-In this method, larger items have a larger chance of selection, in proportion to their size, usually their monetary value. ISA 530 calls the best known form of it *monetary unit sampling*, _"a type of value-weighted selection in which sample size, selection and evaluation results in a conclusion in monetary amounts."_
+In this method, larger items have a larger chance of selection, in proportion to their size, usually their monetary value. ISA 530 calls the best known form of it *monetary unit sampling*. It describes it as follows.
 
-`slice_sample()` can select records with probability in proportion to a column, through its argument `weight_by`. Let us use the `state.x77` data that comes with base R, and select 12 States with probability proportional to their population. Since the data is a matrix, we first convert it into a data frame.
+> A type of value-weighted selection in which sample size, selection and evaluation results in a conclusion in monetary amounts.
+
+`slice_sample()` can select records with probability in proportion to a column, through its argument `weight_by`. Let us select 12 vouchers with probability proportional to their amount.
 
 ```{r}
-dat <- as.data.frame(state.x77)
+set.seed(123)
+pps <- payments |>
+  slice_sample(n = 12, weight_by = amount)
+
+pps |>
+  select(voucher_no, voucher_date, district, head, amount)
 ```
 
-```
-set.seed(123)
-dat |>
-  slice_sample(n = 12, weight_by = Population)
+Compare this with the simple random sample drawn earlier.
+
+```{r}
+tibble(sample = c("Simple random", "Proportionate to size"),
+       median_amount = c(median(srs$amount), median(pps$amount)))
 ```
 
-```{r echo=FALSE}
-set.seed(123)
-knitr::kable(
-  dat |>
-    slice_sample(n = 12, weight_by = Population)
-)
-```
+The median voucher in the PPS sample is ₹`r round(median(pps$amount) / 1e5, 2)` lakh. In the simple random sample it is only ₹`r format(round(median(srs$amount)), big.mark = ",")`. The larger vouchers, where a misstatement would matter most, now get more of the auditor's attention.
 
 This is a quick way to give larger items a larger chance. But it is not exactly monetary unit sampling. For that, we need a systematic selection of *rupees*, which also allows the results to be evaluated statistically. We will see it in @sec-mus.
 
 ## Stratified random sampling {#sec-stratified}
 
-ISA 530 defines stratification as _the process of dividing a population into sub-populations, each of which is a group of sampling units which have similar characteristics (often monetary value)._ So stratified random sampling means applying any of the above methods to each stratum separately, instead of to the whole population. Refer to @fig-strata for an illustration.
+ISA 530 defines stratification as follows.
+
+> The process of dividing a population into sub-populations, each of which is a group of sampling units which have similar characteristics (often monetary value).
+
+So stratified random sampling means applying any of the above methods to each stratum separately, instead of to the whole population. Refer to @fig-strata for an illustration.
 
 ```{r fig-strata, echo=FALSE, fig.cap="Illustration of Stratified Random Sampling", fig.align='center', fig.show='hold', out.width="99%"}
 knitr::include_graphics("images/stratified.png")
 ```
 
-We use `group_by()` to form the strata, and then sample within each group as above.
+We form the strata with a grouping column, and then sample within each group as above.
 
-Example Data. Let us add the region of each State to the `state.x77` data, using `bind_cols()`.
-
-```{r}
-dat <- bind_cols(
-  as.data.frame(state.x77),
-  as.data.frame(state.region)
-)
-```
-
-Let us see the first 6 rows of this data.
-
-```{r echo=FALSE}
-knitr::kable(
-  dat |> head()
-)
-```
-
-And the number of States in each region.
+**Case 1. The same sample size for every stratum.** Say we want 2 vouchers from each district. The district is already a column in the data.
 
 ```{r}
-dat |>
-  count(state.region, name = "states")
-```
-
-__Case-1:__ When the sample size is the same for all strata, say `2` States per region.
-
-```
 set.seed(123)
-dat |>
-  rownames_to_column('State') |>    # State names are stored as row names
-  slice_sample(n = 2, by = state.region)
-```
-
-```{r echo=FALSE}
-set.seed(123)
-knitr::kable(
-  dat |>
-    rownames_to_column('State') |>
-    slice_sample(n = 2, by = state.region)
-)
+payments |>
+  slice_sample(n = 2, by = district) |>
+  select(voucher_no, district, head, amount)
 ```
 
 The argument `by` of `slice_sample()` samples within each group, without the need for `group_by()` and `ungroup()`.
 
-__Case-2:__ When the sample size or proportion differs among strata. This time, let us assume that the stratum is not directly available in the data. Say we want to sample
+**Case 2. A different sample size or proportion for each stratum.** This time, the stratum is not directly available in the data. Most audits stratify by value, so that large vouchers are examined more heavily. Say we want to sample
 
-- 20% of States having population up to `1000` (thousand),
-- 30% of States having population greater than `1000` but up to `5000`, and
-- 50% of States having population more than `5000`.
+- 1% of vouchers up to ₹50,000,
+- 5% of vouchers above ₹50,000 and up to ₹5 lakh, and
+- 25% of vouchers above ₹5 lakh.
 
-Our strategy is to create the stratum with `cut()`, split the data into one data frame per stratum with `group_split()`, sample each with its own proportion using `purrr::map2()`, and bind the samples back into one data frame with `list_rbind()`. We learnt `map2()` in @sec-purrr.
+Our strategy has four steps. We create the stratum with `cut()`. We split the data into one data frame per stratum with `group_split()`. We sample each with its own proportion using `purrr::map2()`. And we bind the samples back into one data frame with `list_rbind()`. We learnt `map2()` in @sec-purrr.
 
 ```{r}
 # define proportions, in the order of the strata
-props <- c(Low = 0.2, Mid = 0.3, High = 0.5)
+props <- c(Low = 0.01, Mid = 0.05, High = 0.25)
+
+payments <- payments |>
+  mutate(stratum = cut(amount, c(0, 5e4, 5e5, Inf),
+                       labels = c("Low", "Mid", "High")))
 
 set.seed(123)
-strat_sample <- dat |>
-  rownames_to_column('State') |>
-  # create the strata
-  mutate(stratum = cut(Population, c(0, 1000, 5000, max(Population)),
-                       labels = c("Low", "Mid", "High"))) |>
+strat_sample <- payments |>
   # one data frame per stratum
   group_split(stratum) |>
   # sample each with its own proportion, and bind the results
@@ -207,19 +224,35 @@ strat_sample <- dat |>
   list_rbind()
 ```
 
-Let us check how many States were selected from each stratum.
+Let us check how many vouchers were selected from each stratum, and what share of the value they cover.
 
 ```{r}
-dat |>
-  mutate(stratum = cut(Population, c(0, 1000, 5000, max(Population)),
-                       labels = c("Low", "Mid", "High"))) |>
-  count(stratum, name = "total") |>
-  left_join(count(strat_sample, stratum, name = "selected"), by = "stratum")
+payments |>
+  summarise(total = n(), value = sum(amount), .by = stratum) |>
+  left_join(strat_sample |>
+              summarise(selected = n(), selected_value = sum(amount), .by = stratum),
+            by = "stratum") |>
+  mutate(value_covered = scales::percent(selected_value / value, accuracy = 1)) |>
+  select(stratum, total, selected, value_covered) |>
+  arrange(stratum)
 ```
+
+```{r}
+#| include: false
+strat_cover <- sum(strat_sample$amount) / sum(payments$amount)
+```
+
+The sample has only `r nrow(strat_sample)` vouchers, about `r round(100 * nrow(strat_sample) / nrow(payments), 1)`% of the population. Yet it covers about `r round(100 * strat_cover)`% of the total value, because the high value stratum was sampled heavily.
+
+::: callout-tip
+## Audit tip
+
+`cut()` puts each value into the band whose upper limit it does not exceed. So a voucher of exactly ₹50,000 falls in the "Low" stratum. Check the boundaries against the audit plan, and record them in the working papers.
+:::
 
 ## Cluster sampling
 
-ISA 530 does not define cluster sampling separately. Here, instead of individual records, we select whole *groups* of records, called clusters, and examine every record in the selected clusters. For example, we may select a few districts, or a few months, and examine all vouchers in them. In our data, let us select 2 regions.
+ISA 530 does not define cluster sampling separately. Here, instead of individual vouchers, we select whole *groups* of vouchers, called clusters. We then examine every voucher in the selected clusters. For example, we may select a few districts, or a few months, and examine all vouchers in them. Let us select 2 districts.
 
 Our strategy is to first sample from the unique values of the cluster column, and then keep all records of those clusters.
 
@@ -228,21 +261,23 @@ Our strategy is to first sample from the unique values of the cluster column, an
 set.seed(123)
 # sample clusters
 clusters <- sample(
-  unique(dat$state.region),
+  unique(payments$district),
   size = 2
 )
 # filter all records in above clusters
-clust_samp <- dat |>
-  filter(state.region %in% clusters)
+clust_samp <- payments |>
+  filter(district %in% clusters)
 # check number of records
-clust_samp |> count(state.region)
+clust_samp |> count(district)
 ```
+
+Cluster sampling is convenient, since the audit party has to visit only the selected districts. But vouchers within one district tend to be alike. So a cluster sample tells us less about the whole population than a simple random sample of the same size.
 
 ## How many items to test? Sample size for tests of controls {#sec-samplesize}
 
-So far we took the sample size as given. In audit, the size depends on how confident we want to be, and how much error we can tolerate. Let us start with tests of controls, where each item either complies with the control or deviates from it.
+So far we took the sample size as given. In audit, the size depends on how confident we want to be, and how much error we can tolerate. Let us start with tests of controls, where each item either complies with the control or deviates from it. For example, each voucher either carries the sanction of the competent authority or it does not.
 
-Suppose we want to be 95% confident that the true rate of deviation is below a **tolerable rate** of 5%, and we expect to find no deviations. In @sec-prob-audit, we saw that the reliability factor for zero errors at 95% confidence is about 3.00. The sample size is simply
+Suppose we want to be 95% confident that the true rate of deviation is below a **tolerable rate** of 5%. Suppose also that we expect to find no deviations. In @sec-prob-audit, we saw that the reliability factor for zero errors at 95% confidence is about 3.00. The sample size is simply
 
 $$
 n = \frac{\text{reliability factor}}{\text{tolerable rate}}
@@ -269,32 +304,13 @@ expand_grid(confidence = c(0.90, 0.95), tolerable_rate = c(0.02, 0.05, 0.10)) |>
               names_prefix = "confidence_")
 ```
 
-A lower tolerable rate, or a higher confidence, needs a bigger sample. If deviations *are* expected, the reliability factor for that number of deviations is used instead, which gives a bigger sample still.
+A lower tolerable rate, or a higher confidence, needs a bigger sample. If deviations *are* expected, we use the reliability factor for that number of deviations instead. This gives a bigger sample still.
 
-## Monetary unit sampling, a complete example {#sec-mus}
+## Audit use case, monetary unit sampling of payments {#sec-mus}
 
-Monetary unit sampling (MUS) is the most widely used statistical method for testing the amounts in accounts. Its idea is simple. Instead of thinking of the population as a list of vouchers, we think of it as a list of *rupees*. We select rupees at random, systematically, and examine the voucher containing each selected rupee. So a voucher of ₹10 lakh is a hundred times more likely to be selected than one of ₹10,000, which is what an auditor wants, since overstatement hides in large amounts.
+Monetary unit sampling (MUS) is the most widely used statistical method for testing the amounts in accounts. Its idea is simple. Instead of thinking of the population as a list of vouchers, we think of it as a list of *rupees*. We select rupees at random, systematically, and examine the voucher containing each selected rupee. So a voucher of ₹10 lakh is a hundred times more likely to be selected than one of ₹10,000. This is what an auditor wants, since overstatement hides in large amounts.
 
-### Our population
-
-Let us create the payment vouchers of an imaginary office for a year. There are 4,000 vouchers, mostly small, with a few very large ones. For each voucher we also keep the *audited* amount, the correct amount which the auditor would find on examining it. We have planted misstatements in 240 vouchers, where the amount paid is more than the correct amount. In real audit, of course, we do not know the audited amounts until we examine the sample.
-
-```{r}
-#| code-fold: true
-#| code-summary: "Code to create the payment population"
-set.seed(530)
-n_pop <- 4000
-payments <- tibble(voucher_no = sprintf("PV-%05d", 1:n_pop),
-                   amount     = round(rlnorm(n_pop, log(40000), 1.2)))
-# A few very large payments
-payments$amount[sample(1:n_pop, 6)] <- round(runif(6, 3e6, 8e6))
-
-# Planted misstatements. The audited (correct) amount is less than the amount paid
-payments <- payments |> mutate(audited = amount)
-mis <- sample(1:n_pop, 240)
-payments$audited[mis] <- round(payments$amount[mis] * (1 - runif(240, 0.2, 1)))
-head(payments)
-```
+The audit question is this. Are the payments of the year free from material overstatement? We return to the `payments` population created at the start of the chapter.
 
 ```{r}
 book_value <- sum(payments$amount)
@@ -303,7 +319,7 @@ book_value / 1e7          # in crore
 
 ### Step 1, sample size
 
-The auditor decides the **tolerable misstatement**, the largest total misstatement which would not change the opinion. Let us take it as 2% of the book value. With 95% confidence and no misstatement expected, the sample size is
+The auditor decides the **tolerable misstatement**. It is the largest total misstatement which would not change the opinion. Let us take it as 2% of the book value. With 95% confidence and no misstatement expected, the sample size is
 
 $$
 n = \frac{\text{book value} \times \text{reliability factor}}{\text{tolerable misstatement}}
@@ -320,7 +336,7 @@ n_mus
 round(interval)
 ```
 
-So we will select every `r format(round(interval), big.mark = ",")`th rupee, from a random start.
+So we will select one rupee in every ₹`r round(interval / 1e5, 2)` lakh, from a random start.
 
 ### Step 2, selection
 
@@ -359,10 +375,12 @@ errors <- mus_sample |>
   mutate(misstatement = amount - audited,
          tainting     = misstatement / amount)
 
-errors |> select(voucher_no, amount, audited, misstatement, tainting, top_value)
+errors |> select(voucher_no, district, amount, audited, misstatement, tainting, top_value)
 ```
 
-Each error in an ordinary item represents its whole sampling interval. So its **projected misstatement** is its tainting times the interval. Errors in top value items are not projected. They are counted at their actual amount, since all such items were examined. The **upper misstatement limit** adds an allowance for sampling risk. It starts with the *basic precision*, the reliability factor for zero errors times the interval, and adds each tainting, largest first, weighted by the increase in the reliability factor. This is the standard method of evaluating a monetary unit sample.
+Each error in an ordinary item represents its whole sampling interval. So its **projected misstatement** is its tainting times the interval. Errors in top value items are not projected. They are counted at their actual amount, since all such items were examined.
+
+The **upper misstatement limit** adds an allowance for sampling risk. It starts with the *basic precision*, the reliability factor for zero errors times the interval. To this it adds each tainting, largest first, weighted by the increase in the reliability factor. This is the standard method of evaluating a monetary unit sample.
 
 ```{r}
 ordinary <- errors |> filter(!top_value) |> arrange(desc(tainting))
@@ -385,7 +403,22 @@ tibble(measure = c("Projected misstatement", "Upper misstatement limit",
 true_mis <- sum(payments$amount - payments$audited)
 ```
 
-The upper misstatement limit is far above the tolerable misstatement. So, at 95% confidence, the auditor cannot conclude that the payments are free from material misstatement. More work is needed, or the misstatement must be reported. Since this population is simulated, we can also see the truth. The actual total misstatement is ₹`r round(true_mis / 1e7, 2)` crore, close to the projection of ₹`r round(projected / 1e7, 2)` crore, and below the upper limit, as it should be 95 times out of 100.
+We found `r nrow(errors)` misstatements in the sample. The upper misstatement limit of ₹`r crore(upper_limit)` crore is `r if (upper_limit > tolerable) "above" else "below"` the tolerable misstatement of ₹`r crore(tolerable)` crore. `r if (upper_limit > tolerable) "So, at 95% confidence, the auditor cannot conclude that the payments are free from material misstatement. More work is needed, or the misstatement must be reported." else "So, at 95% confidence, the auditor can conclude that the payments are free from material misstatement."`
+
+Since this population is simulated, we can also see the truth. The actual total misstatement is ₹`r crore(true_mis)` crore. The projection was ₹`r crore(projected)` crore. The actual figure is `r if (true_mis <= upper_limit) "below" else "above"` the upper limit, as it should be 95 times out of 100.
+
+### What the auditor does next
+
+-   **Confirm each error.** Discuss every misstatement found with the office, and get its explanation in writing.
+-   **Look for a pattern.** Let us see whether the errors cluster in one district or one head of expenditure.
+
+```{r}
+errors |> count(district, sort = TRUE)
+errors |> count(head, sort = TRUE)
+```
+
+-   **Extend the work if needed.** If the errors are spread across districts and heads, as here, the problem is in the general controls over payments. The auditor may extend the sample, or ask the office to review all payments of the year.
+-   **Report.** Put the projected misstatement and the upper limit in the working papers, along with the seed, the random start and the interval.
 
 ::: callout-note
 ## If no errors are found
@@ -412,8 +445,13 @@ Record the seed, the random start, the interval, and the R code in the working p
 ::: callout-important
 ## Remember
 
-A sample gives a conclusion about the population only if it was selected randomly *and* evaluated statistically. A sample which is chosen haphazardly, or whose errors are only listed and not projected, supports conclusions about those items alone.
+A sample gives a conclusion about the population only if it was selected randomly *and* evaluated statistically. Some samples are chosen haphazardly. In others, the errors are only listed and not projected. Such samples support conclusions about those items alone.
 :::
+
+## Where next
+
+-   @sec-tests shows how to test whether a difference seen in the data, or in a sample, is more than chance.
+-   @sec-kmeans-strata shows how clusters found in the data can serve as strata for sampling.
 
 ## Summary of functions used
 
@@ -422,6 +460,7 @@ A sample gives a conclusion about the population only if it was selected randoml
 | `set.seed()`, `sample()` | base R | Reproducible random selection from a vector |
 | `slice_sample(n, prop, weight_by, replace, by)` | dplyr | Random sample of rows, optionally weighted or within groups |
 | `slice()` | dplyr | Rows at given positions, for systematic selection |
+| `month()` | lubridate | Month of a date, to check the spread of a sample over the year |
 | `cut()`, `group_split()` | base R, dplyr | Form strata, and split the data by stratum |
 | `map2()`, `list_rbind()` | purrr | Sample each stratum with its own proportion, and bind the samples |
 | `qgamma()`, `pbinom()` | base R (stats) | Reliability factors and exact binomial checks for sample sizes |

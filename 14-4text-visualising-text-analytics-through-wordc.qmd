@@ -5,7 +5,9 @@ source("_common.R")
 
 # Visualising Text {#sec-textviz}
 
-In the last two chapters, we learnt to clean text, count words and measure sentiment. The results were tables of words and numbers. In this chapter, we will turn such results into pictures. A good picture of text can show, at a glance, what a long document or a large set of documents is about. It is also very useful in audit reports and presentations, where readers want the main message quickly.
+Suppose an auditor of a State health insurance scheme has hundreds of grievances from patients. The audit report must tell its readers, in a page or two, what all this text is about. A table of word counts is accurate, but few readers will study it. A good picture of text can show, at a glance, what a long document or a large set of documents is about. It can also show how the complaints about one group of hospitals differ from those about all the others. Such a picture often makes the case for a closer look better than a page of words.
+
+In the last two chapters, we learnt to clean text, count words and measure sentiment. The results were tables of words and numbers. In this chapter, we will turn such results into pictures. We will practise first on the Union Budget speech. Then we will turn to the grievances of the imaginary health scheme of @sec-text, where six hospitals have already drawn our attention.
 
 We will learn four kinds of charts.
 
@@ -24,11 +26,11 @@ library(tidytext)
 library(wordcloud)   # install.packages("wordcloud")
 ```
 
-## Example 1, the Union Budget speech
+## A first picture, the Union Budget speech
 
-As our first example, we will look at the Budget speech made by the Finance Minister for the year 2022-23^[Data Source: [Indian Budget Portal](https://www.indiabudget.gov.in/)]. The full text of the speech is available in the file `budget.txt` in the `Data` folder.
+As our first example, we will look at the Budget speech of the Finance Minister for 2022-23^[The source is the [Indian Budget Portal](https://www.indiabudget.gov.in/).]. The full text of the speech is available in the file `budget.txt` in the `Data` folder.
 
-### Step-1: Read the text
+### Step 1. Read the text
 
 The file is a plain text file, with one paragraph on each line. `readLines()` reads such a file, giving one element for each line. We then put the lines into a data frame, one row per paragraph.
 
@@ -43,7 +45,7 @@ speech_df |>
 
 The speech has `r length(speech)` lines, from the opening "Hon'ble Speaker" to the last paragraph.
 
-### Step-2: Tokenise and count words
+### Step 2. Tokenise and count words
 
 As in @sec-text, we break the text into words with `unnest_tokens()`, and count them.
 
@@ -56,7 +58,7 @@ speech_words |>
   head(10)
 ```
 
-### Step-3: Remove stop words
+### Step 3. Remove stop words
 
 The top words are stop words, as expected. We remove them with the standard list. We also remove numbers, which the speech has in plenty, like paragraph numbers, years and amounts.
 
@@ -136,12 +138,12 @@ speech_clean |>
 The positions of words in a cloud are partly random. We used `set.seed()` so that the cloud looks the same every time the code is run.
 
 ::: callout-warning
-## Word clouds look good, but read poorly
+## Caution
 
-The human eye is not good at comparing the sizes of words. A long word looks more important than a short one of the same count. And the colours usually carry no meaning. So use word clouds to give a quick impression, especially in presentations. For analysis, and for any comparison that matters, use a bar chart.
+Word clouds look good, but they read poorly. The human eye is not good at comparing the sizes of words. A long word looks more important than a short one of the same count. And the colours usually carry no meaning. So use word clouds to give a quick impression, especially in presentations. For analysis, and for any comparison that matters, use a bar chart.
 :::
 
-## Example 2, comparing groups of documents
+## Comparing groups of documents
 
 In audit, we usually want to *compare*. What do complaints about one set of hospitals say, compared with complaints about others? Let us return to the grievances of the imaginary *Sarvajan Swasthya Yojana* from @sec-text.
 
@@ -184,14 +186,18 @@ griev_words |>
 
 Each panel shows the top words of one category. The panel for *Other* stands out. Its top word is *operation*, by a wide margin, followed by words like *free* and *camp*. These do not belong to any of the fixed categories. This is the same finding as in @sec-text, now visible in one picture.
 
+## Audit use case, grievances about six flagged hospitals {#sec-textviz-hospitals}
+
+In @sec-kmeans, six hospitals stood out for their unusual claims. In @sec-text and @sec-sentiment, their grievances also looked different. Let us now make a picture that shows, to a reader of the audit report, how the grievances about these six hospitals differ from those about all other hospitals.
+
 ### A comparison cloud
 
-A **comparison cloud** shows two or more groups in one cloud. Each word is placed in the part of the cloud belonging to the group in which it is *relatively* more frequent. Let us compare grievances about the six hospitals flagged in earlier chapters with grievances about all other hospitals.
+A **comparison cloud** shows two or more groups in one cloud. Each word is placed in the part of the cloud belonging to the group in which it is *relatively* more frequent. Let us compare grievances about the six flagged hospitals with grievances about all other hospitals.
 
 The function `comparison.cloud()` needs the counts in a matrix, with words as rows and groups as columns. We prepare it with `pivot_wider()`, and convert it with `column_to_rownames()` and `as.matrix()`.
 
 ```{r}
-camp_hospitals <- c("H063", "H066", "H070", "H071", "H098", "H116")  # from the k-means chapter
+camp_hospitals <- c("H063", "H066", "H070", "H071", "H098", "H116")  # flagged in the k-means chapter
 
 compare_matrix <- griev_words |>
   mutate(group = if_else(hospital_id %in% camp_hospitals,
@@ -259,9 +265,50 @@ top_word <- log_ratios |> filter(word == "camp")
 
 Each bar can be read exactly. For example, *`r top_word$word`* has a log ratio of `r round(top_word$log_ratio, 1)`, so it is about `r round(2^top_word$log_ratio)` times as common, relatively, in grievances about the flagged hospitals. The other words at the top, like *vehicle*, *panchayat*, *bhawan*, *village* and *healed*, describe the same story of camps held in villages and wounds that have not healed. At the other end, *pre*, *authorisation*, *delayed*, *pending* and *approval* are typical of the routine complaints about other hospitals.
 
-## Example 3, word networks
+### Back to the grievances
 
-Bar charts and clouds show single words. To see how words are *connected*, we can draw a **network** of bigrams. Each word is a point (a *node*), and an arrow (an *edge*) joins two words that appear one after the other. We learnt about networks in the chapter on network analytics, where we used the package `igraph`. Here we will also use `ggraph`, which draws networks in the style of `ggplot2`.
+A picture points to a theme. The auditor still needs the grievances behind it. Let us pick out the grievances about the six hospitals that mention a camp, a vehicle or a village, and count them by hospital.
+
+```{r}
+camp_grievances <- grievances |>
+  filter(hospital_id %in% camp_hospitals,
+         str_detect(str_to_lower(text), "camp|vehicle|village"))
+
+camp_grievances |>
+  count(hospital_id, sort = TRUE)
+```
+
+```{r}
+#| include: false
+camp_by_hosp <- camp_grievances |> count(hospital_id)
+```
+
+There are `r nrow(camp_grievances)` such grievances. They come from `r if (nrow(camp_by_hosp) == 6) "all six hospitals" else paste(nrow(camp_by_hosp), "of the six hospitals")`, so the pattern is not the work of one hospital alone. Let us read a few of them.
+
+```{r}
+camp_grievances |>
+  slice_head(n = 3) |>
+  pull(text)
+```
+
+The words in the pictures are now backed by the patients' own accounts.
+
+::: callout-tip
+## Audit tip
+
+Put the chart in the report, but keep the list of grievances behind it in the working papers. A reader may question a picture. A list of dated grievances, each with an ID, is evidence.
+:::
+
+The next steps for the auditor follow from here.
+
+-   Match these grievances with the claims of the same hospitals, by patient and by date of admission.
+-   Check whether the patients came from the same villages, on the same days, as a camp would suggest.
+-   Ask the scheme authority what action it took on each grievance.
+-   Where needed, plan a survey of beneficiaries in those villages.
+
+## Word networks
+
+Bar charts and clouds show single words. To see how words are *connected*, we can draw a **network** of bigrams. Each word is a point (a *node*), and an arrow (an *edge*) joins two words that appear one after the other. We will study networks in detail in @sec-graph, with the package `igraph`. Here we use `igraph` only to build the network. We draw it with `ggraph`, which draws networks in the style of `ggplot2`.
 
 ```{r}
 #| message: false
@@ -307,7 +354,7 @@ In @fig-bigramnet, the arrows follow the order of words, and darker arrows mean 
 
 ### An interactive word network
 
-For exploring, an interactive network is often more useful than a static one. We can drag the words apart, zoom in, and click a word to highlight the words joined to it. The package `visNetwork`, which we used in @sec-graph and @sec-netaudit, draws one directly from the `igraph` object (@fig-bigramvis).
+For exploring, an interactive network is often more useful than a static one. We can drag the words apart, zoom in, and click a word to highlight the words joined to it. The package `visNetwork`, which we will use again in @sec-graph and @sec-netaudit, draws one directly from the `igraph` object (@fig-bigramvis).
 
 ```{r}
 #| label: fig-bigramvis
@@ -316,7 +363,7 @@ library(visNetwork)
 
 bigram_vis <- toVisNetworkData(bigram_graph)
 bigram_vis$edges <- bigram_vis$edges |>
-  mutate(value = n, title = paste(from, to, "-", n, "times"))
+  mutate(value = n, title = paste0(from, " ", to, ", ", n, " times"))
 
 visNetwork(bigram_vis$nodes, bigram_vis$edges, width = "100%", height = "450px") |>
   visEdges(arrows = "to", color = list(color = "grey")) |>
@@ -351,7 +398,7 @@ Look at the pair *accepted → staff*. It comes from sentences like "card is not
 4.  **Compare groups** with faceted bar charts or comparison clouds.
 5.  **Use bigram networks** when phrases matter more than single words.
 6.  **Use word clouds for presentation**, and set a seed so they can be reproduced.
-7.  **Check every striking picture against the documents** behind it.
+7.  **Check every striking picture against the documents** behind it. Pull out the records behind each theme, and keep them in the working papers.
 
 ::: callout-important
 ## Remember
@@ -373,5 +420,6 @@ A picture of text is a summary, and every summary leaves things out. The most fr
 | `graph_from_data_frame()` | igraph | Builds a network from a table of word pairs |
 | `ggraph()`, `geom_edge_link()`, `geom_node_text()` | ggraph | Draws the network |
 | `toVisNetworkData()`, `visNetwork()` | visNetwork | Draws an interactive network |
+| `str_detect()`, `pull()` | stringr, dplyr | Pick out the grievances behind a picture, and read their text |
 
 : Functions used in this chapter {#tbl-textvizfunctions}

@@ -5,21 +5,63 @@ source("_common.R")
 
 # Subsetting and Indexing {#sec-subset}
 
-*Subsetting* means picking out some elements of an object, like the third value of a vector, the rows of a table meeting a condition, or one item of a list. Much of audit analysis is subsetting. Picking out the payments above a limit, the bills of one vendor, or the rows with a missing date. There are several ways to subset R objects (vectors, matrices, lists and data frames), each with its own uses, and we discuss each of them here. Three operators are used, `[`, `[[` and `$`.
+An auditor rarely looks at every record in the same way. In the payment register of a works division, we want the payments above the Executive Engineer's financial power of ₹5 lakh. We want the bills of one contractor. We want the rows where the amount is missing, and the payments to firms that are not on the approved list. Each of these is a small part of the register, picked out by a rule. Picking out such parts is called *subsetting*.
 
-In later chapters we will mostly use the `dplyr` functions `filter()` and `select()` for tables. But they are built on the ideas of this chapter, and base R subsetting is still needed every day, for vectors, lists, and quick checks.
+Much of audit analysis is subsetting. Every exception report begins with it. R gives us several ways to subset its objects, that is vectors, matrices, lists and data frames. Three operators are used, `[`, `[[` and `$`. In this chapter we learn each of them, and the traps that can hide a record from us. At the end, we use them to prepare an exception report on the payment register of a division.
+
+In later chapters we will mostly use the `dplyr` functions `filter()` and `select()` for tables. But they are built on the ideas of this chapter. Base R subsetting is still needed every day, for vectors, lists and quick checks.
+
+## Our data, a payment register
+
+We will learn most of the ideas on small vectors, so that each result is easy to follow. But the real use of subsetting is on a register. So let us also create the payment register of an imaginary works division, Amarpur Division, for the first seven months of 2024-25. It has 15 payments. A few problems have been planted in it, for us to find at the end of the chapter.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the payment register"
+payments <- data.frame(
+  voucher_no = sprintf("PV/24/%03d", 1:15),
+  date = as.Date(c("2024-04-05", "2024-04-12", "2024-04-19", "2024-05-03", "2024-05-17",
+                   "2024-06-07", "2024-06-21", "2024-07-05", "2024-07-26", "2024-08-09",
+                   "2024-08-30", "2024-09-13", "2024-09-27", "2024-10-11", "2024-10-25")),
+  vendor = c("Sharma Traders", "Kaveri Infra", "Om Sai Suppliers", "Laxmi Electricals",
+             "Kaveri Infra", "Sharma Traders", "Raj Enterprises", "Patel Hardware",
+             "Kaveri Infra", "Om Sai Suppliers", "Laxmi Electricals", "Kaveri Infra",
+             "Patel Hardware", "Sharma Traders", "Kaveri Infra"),
+  head = c("Stationery", "Works", "Repairs", "Electrical", "Works", "Stationery",
+           "Repairs", "Repairs", "Works", "Repairs", "Electrical", "Works", "Repairs",
+           "Stationery", "Works"),
+  # Planted. Three payments above Rs 5 lakh, one of exactly Rs 5 lakh,
+  # one amount missing, and one negative amount
+  amount = c(18500, 640000, 42300, 96000, 500000, NA, 38750, -12500, 812400,
+             27600, 115000, 455000, 64200, 21900, 735000)
+)
+
+# The approved list of firms. Planted. Raj Enterprises is not on it.
+approved <- c("Sharma Traders", "Kaveri Infra", "Om Sai Suppliers",
+              "Laxmi Electricals", "Patel Hardware")
+```
+
+```{r}
+payments
+```
+
+Each row is one payment. The columns are the voucher number, the date of payment, the firm paid, the head of expenditure, and the amount in rupees. `approved` is a vector holding the names of the firms on the approved list of the division.
 
 ## Subsetting vectors
+
 Let us start with vectors, the basic objects of R. To subset a vector, we use `[`.
-We will use the following vector `x`, which has 6 elements (names), starting with the letters A to F.
+We will use the following vector `x`. It holds the names of six employees of an office, in the order of their employee numbers. The names start with the letters A to F.
+
 ```{r}
-x <- c('Andrew', 'Bob', 'Chris', 'Danny', 'Edmund', 'Freddie')
+x <- c('Anil', 'Bharati', 'Chetan', 'Deepa', 'Esha', 'Farhan')
 ```
 
 ![](images/subset_vec.png)
 
 ### Subsetting through a vector of positive integers
-Subsetting with positive integers gives the elements at those positions (indices). See this
+
+Subsetting with positive integers gives the elements at those positions (indices). See this.
+
 ```{r}
 # fourth element
 x[4]
@@ -28,10 +70,13 @@ x[3:5]
 # first and third element
 x[c(1,3)]
 ```
-_Note: Check what happens when the integer vector has repeated integers, like `x[c(1, 1, 2)]`._
+
+_Try this. Check what happens when the integer vector has repeated integers, like `x[c(1, 1, 2)]`._
 
 ### Subsetting through a vector of negative integers
-Subsetting with negative integers gives all the elements __except__ those at the given positions. See
+
+Subsetting with negative integers gives all the elements __except__ those at the given positions. See this.
+
 ```{r}
 # all elements except that at fourth
 x[-4]
@@ -41,20 +86,25 @@ x[-(3:5)]
 x[-c(1,5)]
 ```
 
-_Note: Try subsetting with a vector having both positive and negative integers in your console, and check what happens._
+_Try this. Subset with a vector having both positive and negative integers in your console, and check what happens._
 
 ### Subsetting through a logical vector
+
 We can also subset a vector with another vector of `logical` values, `TRUE` and `FALSE`. The result has only the elements at the places which are `TRUE`.
+
 ```{r}
 # First, third and fifth element only
 x[c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE)]
 ```
+
 __Recycling__ is an important idea in subsetting with a logical vector. If the logical vector is shorter, it is repeated up to the length of the vector being subset. Thus, `x[TRUE]` gives the whole of `x`.
+
 ```{r}
 x[TRUE]
 x[c(TRUE, FALSE)] # will give elements at odd indices
 ```
-__Subsetting with a logical vector is the most important and most used method__, because the logical vector can come from a *condition*. A comparison like `amounts > 50000` gives a logical vector, which then picks out the elements meeting the condition. This is how every exception report begins.
+
+__Subsetting with a logical vector is the most important and most used method__, because the logical vector can come from a *condition*. A comparison like `amounts > 50000` gives a logical vector, which then picks out the elements meeting the condition. This is how every exception report begins. Let us take the amounts of five bills, named by their bill numbers, and pick out those above ₹50,000.
 
 ```{r}
 amounts <- c(B01 = 42000, B02 = 125000, B03 = 9800, B04 = 51000, B05 = 50000)
@@ -62,7 +112,9 @@ amounts > 50000
 amounts[amounts > 50000]
 ```
 
-Two related functions are very useful. `which()` gives the *positions* (and names) of the `TRUE` values, and `%in%` checks whether each element is in a given set.
+Notice that `B05`, of exactly ₹50,000, is not picked. "Above" a limit and "up to" a limit must be written as `>` and `<=`, as the rule says.
+
+Two related functions are very useful. `which()` gives the *positions* (and names) of the `TRUE` values. `%in%` checks whether each element is in a given set.
 
 ```{r}
 which(amounts > 50000)
@@ -76,67 +128,89 @@ amounts["B03"] <- NA
 amounts[amounts > 50000]
 ```
 
-The bill `B03`, whose amount is missing, appears in the result as `<NA>`. It is neither above nor below the limit. To get only the rows which truly meet the condition, wrap it in `which()`, which ignores `NA`. And to look at the missing ones separately, use `is.na()`.
+The bill `B03`, whose amount is missing, appears in the result as `<NA>`. It is neither above nor below the limit. To get only the bills which truly meet the condition, wrap the condition in `which()`, which ignores `NA`. And to look at the missing ones separately, use `is.na()`.
 
 ```{r}
 amounts[which(amounts > 50000)]
 amounts[is.na(amounts)]
 ```
 
-::: callout-caution
-In an exception report, rows with a missing value in the tested column are neither exceptions nor clean. Report them separately, as we did with `is.na()`. Never let them silently fall into either group. We will see the same trap with `dplyr::filter()` in @sec-DPLYRR.
+::: callout-warning
+## Caution
+
+In an exception report, records with a missing value in the tested column are neither exceptions nor clean. Report them separately, as we did with `is.na()`. Never let them silently fall into either group. We will see the same trap with `dplyr::filter()` in @sec-DPLYRR.
 :::
 
 ### Subsetting through a character vector
-This method is used when the vector has names. We pass the wanted names inside `[]`. See this example.
+
+This method is used when the vector has names. We pass the wanted names inside `[]`. Let us take the number of bills received from four divisions in a month.
+
 ```{r}
 # let us create a named vector `y`
-y <- setNames(1:6, LETTERS[1:6])
+y <- c(Amarpur = 12, Belapur = 7, Chandpur = 15, Devipur = 9)
 # display `y`
 y
-# subset elements named `A` and `C`
-y[c('A', 'C')]
+# subset elements named `Amarpur` and `Chandpur`
+y[c('Amarpur', 'Chandpur')]
 ```
-_Note that we have used quotes above._ We can also use names saved in another variable. See this
+
+_Note that we have used quotes above._ We can also use names saved in another variable. See this.
+
 ```{r}
-var <- c('A', 'C', 'E')
+var <- c('Belapur', 'Devipur')
 # subset those elements from `y` which are named as per `var`
 y[var] # notice that since `var` is a variable, we have not used quotes.
 ```
-_Note: As with positive integers, repeated names give repeated values._
+
+As with positive integers, repeated names give repeated values.
+
 ```{r}
-y[c("A", "A", "C", "A")]
+y[c("Amarpur", "Amarpur", "Chandpur", "Amarpur")]
 ```
 
-__The other two methods are not used often, but are worth knowing for debugging, because sometimes the vector you subset with turns out to be `NULL` or zero.__
+A name which is not in the vector gives `NA`, with the name `<NA>`. So a misspelt name does not give an error. It quietly gives a missing value.
+
+```{r}
+y[c("Belapur", "Bellapur")]
+```
+
+__The other two methods are not used often. But they are worth knowing for debugging, because sometimes the vector you subset with turns out to be `NULL` or zero.__
 
 ### Subsetting through nothing
+
 Subsetting with nothing, that is with an empty `[]`, gives the whole vector.
+
 ```{r}
 x[]
 ```
 
-### Subsetting through Zero
+### Subsetting through zero
+
 Subsetting with `NULL` or `0` gives a vector of length zero.
+
 ```{r}
 x[NULL]
 y[0]
 is.null(x[NULL])
 ```
-It is interesting to note that subsetting with `NULL` does not give `NULL`, but a vector of length zero, of the same type.
 
-## Subsetting Matrices and arrays
+It is interesting to note that subsetting with `NULL` does not give `NULL`. It gives a vector of length zero, of the same type.
+
+## Subsetting matrices and arrays
 
 We can subset structures with more dimensions (matrices with 2 and arrays with more) using (i) one vector for each dimension, (ii) a single vector, or (iii) a matrix.
 
-Let us first create a 5x5 matrix `mat`, with elements named $A_{mn}$, where `m` is the row number and `n` the column number.
+Let us first create a 5x5 matrix `mat`, with elements named $A_{mn}$, where `m` is the row number and `n` the column number. The labels make it easy to see which element each method picks.
+
 ```{r echo=FALSE}
 mat <- outer(1:5, 1:5, FUN = function(x, y) paste0('A', x, y))
 mat
 ```
 
-### Indexing through Multiple vectors
+### Indexing through multiple vectors
+
 This extends all the methods explained for vectors. We give one vector for each dimension, separated by a comma, rows first. A blank, like subsetting with nothing above, returns that dimension complete.
+
 ```{r}
 # first and second row with third and fifth column
 mat[1:2, c(3,5)]
@@ -149,6 +223,7 @@ mat[c(TRUE, FALSE),]
 ```
 
 The idea can be extended to a named matrix also.
+
 ```{r}
 # First create a named matrix
 rownames(mat) <- paste0("Row", 1:5)
@@ -157,7 +232,9 @@ mat
 # filter desired rows/columns
 mat[c("Row1"), c("Col2", "Col3")]
 ```
+
 You may have noticed in the above example that subsetting a matrix may return an object with fewer dimensions. Here a single row of a matrix came back as a vector. __The argument `drop` controls this. It is `TRUE` by default, which can introduce bugs in code which expects a matrix. Use `drop = FALSE` to keep the dimensions.__
+
 ```{r}
 mat[c("Row1"), c("Col2", "Col3"), drop=FALSE]
 #check this
@@ -167,16 +244,19 @@ dim(mat[c("Row1"), c("Col2", "Col3")])
 ```
 
 ### Subsetting through one vector
-Matrices and arrays are, at their core, vectors with dimensions attached. So subsetting them with a single vector treats them as plain vectors, counting down the columns, and works exactly as for vectors.
+
+Matrices and arrays are, at their core, vectors with dimensions attached. So subsetting them with a single vector treats them as plain vectors, counting down the columns. It works exactly as for vectors.
+
 ```{r}
 mat[c(1, 10, 15, 25)]
 # OR
 mat[c(TRUE, FALSE)]
 ```
 
-
 ### Subsetting through a matrix
-We can also subset with an integer matrix having one column for each dimension. To pick elements from a matrix, we need a 2-column matrix, the first column giving the row number and the second the column number of each element. See
+
+We can also subset with an integer matrix having one column for each dimension. To pick elements from a matrix, we need a 2-column matrix. The first column gives the row number and the second the column number of each element. See this.
+
 ```{r}
 selection_matrix <- matrix(c(1,1, # Element at Row 1 Col 1
                              2,2, # Element at Row 2 Col 2
@@ -186,114 +266,147 @@ selection_matrix <- matrix(c(1,1, # Element at Row 1 Col 1
 mat[selection_matrix]
 ```
 
-
 ## Subsetting lists
-Lists can be subset with `[]`, `[[]]` or `$`. Let us take them one by one, to understand the difference. We use a list of 4 elements, a vector, a matrix, a list and a data frame. For now, the list has no names.
+
+Lists can be subset with `[]`, `[[]]` or `$`. Let us take them one by one, to understand the difference. An auditor often keeps the pieces of one inspection together in a list. Let us make such a list of 4 elements. The first is a vector of four bill amounts. The second is a matrix of the expenditure of four divisions in each quarter, in ₹ lakh. The third is a list with the name of the office and whether it has been inspected. The fourth is a data frame of four bills. For now, the list has no names.
+
 ```{r}
+quarterly <- matrix(c(42.5, 18.0, 33.1, 27.4,
+                      51.2, 20.4, 30.8, 25.9,
+                      47.9, 22.7, 35.6, 29.3,
+                      96.3, 41.5, 38.2, 61.8),
+                    nrow = 4,
+                    dimnames = list(c("Amarpur", "Belapur", "Chandpur", "Devipur"),
+                                    c("Q1", "Q2", "Q3", "Q4")))
+
 my_list <- list(
-  11:20,                                                       # first element
-  outer(1:4, 1:4, FUN = function(x, y) paste0('B', x, y)),     # second element
-  list(LETTERS[1:8], TRUE),                                    # third element
-  data.frame(col1 = letters[1:4], col2 = 5:8)                  # fourth element
+  c(42000, 125000, 9800, 51000),                                  # first element
+  quarterly,                                                      # second element
+  list("Amarpur Division", TRUE),                                 # third element
+  data.frame(bill = c("B01", "B02", "B03", "B04"),
+             amount = c(42000, 125000, 9800, 51000))              # fourth element
 )
 # display the list
 my_list
 ```
 
-
 ### Subsetting lists with `[]`
+
 Subsetting a list with `[]` always gives a *list*, containing the chosen element(s).
+
 ```{r}
 my_list[2]
 class(my_list[1])
 ```
+
 All the ideas of vector subsetting work here too. The result is always a list, of one or more items.
 
 ### Subsetting lists with `[[]]`
+
 Subsetting a list with `[[]]` returns the item *itself*, of whatever type it is.
+
 ```{r}
 my_list[[2]]
 class(my_list[[4]])
 ```
-_Notice the difference between the outputs of `my_list[2]` and `my_list[[2]]` in the above two code blocks._ A common way to remember it: if the list is a train, `[` gives a shorter train of the chosen carriages, while `[[` gives the contents of one carriage.
 
-`[[` takes only one item at a time. Check `my_list[[1:2]]` in your console. The result is not the first two items, but the second element *of* the first item, because `[[` with a vector digs one level deeper for each value.
+_Notice the difference between the outputs of `my_list[2]` and `my_list[[2]]` in the above two code blocks._ A common way to remember it is this. If the list is a train, `[` gives a shorter train of the chosen carriages, while `[[` gives the contents of one carriage.
+
+`[[` takes only one item at a time. Check `my_list[[1:2]]` in your console. The result is not the first two items. It is the second element *of* the first item, because `[[` with a vector digs one level deeper for each value.
 
 ### Chaining or multiple subsetting
+
 We can subset the result of a subset again, by __chaining__ two or more of the methods discussed here.
+
 ```{r}
 # third element of second element
-my_list[[2]][3] # recall that by default matrix is by column
+my_list[[2]][3] # recall that by default a matrix is filled by column
 # or
-my_list[[2]][1:3,2:4]
+my_list[[2]][1:3, 2:4]
+# or, by names
+my_list[[2]]["Devipur", "Q4"]
 ```
 
+The first result is the expenditure of Chandpur in the first quarter, the third value counting down the first column.
 
 ### Subsetting with `$`
-`$` is a shorthand operator: `x$y` is roughly equivalent to `x[["y"]]`. To check this let us assign our list some names.
+
+`$` is a shorthand operator. `x$y` is roughly equivalent to `x[["y"]]`. To check this let us give our list some names.
 
 ```{r}
-names(my_list) <- c("first", "second", "third", "fourth")
+names(my_list) <- c("amounts", "quarterly", "office", "bills")
 # Now see
-my_list$first
-my_list$fourth$col2
+my_list$amounts
+my_list$bills$amount
 ```
+
 _Notice that `$`, like `[[`, returns the item itself, not a list._
 
-Another difference between `[[` and `$` is *partial matching*. With `$`, R accepts the beginning of a name, while `[[` needs the exact name. See
+Another difference between `[[` and `$` is *partial matching*. With `$`, R accepts the beginning of a name, while `[[` needs the exact name. See this.
+
 ```{r}
-my_list$fir
-my_list[['fir']]
+my_list$amo
+my_list[['amo']]
 ```
 
 ::: callout-warning
 ## Caution
+
 Partial matching saves typing, but can pick up the wrong column silently. It is safer to always type names in full. (Tibbles, which we will use later, do not allow partial matching, and give a warning instead.)
 :::
 
 ## Data frames
-As we know, data frames are lists whose elements (columns) all have the same length. So all the rules for subsetting lists apply to data frames. In addition, data frames can be subset like matrices, with rows and columns.
+
+As we know, data frames are lists whose elements (columns) all have the same length. So all the rules for subsetting lists apply to data frames. In addition, data frames can be subset like matrices, with rows and columns. Let us use our payment register.
 
 ```{r}
-head(mtcars) # a data frame built into R; head() shows the first six rows
+head(payments) # head() shows the first six rows
 # list type subsetting
-mtcars[[2]]  # second column, as a vector
-mtcars[2] |> head()  # second column, as a data frame
+payments[[5]]  # fifth column, as a vector
+payments[5] |> head()  # fifth column, as a data frame
 # matrix type
-mtcars[1:4, 2:3] # first four rows with second & third columns
+payments[1:4, 2:3] # first four rows with second & third columns
 ```
 
 **Remember**
 
-1. Subsetting a data frame with *one* index works as for lists. `df[2]` gives a data frame with the second column, and `df[[2]]` or `df$cyl` gives the column itself, as a vector.
+1. Subsetting a data frame with *one* index works as for lists. `df[5]` gives a data frame with the fifth column. `df[[5]]` or `df$amount` gives the column itself, as a vector.
 2. Subsetting with *two* indices, `df[rows, columns]`, works as for matrices. If only one column is chosen, the result *drops* to a vector, unless we give `drop = FALSE`.
 
-Examples
+Let us see the second point.
+
 ```{r}
 # Default
-mtcars[1:5, 2]
+payments[1:5, 5]
 # using drop argument
-mtcars[1:5, 2, drop = FALSE]
+payments[1:5, 5, drop = FALSE]
 ```
 
 Tibbles never drop to a vector this way, which is one reason they are safer in code.
 
-**Rows meeting a condition.** The most common use of matrix-type subsetting is to pick the rows meeting a condition, and some columns.
+**Rows meeting a condition.** The most common use of matrix type subsetting is to pick the rows meeting a condition, and some columns. Let us pick the payments above ₹5 lakh.
 
 ```{r}
-mtcars[mtcars$mpg > 30, c("mpg", "cyl", "hp")]
+payments[payments$amount > 500000, c("voucher_no", "vendor", "amount")]
 ```
 
-The same `NA` trap we saw with vectors applies here, and is worse. If the condition is `NA` for some row, base R returns a row full of `NA`s, with a name like `NA.1`. `dplyr::filter()`, which we will learn in @sec-DPLYRR, drops such rows instead. Neither tells you that they existed, so check `sum(is.na(...))` on the tested column first.
+Look at the second row of the result. It is full of `NA`s, with the name `NA`. This is the same `NA` trap we saw with vectors, and it is worse here. Voucher PV/24/006 has no amount, so the condition is `NA` for it. Base R returns a row full of `NA`, and the voucher number itself is lost. `dplyr::filter()`, which we will learn in @sec-DPLYRR, drops such rows instead. Neither tells you that they existed. So check `sum(is.na(...))` on the tested column first, and wrap the condition in `which()`.
+
+```{r}
+sum(is.na(payments$amount))
+payments[which(payments$amount > 500000), c("voucher_no", "vendor", "amount")]
+```
 
 ## Subsetting and assignment
-Every kind of subsetting we have seen can also be used on the left of `<-`, to *replace* the chosen elements.
+
+Every kind of subsetting we have seen can also be used on the left of `<-`, to *replace* the chosen elements. Here we replace the bills in our list with the first four rows of the register.
+
 ```{r}
-my_list$first <- mtcars[1:4, 2:3]
-my_list
+my_list$bills <- payments[1:4, c("voucher_no", "amount")]
+my_list$bills
 ```
 
-This is most useful with a condition. For example, to treat negative amounts in a register as missing, for separate examination,
+This is most useful with a condition. For example, to treat negative amounts in a register as missing, for separate examination, we may write the following.
 
 ```{r}
 amt <- c(1200, -350, 4800, 0, -90)
@@ -303,23 +416,93 @@ amt
 
 ::: callout-tip
 ## Audit tip
+
 Replacing values changes the data for good. The original negative amounts in `amt` are now lost. So before any replacement, keep the data as received in a separate object, and work on a copy. Then you can always show a reviewer what the original values were, and why each one was changed.
 :::
 
-Assigning `NULL` to a list element removes it, as in `my_list$third <- NULL`.
+Assigning `NULL` to a list element removes it, as in `my_list$office <- NULL`.
+
+## Audit use case, an exception report on the payment register {#sec-subset-audit}
+
+```{r}
+#| include: false
+lakh <- function(x) format(round(x / 1e5, 2), nsmall = 2)
+```
+
+Let us now put the ideas together. The Executive Engineer of Amarpur Division may pass payments up to ₹5 lakh. A payment above that needs the sanction of the Superintending Engineer. Payments may be made only to firms on the approved list. We want an exception report on the register for each rule.
+
+**Step 1, count what cannot be tested.** Before testing the amounts, we count the payments with no amount.
+
+```{r}
+sum(is.na(payments$amount))
+payments[is.na(payments$amount), ]
+```
+
+```{r}
+#| include: false
+n_missing <- sum(is.na(payments$amount))
+```
+
+There is `r n_missing` such payment, voucher `r payments$voucher_no[is.na(payments$amount)]`. It cannot be tested against the limit, so it goes into the report on its own.
+
+**Step 2, payments beyond the Executive Engineer's power.** We keep the condition inside `which()`, and choose the columns for the report.
+
+```{r}
+above_limit <- payments[which(payments$amount > 500000),
+                        c("voucher_no", "date", "vendor", "amount")]
+above_limit
+```
+
+```{r}
+#| include: false
+n_above <- nrow(above_limit)
+```
+
+There are `r n_above` such payments, all to `r paste(unique(above_limit$vendor), collapse = " and ")`, for a total of ₹`r lakh(sum(above_limit$amount))` lakh. Voucher PV/24/005, of exactly ₹5 lakh, is within the power and rightly not listed.
+
+**Step 3, payments to firms not on the approved list.** `%in%` tells us whether each firm is on the list, and `!` turns `TRUE` into `FALSE` and the other way round. So `!payments$vendor %in% approved` is `TRUE` for the firms *not* on the list.
+
+```{r}
+not_approved <- payments[!payments$vendor %in% approved,
+                         c("voucher_no", "date", "vendor", "head", "amount")]
+not_approved
+```
+
+**Step 4, amounts that need a closer look.** A negative amount in a payment register is unusual. It may be a recovery entered in the wrong place.
+
+```{r}
+payments[which(payments$amount < 0), c("voucher_no", "vendor", "amount")]
+```
+
+**Step 5, put the report together.** A named list keeps the pieces of the report together, ready to be exported in @sec-read.
+
+```{r}
+exceptions <- list(
+  above_limit    = above_limit,
+  not_approved   = not_approved,
+  amount_missing = payments[is.na(payments$amount), ],
+  negative       = payments[which(payments$amount < 0), ]
+)
+sapply(exceptions, nrow)
+```
+
+`sapply()` applies `nrow()` to each element of the list, and gives the number of rows in each part. We will learn it in @sec-fp.
+
+What would the auditor do next? For the `r n_above` payments above ₹5 lakh, call for the sanction of the Superintending Engineer. For voucher `r payments$voucher_no[is.na(payments$amount)]`, ask the division why the register has no amount, and check the voucher itself. For `r not_approved$vendor[1]`, ask on what authority the firm was paid. For the negative entry, trace the recovery to the bill from which it was made. Each answer, with the documents seen, goes into the working papers.
 
 ## A suggested workflow
 
 To prepare an exception report from a payment register, an auditor may follow these steps.
 
-1.  **Write the condition.** Express the audit rule as a comparison, like `amounts > 50000`. This gives a logical vector.
+1.  **Write the condition.** Express the audit rule as a comparison, like `amount > 500000`. This gives a logical vector. Check whether the rule says "above" or "up to" the limit.
 2.  **Count the missing values first.** Check the tested column with `sum(is.na(...))`. Know how many records cannot be tested before you test the rest.
 3.  **Pick the exceptions.** Subset with the condition wrapped in `which()`, so that missing values do not slip in as rows of `NA`.
 4.  **Report the missing ones separately.** Subset with `is.na()` to list them. They are neither exceptions nor clean.
 5.  **Keep only the columns needed.** For a data frame, use `df[rows, columns]` with the names of the columns you want in the report. Use `drop = FALSE` if the result must stay a table.
-6.  **Check against a list.** Use `%in%` to test whether each code is in a given set, like a list of approved vendors.
+6.  **Check against a list.** Use `%in%` to test whether each value is in a given set, like the approved list of firms. Use `!` in front to find those *not* in the set.
 7.  **Type names in full.** Take out a column with `$` or `[[ ]]` using its full name. Partial matching may pick up the wrong column silently.
 8.  **Replace with care.** Assign to a subset only when needed, like marking negative amounts as `NA` for separate examination. Do it on a copy, so that the data as received stays unchanged.
+9.  **Keep the report together.** Put the parts of the exception report in a named list, ready to be exported.
 
 ::: callout-important
 ## Remember
@@ -335,9 +518,13 @@ A condition on a missing value gives `NA`, not `FALSE`. Base R then returns a ro
 | `[[ ]]` | base R | Take out a single item from a list or a column from a data frame |
 | `$` | base R | Take out an item or column by name |
 | `which()` | base R | Positions of the `TRUE` values, ignoring `NA` |
-| `%in%` | base R | Check whether each value is in a given set |
-| `is.na()` | base R | Find missing values |
+| `%in%`, `!` | base R | Check whether each value is in a given set, and reverse a condition |
+| `is.na()`, `sum()` | base R | Find missing values, and count them |
 | `head()` | utils (base R) | The first few elements or rows |
 | `drop = FALSE` | base R | Keep a matrix or data frame from dropping to a vector |
+| `names()`, `rownames()`, `colnames()` | base R | See or set the names of elements, rows and columns |
+| `dim()`, `nrow()` | base R | The dimensions, or the number of rows, of a matrix or data frame |
+| `data.frame()`, `list()`, `matrix()` | base R | Create a data frame, a list or a matrix |
+| `sapply()` | base R | Apply a function to each element of a list |
 
 : Functions used in this chapter {#tbl-subsetfunctions}

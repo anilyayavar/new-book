@@ -6,590 +6,27 @@ source("_common.R")
 
 # Dates and Times {#sec-lubridate}
 
-## Base R classes to deal with date and time variables
-
 ```{r lubri0, include=FALSE}
 knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.show = "hold", fig.align = "center")
 ```
 
-There is hardly any data analysis in which we do not deal with dates and times. In audit, they are everywhere. Dates of bills and payments, periods of contracts, days taken to settle claims, the financial year and its quarters, and transactions on holidays. In this chapter we will learn the base R classes for dates and times, then the package `lubridate`, which makes working with them much easier, and finally some date-based audit tests in @sec-lubri-audit.
+Dates are everywhere in audit. A bill has a date of receipt and a date of payment. A contract has a period of validity. A rate has a date from which it is in force. An employee has a date of birth, a date of joining and a date of retirement. Many audit questions are really questions about dates. Was the bill paid within the time allowed? Was a payment made on a Sunday or a gazetted holiday? Was the rate applied the one in force on the date of the bill? How long have these advances been pending?
 
-To deal with dates and times, R has four core classes,
+Computerised systems also record the *time* of each action. A treasury's e-payment system notes when each payment was approved. A payment approved at two in the morning is not necessarily wrong. But it deserves a question.
 
--   `Date` To deal with date objects (note: `D` in UPPER case)
--   `POSIXct` To deal with times
--   `POSIXlt` To deal with times (for difference between these two refer @sec-timm.)
--   `difftime` To deal with time-spans
+Dates are also easy to get wrong. One office writes 05/04/2024 for the 5th of April, and a spreadsheet reads it as the 4th of May. A time stamp stored in UTC looks five and a half hours early when read as Indian time. A month added to the 31st of January lands on a date that does not exist. In this chapter we learn to handle dates and times correctly. We start with the base R classes for dates and times. We then learn the package `lubridate`, which makes the work much easier. Finally, we apply both to a register of bills and a log of e-payment approvals, and find payments on holidays, long-pending bills and approvals made late at night.
 
-### Dates
-
-`Date` objects can be created from `string/character` type objects (we will just see that date objects can be created from numeric objects too), using base R's function `as.Date()` which accepts a character vector and a format to parse the date from the given string of characters. E.g.
+**Prerequisites**
 
 ```{r}
-as.Date("2000-12-12") # default format
-as.Date("12-12-2000", format = "%d-%m-%Y") # custom format
+library(tidyverse)
 ```
 
-In the above example, we can see that a custom format has been given to parse the character string into the date type object. We can check the `class` of the object created.
+The package `lubridate` is part of the core tidyverse, so `library(tidyverse)` loads it too.
 
-```{r}
-a_date <- as.Date("20-12-2022", format = "%d-%m-%Y")
-class(a_date)
-```
+## Our data, a register of bills {#sec-lubri-data}
 
-The format used in the above function accepts special codes, which can be seen by running `?strptime` in your R console. A ready reference for most used codes is however, given in @tbl-lubri001 in @sec-strpp. The date objects in R, are actually based on numeric classes which actually store the number of days since an epoch. Check the following code-
-
-```{r}
-class(Sys.Date())
-typeof(Sys.Date())
-unclass(Sys.Date())
-```
-
-So, in R versions 4.3.0 and later, it also accepts a number to convert into a date using the number of days elapsed since epoch. So,
-
-```{r}
-as.Date(1)
-```
-
-Here date since one day of default origin date `r as.Date("1970-01-01")` has been returned.  However, default `origin` can be changed using the argument `origin`.  Example,
-```{r}
-# One day since launch of R version 1.0
-as.Date(1, origin = "2000-02-29")
-```
-
-### Times {#sec-timm}
-
-Now, to create date-time objects we can use either of `POSIXct` and `POSIXlt` classes, i.e. by using `as.POSIXct()` and/or `as.POSIXlt()` functions, as shown below.
-
-```{r}
-as.POSIXct("1990/2/17 12:20:05") # default format
-as.POSIXct("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
-as.POSIXlt("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
-```
-
-As regards, the difference between these two classes, `POSIXct` stores *seconds* since UNIX epoch (and other information), and `POSIXlt`, which stores a list of *day*, *month*, *year*, *hour*, *minute*, *second*, etc., which can be understood from the following codes.
-
-::: callout-note
-`ct` in `POSIXct` stands for calendar time whereas, `lt` in `POSIXlt` stands for local time, explaining the conceptual difference.
-:::
-
-```{r}
-time_ct <- as.POSIXct("17-2-1990 15:30:00", format = "%d-%m-%Y %H:%M:%S")
-class(time_ct)
-unclass(time_ct)
-
-## POSIXlt
-# Convert above object into POSIXlt type
-time_lt <- as.POSIXlt(time_ct)
-# Let us print
-time_lt
-class(time_lt)
-unclass(time_lt)
-```
-
-Similar to `as.Date()`, `as.POSIXct()` also accepts a number and converts it into a date-time object using that much number of seconds since epoch.
-
-```{r}
-as.POSIXct(60)
-```
-
-### Times (without dates)
-
-In base R, we do not have specific class to deal with time objects. However, there is a package `hms` part of `tidyverse` which can be used to create time objects to perform required calculations.
-
-```{r}
-hms::as_hms(10)
-```
-
-### Timespan {#sec-diffftime}
-In base R, besides above date/date-time object classes, there is a special class which creates time difference between two given temporal objects in specified units.  The class is `difftime`.
-
-```{r}
-(freedom_age <- Sys.Date() - as.Date("1947-08-15"))
-class(freedom_age)
-unclass(freedom_age)
-```
-Function `difftime` can create difftime objects, as per specific requirement due to presence of an argument `units` which can take values from one of `“auto”`, `“secs”`, `“mins”`, `“hours”`, `“days”`, `“weeks”`.
-
-```{r}
-difftime(as.Date("2020-02-29"), as.Date("2019-02-28"), units = "weeks")
-```
-We can also create a difftime object by coercion.
-```{r}
-a_difftime <- as.difftime(15, units = "days")
-a_difftime
-class(a_difftime)
-```
-
-### Time zones
-
-Run the function `Sys.timezone()` in your console to check the current timezone. Function `OlsonNames()` will however, display the known location for time-zones.
-
-```{r}
-Sys.timezone()
-grep("Kolkata|London", OlsonNames(), value = TRUE)
-```
-
-So, we may use the `tz` argument of `as.POSIXlt()` and `as.POSIXct()` to give the time zone while converting numbers or text into date-times. Indian Standard Time is `"Asia/Kolkata"`.
-
-```{r}
-as.POSIXct(1, tz = "GMT")
-```
-
-### Coercion
-In earlier sections we have already seen coercing functions useful to coerce the objects from one class to another.
-
-- `as.Date()`
-- `as.POSIXct()`
-- `as.POSIXlt()`
-- `as.difftime()`
-
-### Extracting parts from dates/times
-Base R provides us some useful function to extract relevant part of objects of dates/times classes.
-
-- `weekdays(x, abbreviate = FALSE)` to extract the weekday name.  (Output is in character vector)
-- `months(x, abbreviate = FALSE)` to extract the month name.  (Output is in character vector)
-- `quarters(x)` to extract the quarter.  Output is in character vector.
-- `julian(x)` to extract the days elapsed since origin.  Output is in numeric vector.
-
-Examples-
-```{r}
-dates_vec <- as.Date(15001 + 1:7)
-weekdays(dates_vec)
-months(dates_vec)
-quarters(dates_vec)
-julian(dates_vec)
-```
-
-### Other useful related functions
-There are certain other useful functions to the related classes which are useful in data analytics.
-
-1. `seq.Date(from, to, by, length.out = NULL, along.with = NULL, ...)` where-
-
-- `from` and `to` are start and end dates respectively
-- `by` is increment of sequence which can accept either of these
-    + a number to be taken in days,
-    + an object of class `difftime`
-    + a character string, containing one of "day", "week", "month", "quarter" or "year". This can optionally be preceded by a (positive or negative) integer and a space, or followed by "s".
-- `length.out` is optional argument accepting an integer, for desired length of the sequence.
-- `along.with` take the length from the length of this argument.
-
-Example-
-```{r}
-seq(as.Date("2000/1/1"), by = "month", length.out = 12)
-```
-
-
-### `strptime` character codes {#sec-strpp}
-
-A few format codes useful to parse date/date-time objects in R, are listed below for ready reference.  To know more about these codes, readers can see the output of `?strptime()` in their console.  Some useful codes have been reproduced in the @tbl-lubri001 for ready reference.
-
-
-|     Format     | Meaning                                                                                                                                                                                                                                                                          |
-|:------------------:|----------------------------------------------------|
-| `%y` (or `%Y`) | Year without (or with) Century                                                                                                                                                                                                                                                   |
-|      `%m`      | Month as decimal number (01-12)                                                                                                                                                                                                                                                  |
-| `%B` (or `%b`) | Month name in full (or abbreviated) in current locale                                                                                                                                                                                                                            |
-|      `%d`      | Day of the month (01-31)                                                                                                                                                                                                                                                         |
-|      `%H`      | Hours as decimal number (00-23)                                                                                                                                                                                                                                                  |
-|      `%I`      | Hours as decimal number, in 12 hour format (01-12)                                                                                                                                                                                                                               |
-|      `%M`      | Minute as decimal number (00-59)                                                                                                                                                                                                                                                 |
-|      `%S`      | Second as integer (00-61) allowing up to two leap-seconds                                                                                                                                                                                                                         |
-|     `%OS`      | Second(s) as decimal number                                                                                                                                                                                                                                                      |
-|      `%T`      | Equivalent to `%H:%M:%S`                                                                                                                                                                                                                                                         |
-|      `%p`      | AM/PM indicator in the locale.                                                                                                                                                                                                                                                   |
-| `%A` (or `%a`) | Full (or abbreviated) week-day name, in current locale                                                                                                                                                                                                                               |
-|      `%j`      | Day of year as decimal number (001--366): For input, 366 is only valid in a leap year.                                                                                                                                                                                           |
-|      `%u`      | Weekday as a decimal number (1--7, Monday is 1)                                                                                                                                                                                                                                  |
-|      `%w`      | Weekday as decimal number (0--6, Sunday is 0).                                                                                                                                                                                                                                   |
-|      `%U`      | Week of the year as decimal number (00--53) using Sunday as the first day 1 of the week (and typically with the first Sunday of the year as day 1 of week 1). **The US convention.**                                                                                             |
-|      `%V`      | Week of the year as decimal number (01--53) as defined in ISO 8601. If the week (starting on Monday) containing 1 January has four or more days in the new year, then it is considered week 1. Otherwise, it is the last week of the previous year, and the next week is week 1. |
-|      `%W`      | Week of the year as decimal number (00--53) using Monday as the first day of week (and typically with the first Monday of the year as day 1 of week 1). **The UK convention**.                                                                                                   |
-|      `%z`      | Offset from UTC                                                                                                                                                                                                                                                                  |
-|      `%Z`      | Time Zone name                                                                                                                                                                                                                                                                   |
-
-: Conversion Specifications for Date/Date-time {#tbl-lubri001}
-
-## Using `lubridate` package for parsing/creating dates
-Package `lubridate` which is now part of core `tidyverse` is extremely helpful package while analysing temporal variables in data.  Creating date/date-time objects and converting variables from numeric/character to these types is easier than in base R.  Besides, it offers us some other temporal class objects to make our time-series analysis easier.
-
-### Date/date-time objects creation
-Date and Date-time object classes in `lubridate` are defined similarly as in base R.  So we can create a date (or date-time) using a number of days (or seconds) elapsed since epoch.
-
-```{r lubri1}
-library(lubridate, warn.conflicts = FALSE)
-# Creation using numbers
-as_date(2392)
-as_datetime(206668800)
-
-# Converting from one type to another
-(date_today <- as_date(now()))
-
-# Check its class
-class(date_today)
-
-# Or see what's all in there
-unclass(date_today)
-```
-
-### Parsing date/date-time objects  from `character`
-In `lubridate` parsing date/date-time objects from character strings is pretty easy as we have a number of functions useful to parse dates/date-times written in any specific locale/order irrespective of the delimiter used to separate different components of date/time therein. In these functions, the orders of the year (`y`), quarter (`q`), month (`m`) date (`d`) hour (`h`) minute (`m`) and second (`s`) are represented by their first characters.  These are -
-
-- `ymd_hms`, `ymd_hm`, `ymd_h`, `ymd`
-- `dmy_hms`, `dmy_hm`, `dmy_h`, `dmy`
-- `mdy_hms`, `mdy_hm`, `mdy_h`, `mdy`
-- `ydm_hms`, `ydm_hm`, `ydm_h`, `ydm`
-- `myd`, `dym`
-- `yq`, `ym`, `my`
-
-A few of the examples are -
-
-```{r}
-ymd("19760720")
-dmy("01.12.2004")
-dmy("15th of January, 2006")
-mdy_hm("August 15th, 1947 at 10:45 PM")
-my("04-2006")
-yq("2024: Quarter 4")
-```
-To parse date-time from a fraction of year passed, we can use `date_decimal()`. Example-
-
-```{r}
-date_decimal(2024.162)
-```
-
-### Parsing dates/date-times from individual components
-For the scenario, where we have to create date/date-times we can make use of two functions `make_date` and `make_datetime`.  Syntax is
-
-```
-make_datetime(
-  year = 1970L,
-  month = 1L,
-  day = 1L,
-  hour = 0L,
-  min = 0L,
-  sec = 0,
-  tz = "UTC"
-)
-
-make_date(year = 1970L, month = 1L, day = 1L)
-```
-
-Example-
-```{r}
-make_date(year = 1947, month = 8, day = 15)
-```
-
-## Extracting and setting date/date-time components
-
-### Extraction
-We can extract the specific components from date/date-times using, intuitively named accessor functions, which are listed below.  Note that in all of these functions the individual date components is in singular; as plural component functions will be used in different context, as we will discuss in @sec-perriod.
-
-- `year()` for Year; `isoyear()` for ISO 8601 Year
-- `semester()` for Semester
-- `quarter()` for Quarter
-- `month()` for Month
-- `week` for Week of the year, `isoweek()` for ISO 8601 Week
-- `day` for Day of the month, `wday()` for Day of the week, `qday()` for Day of the quarter
-- `hour()`, `minute()` and `second()` for Hour, Minute and Second respectively
-- `tz()` for Time Zone
-
-See following examples.
-```{r}
-# Make an example date
-(a_time <- as_datetime(999999999))
-# Extract the DAY of the month
-day(a_time)
-# Extract Weekday name in full
-wday(a_time, label = TRUE, abbr = FALSE)
-# Extract second component
-second(a_time)
-# Extract Month name (abbreviated)
-month(a_time, label = TRUE, abbr = TRUE)
-# Extract week number of the year
-week(a_time)
-```
-Besides above functions, there are a few functions which are helpful in knowing certain characteristics of date/date-time variable.  These functions, which return logical vectors, are
-
-- `am(x)`, `pm(x)` to know whether the `x` is in AM or PM, respectively.
-- `dst(x)` to know whether `x` is in Daylight savings.
-- `leap_year(x)` to know whether `x` is a leap year.
-
-Examples-
-```{r}
-# Is our a_time AM?
-am(a_time)
-# Is a_time falling in leap year?
-leap_year(a_time)
-# Is it during DST?
-dst(a_time)
-```
-
-### Setting Components
-Just like we used accessor functions to extract the date-time components, we can use those functions to set specific component in date/date-time object/variable.  See Example-
-
-```{r}
-# Initial variable
-a_time
-# Setting component - Year
-year(a_time) <- 2024
-# Print modified variable
-a_time
-
-# Modify Time zone
-tz(a_time) <- "Asia/Kolkata"
-# print modified variable
-a_time
-```
-Finally, function `update` can also be used to return a date with the specified elements updated.  Example-
-
-```{r}
-EOD <- dmy("31-01-2024")
-EOD <- update(EOD, year = 2020)
-EOD
-# If values are too big, they will roll-over:
-update(EOD, month = 2)
-
-```
-
-## Time spans
-
-When we subtract a date-time object from another in base R, we get a `difftime` object, as we have already seen in @sec-diffftime.
-
-We know that every time/date unit is not same in strict sense.  Like leap years may have 366 days whereas others have 365 days.  Now there is a concept of leap seconds too.  Moreover, certain countries have daylight saving time and thus, every day is not of equal length there.  In order to deal with specific and clear requirements on date calculations, there are three different classes in `lubridate`, as discussed next.
-
-Lubridate has three classes, which may sound similar at first, but are different in their working.  These are -
-
-- `period`
-- `duration`
-- `interval`
-
-Let us discuss about each one separately.
-
-### Periods {#sec-perriod}
-The `period` objects track changes in clock times and ignore time line irregularities.  So every time object is of standard length like our clocks.
-
-Period objects can be created in `lubridate` using **pluralized** date component functions.  Example-
-```{r}
-(one_year <- years(1))
-class(one_year)
-# Add one year PERIOD to get a leap year?
-a_date <- dmy("01-03-2019")
-a_date + years(1)
-```
-
-### Durations
-Durations, on the other hand track changes in physical time, i.e. taking into account all the timeline adjusting irregularities.  These duration objects can be created in lubridate, by adding `d` as prefix to all pluralized `period` objects.
-
-```{r}
-(one_year_duration <- dyears(1))
-class(one_year_duration)
-# Add one year DURATION to get a leap year date?
-a_date + dyears(1)
-```
-
-### Intervals
-The objects of class `interval` represent **specific** interval on the timeline.  In other words, these have a specific start and end date/datetimes.  These can be created in lubridate using function `interval`, which has syntax like -
-
-```
-interval(start = NULL, end = NULL, tzone = tz(start))
-```
-This should be clear with the following examples.
-```{r}
-(a_interval <- interval(dmy("15-08-1947"), today()))
-class(a_interval)
-```
-
-Intervals can also be created using special operator `%--%`. E.g.
-```{r}
-(interval1 <- dmy("15-08-1947") %--% dmy("26-01-1950"))
-```
-
-## Performing calculations on intervals/dates
-There are a few functions to make our life easier while performing data analysis on temporal fields.  These are -
-
-### `%within%` operator
-Operator `a %within% b` checks whether interval/date-time `a` falls with interval `b`.  Returns boolean value(s).
-```{r}
-interval1 %within% a_interval
-```
-
-### Backward intervals
-Intervals in lubridate can be backwards too.  E.g.
-```{r}
-(back_interval <- dmy("26-01-2024") %--% dmy("15-01-2024"))
-```
-
-### Flipping intervals
-Function `int_flip()` can flip the interval.  E.g.
-```{r}
-int_flip(back_interval)
-```
-
-### Checking alignment of two intervals
-Function `int_aligns` tests if two intervals share an endpoint. The direction of each interval is ignored.  In other words, it actually tests whether the earliest or latest moments of each interval occur at the same time.  E.g.
-
-```{r}
-int1 <- interval(ymd("2001-01-01"), ymd("2002-01-01"))
-int2 <- interval(ymd("2001-06-01"), ymd("2002-01-01"))
-int3 <- interval(ymd("2003-01-01"), ymd("2004-01-01"))
-
-int_aligns(int1, int2)
-int_aligns(int1, int3)
-```
-
-### Checking Overlap in two intervals
-Function `int_overlaps` can test if two intervals overlap each other.
-```{r}
-int_overlaps(int1, int2)
-```
-
-### Length of the interval
-Function `int_length()` can calculate the length of interval and returns a `numeric` variable equal to the seconds in that interval.  E.g.
-
-```{r}
-int_length(back_interval)
-```
-
-### Adding Months without exceeding last day of the month.
-Operators `%m+%` and `%m-%` will add (or subtract) months to a date without exceeding the last day of the new month.  E.g.
-```{r}
-(leap <- ymd("2012-02-29"))
-
-leap %m+% years(1)
-leap %m+% years(-1)
-leap %m-% years(1)
-```
-Another Example-
-```{r}
-jan <- ymd_hms("2010-01-31 03:04:05")
-jan + months(1:3) # Feb 31 and April 31 returned as NA
-# NA "2010-03-31 03:04:05 UTC" NA
-jan %m+% months(1:3) # No rollover
-```
-
-::: callout-warning
-## Caution
-
-Adding `months()` to a date near the end of a month gives `NA` when the new date does not exist, like 31 February. In a column of due dates, such rows quietly become missing. Use `%m+%`, which stops at the last day of the month instead.
-:::
-
-### Adding with Rollback
-One more function `add_with_rollback()` which performs similarly, but has more control due to specific syntax-
-
-```
-add_with_rollback(e1, e2, roll_to_first = FALSE, preserve_hms = TRUE)
-```
-Example-
-```{r}
-x <- ymd_hms("2019-01-29 01:02:03")
-add_with_rollback(x, months(1))
-add_with_rollback(x, months(1), preserve_hms = FALSE)
-add_with_rollback(x, months(1), roll_to_first = TRUE)
-add_with_rollback(x, months(1), roll_to_first = TRUE, preserve_hms = FALSE)
-```
-
-### Coercing one time span unit to another
-
-Time-span objects in lubridate can be coerced from one to another using coercing functions,
-
-- `as.period(x, unit)`
-- `as.duration(x)`
-- `as.interval(x, start)`
-- `make_difftime(x)`
-
-Examples-
-```{r}
-# With Period - clock time
-(per <- days(31))
-(int1 <- as.interval(per, dmy("01022020")))
-
-# With Duration - physical time
-(dur <- ddays(31))
-(int2 <- as.interval(dur, dmy("01022020")))
-```
-
-## Rounding date-time variables
-There are dedicated functions to round the dates as per specific requirements.
-
-- `floor_date()` takes a date-time object and rounds it down to the nearest boundary of the specified time unit.
-- `ceiling_date()` takes a date-time object and rounds it up to the nearest boundary of the specified time unit.
-- `round_date()` takes a date-time object and time unit, and rounds it to the nearest value of the specified time unit.
-
-Examples-
-```{r}
-x <- ymd_hms("2009-08-03 12:01:59.23")
-round_date(x, "month")
-round_date(x, "week")
-floor_date(x, "day")
-ceiling_date(x, "month")
-```
-Three other functions helps rolling a date forward or backwards, as
-
-- `rollbackward()` changes a date to the last day of the previous month or to the first day of the month.
-- `rollforward()` rolls to the last day of the current month or to the first day of the next month. Optionally, the new date can retain the same hour, minute, and second information.
-- `rollback()` is a synonym for `rollbackward()`.
-
-See these examples-
-```{r}
-date <- ymd_hms("2010-03-03 12:44:22")
-
-rollbackward(date)
-rollbackward(date, roll_to_first = TRUE)
-rollbackward(date, preserve_hms = FALSE)
-rollbackward(date, roll_to_first = TRUE, preserve_hms = FALSE)
-rollforward(date)
-rollforward(date, roll_to_first = TRUE)
-```
-## Representing date and date-times in customised formats
-In all of the above sections, we saw that once R recognises a temporal object, it depicts that objects in a uniform format.  See
-```{r}
-(date1 <- dmy("01-01-2020"))
-(date2 <- ymd("2020/01/01"))
-as.character(date1)
-```
-In the console, all dates print in the same `yyyy-mm-dd` form. Reports, however, often need another format, like `15 August 2024` or `15/08/2024`. The functions `format()` and `strftime()` convert dates and date-times into text in any format we specify.  Character codes can be used from the @tbl-lubri001 in @sec-strpp.
-
-See following examples-
-```{r}
-format(as.Date("2024-08-15"), "%d %B %Y")
-format(as.Date("2024-08-15"), "%d/%m/%Y")
-```
-
-In this context, let's also discuss about a special date stamping function in `lubridate` which can format date/time outputs based on human friendly formats. Functions `stamp()`, `stamp_date` and `stamp_time()` will create a function from the given template, which can be applied to date/time objects to re-format them.  Example-
-
-```{r}
-eclipse_dates <- dmy(c("11-7-2010", "13-11-2012", "3-11-2013"))
-eclipse_stamp <- stamp_date("There was a solar eclipse on January 13th, 1999")
-eclipse_stamp(eclipse_dates)
-```
-
-## Dates in GGPLOT2 visualisations
-Before concluding the chapter on date and time variables, it is important to learn the related functions to deal with impact of date and time formats on visualisations.  Since we have already seen that, date and date-time variables are actually continuous variables with labels depicted in a specific formats, we have two `scale` functions in ggplot2 to deal with -
-
-- `scale_x_date()`
-- `scale_x_datetime()`
-
-In these functions, we have `date_breaks` and `date_minor_breaks` arguments to position the breaks by date units. E.g. `date_breaks = "6 months"` will place major tick mark every six months.
-
-Using another argument `date_labels` we can control the display of the labels in the plots.  The values of the argument may be in `strptime` formats as we have already seen in @tbl-lubri001 above.
-
-Example-
-```{r fig.show='hold', fig.align='center', fig.cap="Use of Date Time Scale in ggplot2"}
-library(tidyverse, warn.conflicts = FALSE)
-
-economics |>
-  ggplot(aes(date, uempmed)) +
-  geom_line() +
-  scale_x_date(date_labels = "%Y",
-               date_breaks = "5 years",
-               date_minor_breaks = "1 year") +
-  labs(x = "", y = "")
-```
-
-## Date-based audit tests {#sec-lubri-audit}
-
-Let us now apply these functions to three tests which auditors use all the time. We take a register of bills received by an office, with the date each bill was received and the date it was paid. Bills not yet paid have no payment date.
+Through the chapter, we use the register of bills received by an office over two financial years, 2023-24 and 2024-25. Each bill has the date it was received, the date it was paid and the amount. Bills not yet paid on 31 March 2025 have no payment date. A few irregular payments are planted in the data. We will find them in @sec-lubri-audit. The code below creates the register. It uses several functions which we learn in this chapter, so new readers may come back to it later.
 
 ```{r}
 #| code-fold: true
@@ -619,12 +56,677 @@ bill_register$paid[which(bill_register$paid > as.Date("2025-03-31"))] <- NA
 # Planted. A few payments made on Sundays and on Independence Day
 bill_register$paid[c(12, 57, 133, 260)] <- as.Date(c("2024-06-09", "2024-08-15",
                                                       "2024-11-17", "2025-01-26"))
+```
+
+```{r}
 bill_register
 ```
 
+## Base R classes to deal with date and time variables
+
+R has four core classes for dates and times.
+
+-   `Date` for dates. (Note the capital `D`.)
+-   `POSIXct` for date-times.
+-   `POSIXlt` for date-times, stored differently. The difference is explained in @sec-timm.
+-   `difftime` for time spans.
+
+### Dates
+
+The base R function `as.Date()` turns text into a `Date`. It takes a character vector and, optionally, the format in which the date is written. The default format is year, month and day, separated by hyphens. Registers in Indian offices usually write the day first, so we give the format ourselves.
+
+```{r}
+as.Date("2024-12-12")                        # default format
+as.Date("12-12-2024", format = "%d-%m-%Y")   # day first, as in most registers
+```
+
+We can check the `class` of the object created.
+
+```{r}
+bill_date <- as.Date("20-12-2024", format = "%d-%m-%Y")
+class(bill_date)
+```
+
+The format uses special codes, like `%d` for the day and `%Y` for a four-digit year. Run `?strptime` in your console to see them all. A ready reference for the most used codes is in @tbl-lubri001 in @sec-strpp.
+
+Behind the scenes, a date is stored as a number, the count of days since an *origin*, 1 January 1970.
+
+```{r}
+class(bill_date)
+typeof(bill_date)
+unclass(bill_date)
+```
+
+So, in R 4.3.0 and later, `as.Date()` also accepts a number, and counts that many days from the origin.
+
+```{r}
+as.Date(1)
+```
+
+The date one day after the default origin, `r as.Date("1970-01-01")`, is returned. The argument `origin` changes the starting point. This is very useful in audit. Excel also stores dates as numbers, but counts from 30 December 1899. When an Excel file is read carelessly, the dates arrive as numbers like 45383. The right origin turns them back into dates.
+
+```{r}
+# A date that arrived from Excel as a number
+as.Date(45383, origin = "1899-12-30")
+```
+
+### Times {#sec-timm}
+
+To create date-time objects, we use `as.POSIXct()` or `as.POSIXlt()`. Here is the time stamp of a payment approval, written in two ways.
+
+```{r}
+as.POSIXct("2024/11/17 12:20:05")   # default format
+as.POSIXct("17-11-2024 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+as.POSIXlt("17-11-2024 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+```
+
+The two classes store the same moment differently. `POSIXct` stores the number of *seconds* since the origin. `POSIXlt` stores a list of parts, the *day*, *month*, *year*, *hour*, *minute*, *second* and a few more. The code below shows both.
+
+::: callout-note
+`ct` in `POSIXct` stands for calendar time, and `lt` in `POSIXlt` stands for local time. This explains the difference in how they are stored.
+:::
+
+```{r}
+time_ct <- as.POSIXct("17-11-2024 15:30:00", format = "%d-%m-%Y %H:%M:%S")
+class(time_ct)
+unclass(time_ct)
+
+## POSIXlt
+# Convert the above object into POSIXlt
+time_lt <- as.POSIXlt(time_ct)
+# Let us print it
+time_lt
+class(time_lt)
+unclass(time_lt)
+```
+
+Like `as.Date()`, `as.POSIXct()` also accepts a number, and counts that many seconds from the origin.
+
+```{r}
+as.POSIXct(60)
+```
+
+### Times (without dates)
+
+Base R has no class for a time of day without a date. The package `hms`, part of the tidyverse, fills this gap. It is handy for things like the office opening time.
+
+```{r}
+hms::as_hms("09:30:00")
+hms::as_hms(10)          # ten seconds
+```
+
+### Timespan {#sec-diffftime}
+
+Subtracting one date from another gives an object of the special class `difftime`. It holds the difference, with its unit. Let us take a bill received on 2 August 2024 and paid on 20 September 2024.
+
+```{r}
+(days_taken <- as.Date("2024-09-20") - as.Date("2024-08-02"))
+class(days_taken)
+unclass(days_taken)
+```
+
+The bill took `r as.numeric(as.Date("2024-09-20") - as.Date("2024-08-02"))` days to pay. If it was from a micro or small enterprise, that is beyond the 45 days allowed by law.
+
+The function `difftime()` gives the difference in a unit of our choice. The argument `units` takes one of `"auto"`, `"secs"`, `"mins"`, `"hours"`, `"days"` or `"weeks"`.
+
+```{r}
+difftime(as.Date("2024-09-20"), as.Date("2024-08-02"), units = "weeks")
+```
+
+We can also create a difftime object directly, for example a time limit of 15 days.
+
+```{r}
+time_limit <- as.difftime(15, units = "days")
+time_limit
+class(time_limit)
+```
+
+### Time zones
+
+The function `Sys.timezone()` gives the time zone of your computer. `OlsonNames()` lists all the time zones R knows. Indian Standard Time is `"Asia/Kolkata"`.
+
+```{r}
+Sys.timezone()
+grep("Kolkata|London", OlsonNames(), value = TRUE)
+```
+
+The `tz` argument of `as.POSIXct()` and `as.POSIXlt()` gives the time zone when turning numbers or text into date-times. The same number of seconds is a different clock time in each zone.
+
+```{r}
+as.POSIXct(1, tz = "GMT")
+as.POSIXct(1, tz = "Asia/Kolkata")
+```
+
+### Coercion
+
+We have already met the functions which convert objects from one class to another.
+
+- `as.Date()`
+- `as.POSIXct()`
+- `as.POSIXlt()`
+- `as.difftime()`
+
+### Extracting parts from dates/times
+
+Base R has some useful functions to extract parts of a date.
+
+- `weekdays(x, abbreviate = FALSE)` gives the name of the day of the week, as text.
+- `months(x, abbreviate = FALSE)` gives the name of the month, as text.
+- `quarters(x)` gives the calendar quarter, as text.
+- `julian(x)` gives the number of days since the origin, as a number.
+
+Let us take the dates of one week in August 2024.
+
+```{r}
+dates_vec <- seq(as.Date("2024-08-12"), by = "day", length.out = 7)
+weekdays(dates_vec)
+months(dates_vec)
+quarters(dates_vec)
+julian(dates_vec)
+```
+
+The 15th of August, Independence Day, was a Thursday. `quarters()` gives calendar quarters, so August is in `Q3`. For the Indian financial year, which begins in April, we need another way, which we see in @sec-lubri-audit.
+
+### Other useful related functions
+
+The function `seq()` on dates, also written `seq.Date()`, makes a sequence of dates. Its syntax is `seq.Date(from, to, by, length.out = NULL, along.with = NULL, ...)`. The arguments are these.
+
+- `from` and `to` are the start and end dates.
+- `by` is the step. It can be one of the following.
+    + A number, taken as days.
+    + An object of class `difftime`.
+    + A text value, one of "day", "week", "month", "quarter" or "year". It can have a whole number and a space before it, like "2 weeks", or an "s" after it.
+- `length.out` is the desired length of the sequence. It is optional.
+- `along.with` takes the length from the length of this argument.
+
+For example, the first day of each month of the financial year 2024-25 is given below.
+
+```{r}
+seq(as.Date("2024/4/1"), by = "month", length.out = 12)
+```
+
+### `strptime` character codes {#sec-strpp}
+
+The table below lists the format codes most useful for reading and writing dates and date-times. To know more, see the output of `?strptime()` in your console.
+
+
+|     Format     | Meaning                                                                                                                                                                                                                                                                          |
+|:------------------:|----------------------------------------------------|
+| `%y` (or `%Y`) | Year without (or with) century                                                                                                                                                                                                                                                   |
+|      `%m`      | Month as a number (01 to 12)                                                                                                                                                                                                                                                  |
+| `%B` (or `%b`) | Month name in full (or abbreviated) in the current locale                                                                                                                                                                                                                            |
+|      `%d`      | Day of the month (01 to 31)                                                                                                                                                                                                                                                         |
+|      `%H`      | Hours as a number (00 to 23)                                                                                                                                                                                                                                                  |
+|      `%I`      | Hours as a number, in 12 hour format (01 to 12)                                                                                                                                                                                                                               |
+|      `%M`      | Minute as a number (00 to 59)                                                                                                                                                                                                                                                 |
+|      `%S`      | Second as a whole number (00 to 61), allowing up to two leap seconds                                                                                                                                                                                                                         |
+|     `%OS`      | Seconds with decimals                                                                                                                                                                                                                                                      |
+|      `%T`      | Same as `%H:%M:%S`                                                                                                                                                                                                                                                         |
+|      `%p`      | AM/PM indicator in the locale                                                                                                                                                                                                                                                   |
+| `%A` (or `%a`) | Full (or abbreviated) name of the day of the week, in the current locale                                                                                                                                                                                                                               |
+|      `%j`      | Day of the year as a number (001 to 366). For input, 366 is valid only in a leap year.                                                                                                                                                                                           |
+|      `%u`      | Day of the week as a number (1 to 7, Monday is 1)                                                                                                                                                                                                                                  |
+|      `%w`      | Day of the week as a number (0 to 6, Sunday is 0)                                                                                                                                                                                                                                   |
+|      `%U`      | Week of the year as a number (00 to 53), with Sunday as the first day of the week. Typically the first Sunday of the year is day 1 of week 1. **The US convention.**                                                                                             |
+|      `%V`      | Week of the year as a number (01 to 53) as defined in ISO 8601. If the week (starting on Monday) containing 1 January has four or more days in the new year, it is week 1. Otherwise, it is the last week of the previous year, and the next week is week 1. |
+|      `%W`      | Week of the year as a number (00 to 53), with Monday as the first day of the week. Typically the first Monday of the year is day 1 of week 1. **The UK convention.**                                                                                                   |
+|      `%z`      | Offset from UTC                                                                                                                                                                                                                                                                  |
+|      `%Z`      | Time zone name                                                                                                                                                                                                                                                                   |
+
+: Conversion specifications for dates and date-times {#tbl-lubri001}
+
+## Creating and reading dates with `lubridate`
+
+The package `lubridate`, now part of the core tidyverse, makes work with dates and times much easier. Creating dates and converting text or numbers into dates is simpler than in base R. It also offers classes for time spans which make calculations on periods safer.
+
+### Date/date-time objects creation
+
+Dates and date-times in `lubridate` are the same classes as in base R. So we can create a date (or a date-time) from a number of days (or seconds) since the origin.
+
+```{r lubri1}
+library(lubridate, warn.conflicts = FALSE)
+# Creation using numbers
+as_date(19905)
+as_datetime(1719838800)
+
+# Converting from one type to another
+(date_today <- as_date(now()))
+
+# Check its class
+class(date_today)
+
+# Or see what is inside
+unclass(date_today)
+```
+
+### Parsing date/date-time objects from `character`
+
+`lubridate` has a family of functions to read dates and date-times from text. Each function is named after the order in which the parts are written. Year is `y`, quarter is `q`, month is `m`, day is `d`, hour is `h`, minute is `m` and second is `s`. The separators between the parts do not matter. The functions are listed below.
+
+- `ymd_hms`, `ymd_hm`, `ymd_h`, `ymd`
+- `dmy_hms`, `dmy_hm`, `dmy_h`, `dmy`
+- `mdy_hms`, `mdy_hm`, `mdy_h`, `mdy`
+- `ydm_hms`, `ydm_hm`, `ydm_h`, `ydm`
+- `myd`, `dym`
+- `yq`, `ym`, `my`
+
+A few examples follow, written the way dates appear in bank statements, registers and returns.
+
+```{r}
+ymd("20240720")
+dmy("01.12.2024")
+dmy("15th of January, 2025")
+mdy_hm("August 15th, 2024 at 10:45 PM")
+my("04-2024")
+yq("2024: Quarter 4")
+```
+
+This flexibility is a great help with data typed by hand. The same date, written in four different ways in one register, is read correctly by one call.
+
+```{r}
+dmy(c("01/04/2024", "1-4-2024", "01.04.2024", "1st April 2024"))
+```
+
+To get a date-time from a decimal year, we use `date_decimal()`.
+
+```{r}
+date_decimal(2024.162)
+```
+
+### Parsing dates/date-times from individual components
+
+Some registers keep the day, month and year in separate columns. The functions `make_date()` and `make_datetime()` put them together. Their syntax is shown below.
+
+```
+make_datetime(
+  year = 1970L,
+  month = 1L,
+  day = 1L,
+  hour = 0L,
+  min = 0L,
+  sec = 0,
+  tz = "UTC"
+)
+
+make_date(year = 1970L, month = 1L, day = 1L)
+```
+
+```{r}
+make_date(year = 1947, month = 8, day = 15)
+
+tibble(bill_day = c(5, 18, 30), bill_month = c(4, 11, 2), bill_year = 2024) |>
+  mutate(bill_date = make_date(bill_year, bill_month, bill_day))
+```
+
+The third bill is dated 30 February, which does not exist, so its date is `NA`. In audit, such a row is itself a finding. It points to a data entry error, or a register filled in carelessly.
+
+## Extracting and setting date/date-time components
+
+### Extraction
+
+The parts of a date or date-time are extracted with simply named functions, listed below. Note that each name is singular, like `year()`. The plural forms, like `years()`, do something else, which we see in @sec-perriod.
+
+- `year()` for the year, and `isoyear()` for the ISO 8601 year.
+- `semester()` for the half year.
+- `quarter()` for the quarter.
+- `month()` for the month.
+- `week()` for the week of the year, and `isoweek()` for the ISO 8601 week.
+- `day()` for the day of the month, `wday()` for the day of the week, and `qday()` for the day of the quarter.
+- `hour()`, `minute()` and `second()` for the hour, minute and second.
+- `tz()` for the time zone.
+
+Let us take the time stamp of a payment approval.
+
+```{r}
+# An approval time stamp
+(a_time <- ymd_hms("2024-11-17 23:46:40", tz = "Asia/Kolkata"))
+# Day of the month
+day(a_time)
+# Name of the day of the week, in full
+wday(a_time, label = TRUE, abbr = FALSE)
+# Seconds
+second(a_time)
+# Name of the month, abbreviated
+month(a_time, label = TRUE, abbr = TRUE)
+# Week number of the year
+week(a_time)
+```
+
+The approval was made on a Sunday, at a quarter to midnight. We return to such approvals in @sec-lubri-hours.
+
+A few functions answer yes or no questions about a date-time.
+
+- `am(x)` and `pm(x)` tell whether `x` is before or after noon.
+- `dst(x)` tells whether `x` is in daylight saving time.
+- `leap_year(x)` tells whether `x` is in a leap year.
+
+```{r}
+# Was the approval before noon?
+am(a_time)
+# Is it in a leap year?
+leap_year(a_time)
+# Is it in daylight saving time? (India does not use it)
+dst(a_time)
+```
+
+### Setting components
+
+The same functions can also *change* a part of a date. Suppose the year of a time stamp was keyed in wrongly.
+
+```{r}
+# Initial value
+a_time
+# Set the year
+year(a_time) <- 2025
+a_time
+
+# Set the time zone
+tz(a_time) <- "UTC"
+a_time
+```
+
+Notice that setting the time zone kept the clock time and changed only the zone. So it now stands for a different moment. We return to this trap in the Audit tip of @sec-lubri-hours.
+
+The function `update()` returns a date with the given parts changed, in one step.
+
+```{r}
+due_date <- dmy("31-01-2024")
+due_date <- update(due_date, year = 2025)
+due_date
+# If the new date does not exist, it rolls over into the next month
+update(due_date, month = 2)
+```
+
+There is no 31 February, so the date rolled over to 3 March. Keep this in mind when computing due dates.
+
+## Time spans
+
+Subtracting one date-time from another in base R gives a `difftime` object, as we saw in @sec-diffftime.
+
+But not every unit of time has a fixed length. A year may have 365 or 366 days. Some countries use daylight saving time, so not every day there has 24 hours. To be clear about what we mean, `lubridate` has three classes of time span. They may sound alike, but they work differently.
+
+- `period`
+- `duration`
+- `interval`
+
+Let us take each in turn.
+
+### Periods {#sec-perriod}
+
+A *period* follows the clock and the calendar. One year is one calendar year, whatever its number of days. Periods are created with the **plural** names of the date parts, like `years()`, `months()` and `days()`.
+
+```{r}
+(one_year <- years(1))
+class(one_year)
+# A contract of one year from 1 March 2023 ends on
+contract_start <- dmy("01-03-2023")
+contract_start + years(1)
+```
+
+### Durations
+
+A *duration* is an exact length of time, in seconds. Durations are created by adding `d` before the plural names, like `dyears()` and `ddays()`. One duration year is 365.25 days.
+
+```{r}
+(one_year_duration <- dyears(1))
+class(one_year_duration)
+# One duration year from 1 March 2023
+contract_start + dyears(1)
+```
+
+Since 2024 is a leap year, 365.25 days from 1 March 2023 ends at 6 am on 29 February 2024, not on 1 March. For contract periods, leave and service, which follow the calendar, use periods.
+
+### Intervals
+
+An *interval* is a specific stretch of the time line, with a definite start and end. It is created with the function `interval()`, whose syntax is shown below.
+
+```
+interval(start = NULL, end = NULL, tzone = tz(start))
+```
+
+Let us take a rate contract valid for the financial year 2024-25.
+
+```{r}
+(contract <- interval(dmy("01-04-2024"), dmy("31-03-2025")))
+class(contract)
+```
+
+Intervals can also be created with the special operator `%--%`. Here is the period in which a work was executed.
+
+```{r}
+(work_period <- dmy("15-06-2024") %--% dmy("14-12-2024"))
+```
+
+## Performing calculations on intervals/dates
+
+`lubridate` has several functions for working with intervals.
+
+### `%within%` operator
+
+`a %within% b` checks whether the interval or date `a` falls within the interval `b`. It returns `TRUE` or `FALSE`.
+
+```{r}
+work_period %within% contract
+```
+
+It works on many dates at once. Supplies billed under the rate contract must fall within its validity.
+
+```{r}
+supply_dates <- dmy(c("20-03-2024", "10-10-2024", "05-04-2025"))
+supply_dates %within% contract
+```
+
+The first and the third supplies fall outside the contract period. They cannot claim the contract rate, and the auditor would ask on what terms they were bought.
+
+### Backward intervals
+
+Intervals in `lubridate` can run backwards, with the end before the start. This often signals an entry error, like a completion date earlier than the start date.
+
+```{r}
+(back_interval <- dmy("26-01-2025") %--% dmy("15-01-2025"))
+```
+
+### Flipping intervals
+
+The function `int_flip()` reverses the direction of an interval.
+
+```{r}
+int_flip(back_interval)
+```
+
+### Checking alignment of two intervals
+
+The function `int_aligns()` tests whether two intervals share a start or an end. The direction of each interval is ignored. Let us take three rate contracts.
+
+```{r}
+int1 <- interval(ymd("2024-04-01"), ymd("2025-03-31"))
+int2 <- interval(ymd("2024-10-01"), ymd("2025-03-31"))
+int3 <- interval(ymd("2025-04-01"), ymd("2026-03-31"))
+
+int_aligns(int1, int2)
+int_aligns(int1, int3)
+```
+
+### Checking overlap in two intervals
+
+The function `int_overlaps()` tests whether two intervals overlap.
+
+```{r}
+int_overlaps(int1, int2)
+int_overlaps(int1, int3)
+```
+
+If `int1` and `int2` were two rate contracts for the same item, the overlap would be a question for audit. Which rate applied in the months both were valid? To compare many periods across two tables at once, overlap joins are more convenient (@sec-nonequi).
+
+### Length of the interval
+
+The function `int_length()` gives the length of an interval in seconds. For a backward interval, the length is negative.
+
+```{r}
+int_length(back_interval)
+```
+
+### Adding months without going past the end of the month
+
+The operators `%m+%` and `%m-%` add (or subtract) months to a date without going past the last day of the new month.
+
+```{r}
+(leap <- ymd("2024-02-29"))
+
+leap %m+% years(1)
+leap %m+% years(-1)
+leap %m-% years(1)
+```
+
+Monthly instalments due on the last day of the month show why this matters.
+
+```{r}
+jan <- ymd_hms("2025-01-31 03:04:05")
+jan + months(1:3) # 31 February and 31 April do not exist, so NA
+jan %m+% months(1:3) # stops at the last day of the month
+```
+
+::: callout-warning
+## Caution
+
+Adding `months()` to a date near the end of a month gives `NA` when the new date does not exist, like 31 February. In a column of due dates, such rows quietly become missing. Use `%m+%`, which stops at the last day of the month instead.
+:::
+
+### Adding with rollback
+
+The function `add_with_rollback()` does the same, with more control. Its syntax is shown below.
+
+```
+add_with_rollback(e1, e2, roll_to_first = FALSE, preserve_hms = TRUE)
+```
+
+```{r}
+x <- ymd_hms("2025-01-29 01:02:03")
+add_with_rollback(x, months(1))
+add_with_rollback(x, months(1), preserve_hms = FALSE)
+add_with_rollback(x, months(1), roll_to_first = TRUE)
+add_with_rollback(x, months(1), roll_to_first = TRUE, preserve_hms = FALSE)
+```
+
+There is no 29 February in 2025. By default, the date rolls back to the last day of February. With `roll_to_first = TRUE`, it moves to the first day of March instead. `preserve_hms` decides whether the time of day is kept.
+
+### Coercing one time span unit to another
+
+Time spans in `lubridate` can be converted from one class to another with these functions.
+
+- `as.period(x, unit)`
+- `as.duration(x)`
+- `as.interval(x, start)`
+- `make_difftime(x)`
+
+```{r}
+# A period follows the calendar
+(per <- days(31))
+(int1 <- as.interval(per, dmy("01022024")))
+
+# A duration is an exact length of time
+(dur <- ddays(31))
+(int2 <- as.interval(dur, dmy("01022024")))
+```
+
+## Rounding date-time variables
+
+Three functions round dates and date-times to a unit of time.
+
+- `floor_date()` rounds down to the start of the unit.
+- `ceiling_date()` rounds up to the start of the next unit.
+- `round_date()` rounds to the nearest boundary of the unit.
+
+```{r}
+x <- ymd_hms("2024-08-03 12:01:59.23")
+round_date(x, "month")
+round_date(x, "week")
+floor_date(x, "day")
+ceiling_date(x, "month")
+```
+
+`floor_date(x, "month")` is especially useful. It turns every date into the first day of its month, which makes monthly totals easy, as we see in the chart below.
+
+Three more functions roll a date forward or backward to a month end.
+
+- `rollbackward()` moves a date to the last day of the previous month, or to the first day of its own month.
+- `rollforward()` moves a date to the last day of its month, or to the first day of the next month. Optionally, the time of day can be kept.
+- `rollback()` is another name for `rollbackward()`.
+
+```{r}
+date <- ymd_hms("2025-03-03 12:44:22")
+
+rollbackward(date)
+rollbackward(date, roll_to_first = TRUE)
+rollbackward(date, preserve_hms = FALSE)
+rollbackward(date, roll_to_first = TRUE, preserve_hms = FALSE)
+rollforward(date)
+rollforward(date, roll_to_first = TRUE)
+```
+
+`rollforward()` gives the last day of the month. This is how the date of retirement is worked out in @sec-validate, since a government servant retires on the last day of the month in which he or she attains 60.
+
+## Representing date and date-times in customised formats
+
+Once R recognises a date, it always prints it in the same way, however it was written in the source.
+
+```{r}
+(date1 <- dmy("01-01-2025"))
+(date2 <- ymd("2025/01/01"))
+as.character(date1)
+```
+
+In the console, all dates print in the `yyyy-mm-dd` form. Reports, however, often need another format, like `15 August 2024` or `15/08/2024`. The functions `format()` and `strftime()` turn dates and date-times into text in any format we give. The codes are those in @tbl-lubri001 in @sec-strpp.
+
+```{r}
+format(as.Date("2024-08-15"), "%d %B %Y")
+format(as.Date("2024-08-15"), "%d/%m/%Y")
+strftime(as.Date("2024-08-15"), "%A, %d %B %Y")
+```
+
+`lubridate` has a friendlier way too. The functions `stamp()`, `stamp_date()` and `stamp_time()` take an example sentence and make a *function* which formats dates in the same way.
+
+```{r}
+paid_dates  <- dmy(c("15-08-2024", "26-01-2025", "02-10-2024"))
+paid_stamp  <- stamp_date("Paid on 5 March 2024")
+paid_stamp(paid_dates)
+```
+
+This is handy for sentences in audit observations and letters.
+
+## Dates in ggplot2 visualisations
+
+Dates and date-times are continuous values with labels in a particular format. So ggplot2 has two special scale functions for them.
+
+- `scale_x_date()`
+- `scale_x_datetime()`
+
+The arguments `date_breaks` and `date_minor_breaks` place the breaks by units of time. For example, `date_breaks = "3 months"` puts a major tick mark every three months. The argument `date_labels` sets the format of the labels, using the codes of @tbl-lubri001. Charts are explained in detail in @sec-ggplot2.
+
+Let us chart the amount paid each month from the bill register. `floor_date()` turns each payment date into its month.
+
+```{r fig.show='hold', fig.align='center', fig.cap="Payments by month, from the bill register"}
+bill_register |>
+  filter(!is.na(paid)) |>
+  mutate(month = floor_date(paid, "month")) |>
+  summarise(amount_lakh = sum(amount) / 1e5, .by = month) |>
+  ggplot(aes(month, amount_lakh)) +
+  geom_line() +
+  geom_point() +
+  scale_x_date(date_labels = "%b %Y",
+               date_breaks = "3 months",
+               date_minor_breaks = "1 month") +
+  labs(x = NULL, y = "Amount paid (₹ lakh)") +
+  theme_minimal()
+```
+
+## Audit use case, date-based tests {#sec-lubri-audit}
+
+Let us now apply these functions to three tests which auditors use all the time. We use the bill register created at the start of the chapter (@sec-lubri-data).
+
 ### Financial year and its quarters
 
-The Indian financial year runs from April to March. `lubridate`'s `quarter()` has an argument `fiscal_start`, the month in which the year starts. With `fiscal_start = 4`, April to June is the first quarter. The financial year can be labelled like `2024-25` with a little arithmetic.
+The Indian financial year runs from April to March. `lubridate`'s `quarter()` has an argument `fiscal_start`, the month in which the year starts. With `fiscal_start = 4`, April to June is the first quarter. The financial year can be labelled like `2024-25` with a little arithmetic, in a small function of our own.
 
 ```{r}
 fin_year <- function(date) {
@@ -657,14 +759,14 @@ bill_register |>
   filter(!is.na(paid)) |>
   mutate(day = wday(paid, label = TRUE, abbr = FALSE)) |>
   filter(day == "Sunday" | paid %in% holidays) |>
-  select(bill_no, paid, day, amount)
+  select(bill_no, received, paid, day, amount)
 ```
 
-The four planted payments are found. Three were made on Sundays, one of which was also Republic Day, and one on Independence Day, which was a Thursday. A check on Sundays alone would have missed it.
+The four planted payments are found. Three were made on Sundays, one of which was also Republic Day. One was made on Independence Day, which was a Thursday. A check on Sundays alone would have missed it.
 
 ### Ageing analysis
 
-*Ageing* sorts pending items by how long they have been pending. It is one of the most common audit analyses, for pending bills, outstanding advances, unadjusted suspense entries, or grievances not disposed of. Let us age the unpaid bills as on 31 March 2025.
+*Ageing* sorts pending items by how long they have been pending. It is one of the most common audit analyses. It applies to pending bills, outstanding advances, unadjusted suspense entries and grievances not disposed of. Let us age the unpaid bills as on 31 March 2025.
 
 ```{r}
 as_on <- as.Date("2025-03-31")
@@ -677,12 +779,13 @@ ageing <- bill_register |>
                          labels = c("Up to 30 days", "31-90 days", "91-180 days",
                                     "181-365 days", "Over a year")))
 
-ageing |>
+age_summary <- ageing |>
   summarise(bills = n(), amount_lakh = round(sum(amount) / 1e5, 2), .by = age_group) |>
   arrange(age_group)
+age_summary
 ```
 
-`cut()` sorts the days into age groups, and gives an ordered factor, so the groups print in a sensible order. Bills pending for more than a year deserve particular attention. They may be for supplies never received, duplicates, or genuine dues which are being delayed.
+`cut()` sorts the days into age groups. It gives a factor, so the groups print in a sensible order. Bills pending for more than a year deserve particular attention. Here there are `r age_summary$bills[age_summary$age_group == "Over a year"]` of them, worth ₹`r age_summary$amount_lakh[age_summary$age_group == "Over a year"]` lakh. They may be for supplies never received, duplicates, or genuine dues which are being delayed.
 
 **Time taken to pay.** The same arithmetic, on paid bills, measures how long the office takes to pay.
 
@@ -696,11 +799,19 @@ bill_register |>
             paid_before_received = sum(days_to_pay < 0))
 ```
 
-The last column is a basic validity test. A bill cannot be paid before it is received. Any such case is either a data entry error or a payment made in advance of the bill, and both need explanation. Here, `r sum(bill_register$paid < bill_register$received, na.rm = TRUE)` of the planted holiday payments is dated before its bill was received, which makes it doubly suspicious.
+The last column is a basic validity test. A bill cannot be paid before it is received. Any such case is either a data entry error or a payment made in advance of the bill, and both need explanation. Here, `r sum(bill_register$paid < bill_register$received, na.rm = TRUE)` bill was paid before it was received. It is `r with(bill_register, bill_no[which(paid < received)])`, one of the planted holiday payments, which makes it doubly suspicious.
 
-### Transactions by the hour of the day {#sec-lubri-hours}
+The auditor would now call for the vouchers of the holiday payments, the cash book entries for those days and the files of the bills pending for over a year. The findings, with these lists, go into the working papers.
 
-Dates tell us *which day* something happened. Date-times also tell us *what time*, and that can be just as revealing. Most computerised systems, like the treasury's e-payment system, an ERP, or core banking, record a time stamp for every transaction: when a bill was passed, a payment approved, or a record changed. Government offices work roughly from 9:30 in the morning to 6 in the evening on working days. A payment approved at two in the morning, or on a Sunday, is not necessarily wrong, but it deserves a question. Was the approver really at work then? Was someone else using the approver's login?
+::: callout-tip
+## Audit tip
+
+Always fix the *as-on date* of an ageing analysis, as we did with `as_on`, instead of using `today()`. The analysis is then reproducible, and matches the date of the accounts being audited. Make the age groups match the rules in force, like the time limit for paying bills or adjusting advances. Then the groups beyond the limit are the exceptions to report.
+:::
+
+## Audit use case, approvals outside office hours {#sec-lubri-hours}
+
+Dates tell us *which day* something happened. Date-times also tell us *what time*, and that can be just as revealing. Most computerised systems record a time stamp for every transaction. Examples are the treasury's e-payment system, an ERP and core banking. The stamp shows when a bill was passed, a payment approved or a record changed. Government offices work roughly from 9:30 in the morning to 6 in the evening on working days. A payment approved at two in the morning, or on a Sunday, is not necessarily wrong. But it deserves a question. Was the approver really at work then? Was someone else using the approver's login?
 
 Let us take the system log of e-payment approvals of a treasury for one quarter.
 
@@ -769,7 +880,7 @@ approval_log |>
   theme_minimal()
 ```
 
-The working week shows as a solid block from about 9 am to 7 pm, Monday to Friday. Outside it, faint cells are scattered through the night, and on Saturdays and Sundays, when there should be nothing at all. (We used `complete()` from @sec-tidyr so that hours with no approvals appear as empty cells, rather than gaps, and a square-root colour scale so that the faint cells remain visible beside the busy ones.)
+The working week shows as a solid block from about 9 am to 7 pm, Monday to Friday. Outside it, faint cells are scattered through the night, and on Saturdays and Sundays, when there should be nothing at all. We used `complete()` from @sec-tidyr so that hours with no approvals appear as empty cells, rather than gaps. The square-root colour scale keeps the faint cells visible beside the busy ones.
 
 Who approved these payments?
 
@@ -787,34 +898,30 @@ off_hours |>
 oh <- off_hours |> summarise(approvals = n(), amount = sum(amount), .by = user) |> arrange(desc(approvals))
 ```
 
-One user, `r oh$user[1]`, stands out: `r oh$approvals[1]` approvals worth ₹`r round(oh$amount[1] / 1e5, 1)` lakh, far larger than the typical payment. Every other user has only a handful, mostly just after 7 pm, when an office sometimes works late. The next steps would be to compare these times with the user's attendance and leave records, to check where the logins came from, and to examine the payments themselves.
+One user stands out. `r oh$user[1]` made `r oh$approvals[1]` approvals outside office hours, worth ₹`r round(oh$amount[1] / 1e5, 1)` lakh, and the payments are far larger than the typical one. Every other user has only a handful, all just after 7 pm, when an office sometimes works late. The next steps would be to compare these times with the user's attendance and leave records, to check where the logins came from, and to examine the payments themselves.
 
 ::: callout-tip
 ## Audit tip
 
-Before reading anything into the hours, check the **time zone** of the time stamps. Systems often store time in UTC, which is five and a half hours behind Indian Standard Time. Read in the wrong zone, a 3 pm approval appears as 9:30 am, and every pattern shifts. Use `with_tz(time, "Asia/Kolkata")` to show a stored time in Indian time, and `force_tz()` when a time was recorded without a zone and is known to be Indian time. The trap is easy to fall into. Even `as.POSIXct()` on a date gives midnight in UTC, which is 5:30 am in India. While preparing the data for this very section, that one slip moved every approval five and a half hours later, and made the whole office look as if it worked through the night. The code above uses `force_tz(as_datetime(date), "Asia/Kolkata")`, which gives midnight in Indian time.
-:::
-
-::: callout-tip
-## Audit tip
-
-Always fix the *as-on date* of an ageing analysis, as we did with `as_on`, instead of using `today()`. The analysis is then reproducible, and matches the date of the accounts being audited. And make the age groups match the rules in force, like the time limit for paying bills or adjusting advances, so that the groups beyond the limit are the exceptions to report.
+Before reading anything into the hours, check the **time zone** of the time stamps. Systems often store time in UTC, which is five and a half hours behind Indian Standard Time. Read in the wrong zone, a 3 pm approval appears as 9:30 am, and every pattern shifts. Use `with_tz(time, "Asia/Kolkata")` to show a stored time in Indian time. Use `force_tz()` when a time was recorded without a zone and is known to be Indian time. The trap is easy to fall into. Even `as.POSIXct()` on a date gives midnight in UTC, which is 5:30 am in India. While preparing the data for this very section, that one slip moved every approval five and a half hours later. It made the whole office look as if it worked through the night. The code above uses `force_tz(as_datetime(date), "Asia/Kolkata")`, which gives midnight in Indian time.
 :::
 
 ## A suggested workflow
 
-1.  **Read the dates correctly.** Dates in files received from the auditee come in many forms. Use `dmy()`, `ymd()` or `mdy()` to match the order in the file, and check a few rows after conversion.
-2.  **Set the time zone.** Time stamps from a system log may be stored in UTC. Use `with_tz()` or `force_tz()` to get Indian Standard Time before any analysis.
-3.  **Add the financial year and quarter.** Use `quarter()` with `fiscal_start = 4`, so that April to June is the first quarter. Then summarise bills and payments by financial year and quarter.
-4.  **Check payments on Sundays and holidays.** Use `wday()` to find the day of the week, and `%in%` to compare with the list of gazetted holidays. Check both, since a holiday can fall on a weekday.
-5.  **Look at the hour of approvals.** Use `hour()` on the time stamps to find approvals made late at night or at weekends. Count them by user.
-6.  **Run validity checks.** Subtract dates to get the days taken to pay. A bill paid before it was received is either an entry error or an advance payment, and needs explanation.
-7.  **Age the pending items.** Fix an as-on date, work out the days pending, and sort them into age groups with `cut()`. Make the groups match the time limits in the rules.
+1.  **Read the dates correctly.** Dates in files received from the auditee come in many forms. Use `dmy()`, `ymd()` or `mdy()` to match the order in the file, and check a few rows after conversion. Turn Excel serial numbers into dates with `as.Date(x, origin = "1899-12-30")`.
+2.  **Look for impossible dates.** Dates that fail to parse, like 30 February, become `NA`. Count them, and treat them as findings.
+3.  **Set the time zone.** Time stamps from a system log may be stored in UTC. Use `with_tz()` or `force_tz()` to get Indian Standard Time before any analysis.
+4.  **Add the financial year and quarter.** Use `quarter()` with `fiscal_start = 4`, so that April to June is the first quarter. Then summarise bills and payments by financial year and quarter.
+5.  **Check payments on Sundays and holidays.** Use `wday()` to find the day of the week, and `%in%` to compare with the list of gazetted holidays. Check both, since a holiday can fall on a weekday.
+6.  **Look at the hour of approvals.** Use `hour()` on the time stamps to find approvals made late at night or at weekends. Count them by user.
+7.  **Check dates against periods.** Use `%within%` to check that supplies fall within the contract period, and `int_overlaps()` to find contracts that clash.
+8.  **Run validity checks.** Subtract dates to get the days taken to pay. A bill paid before it was received is either an entry error or an advance payment, and needs explanation.
+9.  **Age the pending items.** Fix an as-on date, work out the days pending, and sort them into age groups with `cut()`. Make the groups match the time limits in the rules.
 
 ::: callout-important
 ## Remember
 
-Dates and times are easy to misread. A wrong date order or a wrong time zone shifts every result, without any error message. Check a few converted values by hand. Fix the as-on date instead of using `today()`, so that the analysis can be repeated.
+Dates and times are easy to misread. A wrong date order or a wrong time zone shifts every result, without any error message. Check a few converted values by hand. Use periods and `%m+%` for calendar arithmetic, so that due dates do not go missing. Fix the as-on date instead of using `today()`, so that the analysis can be repeated.
 :::
 
 ## Where next
@@ -825,17 +932,25 @@ Dates are also the backbone of two later chapters. When the question is about ho
 
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
-| `as.Date()`, `as.POSIXct()`, `difftime()` | base R | Dates, date-times and time differences |
+| `as.Date()`, `as.POSIXct()`, `as.POSIXlt()`, `difftime()`, `as.difftime()` | base R | Dates, date-times and time differences |
+| `weekdays()`, `months()`, `quarters()`, `julian()`, `seq()` | base R | Parts of dates, and sequences of dates |
+| `as_hms()` | hms | Times of day without dates |
+| `as_date()`, `as_datetime()`, `now()` | lubridate | Create dates and date-times |
 | `ymd()`, `dmy()`, `mdy()` and others | lubridate | Read dates written in the given order of year, month and day |
 | `make_date()`, `make_datetime()` | lubridate | Build dates from year, month and day columns |
-| `year()`, `month()`, `day()`, `wday()`, `quarter()`, `hour()` | lubridate | Extract parts of a date or date-time, including the fiscal quarter and the hour |
+| `year()`, `month()`, `day()`, `wday()`, `week()`, `quarter()`, `hour()`, `second()` | lubridate | Extract parts of a date or date-time, including the fiscal quarter and the hour |
+| `am()`, `leap_year()`, `dst()` | lubridate | Yes or no questions about a date-time |
+| `update()`, `tz()` | lubridate | Change parts of a date, or its time zone |
 | `with_tz()`, `force_tz()` | lubridate | Show a date-time in another time zone, or set its zone |
-| `years()`, `months()`, `dyears()`, `interval()`, `%--%`, `%within%` | lubridate | Periods, durations and intervals |
-| `%m+%`, `add_with_rollback()` | lubridate | Add months without going past the month's last day |
+| `years()`, `months()`, `days()`, `dyears()`, `ddays()` | lubridate | Periods and durations |
+| `interval()`, `%--%`, `%within%`, `int_flip()`, `int_aligns()`, `int_overlaps()`, `int_length()` | lubridate | Create and compare intervals |
+| `%m+%`, `%m-%`, `add_with_rollback()` | lubridate | Add months without going past the month's last day |
+| `as.period()`, `as.duration()`, `as.interval()` | lubridate | Convert one kind of time span into another |
 | `floor_date()`, `ceiling_date()`, `round_date()` | lubridate | Round dates to a unit, like the start of the month |
-| `format()`, `strftime()`, `stamp()` | base R, lubridate | Show dates in a chosen format |
+| `rollbackward()`, `rollforward()` | lubridate | Move a date to a month end |
+| `format()`, `strftime()`, `stamp_date()` | base R, lubridate | Show dates in a chosen format |
 | `cut()` | base R | Sort numbers, like days pending, into groups |
 | `scale_x_date()` | ggplot2 | Date axes in charts |
-| `geom_col()`, `geom_tile()` | ggplot2 | Bar chart by hour, and heat map of day against hour |
+| `geom_line()`, `geom_col()`, `geom_tile()` | ggplot2 | Line chart by month, bar chart by hour, and heat map of day against hour |
 
 : Functions used in this chapter {#tbl-lubrifunctions}

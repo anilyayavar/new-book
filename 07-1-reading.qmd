@@ -5,23 +5,98 @@ source("_common.R")
 
 # Importing and Exporting Data {#sec-read}
 
-Until now, we have created our own datasets or used the sample datasets that come with R. In practice, audit data comes from outside, as files received from the auditee, downloads from portals, or extracts from databases. We have to import this data into R before analysis. After the analysis, the summaries, exception lists and charts have to be exported, for the working papers and the report. This chapter covers both.
+Audit data comes from outside. A district treasury sends a file of every voucher it passed in a month. A works division sends its register as an Excel workbook, with a sheet for each sub-division. A scheme's portal gives a download of its beneficiaries. Before we can check anything, this data has to come into R, whole and correct.
 
-The first section deals with the base R functions for reading external data, that is, importing it into R. The next section deals with writing data to external files, that is, exporting it out of R. Then we will see the `tidyverse` packages which do these jobs faster and more safely, and end with the most important point for an auditor, checking that nothing went wrong while reading.
+This step is not as simple as it looks. A file read carelessly can lose payments without any error. An amount written as "1,25,000" can quietly become a missing value, and drop out of every total. A DDO code like `0204015` can lose its leading zero and stop matching the master. So reading a file is itself an audit step. The auditor must be able to show that the data analysed is the data received, row for row and rupee for rupee.
 
-## Importing external data in R - Base R methods
+After the analysis, the results travel the other way. Exception lists, summaries and charts are exported, for the working papers, for the audit report, and for the auditee's reply. In this chapter we learn both directions. We first see the base R functions for reading and writing files, and then the `tidyverse` packages which do these jobs faster and more safely. We end with the most important point for an auditor, checking that nothing went wrong while reading, and reconciling a treasury file with its covering letter.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(readxl)
+library(writexl)
+```
+
+## Our data, files received from a treasury
+
+To practise, we need some files. So let us create them, in a temporary folder given by `tempdir()`, so that nothing is left behind in our project. There are four files.
+
+- `amarpur_vouchers_apr2024.csv`, the vouchers passed by the District Treasury, Amarpur, in April 2024. Each row has the voucher number, the code of the drawing and disbursing officer (DDO), the date of the bill, the head of account, the payee, the mode of payment and the amount in rupees.
+- `cancelled_cheques.txt`, the numbers of cheques reported as cancelled, one on each line.
+- `covering_letter.txt`, the letter sent by the treasury with the file.
+- `works_register.xlsx`, an Excel workbook from a works division, with one sheet for each of two sub-divisions.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the files used in this chapter"
+folder <- file.path(tempdir(), "audit_files")
+dir.create(folder, showWarnings = FALSE)
+
+set.seed(2024)
+n <- 120
+ddo_codes <- c("0204015", "0204022", "0204031", "0204047", "0204058")
+heads <- c("2054-00-095-01", "2202-01-101-02", "2210-03-103-01", "4059-01-051-03")
+payees <- c("Sharma Traders", "Kaveri Infra", "Om Sai Suppliers", "Laxmi Electricals",
+            "Patel Hardware", "Salaries, establishment", "Gupta Enterprises")
+
+amarpur <- tibble(
+  voucher_no = sprintf("TV/AMR/%04d", 1:n),
+  ddo_code   = sample(ddo_codes, n, replace = TRUE),
+  bill_date  = format(sort(as.Date("2024-04-01") + sample(0:29, n, replace = TRUE)),
+                      "%d/%m/%Y"),
+  head       = sample(heads, n, replace = TRUE),
+  payee      = sample(payees, n, replace = TRUE),
+  mode       = sample(c("e-payment", "Cheque"), n, replace = TRUE, prob = c(0.85, 0.15)),
+  amount     = round(rlnorm(n, log(80000), 1), -1)
+)
+# Planted. Three large payments of works contracts
+amarpur$amount[c(17, 58, 93)] <- c(1245000, 1870500, 2310000)
+amarpur$payee[c(17, 58, 93)] <- "Kaveri Infra"
+amarpur_file <- file.path(folder, "amarpur_vouchers_apr2024.csv")
+write.csv(amarpur, amarpur_file, row.names = FALSE)
+
+cheque_file <- file.path(folder, "cancelled_cheques.txt")
+writeLines(c("504117", "504123", "504188", "504190", "504201", "504236"), cheque_file)
+
+letter_file <- file.path(folder, "covering_letter.txt")
+writeLines(c("Office of the Treasury Officer, District Treasury, Amarpur",
+             "To the Senior Audit Officer",
+             "Data of vouchers passed in April 2024",
+             "Number of vouchers passed, 120",
+             "Total amount in rupees, see the enclosed file"),
+           letter_file)
+
+xl_file <- file.path(folder, "works_register.xlsx")
+write_xlsx(list(
+  "Amarpur North" = tibble(work_id = c("W-101", "W-102", "W-103"),
+                           work = c("Road repair, Km 4 to 9", "School boundary wall",
+                                    "Culvert at Sonpur"),
+                           estimate_lakh = c(42.5, 18.0, 9.6)),
+  "Amarpur South" = tibble(work_id = c("W-201", "W-202"),
+                           work = c("Panchayat bhawan", "Drain, ward 7"),
+                           estimate_lakh = c(25.0, 12.4))),
+  xl_file)
+```
+
+`file.path()` joins the parts of a path with `/`, the separator which works on every computer. The four paths are now saved in `amarpur_file`, `cheque_file`, `letter_file` and `xl_file`, and we use these names below. With your own data, you would instead give the path of the file on your computer, like `"Data/vouchers.csv"`.
+
+## Importing data with base R
 
 Base R has functions to import nearly any kind of external data. There are also packages which make certain tasks easier, and we will learn some of them later in this chapter. Let us first see the base R functions which are used most often.
 
-### Reading tables through `read.table()` and/or `read.csv()` {-}
+### Reading tables with `read.table()` and `read.csv()` {-}
 
-These two are the most common functions for reading tabular data from plain text files. `read.table()` reads data whose columns are separated by spaces or another separator, and `read.csv()` reads *comma separated values* (.csv) files. They have three more cousins.
+These two are the most common functions for reading tabular data from plain text files. `read.table()` reads data whose columns are separated by spaces or another separator. `read.csv()` reads *comma separated values* (.csv) files. They have three more cousins.
 
 - `read.csv2()` reads csv files where `;` is the separator and `,` the decimal mark, as used in many European countries.
 - `read.delim()` reads files where a `tab` character separates the columns and `.` is the decimal mark.
 - `read.delim2()` reads tab separated files where `,` is the decimal mark.
 
-The most important arguments of these functions are
+The most important arguments of these functions are these.
 
 - `file`, the name of the file, with its path, as a string^[If backslashes `\` are used in file paths, they must be escaped, since R treats `\` as an escape character. So `"my/location/here/file.txt"` and `"my\\location\\here\\file.txt"` are both correct ways of giving a file name.].
 - `header`, a logical value, telling whether the first line of the file holds the column names.
@@ -29,29 +104,35 @@ The most important arguments of these functions are
 - `colClasses`, a character vector giving the type of each column, if the columns must be read in these types only.
 - `skip`, the number of lines to skip at the beginning of the file.
 
-Readers may see `?read.table()` for the complete list of arguments.
+Readers may see `?read.table()` for the complete list of arguments. Let us read the voucher file of the Amarpur treasury.
 
-Example: Let us read the data of the _World Happiness Report 2021_, which was available on the data.world portal.
-
-```
-wh2021 <- read.csv("https://query.data.world/s/qbsbmxlfj54sl4mq3y6uxsr3pkhhmo")
+```{r}
+vouchers <- read.csv(amarpur_file)
 # Check dimensions
-dim(wh2021)
+dim(vouchers)
 # Check column names
-colnames(wh2021)
+colnames(vouchers)
+head(vouchers)
 ```
 
-The dataset `wh2021`, with `20` columns and `149` rows, would then be available in our environment. Notice that a file can be read directly from a web address, without downloading it first. (Links on portals change over time, so this particular link may no longer work.)
+The data has `r nrow(vouchers)` rows and `r ncol(vouchers)` columns. But look at `ddo_code`. The first code in the file is `0204022`, but R shows `r vouchers$ddo_code[1]`. `read.csv()` has seen digits, and read the column as numbers, so the leading zero is gone. These codes will no longer match the DDO master. The argument `colClasses` tells R the type of the columns we name.
+
+```{r}
+vouchers <- read.csv(amarpur_file, colClasses = c(ddo_code = "character"))
+head(vouchers$ddo_code)
+```
+
+A file can also be read directly from a web address, without downloading it first, by giving the address in place of the file name.
 
 ::: callout-note
 Use `"clipboard"` as the file name to paste copied data into R. For example, copy a few rows and columns from an Excel sheet, and run `read.delim("clipboard", header = FALSE)`. This works on Windows.
 :::
 
-### Read data into a vector through `scan()` or `readline()` {-}
+### Reading data into a vector with `scan()` and `readline()` {-}
 
 `read.table()` and its cousins read data into tables. Sometimes we need to read data into a simple vector instead. The two functions `scan()` and `readline()` are used for this.
 
-The basic syntax of `scan()` is
+The basic syntax of `scan()` is as follows.
 
 ```
 scan(file = "",
@@ -61,18 +142,20 @@ scan(file = "",
 )
 ```
 
-Where -
+The arguments mean this.
 
 - `file` is the name of the file, or a link.
 - `what` is the type of data to be read. The default is double.
 - `nmax` is the maximum number of values to be read. The default, `-1`, means all.
 
-There are many other useful arguments, which can be seen with `?scan`.
+There are many other useful arguments, which can be seen with `?scan`. Let us read the numbers of the cancelled cheques.
 
-Example -
+```{r}
+cancelled <- scan(cheque_file)
+cancelled
 ```
-scan("http://mattmahoney.net/iq/digits.txt", nmax = 10)
-```
+
+In the console, `scan()` also says how many items it read. The result is a plain vector, ready to be checked against the cheque issue register with `%in%` (@sec-subset).
 
 `scan()` can also read data typed on the keyboard into a vector. Just give a blank string `""` as the file name. See this example.
 
@@ -82,17 +165,24 @@ The function `readline()` does a similar job, but shows a prompt. See this examp
 
 ![](images/readline.png)
 
-### Reading text files through `readLines()` {-}
+### Reading text files with `readLines()` {-}
 
-The function `readLines()` reads the lines of a text file (or connection), giving one element for each line. To see it in action, prepare a text file, say `"txt.txt"`, and read it with `readLines("txt.txt")`. We used it to read the Budget speech in @sec-textviz.
+The function `readLines()` reads the lines of a text file (or connection), giving one element for each line. Let us read the covering letter of the treasury.
 
-## Exporting data out of R - Base R methods
+```{r}
+letter <- readLines(letter_file)
+letter
+```
+
+Each line is now one element of a character vector, which we can search and subset like any other. We use `readLines()` again to read the Budget speech in @sec-textviz.
+
+## Exporting data with base R
 
 In most analysis, we read external data, and then clean, transform and analyse it, all in R. So we export less often than we import. Still, cleaned data, summaries and exception lists often need to be exported. The following functions meet nearly all such needs.
 
-### Writing tabular data through `write.table()` and/or `write.csv()` {-}
+### Writing tables with `write.table()` and `write.csv()` {-}
 
-Data frames can be exported with these functions. The latter writes csv files specifically. The syntax is
+Data frames can be exported with these functions. The latter writes csv files specifically. The syntax is as follows.
 
 ```
 write.table(x, file = "", sep = " ", ...)
@@ -100,44 +190,50 @@ write.csv(x, file = "", ...)
 write.csv2(x, file = "", ...)
 ```
 
-where -
+The arguments mean this.
 
 - `x` is the data frame to be exported.
 - `file` is the file name, with its path.
 - `sep` is the separator.
 - `...` are many more arguments for customised exports. See `?write.table()` for full details.
 
-For example, the following command exports the `iris` data frame as the file `iris.csv` in the current working directory.
+For example, let us export the vouchers of ₹10 lakh or more as a csv file, for the working papers. We pick them out exactly as in @sec-subset.
 
-```{r eval=FALSE}
-write.csv(iris, 'iris.csv', row.names = FALSE)
-```
-
-By default, `write.csv()` also writes the row numbers as a first, unnamed column. `row.names = FALSE` stops this, which is nearly always what we want.
-
-### Writing character data line by line to a file through `writeLines()` {-}
-
-Like `readLines()`, the function `writeLines()` writes text into a file of the given name. Type the following code in your console, and check that a new file `my_new_file.txt` has been created with the given contents in your working directory.
-
-```{r eval=FALSE}
-writeLines(c("Andrew 25", "Bob 45", "Charles 56"), "my_new_file.txt")
-```
-
-### Using `dput()` to get a code representation of R object {-}
-
-This function prints the code which would recreate a given R object. It is particularly useful when asking for help online. For example, on [_Stack Overflow_](https://stackoverflow.com/), a question should include [reproducible data](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example). Please also refer to @sec-reprex.
-
-Example-1:
 ```{r}
-my_data <- data.frame(Name = c("Andrew", "Bob", "Charles"),
-                      Age = c(25, 45, 56))
+big_vouchers <- vouchers[which(vouchers$amount >= 1e6), c("voucher_no", "payee", "amount")]
+write.csv(big_vouchers, file.path(folder, "big_vouchers.csv"), row.names = FALSE)
+big_vouchers
+```
+
+There are `r nrow(big_vouchers)` such vouchers, for a total of ₹`r round(sum(big_vouchers$amount) / 1e5, 2)` lakh. By default, `write.csv()` also writes the row numbers as a first, unnamed column. `row.names = FALSE` stops this, which is nearly always what we want.
+
+### Writing text line by line with `writeLines()` {-}
+
+Like `readLines()`, the function `writeLines()` writes text into a file of the given name, one element on each line. It is handy for a short note to go with an exported file.
+
+```{r}
+writeLines(c("Vouchers of Rs 10 lakh or more, District Treasury Amarpur, April 2024",
+             paste("Number of vouchers,", nrow(big_vouchers))),
+           file.path(folder, "big_vouchers_note.txt"))
+readLines(file.path(folder, "big_vouchers_note.txt"))
+```
+
+### Getting the code for an object with `dput()` {-}
+
+This function prints the code which would recreate a given R object. It is particularly useful when asking for help online. For example, on [_Stack Overflow_](https://stackoverflow.com/), a question should include [reproducible data](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example). Please also refer to @sec-reprex. Let us make up three rows of voucher data and see.
+
+```{r}
+my_data <- data.frame(voucher_no = c("TV-0001", "TV-0002", "TV-0003"),
+                      amount = c(18500, 125000, 9800))
 dput(my_data)
 ```
 
-And to recreate someone else's data from their `dput()` output,
+And to recreate someone else's data from their `dput()` output, we simply run it.
+
 ```{r}
-now_mydata <- structure(list(Name = c("Andrew", "Bob", "Charles"), Age = c(25,
-45, 56)), class = "data.frame", row.names = c(NA, -3L))
+now_mydata <- structure(list(voucher_no = c("TV-0001", "TV-0002", "TV-0003"
+), amount = c(18500, 125000, 9800)), class = "data.frame", row.names = c(NA,
+-3L))
 
 now_mydata
 ```
@@ -145,10 +241,10 @@ now_mydata
 ::: callout-warning
 ## Caution
 
-Never share real audit data this way. Make up a few rows of similar data instead. Audit data often holds names, account numbers and other personal details, which must not be posted on a public forum.
+Never share real audit data this way. Make up a few rows of similar data instead, as we did here. Audit data often holds names, account numbers and other personal details, which must not be posted on a public forum.
 :::
 
-## Using external packages for reading/writing data
+## Reading and writing with packages
 
 ### Package `readr`
 
@@ -169,68 +265,78 @@ The `readr` package [@R-readr] is part of the core `tidyverse`, and is loaded wi
 
 : Base R and readr functions {#tbl-readr}
 
-What is the difference between the two sets? Firstly, the `readr` functions are much faster, which matters for large files. Secondly, they report the problems they meet while reading, as we will see shortly. And thirdly, they never turn text into factors, or change column names, behind our back.
-
-```{r message=FALSE, warning=FALSE}
-library(tidyverse)
-```
+What is the difference between the two sets? Firstly, the `readr` functions are much faster, which matters for large files. Secondly, they report the problems they meet while reading, as we will see shortly. And thirdly, they never turn text into factors, or change column names, behind our back. Let us read the same voucher file with `read_csv()`.
 
 ```{r}
-read_csv(readr_example("chickens.csv"))
+read_csv(amarpur_file)
 ```
 
-Notice that the type of each column has been printed. `readr` *guesses* the types from the first 1,000 rows. If the guesses are not what we want, we use the argument `col_types`. We can see the guessed types with `spec()`, and modify them for use in `col_types`. See this example.
+Notice that the type of each column has been printed. `readr` *guesses* the types from the first 1,000 rows. Here it has kept `ddo_code` as text (`chr`), because the values begin with a zero. But it has also read `bill_date` as text, since it does not recognise dates written day first. If the guesses are not what we want, we use the argument `col_types`. We can see the guessed types with `spec()`, and modify them for use in `col_types`. See this example.
 
 ```{r}
-write.csv(iris, "iris.csv", row.names = FALSE) #write a dummy data
-spec(read_csv("iris.csv"))
-read_csv("iris.csv",
-         col_types = cols(
-           Sepal.Length = col_double(),
-           Sepal.Width = col_double(),
-           Petal.Length = col_double(),
-           Petal.Width = col_double(),
-           Species = col_factor(levels = c('setosa', 'versicolor', 'virginica'))
-         )
-) |> head(2)
+spec(read_csv(amarpur_file))
+vouchers <- read_csv(amarpur_file,
+                     col_types = cols(
+                       voucher_no = col_character(),
+                       ddo_code   = col_character(),
+                       bill_date  = col_date(format = "%d/%m/%Y"),
+                       head       = col_character(),
+                       payee      = col_character(),
+                       mode       = col_factor(levels = c("e-payment", "Cheque")),
+                       amount     = col_double()
+                     ))
+vouchers |> head(3)
 ```
 
-Two other arguments are often useful. `col_select` reads only the columns we need, which saves time and memory with wide files. `locale` handles files with other encodings or number formats. For example, files with Hindi or other Indian scripts, saved from older software, may need `locale = locale(encoding = "UTF-16LE")` or another encoding, to be read correctly.
+Now `bill_date` is a true date, and `mode` a factor with the two modes of payment. The format `"%d/%m/%Y"` says that the day comes first, then the month, then the year in four digits, separated by `/`. We will learn more about such formats in @sec-lubridate.
+
+Two other arguments are often useful. `col_select` reads only the columns we need, which saves time and memory with wide files.
+
+```{r}
+read_csv(amarpur_file, col_select = c(voucher_no, amount), show_col_types = FALSE) |>
+  head(3)
+```
+
+`locale` handles files with other encodings or number formats. For example, files with Hindi or other Indian scripts, saved from older software, may need `locale = locale(encoding = "UTF-16LE")` or another encoding, to be read correctly.
 
 ### Package `readxl`
 
-This package is also part of `tidyverse`, but has to be loaded separately with `library(readxl)`. It *reads* Excel files. An Excel file (with extension .xls or .xlsx) can hold several *sheets*. The functions `read_excel()`, `read_xlsx()` and `read_xls()` read a sheet. The syntax is
+This package is also part of `tidyverse`, but has to be loaded separately with `library(readxl)`. It *reads* Excel files. An Excel file (with extension .xls or .xlsx) can hold several *sheets*. The functions `read_excel()`, `read_xlsx()` and `read_xls()` read a sheet. The syntax is as follows.
 
 ```
 read_excel(path, sheet = NULL, range = NULL, skip = 0, col_types = NULL)
 ```
+
+The arguments mean this.
 
 - `sheet` is the name or number of the sheet. The default is the first sheet.
 - `range` reads only a block of cells, like `"B3:H120"`.
 - `skip` skips rows at the top, like a title.
 - `col_types = "text"` reads every column as text, which is the safest way to begin with a messy file.
 
-To get the names of all the sheets in an Excel file, we use `excel_sheets()`.
+To get the names of all the sheets in an Excel file, we use `excel_sheets()`. Let us look at the works register.
 
-```
-excel_sheets(path)
+```{r}
+excel_sheets(xl_file)
+read_excel(xl_file, sheet = "Amarpur South")
+read_excel(xl_file, sheet = 1, range = "A1:B3")
 ```
 
-We read all the sheets of a file together in @sec-merge.
+The first call read the whole of the second sheet, by its name. The second read only the cells `A1:B3` of the first sheet, that is the headings and two rows of the first two columns. We read all the sheets of a file together in @sec-merge.
 
 ### Writing Excel files
 
 `readxl` cannot write Excel files. For that, the package `writexl` has a simple function, `write_xlsx()`. A named list of data frames is written as one sheet each, which is a convenient way to give the auditee all the exception lists in one file.
 
-```{r eval=FALSE}
-library(writexl)
-write_xlsx(list(duplicates     = duplicate_payments,
-                above_limit    = large_payments,
-                missing_vendor = no_vendor),
-           "exceptions.xlsx")
+```{r}
+exceptions_file <- file.path(folder, "exceptions.xlsx")
+write_xlsx(list(big_vouchers   = vouchers |> filter(amount >= 1e6),
+                cheque_payments = vouchers |> filter(mode == "Cheque")),
+           exceptions_file)
+excel_sheets(exceptions_file)
 ```
 
-For formatted Excel output, with colours, column widths and formulas, the package `openxlsx2` can be used.
+`filter()` keeps the rows meeting a condition. We will learn it properly in @sec-DPLYRR. For formatted Excel output, with colours, column widths and formulas, the package `openxlsx2` can be used.
 
 ## Checking that the data was read correctly {#sec-read-check}
 
@@ -270,11 +376,11 @@ Now ₹1,25,000 has been read correctly. Notice also that `emp_code` keeps its l
 After reading any file, always check three things before analysis. (1) The number of rows matches the number in the source, or the count given by the auditee. (2) The totals of amount columns match the totals in the source. (3) `problems()` is empty, or every problem is understood. Read code columns, like employee numbers, PIN codes and account numbers, as text.
 :::
 
-### Package `reprex` {#sec-reprex}
+## Asking for help with `reprex` {#sec-reprex}
 
-This package is part of tidyverse too, but has to be loaded with `library(reprex)`. Its name is short for *reproducible example*. It is useful when we are stuck with a problem and seek help on a forum, such as [Stack Overflow](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example) or [Posit Community](https://forum.posit.co).
+The package `reprex` is part of tidyverse too, but has to be loaded with `library(reprex)`. Its name is short for *reproducible example*. It is useful when we are stuck with a problem and seek help on a forum, such as [Stack Overflow](https://stackoverflow.com/questions/5963269/how-to-make-a-great-r-reproducible-example) or [Posit Community](https://forum.posit.co).
 
-As an example, do this in your console.
+As an example, do this in your console. It uses `iris`, a small data set that comes with R, since a helper on a forum will have it too.
 
 ```
 library(reprex)
@@ -287,24 +393,150 @@ Thereafter, copy the code and run `reprex()`. A small window opens in the `Viewe
 
 ![](images/reprex.png)
 
-For more reading please refer [this page.](https://www.tidyverse.org/help/)^[https://www.tidyverse.org/help/]
+For more reading please refer to [this page.](https://www.tidyverse.org/help/)^[https://www.tidyverse.org/help/]
+
+## Audit use case, reconciling a treasury file with its covering letter {#sec-read-audit}
+
+The District Treasury, Belapur, has sent its vouchers for April 2024 as a csv file. Its covering letter states the number of vouchers and their total amount. Before any analysis, we must show that the file we analyse agrees with the letter. The code below creates the file and the letter. Like many real extracts, the file writes some amounts with Indian commas and some as `-`, and it may not be complete.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the Belapur file and covering letter"
+set.seed(77)
+m <- 85
+belapur <- tibble(
+  voucher_no = sprintf("TV/BLP/%04d", 1:m),
+  ddo_code   = sample(c("0311004", "0311012", "0311019", "0311026"), m, replace = TRUE),
+  bill_date  = format(sort(as.Date("2024-04-01") + sample(0:29, m, replace = TRUE)),
+                      "%d/%m/%Y"),
+  payee      = sample(payees, m, replace = TRUE),
+  amount     = round(rlnorm(m, log(90000), 0.9), -1)
+)
+letter_total <- sum(belapur$amount)
+
+# Write a whole number with Indian commas, like 1,25,000
+indian <- function(x) {
+  s <- format(x, scientific = FALSE, trim = TRUE)
+  ifelse(nchar(s) <= 3, s,
+         paste0(gsub("(\\d)(?=(\\d{2})+$)", "\\1,", substr(s, 1, nchar(s) - 3), perl = TRUE),
+                ",", substr(s, nchar(s) - 2, nchar(s))))
+}
+
+belapur_out <- belapur |>
+  mutate(amount = format(amount, scientific = FALSE, trim = TRUE))
+# Planted. Amounts of a lakh or more written with Indian commas
+big <- which(belapur$amount >= 1e5)
+belapur_out$amount[big] <- indian(belapur$amount[big])
+# Planted. Two amounts left as "-" in the extract
+belapur_out$amount[c(23, 61)] <- "-"
+# Planted. One voucher missing from the extract
+belapur_out <- belapur_out[-47, ]
+
+belapur_file <- file.path(folder, "belapur_vouchers_apr2024.csv")
+write_csv(belapur_out, belapur_file)
+
+belapur_letter <- file.path(folder, "belapur_letter.txt")
+writeLines(c("Office of the Treasury Officer, District Treasury, Belapur",
+             "Data of vouchers passed in April 2024",
+             paste0("Number of vouchers passed, ", m),
+             paste0("Total amount in rupees, ", indian(letter_total))),
+           belapur_letter)
+```
+
+**Step 1, take the control totals from the letter.** The letter is a text file, so we read it with `readLines()`. `parse_number()` takes out the number from each line.
+
+```{r}
+letter <- readLines(belapur_letter)
+letter
+control <- parse_number(letter[3:4])
+control
+```
+
+The treasury says it passed `r control[1]` vouchers, for a total of ₹`r round(control[2] / 1e5, 2)` lakh.
+
+**Step 2, read the file the quick way, and see what goes wrong.** Suppose we tell `read_csv()` that the amount is a number.
+
+```{r}
+quick <- read_csv(belapur_file, col_types = cols(amount = col_double()))
+nrow(quick)
+sum(quick$amount, na.rm = TRUE)
+nrow(problems(quick))
+```
+
+```{r}
+#| include: false
+quick_total <- sum(quick$amount, na.rm = TRUE)
+n_prob <- nrow(problems(quick))
+```
+
+The total is only ₹`r round(quick_total / 1e5, 2)` lakh, against ₹`r round(control[2] / 1e5, 2)` lakh in the letter. `r n_prob` amounts could not be read, and have become `NA`. Had we not compared with the letter, we would have analysed a file short of ₹`r round((control[2] - quick_total) / 1e5, 2)` lakh, without knowing it.
+
+**Step 3, read everything as text, and convert the amounts ourselves.**
+
+```{r}
+received <- read_csv(belapur_file, col_types = cols(.default = col_character())) |>
+  mutate(amount_num = parse_number(amount, na = "-"))
+
+received |> filter(is.na(amount_num))
+```
+
+```{r}
+#| include: false
+read_total <- sum(received$amount_num, na.rm = TRUE)
+nil_vouchers <- received$voucher_no[is.na(received$amount_num)]
+```
+
+Only the two vouchers written as `-` are now without an amount. The commas have been read correctly.
+
+**Step 4, reconcile the rows and the total.**
+
+```{r}
+tibble(item     = c("Vouchers", "Amount (Rs)"),
+       letter   = control,
+       file     = c(nrow(received), read_total),
+       shortfall = letter - file)
+```
+
+The file has `r nrow(received)` vouchers, one fewer than the letter. Since voucher numbers run in a series, the missing one is easy to find, by the method of @sec-gaps.
+
+```{r}
+serials <- parse_number(str_extract(received$voucher_no, "\\d+$"))
+missing_voucher <- setdiff(1:max(serials), serials)
+missing_voucher
+```
+
+```{r}
+#| include: false
+gap <- control[2] - read_total
+```
+
+Voucher `r sprintf("TV/BLP/%04d", missing_voucher)` is not in the file. The total is still short by ₹`r indian(gap)`. This is the amount of the missing voucher and of the two vouchers, `r paste(nil_vouchers, collapse = " and ")`, shown as `-`.
+
+What next? The auditor writes to the treasury, asking for voucher `r sprintf("TV/BLP/%04d", missing_voucher)` and for the amounts of the two vouchers shown as `-`. When the corrected file arrives, the same code is run again, and the reconciliation table goes into the working papers. Only then does the analysis begin. If the treasury cannot explain the gap, the incomplete extract is itself a point to report, about the reliability of the treasury's data.
+
+::: callout-warning
+## Caution
+
+A file that reconciles in count but not in total, or the other way round, is not ready for analysis. Never "adjust" the data in R to make it agree with the letter. Find the reason, record it, and get the corrected data from the source.
+:::
 
 ## A suggested workflow
 
 For any file received from the auditee, an auditor may follow these steps.
 
 1.  **Look at the file first.** Note its format, its sheets with `excel_sheets()`, and any title rows to skip.
-2.  **Read everything as text to begin with.** Use `col_types = cols(.default = col_character())` in `read_csv()`, or `col_types = "text"` in `read_excel()`. This keeps leading zeros in codes and stops values from turning into `NA` silently.
-3.  **Check for problems.** Run `problems()` and make sure every problem is understood.
-4.  **Convert amounts yourself.** Use `parse_number()` with a suitable `na` argument, so that amounts written with Indian commas are read correctly.
-5.  **Keep code columns as text.** Employee numbers, PIN codes and account numbers should stay as text.
-6.  **Reconcile with the source.** Match the number of rows and the totals of amount columns with the source, or with the counts given by the auditee.
-7.  **Export the results.** Write exception lists with `write_csv()`, or with `write_xlsx()` to put each list on its own sheet in one file.
+2.  **Note the control totals.** Take the number of records and the total amount from the covering letter, with `readLines()` and `parse_number()` if the letter is a text file.
+3.  **Read everything as text to begin with.** Use `col_types = cols(.default = col_character())` in `read_csv()`, or `col_types = "text"` in `read_excel()`. This keeps leading zeros in codes and stops values from turning into `NA` silently.
+4.  **Check for problems.** Run `problems()` and make sure every problem is understood.
+5.  **Convert amounts and dates yourself.** Use `parse_number()` with a suitable `na` argument, so that amounts written with Indian commas are read correctly. Give the date format with `col_date()`.
+6.  **Keep code columns as text.** DDO codes, employee numbers, PIN codes and account numbers should stay as text.
+7.  **Reconcile with the source.** Match the number of rows and the totals of amount columns with the covering letter. Look for missing serial numbers with `setdiff()`.
+8.  **Export the results.** Write exception lists with `write_csv()` or `write.csv()`, or with `write_xlsx()` to put each list on its own sheet in one file.
 
 ::: callout-important
 ## Remember
 
-A value that cannot be read becomes `NA` with only a short message. Such a payment silently drops out of every total. Always check `problems()`, the row count and the totals before starting the analysis.
+A value that cannot be read becomes `NA` with only a short message. Such a payment silently drops out of every total. Always check `problems()`, the row count and the totals against the covering letter before starting the analysis.
 :::
 
 ## Summary of functions used
@@ -315,10 +547,16 @@ A value that cannot be read becomes `NA` with only a short message. Such a payme
 | `scan()`, `readline()`, `readLines()` | base R | Read data into a vector, or lines of text |
 | `write.table()`, `write.csv()`, `writeLines()` | base R | Write data frames or text to files |
 | `dput()` | base R | Code which recreates an object |
+| `tempdir()`, `file.path()` | base R | A temporary folder, and a path joined from its parts |
+| `dim()`, `colnames()`, `head()` | base R | The size, the column names and the first rows of a table |
+| `setdiff()` | base R | Values in the first vector but not in the second, like missing serial numbers |
 | `read_csv()`, `read_tsv()`, `read_delim()` | readr | Read text files, faster and with problem reports |
-| `spec()`, `cols()`, `col_character()` and others | readr | See and set the type of each column |
+| `spec()`, `cols()`, `col_character()`, `col_date()`, `col_factor()` and others | readr | See and set the type of each column |
 | `problems()` | readr | Values which could not be read as the expected type |
 | `parse_number()` | readr | Numbers from text, ignoring commas and symbols |
+| `write_csv()` | readr | Write a data frame to a csv file |
+| `str_extract()` | stringr | Take out the part of a text matching a pattern |
+| `filter()`, `mutate()` | dplyr | Keep rows meeting a condition, and add columns |
 | `read_excel()`, `excel_sheets()` | readxl | Read Excel sheets, and list the sheets in a file |
 | `write_xlsx()` | writexl | Write one or more data frames to an Excel file |
 | `reprex()` | reprex | Prepare a reproducible example for asking help |

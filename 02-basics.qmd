@@ -6,7 +6,9 @@ source("_common.R")
 
 # Objects, Data Types and Data Structures {#sec-basics}
 
-In this chapter we learn the building blocks of R. How to calculate, how to store values in *objects*, the basic types of data, and the structures which hold them, from a single number to a full table. These may look elementary, but many errors in audit analysis come from exactly here. A column of amounts read as text, an account number that has lost its leading zero, or a total that silently became `NA`. We will point these out as we go.
+Suppose a district treasury sends us its bill register as an Excel file. We add up the amounts, and R says the total is `NA`. Or it refuses to add at all, because the amounts are "text". Or the bank account numbers no longer match the vendor master, because their leading zeros have gone. None of these is an error in the treasury's accounts. Each is a problem of *data types*, and each can make an audit check give a wrong answer without any warning.
+
+In this chapter we learn the building blocks of R. We learn how to calculate, how to store values in *objects*, the basic types of data, and the structures which hold them, from a single number to a full table. These may look elementary, but many errors in audit analysis start exactly here. We point out these traps as we go. At the end, an audit use case puts them together on a small bill register.
 
 ## Use R as a calculator {#sec-calculator}
 To start learning R, type a calculation at the command prompt `>` and press `Enter`. So, `3+4` gives the result `7`. Common mathematical operators are listed in @tbl-table3.\index{common mathematical operators}
@@ -28,21 +30,33 @@ tabl1 <- "
 cat(tabl1)
 ```
 
-A few examples of calculations in R are
+A few examples of calculations in R follow.
 
 ```{r}
 4 + 3 ^ 2
 8 * (9 + 4)
 ```
 
+The same operators answer everyday audit questions. What is a bill of ₹84,000 with 18% GST added? How much is ₹3,45,67,890 in lakh? Is an amount a round sum of thousands, with nothing left over on division by 1,000? How many full lakh are there in ₹2,75,000?
+
+```{r}
+84000 * 1.18        # bill amount with 18% GST
+34567890 / 1e5      # the amount in lakh (1e5 is 1,00,000)
+48000 %% 1000       # remainder 0, so a round sum of thousands
+48250 %% 1000       # remainder 250, not a round sum
+275000 %/% 1e5      # number of full lakh
+```
+
+Round sums are worth a look in audit, because genuine bills rarely come out to exact thousands. We will use `%%` in this way in later chapters.
+
 ::: callout-note
 R follows the usual mathematical order of precedence while evaluating expressions. It can be changed with parentheses `()`. Curly braces `{}` and square brackets `[]` have other meanings in R, so only `()` may be used to change the order of operations, even when nested.
 :::
 
-## Object Assignment
+## Object assignment
 R is an object-oriented language.[@R-base] This means that *objects* \index{objects in R} are created and stored in the R environment, so that they can be used later.
 
-So what is an object? It can be as simple as a single number stored under a name. Suppose we have to greet each user by name, prefixing *hello* to it. Once the user's name is stored in an object, we can use it again and again by calling the object's name, instead of asking for the name every time. An object can also be a whole data set, the output of a model, or a function. So an object in R can hold many values.
+So what is an object? It can be as simple as a single number stored under a name. Suppose we have to greet each user by name, prefixing *hello* to it. Once the user's name is stored in an object, we can use it again and again by calling the object's name, instead of asking for the name every time. In the same way, once the sanctioned amount of a work is stored under a name, every later check can refer to it. An object can also be a whole data set, the output of a model, or a function. So an object in R can hold many values.
 
 Objects are created with the assignment operator\index{assignment operator} `<-`. Read it as "the name on the left gets the value on the right". The equals sign `=` also works in most cases, but `<-` is the convention in R, and we will use it throughout. The arrow can point the other way too, `value -> name`, though this is rarely used.\index{right assignment operator} The keyboard shortcut for `<-` in RStudio is `Alt` + `-`.
 
@@ -52,6 +66,11 @@ user_name <- 'Anil Goyal'
 
 # when the above variable is called
 user_name
+
+# sanctioned amount of a work, and the amount paid so far
+sanctioned <- 2500000
+paid <- 2740000
+paid - sanctioned   # excess over the sanction
 ```
 
 ::: callout-note
@@ -68,7 +87,7 @@ Names may contain letters, numbers, `.` and `_`, but must start with a letter (o
 -   integer (whole numbers, like 0 or 1)
 -   double (numbers with decimals, like 1.0 or 5.25)
 -   character (text, or *strings*)
--   complex (numbers having both real and imaginary parts e.g. 1+1i)
+-   complex (numbers having both real and imaginary parts, like 1+1i)
 -   raw (not discussed here)
 
 ```{r fig-datatypes, fig.cap="Data types in R", fig.show="hold", fig.align="center", echo=FALSE, out.height="60%"}
@@ -78,7 +97,7 @@ knitr::include_graphics("images/datatypes.png")
 Let us discuss all of these.
 
 ::: callout-note
-We will use a pre-built function `typeof()` to check the type of given value/variable. However, functions as such will be discussed later-on.
+We will use a built-in function, `typeof()`, to check the type of a value or an object. Functions as such are discussed in @sec-func.
 :::
 
 ### Logical
@@ -90,9 +109,12 @@ typeof(TRUE)
 
 my_val <- TRUE
 typeof(my_val)
+
+bill_amount <- 62000
+bill_amount > 50000   # does the bill need higher sanction?
 ```
 
-**`NA`**: There is one special logical value, `NA`\index{missing values in R} (short for *Not Available*)\index{NA in R}. It is used for missing data. Any calculation with a missing value gives a missing result, because R cannot know the answer. Most summary functions have an argument `na.rm = TRUE` to leave out the missing values.
+**`NA`.** There is one special logical value, `NA`\index{missing values in R} (short for *Not Available*)\index{NA in R}. It is used for missing data. Any calculation with a missing value gives a missing result, because R cannot know the answer. Most summary functions have an argument `na.rm = TRUE` to leave out the missing values.
 
 ```{r}
 NA + 100
@@ -104,17 +126,18 @@ sum(c(5000, NA, 2500), na.rm = TRUE)
 Remember, missing data is not an empty string. The difference between the two is explained in @sec-string.
 :::
 
-::: callout-caution
+::: callout-warning
+## Caution
 A total which comes out as `NA` is a warning sign, not a nuisance to be silenced with `na.rm = TRUE`. Find out first *which* values are missing and why. A bill without an amount may itself be an audit finding.
 :::
 
 ### Integer
-Numeric \index{Numeric data types} values can either be integers\index{integer data type}, without a decimal part, or numbers with decimals, called `double` in R\index{double data type in R}. Integers are written with a suffix `L`\index{L suffix}. For example,
+Numeric \index{Numeric data types} values can either be integers\index{integer data type}, without a decimal part, or numbers with decimals, called `double` in R\index{double data type in R}. Integers are written with a suffix `L`\index{L suffix}, as in the number of vouchers below.
 
 ```{r}
-my_val1 <- 2L
-typeof(my_val1)
-typeof(2)
+n_vouchers <- 240L
+typeof(n_vouchers)
+typeof(240)
 ```
 
 ### Double
@@ -124,8 +147,8 @@ Numbers with decimals are stored as type `double`. Keep in mind that a whole num
 Doubles can also be written in exponential (scientific) or hexadecimal form.
 
 ```{r}
-my_val2 <- 2.5
-my_val3 <- 1.23e4
+my_val2 <- 1250.75 # an amount in rupees and paise
+my_val3 <- 1.23e4  # 1.23 x 10^4, that is, 12,300
 my_val4 <- 0xcafe # hexadecimal format (prefixed by 0x)
 
 typeof(my_val2)
@@ -134,7 +157,7 @@ typeof(my_val4)
 ```
 
 ::: callout-note
-Suffix `L` may also be used with numerals in hexadecimal (e.g. `0xcafeL`) or exponential form (e.g. `1.23e4L`), which makes them `integer`.
+Suffix `L` may also be used with numerals in hexadecimal form, like `0xcafeL`, or exponential form, like `1.23e4L`. This makes them `integer`.
 :::
 
 ```{r}
@@ -147,6 +170,7 @@ So `integer` and `double` may be thought of as two sub-types of `numeric` data. 
 1/0
 -45/0
 0/0
+500000 / 0   # expenditure per beneficiary, with no beneficiaries
 ```
 
 In audit data these usually appear when a ratio is computed with a zero in the denominator, like expenditure per beneficiary for a scheme with no beneficiaries. They should be looked at, not averaged.
@@ -159,7 +183,8 @@ isTRUE(all.equal(0.1 + 0.2, 0.3))
 round(0.1 + 0.2, 2) == 0.3
 ```
 
-::: callout-caution
+::: callout-warning
+## Caution
 When matching amounts, say a bill total against the sum of its items, do not compare computed decimals with `==`. Round both to paise with `round(x, 2)`, or allow a small tolerance, like `abs(x - y) < 0.005`. Otherwise genuine matches may be reported as mismatches.
 :::
 
@@ -182,11 +207,11 @@ Keep identifiers, like account numbers, Aadhaar, PAN, mobile numbers, PIN codes 
 
 Strings (text) \index{characters in R}are\index{strings} stored in R as type character. They are enclosed in single quotes `''` or double quotes `""`\index{quotes}[^02-basics-1].
 
-[^02-basics-1]: Single and double quotes can be used interchangeably, and make no difference to the object created. The only thing to remember is that a string must be closed with the same quote it was opened with. This also lets us put one kind of quote inside a string enclosed by the other, as in Example-1 below.
+[^02-basics-1]: Single and double quotes can be used interchangeably, and make no difference to the object created. The only thing to remember is that a string must be closed with the same quote it was opened with. This also lets us put one kind of quote inside a string enclosed by the other, as in the first example below.
 
 ```{r}
 my_val5 <- 'Anil Goyal'
-my_val6 <- "Anil Goyal"
+my_val6 <- "ABCPK1234Q" # a PAN is text, not a number
 my_val7 <- "" # empty string
 my_missing_val <- NA # missing value
 
@@ -199,29 +224,29 @@ typeof(my_missing_val)
 ::: callout-note
 1. Though `NA` is of type logical, it is used to store missing values in every other type too, as we will see in later chapters.
 2. Special characters are *escaped* with a backslash `\`, like `\n` for a new line. Type `?Quotes` in the console for the full list.
-3. A simple use of the escape character is to put `"` or `'` inside a string. See Example-3 below.
+3. A simple use of the escape character is to put `"` or `'` inside a string. See the third example below.
 :::
 
-Example-1: Usage of double and single quote interchangeably.
+A single quote can sit inside double quotes, as in a vendor's name.
 
 ```{r}
-my_val8 <- "R's book"
+my_val8 <- "Sharma's Enterprises"
 my_val8
 ```
 
-Example-2: Usage of escape character.
+The escape character `\n` starts a new line.
 
 ```{r}
-cat("This is first line.\nThis is new line")
+cat("Office: DTO Jaipur\nVoucher: 245")
 ```
 
-Example-3: Usage of escape character to store single/double quotes as string themselves.
+The escape character also stores the quotes themselves as text.
 
 ```{r}
 cat("\' is single quote and \" is double quote")
 ```
 
-**Note:** If you noticed that the output above has no `[1]` at the start, learn more about the `cat()` function in @sec-cat.
+The output above has no `[1]` at the start. The reason is explained with the `cat()` function in @sec-cat.
 
 ### NULL
 
@@ -237,14 +262,14 @@ vec
 
 ### Complex
 
-Complex numbers \index{complex numbers - data type} have real and imaginary parts. As we will not use them in data analysis, we do not discuss them further.
+Complex numbers \index{complex numbers, data type} have real and imaginary parts. As we will not use them in data analysis, we do not discuss them further.
 
 ```{r}
 my_complex_no <- 1+1i
 typeof(my_complex_no)
 ```
 
-## Data structures/Object Types in R
+## Data structures in R
 
 Objects\index{data structures in R} in R can be either homogeneous or heterogeneous.
 
@@ -262,7 +287,7 @@ What is a vector? A vector is simply a collection of values of the same type.\in
 knitr::include_graphics("images/vec_buck.jpg")
 ```
 
-#### Simple vectors (Unnamed vectors)
+#### Simple vectors (unnamed vectors)
 
 The vector is the most basic structure in R, yet it can hold many values of the same type at once. You may have noticed a `[1]` at the start of every output so far. It is the position (index) of the first value printed on that line. In R there are no single values, or *scalars*, as such. A single value is just a vector of length one. When a long vector is printed, each new line starts with the index of its first value.
 
@@ -272,14 +297,17 @@ Working on all the values of a vector at once, without writing loops, is one of 
 knitr::include_graphics("images/example_vecs.png")
 ```
 
-How do we create a vector? With either
+How do we create a vector? There are two ways.
 
--   the function `c()`\index{c() function}, the shortest and most commonly used function in R. It *combines* the values given to it, separated by commas; or
--   the function `vector()`\index{vector() function}, which creates an empty vector of a given `mode` and `length`, to be filled later.
+-   The function `c()`\index{c() function}, the shortest and most commonly used function in R. It *combines* the values given to it, separated by commas.
+-   The function `vector()`\index{vector() function}, which creates an empty vector of a given `mode` and `length`, to be filled later.
 
 ```{r}
 my_vector <- c(1, 2, 3)
 my_vector
+
+bill_amounts <- c(45000, 128000, 9500, 62000)  # four bills
+bill_amounts * 1.18                            # each with 18% GST
 
 my_vector2 <- vector(mode = 'integer', length = 15)
 my_vector2
@@ -298,11 +326,11 @@ vec3
 knitr::include_graphics("images/vector_concatenation.png")
 ```
 
-#### Useful Functions to create new vectors {.unnumbered}
+#### Useful functions to create vectors {.unnumbered}
 
 Some more functions create vectors, which we will use in later chapters.
 
-#### Generate integer sequences with Colon Operator `:` {.unnumbered}
+#### Generate integer sequences with the colon operator `:` {.unnumbered}
 
 The colon operator generates a sequence from the number before `:` \index{colon operator}\index{: operator} to the number after it, in steps of `1` or `-1`, as the case may be. Notice that the result is of type `integer`.
 
@@ -325,28 +353,30 @@ n <- 5
 1:n*2
 ```
 
-#### Generate specific sequences with function `seq` {.unnumbered}
+#### Generate other sequences with `seq()` {.unnumbered}
 
 The function `seq()`\index{seq() function} generates a sequence like `:`, but with more control. The step can be given in the argument `by`, and may be a decimal. Or the number of values wanted can be given in `length.out`, and R works out the step.
 
 ```{r}
 seq(1, 5, by = 0.3)
 seq(1, 2, length.out = 11)
+seq(101, 150, by = 7)   # every seventh voucher number, for a systematic sample
 ```
 
-#### Repeat a pattern/vector with function `rep` {.unnumbered}
+#### Repeat a value or a vector with `rep()` {.unnumbered}
 
 As the name suggests, `rep()`\index{rep() function} is short for *repeat*. It repeats a value, or a vector, a given number of times.
 
 ```{r}
 rep('repeat this', 5)
+rep(c("Q1", "Q2", "Q3", "Q4"), each = 3)  # quarter of each month, April to March
 # We can even repeat already created vectors
 vec <- c(1, 10)
 rep(vec, 5)
 rep(vec, each = 5) # notice the difference in results
 ```
 
-#### Generate English alphabet with `LETTERS` / `letters` {.unnumbered}
+#### The English alphabet with `LETTERS` and `letters` {.unnumbered}
 
 These are two built-in vectors with the 26 letters of the English alphabet, in upper and lower case respectively.\index{LETTERS}\index{letters}
 
@@ -355,33 +385,41 @@ LETTERS
 letters
 ```
 
-#### Generate Gregorian calendar month names with `month.name` / `month.abb` {.unnumbered}
+#### Month names with `month.name` and `month.abb` {.unnumbered}
 
 ```{r}
 month.name
 month.abb
 ```
 
-#### Named Vectors
+#### Named vectors
 
-The elements of a vector can have names.\index{named vectors} For example,
+The elements of a vector can have names.\index{named vectors} The figure below shows a simple example.
 
 ```{r}
 ages <- c(A = 10, B = 20, C = 15)
 ages
 ```
 
+In audit work, names often label figures by office or scheme, like the expenditure of three divisions in ₹ lakh.
+
+```{r}
+expenditure <- c(Ajmer = 412.5, Bikaner = 298.0, Kota = 356.8)
+expenditure
+```
+
 ```{r fig-namedvec, fig.cap="Vector elements can have names", fig.show="hold", fig.align="center", echo=FALSE, out.width="60%"}
 knitr::include_graphics("images/named_vector.png")
 ```
 
-**Note** that the names are written here without quotes, just like object names. Also notice that this time R has not printed the index `[1]`, but the names. The function `names()`\index{names() function} shows the names of all the elements (this time in quotes, since the names themselves are a character vector).
+Notice that the names are written here without quotes, just like object names. Also notice that this time R has not printed the index `[1]`, but the names. The function `names()`\index{names() function} shows the names of all the elements. This time they are in quotes, since the names themselves are a character vector.
 
 ```{r}
 names(ages)
+names(expenditure)
 ```
 
-The same function assigns names to an existing vector. See
+The same function assigns names to an existing vector.
 
 ```{r}
 vec1
@@ -396,7 +434,7 @@ new_vec <- setNames(1:26, LETTERS)
 new_vec
 ```
 
-The function `unname()`\index{unname() function} removes all the names. Assigning `NULL` to the names, `names(x) <- NULL`, does the same. Remember that `unname()` does not change the vector itself. To keep the change, we have to assign the result back to the vector. Check this,
+The function `unname()`\index{unname() function} removes all the names. Assigning `NULL` to the names, `names(x) <- NULL`, does the same. Remember that `unname()` does not change the vector itself. To keep the change, we have to assign the result back to the vector. Check this.
 
 ```{r}
 unname(new_vec)
@@ -422,7 +460,7 @@ is.integer(1:10)
 is.logical(LETTERS)
 ```
 
-#### Implicit Coercion {.unnumbered}
+#### Implicit coercion {.unnumbered}
 We know that\index{implicit coercion} all the values in a vector must be of the same type. So what happens when we mix values of different types in a vector?
 
 R converts all of them to the most flexible type among them. A number like `56` can easily become a complex number (`56+0i`) or text (`"56"`), but a letter like `A` cannot become a number. So the types follow the order of precedence in @tbl-rank, and the vector takes the highest-ranked type present.
@@ -435,7 +473,7 @@ R converts all of them to the most flexible type among them. A number like `56` 
 |  4   |  Integer  |
 |  5   |  Logical  |
 
-: Order of Precedence for Atomic Data Types {#tbl-rank}
+: Order of precedence for atomic data types {#tbl-rank}
 
 For example, in the following diagram, the first vector has a character element, the highest rank, so the whole vector becomes character. Similarly, the second and third vectors become `double` (because of the second element) and `integer` (because of the first element) respectively.
 
@@ -445,7 +483,7 @@ knitr::include_graphics("images/implicit_coercion.png")
 
 It is important to note that this coercion happens silently, without any warning. It also happens when two or more vectors of different types are joined together.
 
-Example: `vec` is a vector of type `integer`. When we add an element of type `character`, the whole of `vec` becomes `character`.
+For example, `vec` below is a vector of type `integer`. When we add an element of type `character`, the whole of `vec` becomes `character`.
 
 ```{r}
 vec <- 1:5
@@ -454,7 +492,7 @@ vec <- append(vec, 'ABCD')
 typeof(vec)
 ```
 
-R also coerces vectors when we calculate with them. `TRUE` becomes `1` and `FALSE` becomes `0`. Example
+R also coerces vectors when we calculate with them. `TRUE` becomes `1` and `FALSE` becomes `0`.
 
 ```{r}
 (TRUE == FALSE) + 1
@@ -476,8 +514,8 @@ mean(amounts > 50000)   # what proportion
 The silent coercion to character is a classic trap with data from Excel. If a single cell in a column of amounts holds text, like `"1,25,000"`, `"NIL"` or `"-"`, the *whole column* is read as character. Arithmetic on it then fails, or sorting puts `"9000"` after `"85000"`. So after reading any file, check the type of every column, as we will learn in @sec-read-check.
 :::
 
-#### Explicit Coercion {.unnumbered}
-We can coerce explicitly\index{explicit coercion} with an `as.*()` function, like `as.logical()`, `as.integer()`, `as.double()` or `as.character()`. **A value which cannot be converted becomes `NA`, with a warning:**
+#### Explicit coercion {.unnumbered}
+We can coerce explicitly\index{explicit coercion} with an `as.*()` function, like `as.logical()`, `as.integer()`, `as.double()` or `as.character()`. **A value which cannot be converted becomes `NA`, with a warning.**
 
 ```{r}
 as.double(c(TRUE, FALSE))
@@ -494,7 +532,7 @@ Sometimes both kinds of coercion happen together. Which comes first? Implicit co
 as.logical(c('TRUE', 1))
 ```
 
-Explanation: the vector `c('TRUE', 1)` first becomes `c('TRUE', '1')` by implicit coercion. Then `as.logical()` converts `'1'` to `NA`. The number `1` would have become `TRUE`, but the text `"1"` becomes `NA`.
+Here is why. The vector `c('TRUE', 1)` first becomes `c('TRUE', '1')` by implicit coercion. Then `as.logical()` converts `'1'` to `NA`. The number `1` would have become `TRUE`, but the text `"1"` becomes `NA`.
 
 #### Checking dimensions {.unnumbered}
 The function `length()` tells how many elements a vector has.
@@ -505,7 +543,7 @@ length(LETTERS)
 length('LENGTH') # If you thought its output should have been 6, check again.
 ```
 
-### Matrix (Matrices)
+### Matrices
 A matrix (plural matrices) is a two-dimensional arrangement of values, like a matrix in mathematics. As in vectors, all the values must be of the same type. For example,
 
 $$\begin{array}{ccc}
@@ -545,7 +583,17 @@ matrix(c(LETTERS, 1:4), nrow=5)
 ```
 
 #### Names in matrices {.unnumbered}
-Like vectors, the rows and columns of a matrix may have names\index{named matrix}, given with `rownames()`, `colnames()` or the argument `dimnames`. Check `?matrix` for the complete documentation.
+Like vectors, the rows and columns of a matrix may have names\index{named matrix}, given with `rownames()`, `colnames()` or the argument `dimnames`. Check `?matrix` for the complete documentation. Here is the quarterly expenditure of three divisions, in ₹ lakh, with named rows and columns.
+
+```{r}
+qtr_exp <- matrix(c(95, 102, 110, 105.5,
+                    70, 68, 81, 79,
+                    88, 90, 85, 93.8),
+                  nrow = 3, byrow = TRUE,
+                  dimnames = list(c("Ajmer", "Bikaner", "Kota"),
+                                  c("Q1", "Q2", "Q3", "Q4")))
+qtr_exp
+```
 
 #### Dimension {.unnumbered}
 The dimensions of a matrix\index{dimensions of matrix} are given by `dim()`\index{dim function}, as two numbers, rows first and then columns. It is the matrix's counterpart of `length()`.
@@ -553,9 +601,10 @@ The dimensions of a matrix\index{dimensions of matrix} are given by `dim()`\inde
 ```{r}
 my_mat <- matrix(c(LETTERS, 1:4), nrow=5)
 dim(my_mat)
+dim(qtr_exp)
 ```
 
-Assigning dimensions to a vector is another way of turning it into a matrix. See
+Assigning dimensions to a vector is another way of turning it into a matrix.
 
 ```{r}
 my_mat2 <- 1:10
@@ -563,7 +612,7 @@ dim(my_mat2) <- c(2,5)
 my_mat2
 ```
 
-#### Have a check on replication {.unnumbered}
+#### Check the recycling {.unnumbered}
 What happens when the vector has fewer, or more, values than the matrix needs? R recycles the values, or drops the extra ones, but the result may not be what you wanted. Check these cases, and notice when R warns you.
 
 ```{r}
@@ -578,7 +627,7 @@ matrix(1:1000, nrow=2, ncol=3)
 knitr::include_graphics("images/cbind_vs_rbind.png")
 ```
 
-See these two examples.
+See these two examples. The first joins side by side.
 
 ```{r}
 mat1 <- matrix(1:4, nrow = 2)
@@ -586,14 +635,14 @@ mat2 <- matrix(5:8, nrow = 2)
 cbind(mat1, mat2)
 ```
 
-Example-2
+The second joins one below the other.
 
 ```{r}
 rbind(mat1, mat2)
 ```
 
 ### Arrays
-So far we have seen values in one dimension, as vectors, and in two dimensions, as matrices. How many dimensions can we have? Any number, in an object of type `array`, but they become hard to picture, so we do not discuss them further. Check this, however, for your understanding,
+So far we have seen values in one dimension, as vectors, and in two dimensions, as matrices. How many dimensions can we have? Any number, in an object of type `array`. But they become hard to picture, so we do not discuss them further. Check this, however, for your understanding.
 
 ```{r}
 array(1:24, dim = c(3,2,4)) # a three dimensional array
@@ -601,24 +650,24 @@ array(1:24, dim = c(3,2,4)) # a three dimensional array
 
 Try creating 4 or 5 dimensional arrays in your console and see the results.
 
-More about vectors and matrices comes in the next chapter, on subsetting, where we learn to pick out particular elements. So far, all our objects held values of a single type. What if we want to keep values of different types together, each retaining its type? The answer is in the next section, on heterogeneous objects.
+More about vectors and matrices comes in the next chapter, @sec-subset, where we learn to pick out particular elements. So far, all our objects held values of a single type. What if we want to keep values of different types together, each retaining its type? The answer is in the next section, on heterogeneous objects.
 
 ### Heterogeneous objects {.unnumbered}
 
 ### Lists
-Lists combine elements of different types. A list is created with the function `list()`. Check this
+Lists combine elements of different types. A list is created with the function `list()`. Check this.
 
 ```{r}
 list(1, 2, 3, 'My string', TRUE)
 ```
 
-Pictorially this list can be depicted as
+The figure below depicts this list.
 
 ```{r fig-exlist, fig.cap="A list in R is a heterogeneous object", fig.show="hold", fig.align="center", echo=FALSE, out.width="99%"}
 knitr::include_graphics("images/list_ex.png")
 ```
 
-A list can even contain vectors, matrices and arrays as its elements. See
+A list can even contain vectors, matrices and arrays as its elements.
 
 ```{r}
 list(1:3, LETTERS, TRUE, my_mat2)
@@ -634,18 +683,27 @@ Like vectors, the elements of a list can have names.
 list(first_item = 1:5, second_item = my_mat2)
 ```
 
-OR
+Or, with a named vector as one of the elements, as in the figure below.
 
 ```{r}
 my_list <- list(first=c(A=1, B=2, C=3),second=my_mat2)
 my_list
 ```
 
+A list is a natural way to keep together the different pieces of one audit observation.
+
+```{r}
+observation <- list(office = "PWD Division, Kota",
+                    para_no = 12L,
+                    amount_lakh = 18.45,
+                    vouchers = c("V-0412", "V-0419", "V-0533"),
+                    settled = FALSE)
+observation
+```
+
 ```{r fig-namedlist, fig.cap="Similar to vector elements, the elements in list can be named also", fig.show="hold", fig.align="center", echo=FALSE, out.width="99%"}
 knitr::include_graphics("images/named_list.png")
 ```
-
-OR
 
 A list can even contain other lists.
 
@@ -661,7 +719,7 @@ length(my_list)
 length(my_list2) # If you thought its output should have been 3, think again.
 ```
 
-### Data Frame
+### Data frames
 
 Data frames store tabular (rectangular) data in R, with rows and columns, like a sheet in Excel. They are the object we will work with most.
 
@@ -677,7 +735,7 @@ knitr::include_graphics("images/list_vs_df.png")
 
 Unlike a matrix, a data frame can have columns of different types. Within a column, though, all the values are of one type, since each column is a vector.
 
-To create a data frame from scratch, we use the function `data.frame()`. See
+To create a data frame from scratch, we use the function `data.frame()`. Here is a small extract of a pay register.
 
 ```{r}
 my_df <- data.frame(emp_name = c('Ramesh', 'Sunita', 'Imran', 'Harpreet', 'Lakshmi'),
@@ -688,7 +746,7 @@ my_df <- data.frame(emp_name = c('Ramesh', 'Sunita', 'Imran', 'Harpreet', 'Laksh
 my_df
 ```
 
-**Note** that R has given each row a number as its row name.
+Notice that R has given each row a number as its row name. Notice also the `NA` in `salary`. Lakshmi's salary is missing, and an auditor would want to know why.
 
 Most of the time, of course, we will read data frames from files, which we will learn in later chapters. The dimensions of a data frame are given by `dim()`, as for a matrix, and the structure, with the type of each column, by `str()`.
 
@@ -705,36 +763,36 @@ The main types of objects in R can be depicted as in the figure below.
 knitr::include_graphics("images/Objects.png")
 ```
 
-## Other Data types
-There are other data types in R, of which three are particularly useful, `factor`, `Date` and date-time. They are built on top of the basic types, `integer`, `double` and `double` respectively, which is why we discuss them separately. They are *S3 objects*, part of R's system of object oriented programming, which is beyond our scope here.
+## Other data types
+There are other data types in R, of which three are particularly useful in audit. They are `factor`, `Date` and date-time. They are built on top of the basic types, `integer`, `double` and `double` respectively, which is why we discuss them separately. They are *S3 objects*, part of R's system of object oriented programming, which is beyond our scope here.
 
-To understand them, we need to know that objects (for simplicity, think of vectors) can carry *attributes*, extra information attached to them.
+To understand them, we need to know that objects can carry *attributes*, extra information attached to them. For simplicity, think of vectors.
 
-**Example** One attribute of a vector is `names`, which is empty (`NULL`) for an unnamed vector. All the attributes of an object are shown by the function `attributes()`.
+For example, one attribute of a vector is `names`, which is empty (`NULL`) for an unnamed vector. All the attributes of an object are shown by the function `attributes()`.
 
 ```{r}
 # Let us create a vector
 vec <- 1:26
-# Convert this to a named vector using function setNames()
-# This function takes first argument as vector
-# Second argument should be a character vector of equal length.
+# Convert this to a named vector using the function setNames()
+# The first argument is the vector
+# The second is a character vector of the same length
 vec <- setNames(vec, LETTERS)
-# let's check what are the attributes of `vec`
+# Let us check the attributes of `vec`
 attributes(vec)
 ```
 With `attr()` we can assign a new attribute to any object.
 
 ```{r}
-# Let's also assign a new attribute say `x` having value "New Attribute" to `vec`
+# Let us assign a new attribute `x`, with the value "New Attribute", to `vec`
 attr(vec, "x") <- "New Attribute"
-# Now let's check its attributes again
+# Now let us check its attributes again
 attributes(vec)
 ```
 We can see how a new attribute has been added to the vector. A factor or a date is simply a vector with particular attributes, as we will now see.
 
 ### Factors {#sec-fctrss}
 
-A factor is a vector that can contain only predefined values. It is used for categorical data, like the category of a district or the status of a bill. Factors are built on top of an integer vector with two attributes: a *class*, `factor`, which makes it behave differently from ordinary integers, and *levels*, the set of allowed values. Factors are created with the function `factor()`.
+A factor is a vector that can contain only predefined values. It is used for categorical data, like the category of a district or the status of a bill. Factors are built on top of an integer vector with two attributes. The first is a *class*, `factor`, which makes it behave differently from ordinary integers. The second is *levels*, the set of allowed values. Factors are created with the function `factor()`.
 
 ```{r}
 fac <- factor(c('a', 'b', 'c', 'a'))
@@ -750,20 +808,21 @@ class(fac)
 is.factor(fac)
 ```
 
-A factor can also be *ordered*, when its categories have a natural order. We give the argument `ordered = TRUE`, along with the `levels` in their order.
+A factor can also be *ordered*, when its categories have a natural order. The risk rating of the auditable units of a department is a good example. We give the argument `ordered = TRUE`, along with the `levels` in their order.
 
 ```{r}
-my_degrees <- c("PG", "PG", "Doctorate", "UG", "PG")
-my_factor <- factor(my_degrees, levels = c('UG', 'PG', 'Doctorate'), ordered = TRUE)
+unit_risk <- c("M", "M", "H", "L", "M")
+my_factor <- factor(unit_risk, levels = c('L', 'M', 'H'), ordered = TRUE)
 my_factor # notice output here
 is.ordered(my_factor)
+my_factor > "L"   # units rated above low risk
 ```
 
 The argument `labels` gives labels to display, which may be different from the levels.
 
 ```{r}
-my_factor <- factor(my_degrees, levels = c('UG', 'PG', 'Doctorate'),
-                    labels = c("Under-Graduate", "Post Graduate", "Ph.D"),
+my_factor <- factor(unit_risk, levels = c('L', 'M', 'H'),
+                    labels = c("Low", "Medium", "High"),
                     ordered = TRUE)
 my_factor # notice output here
 ```
@@ -772,17 +831,17 @@ The function `levels()` shows the levels, and can also change them.
 
 ```{r}
 levels(my_factor)
-levels(my_factor) <- c("Grad", "Masters", "Doctorate")
+levels(my_factor) <- c("Low risk", "Medium risk", "High risk")
 my_factor
 ```
 
-Remember that while factors look like (and often behave like) character vectors, they are built on top of integers. Try to guess the output of `is.factor(c(my_factor, "UG"))` before running it in your console.
+Remember that while factors look like character vectors, and often behave like them, they are built on top of integers. Try to guess the output of `is.factor(c(my_factor, "Low risk"))` before running it in your console.
 
 We will learn about these data types in detail in @sec-factors.
 
 ### Date
 
-Dates are built on top of doubles, the number of days since 1 January 1970. They have the class `Date` and no other attributes. A common way to create dates is to convert text with `as.Date()` (note the capital `D`),
+Dates are built on top of doubles, the number of days since 1 January 1970. They have the class `Date` and no other attributes. A common way to create dates is to convert text with `as.Date()`. Note the capital `D`.
 
 ```{r}
 my_date <- as.Date("1970-01-31")
@@ -791,7 +850,14 @@ attributes(my_date)
 unclass(my_date)   # the number underneath
 ```
 
-Because a date is a number underneath, we can subtract one date from another, to get the days taken to pay a bill, or add days to a date, to get a due date.
+Because a date is a number underneath, we can subtract one date from another, to get the days taken to pay a bill. We can also add days to a date, to get a due date.
+
+```{r}
+bill_date <- as.Date("2024-11-18")
+paid_date <- as.Date("2025-01-09")
+paid_date - bill_date      # days taken to pay the bill
+bill_date + 30             # due date, if bills are to be paid within 30 days
+```
 
 Do check the other arguments of `as.Date()` by running `?as.Date` in your console. To check whether an object is a date, base R has no function like `is.Date()`, so we use `inherits()`. (The package lubridate does have `is.Date()`.)
 
@@ -825,6 +891,115 @@ two_days
 
 We will discuss dates and times in detail in @sec-lubridate.
 
+## Audit use case, a bill register from Excel {#sec-basics-usecase}
+
+Let us bring the chapter together. A divisional office has sent its bill register for a quarter as an Excel sheet. Some cells of the amount column hold text like `"1,25,000"` and `"NIL"`, and the bank account numbers were typed into Excel as numbers. When such a sheet is read, the amounts arrive as text and the account numbers as numbers. The code below builds a small register in that state. We will learn to read real files in @sec-read.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the bill register"
+bills <- data.frame(
+  bill_no    = c("B-101", "B-102", "B-103", "B-104", "B-105", "B-106", "B-107", "B-108"),
+  vendor     = c("Shree Ganesh Traders", "Kumar Electricals", "Shree Ganesh Traders",
+                 "Verma Stationers", "Kumar Electricals", "Patel Builders",
+                 "Verma Stationers", "Patel Builders"),
+  account_no = c(4512378901, 7700123456, 4512378901, 2219876543,
+                 7700123456, 931245678012, 2219876543, 931245678012),
+  amount     = c("48000", "1,25,000", "9850", "NIL", "62,400", "300000", "7425.50", NA),
+  bill_date  = c("2024-10-03", "2024-10-11", "2024-10-25", "2024-11-02",
+                 "2024-11-14", "2024-11-29", "2024-12-06", "2024-12-20"),
+  paid_date  = c("2024-10-15", "2024-12-20", "2024-11-04", "2024-11-12",
+                 "2024-11-21", "2025-01-27", "2024-12-13", "2024-12-31")
+)
+```
+
+```{r}
+bills
+str(bills)
+```
+
+`str()` tells the story at once. The amounts are `chr`, that is, text. The account numbers are `num`, and the dates are text too. Let us try to total the amounts.
+
+```{r}
+#| error: true
+sum(bills$amount)
+```
+
+R refuses, because text cannot be added. Converting with `as.numeric()` turns every value it cannot read into `NA`, with a warning.
+
+```{r}
+as.numeric(bills$amount)
+```
+
+The amounts with commas have been lost along with `"NIL"`. The commas are only formatting, so we remove them first. The function `gsub()` replaces every comma with nothing. We meet it properly in @sec-basefuns.
+
+```{r}
+amount <- as.numeric(gsub(",", "", bills$amount))
+amount
+```
+
+```{r}
+#| include: false
+n_bills <- nrow(bills)
+n_missing <- sum(is.na(amount))
+total_known <- sum(amount, na.rm = TRUE)
+n_round <- sum(amount %% 1000 == 0, na.rm = TRUE)
+```
+
+Only `"NIL"` now gives a warning, and the one bill with an empty cell stays `NA`. The total is still `NA` until we decide what to do with these two.
+
+```{r}
+sum(amount)
+sum(is.na(amount))
+bills$bill_no[is.na(amount)]
+sum(amount, na.rm = TRUE)
+```
+
+Of the `r n_bills` bills, `r n_missing` have no usable amount. The other bills add up to ₹`r round(total_known / 1e5, 2)` lakh. We report the total *with* the note that `r n_missing` bills could not be valued, and ask the office what "NIL" and the blank cell mean. A bill entered as nil but paid would be a finding.
+
+Next, round sums. The remainder on division by 1,000 picks them out.
+
+```{r}
+amount %% 1000 == 0
+bills$bill_no[which(amount %% 1000 == 0)]
+```
+
+So `r n_round` of the bills are exact multiples of ₹1,000. This is not wrong in itself, but such bills are worth matching with the supporting invoices.
+
+Now the account numbers. The vendor master keeps them as text, and Patel Builders' account starts with a zero. The bill register, read as numbers, has lost that zero, so the two will never match.
+
+```{r}
+master_account <- c("Patel Builders" = "0931245678012")
+bills$account_no[bills$vendor == "Patel Builders"]
+as.character(bills$account_no[bills$vendor == "Patel Builders"]) == master_account
+nchar(master_account)
+```
+
+The master has 13 characters, the register only 12. The fix is to read such columns as text in the first place, as we will learn in @sec-read-check.
+
+Last, the days taken to pay. We convert the date text with `as.Date()` and subtract.
+
+```{r}
+days_to_pay <- as.Date(bills$paid_date) - as.Date(bills$bill_date)
+days_to_pay
+bills$bill_no[days_to_pay > 30]
+```
+
+```{r}
+#| include: false
+late <- bills$bill_no[days_to_pay > 30]
+```
+
+Bills `r paste(late, collapse = " and ")` took more than 30 days to pay. If the rules require payment within 30 days, the auditor would ask the office for the reasons, and check whether any interest on delayed payment was claimed by the vendor.
+
+In a few lines we have found missing amounts, round sums, a mismatched account and delayed payments. Every one of these came from knowing the type of each value.
+
+::: callout-tip
+## Audit tip
+
+Before any analysis of a data file, run `str()` and write down, in a comment, the expected type of every column. Any column that does not match is the first thing to examine. It is often a finding about the quality of the office's records.
+:::
+
 ## A suggested workflow
 
 When a file of payments or bills is first loaded into R, an auditor may follow these steps.
@@ -833,15 +1008,19 @@ When a file of payments or bills is first loaded into R, an auditor may follow t
 2.  **Check the structure first.** Look at every new data frame with `str()` and `dim()`. Confirm the number of rows and the type of each column.
 3.  **Look for silent coercion.** An amount column shown as character usually has a text value, like `"NIL"` or `"1,25,000"`, in some cell. Find it before doing any arithmetic.
 4.  **Keep identifiers as text.** Account numbers, PAN, Aadhaar, mobile numbers and PIN codes stay character. This protects leading zeros and long numbers.
-5.  **Convert with care.** When you use `as.numeric()` or another `as.*()` function, read every warning. Each new `NA` is a value dropped from your totals.
-6.  **Find the missing values.** If a total comes out as `NA`, use `is.na()` to see which values are missing and why. Only then decide on `na.rm = TRUE`.
-7.  **Compare amounts safely.** Round both sides with `round(x, 2)` before matching a bill total with the sum of its items. Do not compare computed decimals with `==`.
-8.  **Store dates as dates.** Convert date text with `as.Date()`, so that the days taken to pay a bill can be worked out by subtraction.
+5.  **Clean before converting.** Remove commas from amounts with `gsub()` before `as.numeric()`.
+6.  **Convert with care.** When you use `as.numeric()` or another `as.*()` function, read every warning. Each new `NA` is a value dropped from your totals.
+7.  **Find the missing values.** If a total comes out as `NA`, use `is.na()` to see which values are missing and why. Only then decide on `na.rm = TRUE`.
+8.  **Compare amounts safely.** Round both sides with `round(x, 2)` before matching a bill total with the sum of its items. Do not compare computed decimals with `==`.
+9.  **Store dates as dates.** Convert date text with `as.Date()`, so that the days taken to pay a bill can be worked out by subtraction.
 
 ::: callout-important
 ## Remember
 
-Many errors in audit analysis start with the wrong data type. An amount read as text, an account number that has lost its leading zero, or a total that has silently become `NA` gives a wrong result without any error. Check the type of every column before you analyse it.
+- Many errors in audit analysis start with the wrong data type. An amount read as text, an account number that has lost its leading zero, or a total that has silently become `NA` gives a wrong result without any error.
+- Check the type of every column with `str()` before you analyse it.
+- A missing value is a question for the office, not something to drop quietly with `na.rm = TRUE`.
+- Keep identifiers as text, compare decimals after rounding, and store dates as dates.
 :::
 
 ## Summary of functions used
@@ -863,5 +1042,11 @@ Many errors in audit analysis start with the wrong data type. An amount read as 
 | `factor()`, `levels()` | base R | Create factors and see their levels |
 | `as.Date()`, `Sys.time()`, `as.difftime()` | base R | Dates, date-times and durations |
 | `all.equal()`, `round()` | base R | Compare decimals safely |
+| `%%`, `%/%` | base R | Remainder and whole-number division, for example to spot round sums |
+| `sum()`, `which()` | base R | Total a vector, count `TRUE` values, and find their positions |
+| `gsub()` | base R | Replace text, here to remove the commas in amounts |
+| `nchar()` | base R | Number of characters in a string |
+| `unclass()`, `inherits()`, `is.factor()`, `is.ordered()` | base R | Look under a class, and check what class an object has |
+| `cat()` | base R | Print text without the index `[1]` |
 
 : Functions used in this chapter {#tbl-basicfunctions}

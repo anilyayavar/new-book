@@ -5,9 +5,11 @@ source("_common.R")
 
 # Descriptive Statistics {#sec-descriptive}
 
-Exploratory Data Analysis, often abbreviated as EDA, is the first step of nearly every data analytics task. It means examining a dataset to summarise its main characteristics, often with charts. EDA shows what the data can reveal beyond formal models or hypothesis tests. It gives a better understanding of the variables and the relationships between them, and helps decide whether the techniques we plan to use are appropriate. EDA was developed by the American mathematician John Tukey in the 1960s and 1970s, and its techniques remain in wide use today.
+An office has given us its payment ledger for the year. Before we test a single payment, we must know what is in the file. How many records are there, and over what period? Are some amounts missing, negative or zero? Are any voucher numbers repeated? Are there dates outside the year? Does most of the money go to a few vendors? A few summary statistics answer these questions in minutes. They often produce the first audit observations too.
 
-For an auditor, EDA has one more purpose. Before trusting a dataset received from the auditee, we must know what is in it. How many records? Over what period? Are there missing values, negative amounts, duplicates, or dates outside the period? A few summary statistics answer these questions in minutes, and often produce the first audit observations. We will see a complete example at the end of this chapter, in @sec-desc-audit.
+This first look at a dataset is called *Exploratory Data Analysis*, or EDA. It means examining the data to summarise its main features, often with charts. EDA shows what the data can tell us before any formal model or test. It also helps us decide whether the techniques we plan to use are suitable. EDA was developed by the American mathematician John Tukey in the 1960s and 1970s. Its methods remain in wide use today.
+
+In this chapter we learn the tools for this first look. We start with `str()` and `summary()` of base R, and then use dplyr to compute any statistic for many columns at once. Next we meet two packages, `psych` and `skimr`, that give a full summary in one line. Then we see the relationships between numeric columns with `PerformanceAnalytics` and `GGally`. All along we use an office's payment ledger. At the end, in @sec-desc-audit, we put the tools together to profile the ledger as an auditor would.
 
 **Prerequisites**
 
@@ -17,174 +19,11 @@ For an auditor, EDA has one more purpose. Before trusting a dataset received fro
 library(tidyverse)
 ```
 
-## Using base R
+## Our data, a payment ledger {#sec-desc-data}
 
-Base R provides two functions to see the structure and summary statistics of a data frame. The first is `str()`, short for **str**ucture (not to be confused with **str**ing), which shows the structure of the data. Its usage is simple.
+The ledger covers the financial year 2024-25. Each row is one payment voucher. It gives the voucher number, the date, the vendor, the head of expenditure, the mode of payment, the amount, the income tax deducted at source (TDS) and the net amount paid. TDS is taken at 10% on professional fees and at 2% on other payments.
 
-```{r}
-str(iris)
-```
-
-It gives us the number of variables (columns) and observations (rows) in the data. It then lists the names of all the columns, with their types, and the first few values of each. For `factor` columns, it also shows the levels.
-
-Another function from base R is `summary()`, which gives summary statistics for each column of a data frame.
-
-```{r}
-summary(iris)
-```
-
-For each `numeric` column, it gives the *five-number summary*, that is, (1) minimum, (2) first quartile, (3) median, (4) third quartile and (5) maximum, along with the (arithmetic) mean. For `factor` columns, it gives the count of each value.
-
-We can also recall here the function `table()`, which counts the values of factor or character columns in base R.
-
-```{r}
-with(iris, table(Species))
-```
-
-## Dplyr functions
-
-To calculate other statistics, we can use `dplyr::summarise()` together with `across()`. For example, to calculate the mean, standard deviation and variance of all numeric columns of the `iris` data, we can do
-
-```{r}
-iris |>
-  summarise(across(where(is.numeric),
-                   .fns = list(
-                     Mean = ~ mean(.),
-                     SD = ~ sd(.),
-                     Var = ~ var(.)
-                   )))
-```
-
-Before reading the output, let us understand `across()`. It is used inside dplyr verbs, mostly `mutate()` and `summarise()`, to apply the same operation to many columns at once. It needs at least two arguments. The first selects the columns, by names, by type with a function like `where(is.numeric)`, or by a pattern in the names. The second gives a function, or a list of functions, to apply. In the example above, we selected all numeric columns, and applied a list of three functions written in the short lambda style. With 4 numeric columns and 3 functions, we get 12 columns in the output. We learnt `across()` in detail in @sec-across.
-
-Twelve columns in one row are hard to read. We can reshape the result with `tidyr::pivot_longer()`.
-
-```{r}
-iris |>
-  summarise(across(where(is.numeric),
-                   .fns = list(
-                     Mean = ~ mean(.),
-                     SD = ~ sd(.),
-                     Var = ~ var(.)
-                   ))) |>
-  pivot_longer(everything(),
-               names_sep = "_",
-               names_to = c(".value", "Function"))
-```
-
-```{r}
-iris |>
-  summarise(across(where(is.numeric),
-                   .fns = list(
-                     Mean = ~ mean(.),
-                     SD = ~ sd(.),
-                     Var = ~ var(.)
-                   ))) |>
-  pivot_longer(everything(),
-               names_sep = "_",
-               names_to = c("Variable", ".value"))
-```
-
-The special name `.value` in `names_to` tells `pivot_longer()` which part of the old column names should become new column names. In the first output it is the variable, in the second the statistic.
-
-Let us also see one more summary function of `dplyr`, `glimpse()`. It is like `str()`, but fits the screen better and works well in a pipe.
-
-```{r}
-iris |>
-  glimpse()
-```
-
-To count the values of a factor column, as `table()` does in base R, we can use `dplyr::count()`, which works well in a pipe.
-
-```{r}
-iris |>
-  count(Species)
-```
-
-We can also count combinations of several columns.
-
-```{r}
-ggplot2::diamonds |>
-  count(cut, color, name = "count")
-```
-
-## Using `psych`
-
-Some packages produce good summaries without much effort. The package `psych` is one of these.
-
-```{r}
-#| message: false
-#| warning: false
-library(psych)
-describe(USArrests)
-```
-
-The output is a data frame, ready to use. Besides the mean and standard deviation, it gives the median, the *trimmed* mean (the mean after dropping the extreme 10% at each end), the *mad* (median absolute deviation, a measure of spread not affected by outliers), the *skew* and the *kurtosis*. Skew is especially useful in audit. Amounts in accounts are nearly always strongly skewed to the right, with many small amounts and a few very large ones.
-
-Another function in `psych`, `describeBy()`, gives summaries for each group.
-
-```{r}
-describeBy(ggplot2::diamonds, group = "cut")
-```
-
-One more function, `describeData()`, also shows the first and last four values (by default) of each column.
-
-```{r}
-describeData(ggplot2::diamonds)
-```
-
-## Using `skimr`
-
-The package `skimr` produces a compact summary report of a data frame, with a small histogram for each numeric column. A full description may be seen [here](https://cran.r-project.org/web/packages/skimr/vignettes/using_skimr.html). For basic use, the function `skim()` is enough.
-
-```
-library(skimr)
-skim(iris)
-```
-
-```{r skimrr, fig.show='hold', out.width='50%', echo=FALSE}
-knitr::include_graphics('images/skmi1.png')
-```
-
-`skim()` also reports the number of missing values and the *complete rate* of each column, which is the first thing to check in audit data.
-
-## Viewing relationships between different variables
-
-The package `PerformanceAnalytics` can show the relationships between all pairs of numeric variables at once, with its function `chart.Correlation()`.
-
-```{r warning=FALSE, fig.show='hold', fig.align='center', fig.cap="Viewing relationships with PerformanceAnalytics"}
-suppressMessages(library(PerformanceAnalytics))
-
-USArrests |>
-  select(where(is.numeric)) |>
-  PerformanceAnalytics::chart.Correlation()
-```
-
-It draws a correlation matrix of the numeric variables. The diagonal shows the distribution of each variable, the lower part shows the scatter plot of each pair, and the upper part shows the correlation, with stars for its significance.
-
-The package `GGally` also draws good charts of relationships. Two of its functions are particularly useful.
-
-1. `ggpairs()` draws a scatterplot matrix. Scatter plots of each pair of numeric variables are drawn in the lower part, the Pearson correlation is shown in the upper part, and the distribution of each variable on the diagonal.
-
-2. `ggcorr()` shows the correlation of each pair of variables as a coloured square. The `method` argument chooses the type of correlation.
-
-See the following example.
-
-```{r fig-two-corr, fig.show='hold', out.width="50%", warning=FALSE, fig.cap="Correlation plot (Left) and Scatterplot Matrix (Right) produced in GGally", fig.align='center'}
-suppressMessages(library(GGally))
-USArrests |>
-  select(where(is.numeric)) |>
-  ggcorr(label = TRUE)
-
-USArrests |>
-  select(where(is.numeric)) |>
-  ggpairs()
-
-```
-
-## Audit use case, profiling a payment ledger {#sec-desc-audit}
-
-Let us apply these tools to a dataset an auditor actually receives. An office has given us its payment ledger for the financial year 2024-25. Before any analysis, we profile it. We have planted the kind of problems that real ledgers often have.
+We have planted the kind of problems that real ledgers often have. Some amounts are negative or zero. Some vendors are missing. A few dates fall outside the year, and a few voucher numbers are repeated. We will find all of them in this chapter.
 
 ```{r}
 #| code-fold: true
@@ -212,13 +51,284 @@ ledger$vendor_id[novendor] <- NA                                    # vendor mis
 ledger$date[baddate] <- as.Date(c("2023-11-15", "2025-04-12",
                                   "2025-05-02", "2024-03-30"))      # outside the year
 ledger$voucher_no[dup] <- ledger$voucher_no[dup - 1]                # repeated voucher numbers
+
+# Mode of payment, TDS and net amount
+ledger <- ledger |>
+  mutate(head = factor(head),
+         mode = sample(c("e-payment", "Cheque", "Cash"), n, TRUE, prob = c(85, 12, 3)),
+         tds  = round(amount * if_else(head == "Professional fees", 0.10, 0.02)),
+         net  = amount - tds) |>
+  relocate(mode, .after = head)
 ```
 
-**Step 1. Size, period and types.** `glimpse()` shows the columns and their types. A date stored as text, or an amount stored as text because of a stray comma, would show up here at once.
+## Using base R
+
+Base R has two functions to see the structure and the summary of a data frame. The first is `str()`, short for **str**ucture (not to be confused with **str**ing). It shows the structure of the data. Its use is simple.
 
 ```{r}
-glimpse(ledger)
+str(ledger)
 ```
+
+It gives the number of rows (observations) and columns (variables) in the data. It then lists the name of every column, with its type and its first few values. For `factor` columns, like `head`, it also shows the levels. A date stored as text, or an amount stored as text because of a stray comma, would show up here at once.
+
+The second function of base R is `summary()`. It gives summary statistics for each column of a data frame.
+
+```{r}
+summary(ledger)
+```
+
+For each `numeric` column, it gives the *five-number summary*, along with the (arithmetic) mean. The five numbers are (1) the minimum, (2) the first quartile, (3) the median, (4) the third quartile and (5) the maximum. For a date column it gives the same numbers as dates. For a `factor` column it gives the count of each level. For a character column, like `vendor_id`, it only says that the column is text.
+
+Already we see two problems. The smallest `amount` is negative, and the dates run from `r format(min(ledger$date), "%B %Y")` to `r format(max(ledger$date), "%B %Y")`, beyond the financial year at both ends.
+
+We can also recall here the function `table()`. It counts the values of a factor or character column in base R.
+
+```{r}
+table(ledger$mode)
+```
+
+## Dplyr functions
+
+To calculate other statistics, we can use `dplyr::summarise()` together with `across()`. For example, to calculate the mean, median and standard deviation of all numeric columns of the ledger, we can write
+
+```{r}
+ledger |>
+  summarise(across(where(is.numeric),
+                   .fns = list(
+                     Mean = ~ mean(.),
+                     Median = ~ median(.),
+                     SD = ~ sd(.)
+                   )))
+```
+
+```{r}
+#| include: false
+n_num <- sum(sapply(ledger, is.numeric))
+```
+
+Before reading the output, let us understand `across()`. It is used inside dplyr verbs, mostly `mutate()` and `summarise()`, to apply the same operation to many columns at once. It needs at least two arguments. The first selects the columns. We may select them by name, by type with a function like `where(is.numeric)`, or by a pattern in the names. The second gives a function, or a list of functions, to apply. In the example above, we selected all numeric columns. Then we applied a list of three functions written in the short lambda style. With `r n_num` numeric columns and 3 functions, we get `r 3 * n_num` columns in the output. We learnt `across()` in detail in @sec-across.
+
+Many columns in one row are hard to read. We can reshape the result with `tidyr::pivot_longer()`.
+
+```{r}
+ledger |>
+  summarise(across(where(is.numeric),
+                   .fns = list(
+                     Mean = ~ mean(.),
+                     Median = ~ median(.),
+                     SD = ~ sd(.)
+                   ))) |>
+  pivot_longer(everything(),
+               names_sep = "_",
+               names_to = c(".value", "Function"))
+```
+
+```{r}
+ledger |>
+  summarise(across(where(is.numeric),
+                   .fns = list(
+                     Mean = ~ mean(.),
+                     Median = ~ median(.),
+                     SD = ~ sd(.)
+                   ))) |>
+  pivot_longer(everything(),
+               names_sep = "_",
+               names_to = c("Variable", ".value"))
+```
+
+The special name `.value` in `names_to` tells `pivot_longer()` which part of the old column names should become new column names. In the first output it is the variable. In the second it is the statistic. The second layout, one row per column of the ledger, is usually easier to read.
+
+::: callout-note
+`names_sep = "_"` splits each name at the underscore, so that `amount_Mean` becomes `amount` and `Mean`. This works only if the column names have no underscore of their own. A column called `net_amount` would be split in the wrong place. Rename such columns first, or use the argument `names_pattern` instead.
+:::
+
+Let us also see one more summary function of `dplyr`, `glimpse()`. It is like `str()`, but fits the screen better and works well in a pipe.
+
+```{r}
+ledger |>
+  glimpse()
+```
+
+To count the values of a column, as `table()` does in base R, we can use `dplyr::count()`. It works well in a pipe and gives a tibble.
+
+```{r}
+ledger |>
+  count(head)
+```
+
+We can also count combinations of several columns.
+
+```{r}
+ledger |>
+  count(head, mode, name = "vouchers")
+```
+
+```{r}
+#| include: false
+cash_big <- ledger |> filter(mode == "Cash", amount > 10000)
+```
+
+Cash payments are a small share of the vouchers. Still, `r nrow(cash_big)` of them are above ₹10,000, worth ₹`r round(sum(cash_big$amount) / 1e5, 1)` lakh in all. Large payments are normally expected to be made electronically. These vouchers would be worth a look.
+
+## Using `psych`
+
+Some packages produce good summaries without much effort. The package `psych` is one of these. Its function `describe()` summarises every numeric column.
+
+```{r}
+#| message: false
+#| warning: false
+library(psych)
+ledger |>
+  select(amount, tds, net) |>
+  describe()
+```
+
+The output is a data frame, ready to use. Besides the mean and standard deviation, it gives the median and the *trimmed* mean. The trimmed mean is the mean after dropping the extreme 10% at each end. It also gives the *mad* (median absolute deviation, a measure of spread not affected by outliers), the *skew* and the *kurtosis*.
+
+```{r}
+#| include: false
+amt_skew <- psych::skew(ledger$amount)
+```
+
+Skew is especially useful in audit. A skew near zero means the values are spread evenly on both sides of the middle. Here the skew of `amount` is `r round(amt_skew, 1)`. That is a strong skew to the right, with many small amounts and a few very large ones. Amounts in accounts nearly always look like this.
+
+Another function in `psych`, `describeBy()`, gives summaries for each group. Let us describe the amounts under each head.
+
+```{r}
+describeBy(ledger$amount, group = ledger$head)
+```
+
+One more function, `describeData()`, shows the first and last four values (by default) of each column. It also counts the complete values in each column, which is a quick way to spot missing data. It reads a plain data frame better than a tibble, so we convert the ledger first with `as.data.frame()`.
+
+```{r}
+describeData(as.data.frame(ledger))
+```
+
+The first line says how many rows are *complete cases*, that is, rows with no missing value at all. Here `r format(sum(complete.cases(ledger)), big.mark = ",")` of the `r format(nrow(ledger), big.mark = ",")` rows are complete. The `type` column marks numeric columns with 1, factors with 2, text with 3 and other types, such as dates, with 4. A star after a name marks a column that is not numeric.
+
+## Using `skimr`
+
+The package `skimr` produces a compact summary report of a data frame. A full description may be seen [here](https://cran.r-project.org/web/packages/skimr/vignettes/using_skimr.html). For basic use, the function `skim()` is enough.
+
+```{r}
+#| message: false
+#| warning: false
+library(skimr)
+skim(ledger)
+```
+
+`skim()` groups the columns by type. For each numeric column it draws a small histogram. For every column it reports the number of missing values and the *complete rate*. This is the first thing to check in audit data. Here `vendor_id` has `r sum(is.na(ledger$vendor_id))` missing values.
+
+## Viewing relationships between different variables {#sec-desc-corr}
+
+So far we looked at one column at a time. Sometimes we want to see how several numeric columns move together. Our ledger is not suitable for this, since `tds` and `net` are worked out from `amount`. So let us take a second dataset.
+
+A district has 36 tehsil offices. For each office we have the staff strength, and the salary, fuel and electricity expenditure of the year, in lakh. Salary should rise with staff. Fuel should rise with the number of vehicles. We have planted two offices that break these patterns.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the office-wise expenditure"
+set.seed(31)
+tehsils <- tibble(
+  office   = sprintf("Tehsil %02d", 1:36),
+  staff    = round(runif(36, 12, 60)),
+  vehicles = rpois(36, 2) + 1
+) |>
+  mutate(salary_lakh      = round(staff * 7.2 * runif(36, 0.9, 1.1), 1),
+         fuel_lakh        = round(vehicles * 1.5 * runif(36, 0.8, 1.2), 1),
+         electricity_lakh = round(2 + staff * 0.08 * runif(36, 0.8, 1.2), 1))
+
+# Planted. Tehsil 23 draws far more salary than its staff strength explains
+tehsils$salary_lakh[23] <- round(tehsils$salary_lakh[23] * 1.8, 1)
+# Planted. Tehsil 08 burns three times the fuel its vehicles need
+tehsils$fuel_lakh[8] <- round(tehsils$fuel_lakh[8] * 3, 1)
+```
+
+```{r}
+tehsils
+```
+
+The package `PerformanceAnalytics` can show the relationships between all pairs of numeric columns at once, with its function `chart.Correlation()`.
+
+```{r warning=FALSE, fig.show='hold', fig.align='center', fig.cap="Viewing relationships with PerformanceAnalytics"}
+suppressMessages(library(PerformanceAnalytics))
+
+tehsils |>
+  select(where(is.numeric)) |>
+  PerformanceAnalytics::chart.Correlation()
+```
+
+It draws a correlation matrix of the numeric columns. The diagonal shows the distribution of each column. The lower part shows the scatter plot of each pair. The upper part shows the correlation, with stars for its significance.
+
+```{r}
+#| include: false
+r_staff_sal <- cor(tehsils$staff, tehsils$salary_lakh)
+r_veh_fuel  <- cor(tehsils$vehicles, tehsils$fuel_lakh)
+```
+
+As expected, staff and salary are closely related, with a correlation of `r round(r_staff_sal, 2)`. Vehicles and fuel are related too, with a correlation of `r round(r_veh_fuel, 2)`. Now look at the scatter plots of these two pairs. In each, one point sits well away from the rest. These are the two offices we planted. A correlation is a single number, and does not point to them. The scatter plot does.
+
+Some other pairs show a moderate negative correlation, such as staff and vehicles at `r round(cor(tehsils$staff, tehsils$vehicles), 2)`. There is no reason for larger offices to have fewer vehicles. With only 36 offices, values like this can arise by chance. So read a correlation together with its scatter plot, and with what we know of the offices.
+
+The package `GGally` also draws good charts of relationships. Two of its functions are particularly useful.
+
+1. `ggpairs()` draws a scatterplot matrix. Scatter plots of each pair of numeric columns are drawn in the lower part. The Pearson correlation is shown in the upper part, and the distribution of each column on the diagonal.
+
+2. `ggcorr()` shows the correlation of each pair of columns as a coloured square. The `method` argument chooses the type of correlation.
+
+See the following example.
+
+```{r fig-two-corr, fig.show='hold', out.width="50%", warning=FALSE, fig.cap="Correlation plot (Left) and Scatterplot Matrix (Right) produced in GGally", fig.align='center'}
+suppressMessages(library(GGally))
+tehsils |>
+  select(where(is.numeric)) |>
+  ggcorr(label = TRUE)
+
+tehsils |>
+  select(where(is.numeric)) |>
+  ggpairs()
+
+```
+
+To name the odd points, we can work out a simple ratio for each office, such as salary per staff member. The offices at the top of the list are the ones to examine.
+
+```{r}
+tehsils |>
+  mutate(salary_per_staff = round(salary_lakh / staff, 2),
+         fuel_per_vehicle = round(fuel_lakh / vehicles, 2)) |>
+  select(office, staff, salary_per_staff, vehicles, fuel_per_vehicle) |>
+  arrange(desc(salary_per_staff)) |>
+  head(3)
+```
+
+```{r}
+#| include: false
+top_sal <- tehsils |> mutate(r = salary_lakh / staff) |> slice_max(r, n = 1)
+top_fuel <- tehsils |> mutate(r = fuel_lakh / vehicles) |> slice_max(r, n = 1)
+```
+
+`r top_sal$office` pays ₹`r round(top_sal$salary_lakh / top_sal$staff, 1)` lakh a year for each member of staff, far above the others. Sorting by `fuel_per_vehicle` instead puts `r top_fuel$office` at the top, at ₹`r round(top_fuel$fuel_lakh / top_fuel$vehicles, 1)` lakh per vehicle. Higher salary per head may have a reason, such as senior staff. It may also mean salary paid to persons not on the rolls. We study such relationships properly in @sec-regression.
+
+::: callout-warning
+## Caution
+
+Correlation shows that two columns move together. It does not show why. Two columns may also be strongly correlated only because both grow with the size of the office. Always ask what drives a relationship before drawing a conclusion from it.
+:::
+
+## Audit use case, profiling a payment ledger {#sec-desc-audit}
+
+Let us now put these tools together. We profile the payment ledger as an auditor would, before any detailed test.
+
+**Step 1. Size, period and types.** We saw the columns and their types with `glimpse()`. Now we note the size of the data and its period.
+
+```{r}
+tibble(records    = nrow(ledger),
+       vendors    = n_distinct(ledger$vendor_id, na.rm = TRUE),
+       total_lakh = round(sum(ledger$amount) / 1e5, 1))
+range(ledger$date)
+```
+
+The ledger has `r format(nrow(ledger), big.mark = ",")` vouchers worth ₹`r round(sum(ledger$amount) / 1e7, 2)` crore, paid to `r n_distinct(ledger$vendor_id, na.rm = TRUE)` vendors. The dates run beyond the year at both ends.
 
 **Step 2. Summary of amounts.**
 
@@ -275,7 +385,7 @@ head(vendor_share, 5)
 top3 <- sum(vendor_share$share_pct[1:3])
 ```
 
-Three of the 60 vendors received `r round(top3)`% of all the money. Concentration is not wrong in itself, but these vendors deserve a look at how they were selected, and whether their contracts were tendered.
+Three of the 60 vendors received `r round(top3)`% of all the money. Concentration is not wrong in itself. But these vendors deserve a look at how they were selected, and whether their contracts were tendered.
 
 **Step 5. Month-wise pattern.**
 
@@ -287,23 +397,26 @@ ledger |>
   arrange(month)
 ```
 
-A month with unusually many payments or a very large total, like a rush in March, would show up here. We study such patterns in @sec-ts and @sec-ano-ts.
+A month with unusually many payments or a very large total, like a rush in March, would show up here. In this ledger no month stands out sharply. We study such patterns in @sec-ts and @sec-ano-ts.
+
+**Step 6. Record the profile and follow up.** The auditor now puts the counts of Step 3 to the office, with the list of records behind each count. The office should explain each negative and zero amount, supply the missing vendors, and say why some vouchers are dated outside the year. The repeated voucher numbers go on to the duplicate tests of @sec-dup. The profile itself goes into the working papers, as the record of what data was received.
 
 ::: callout-tip
 ## Audit tip
 
-Always reconcile the total of the data received with the accounts, *before* any analysis. If the ledger total does not match the expenditure in the accounts, the data is incomplete or extra, and every result based on it is doubtful. Record the profile, with record counts, totals and the problem records, in the working papers. It is the evidence of what data was received and tested.
+Always reconcile the total of the data received with the accounts, *before* any analysis. If the ledger total does not match the expenditure in the accounts, the data is incomplete or has extra records. Then every result based on it is doubtful. Record the profile, with record counts, totals and the problem records, in the working papers. It is the evidence of what data was received and tested.
 :::
 
 ## A suggested workflow
 
 1.  **Look at the structure** with `glimpse()` or `str()`. Check the number of rows and the type of each column.
 2.  **Reconcile the totals** with the accounts or another trusted source.
-3.  **Summarise every numeric column** with `summary()` or `describe()`. Look at the minimum, maximum and skew.
+3.  **Summarise every numeric column** with `summary()`, `describe()` or `skim()`. Look at the minimum, the maximum, the skew and the missing values.
 4.  **Count the problem records**, like missing, negative, zero, out-of-period and duplicate values.
-5.  **Count categories** with `count()`, and look at the concentration of amounts.
-6.  **Look at patterns over time**, by month or week.
-7.  **Record the profile** in the working papers before going further.
+5.  **Count categories** with `count()`, alone and in combination, and look at the concentration of amounts.
+6.  **Look at relationships** between numeric columns with `chart.Correlation()` or `ggpairs()`. Points far from the pattern are leads.
+7.  **Look at patterns over time**, by month or week.
+8.  **Record the profile** in the working papers, and put the problem records to the auditee, before going further.
 
 ::: callout-important
 ## Remember
@@ -316,14 +429,17 @@ Descriptive statistics describe the data, not the truth. A clean summary does no
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
 | `str()`, `glimpse()` | base R, dplyr | Structure of a data frame |
+| `as.data.frame()`, `complete.cases()` | base R | Turn a tibble into a plain data frame, and find rows with no missing value |
 | `summary()` | base R | Five-number summary and mean, counts for factors |
-| `table()`, `count()` | base R, dplyr | Counts of values |
+| `table()`, `count()` | base R, dplyr | Counts of values, alone or in combination |
 | `summarise()` with `across()` | dplyr | Several statistics for several columns |
+| `mean()`, `median()`, `sd()` | base R | Mean, median and standard deviation |
 | `pivot_longer()` | tidyr | Reshape a wide summary into a long one |
 | `describe()`, `describeBy()`, `describeData()` | psych | Detailed summaries, including skew, overall or by group |
 | `skim()` | skimr | Compact summary report with missing values |
 | `chart.Correlation()` | PerformanceAnalytics | Correlation matrix chart |
 | `ggpairs()`, `ggcorr()` | GGally | Scatterplot matrix and correlation chart |
+| `range()`, `n_distinct()` | base R, dplyr | Smallest and largest values, and the number of distinct values |
 | `duplicated()`, `between()` | base R, dplyr | Find repeated values and values outside a range |
 
 : Functions used in this chapter {#tbl-descfunctions}

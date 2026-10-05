@@ -5,288 +5,333 @@ source("_common.R")
 
 # Charts with ggplot2 {#sec-ggplot2}
 
+An auditor often receives data with thousands of rows. Think of the bill register of a State scheme run in twelve districts, for a whole financial year. Somewhere in it, a district may have rushed its spending into March to avoid a lapse of funds. Another may have split its purchases into bills just below the limit of its financial powers. A third may have spent more than its budget. Each of these is hard to see in a table. Each is plain to see in a good chart.
+
+Charts help the auditor twice. First, while analysing, a chart shows patterns, outliers and gaps that a summary table hides. Second, while reporting, a clear chart tells the reader in a few seconds what a paragraph of numbers cannot.
+
+In @sec-baseplot we drew charts with base R. In this chapter we learn **ggplot2**, the most widely used charting package in R. We will build every chart on a simulated bill register of a scheme, with a few irregularities planted in it. Step by step, we will learn
+
+-   the idea of the *grammar of graphics*, on which ggplot2 is built;
+-   how to map columns of the data to the look of a chart, through *aesthetics*;
+-   the common chart types, called *geoms*, such as bars, histograms, lines and box plots;
+-   how to control axes, colours and coordinate systems, through *scales* and *coords*;
+-   how to split a chart into small panels, called *facets*;
+-   how to add titles, labels and notes, and how to change the overall look with *themes*;
+-   how to save charts for the audit report.
+
+On the way, the charts will point us to the planted cases. At the end, two audit use cases put it all together.
+
 ## Core concepts of **grammar of graphics**
 
-**ggplot2**[^00-ggplot2-1] [@R-ggplot2] is the package developed by Hadley Wickham, which is based on concepts laid (2005) down by Leland Wilkinson in his *The Grammar of Graphics*.[^00-ggplot2-2] Basically, **grammar of graphics** is a framework which follows a layered approach to describe and construct visualisations or graphics in a structured manner. Even the letters `gg` in ggplot2 stand for `g`grammar of `g`raphics.
+**ggplot2**[^00-ggplot2-1] [@R-ggplot2] was developed by Hadley Wickham. It is based on the ideas of Leland Wilkinson in his book *The Grammar of Graphics* (2005).[^00-ggplot2-2] The **grammar of graphics** is a framework that describes a chart as a set of layers. Each layer does one job, and the layers together make the chart. Even the letters `gg` in ggplot2 stand for **g**rammar of **g**raphics.
 
 [^00-ggplot2-1]: <https://ggplot2.tidyverse.org/>
 
 [^00-ggplot2-2]: <https://link.springer.com/book/10.1007/0-387-28695-0>
 
-Hadley Wickham, in his paper titled **A Layered Grammar of Graphics**[^00-ggplot2-3](2010) [@layered-grammar] proposed his idea of layered grammar of graphics in detail and simultaneously put forward his idea of *ggplot2* as an open source implementation framework for building graphics. Readers/Users are advised to check the paper as it describes the concept of grammar of graphics in detail. Over the next decade the package grew[^00-ggplot2-4] into one of the most used and popular packages in R.
+Hadley Wickham explained his idea of a layered grammar in a paper titled **A Layered Grammar of Graphics**[^00-ggplot2-3] (2010) [@layered-grammar]. In the same paper, he put forward ggplot2 as an open source way of building such charts. Readers who want the theory in detail may read the paper. Over the next decade, the package grew[^00-ggplot2-4] into one of the most used packages in R.
 
 [^00-ggplot2-3]: <http://vita.had.co.nz/papers/layered-grammar.pdf>
 
 [^00-ggplot2-4]: Version 3.3.0 was released in March 2020, and version 4.0.0, with a rewritten internal structure and many new features, in September 2025. This book uses version 4.
 
-The relationship between the components explained in both the grammars can be illustrated with the image[^00-ggplot2-5] in @fig-rgg1. The components on the left have been put forward by Wilkinson whereas those on right were proposed by Wickham. It may be seen that `TRANS` has no relation in `ggplot2` as its role is played by in-built features of R.
+@fig-rgg1[^00-ggplot2-5] shows how the parts of the two grammars relate. The parts on the left were put forward by Wilkinson. Those on the right were proposed by Wickham. `TRANS` has no match in ggplot2, because R itself does that job.
 
-[^00-ggplot2-5]: Source: Hadley Wickham's paper on *the layered grammar of graphics*
+[^00-ggplot2-5]: Adapted from Hadley Wickham's paper on *the layered grammar of graphics*
 
 ```{r fig-rgg1, echo=FALSE, fig.cap="Layers in Grammar of Graphics mapped in GGPLOT2", fig.align='center', fig.show='hold', out.height="40%", out.width="50%"}
 knitr::include_graphics("images/layers_gg.png")
 ```
 
-Thus, to build a graphic having one or more dimensions, from a given data, we use *seven* major components -
+So, to build a chart from data, we use *seven* main components.
 
-1.  **Data:** Unarguably, a graphic/visualisation should start with a
-    data. It is also the first argument in most important function in
-    the package i.e. `ggplot(data =)`.
-2.  **Aesthetics:** or `aes()` in short, provide a **mapping** of
-    various data dimensions to axes so as to provide positions to
-    various data points in the output plot/graphic.
-3.  **Geometries:** or `geoms` for short, are used to provide the
-    *geometries* so that data points may take a concrete shape on the
-    visualisation. For e.g. the data points should be depicted as bars
-    or scatter points or else are decided by the provided `geoms.`
-4.  **Statistics:** or `stat` for short, provides the statistics to show
-    in the visualisation like measures of central tendency, etc.
-5.  **Scale:** This component is used to decide whether any dimension
-    needs some scaling like logarithmic transformation, etc.
-6.  **Coordinate System:** Though most of the time *Cartesian coordinate
-    system* is used, yet there are times when *polar coordinate system*
-    (e.g. pie chart) or *map projections* (e.g. geographical
-    maps) are used.
-7.  **Facets:** Used when based on certain dimension, the plot is
-    divided into further sub-plots.
+1.  **Data.** Every chart starts with data. It is also the first argument of the most important function in the package, `ggplot(data = )`.
+2.  **Aesthetics.** The function `aes()` gives a **mapping** from the columns of the data to the parts of the chart. For example, one column may go on the `x` axis, another on the `y` axis, and a third may decide the colour.
+3.  **Geometries.** The `geom_*()` functions, or *geoms*, decide the shape the data takes on the chart. They decide, for example, whether each row is drawn as a point, a bar or a line.
+4.  **Statistics.** A *stat* computes something from the data before drawing it, such as a count, a mean or a trend line.
+5.  **Scales.** A scale controls how values become positions, colours or sizes. For example, an axis may be shown on a logarithmic scale, or amounts may be shown in lakh.
+6.  **Coordinate system.** Most charts use the usual *Cartesian* system of `x` and `y`. A pie chart uses a *polar* system, and a map uses a *map projection*.
+7.  **Facets.** A facet splits one chart into small panels, one for each group in the data.
 
-Out of the afore-mentioned components, first three (`data`, `aesthetics` and `geometries`) are to be explicitly provided and thus can be understood as mandatory components. Whilst these three components are mandatorily provided, it is not that others are not mandatory. It is just that other components have their defaults (e.g. default coordinate system is Cartesian coordinate system). Let us dive into these three essential components and build a plot using these.
+Of these, the first three (`data`, `aesthetics` and `geometries`) must be given by us. The others are not less important. It is just that they have sensible defaults. For example, the default coordinate system is Cartesian. Let us start with the three essential components and build a chart with them.
+
+## Our data, a bill register of a scheme {#sec-ggplot2-data}
+
+We need data first. Let us create the bill register of an imaginary State scheme for the financial year 2024-25. The scheme runs in 12 districts, grouped into four divisions. Each bill belongs to one of four categories, which are *Works*, *Supplies*, *Services* and *Vehicle hire*. The West division hires no vehicles, as it has its own.
+
+The rules of our scheme are simple. A district officer may pass a bill of up to ₹2 lakh. A bill above ₹2 lakh needs the sanction of a higher authority. Bills are normally paid after a few days of checking.
+
+We have planted four irregularities in the data. We will not list them here. The charts in this chapter will bring them out one by one. The code that creates the data is folded below. You may expand it once you are comfortable with `dplyr`.
+
+```{r}
+#| message: false
+library(tidyverse)
+```
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the bill register, the monthly expenditure and the budget"
+set.seed(2025)
+
+district_list <- tibble(
+  district = c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur", "Gopalganj",
+               "Haripur", "Kishanpur", "Lalganj", "Madhopur", "Narsinghpur", "Rampur"),
+  division = rep(c("North", "South", "East", "West"), each = 3),
+  size     = round(runif(12, 0.6, 1.5), 2)   # bigger districts have more bills
+)
+fy_months <- seq(as.Date("2024-04-01"), by = "month", length.out = 12)
+categories <- tibble(
+  category = c("Works", "Supplies", "Services", "Vehicle hire"),
+  lambda   = c(3, 4, 3, 2),                       # bills per month in a district
+  median   = c(300000, 110000, 70000, 35000)      # typical bill amount
+)
+vendors <- list(
+  "Works"        = c("Narmada Builders", "Shakti Constructions", "Jai Hind Infra",
+                     "Pawan Contractors"),
+  "Supplies"     = c("Bharat Stationers", "Kaveri Suppliers", "Om Sai Traders",
+                     "Patel Hardware"),
+  "Services"     = c("National Printers", "Rajdhani Computers", "Sagar Caterers"),
+  "Vehicle hire" = c("Shree Ganesh Transport", "Annapurna Travels")
+)
+
+# Number of bills for each district, month and category
+cells <- expand_grid(district_list, month_start = fy_months, categories) |>
+  # Planted case 1. March rush in Fatehpur and Rampur
+  mutate(rush   = district %in% c("Fatehpur", "Rampur") &
+                  month_start == as.Date("2025-03-01"),
+         lambda = if_else(division == "West" & category == "Vehicle hire", 0, lambda),
+         n      = rpois(n(), lambda * size * if_else(rush, 2, 1)))
+
+bills <- cells |>
+  uncount(n) |>
+  mutate(
+    bill_date   = month_start + sample(0:27, n(), replace = TRUE),
+    amount      = round(rlnorm(n(), log(median), 0.55) * if_else(rush, 2.5, 1), -1),
+    vendor      = map_chr(category, \(k) sample(vendors[[k]], 1)),
+    days_to_pay = 3 + rnbinom(n(), mu = 15, size = 3)
+  )
+
+# Planted case 2. Supplies split into bills just below Rs 2 lakh in Devgarh
+split_bills <- tibble(
+  district = "Devgarh", division = "South", category = "Supplies",
+  vendor = "Shubham Enterprises",
+  bill_date = as.Date("2024-06-03") + sort(sample(0:270, 28)),
+  amount = round(runif(28, 190000, 199900), -1),
+  days_to_pay = 3 + rnbinom(28, mu = 15, size = 3)
+)
+
+# Planted case 3. Large works bills paid within a day in Lalganj
+fast_bills <- tibble(
+  district = "Lalganj", division = "East", category = "Works",
+  vendor = "Vikas Constructions",
+  bill_date = as.Date("2024-08-05") + sort(sample(0:200, 6)),
+  amount = round(runif(6, 650000, 900000), -1),
+  days_to_pay = c(0, 1, 0, 1, 1, 0)
+)
+
+bills <- bind_rows(bills, split_bills, fast_bills) |>
+  mutate(month_start = floor_date(bill_date, "month"),
+         month   = factor(format(month_start, "%b"), levels = format(fy_months, "%b")),
+         quarter = (as.integer(month) - 1) %/% 3 + 1) |>
+  arrange(bill_date) |>
+  mutate(bill_no = sprintf("B-%04d", row_number())) |>
+  select(bill_no, district, division, category, vendor, bill_date, month_start,
+         month, quarter, amount, days_to_pay)
+
+# Monthly expenditure statement, built from the bills
+spend <- bills |>
+  summarise(vouchers = n(), exp = sum(amount),
+            .by = c(district, division, month_start, month, category)) |>
+  arrange(district, month, category)
+
+# Budget estimate of each district for the year
+budget <- spend |>
+  summarise(amt_exp = sum(exp), .by = district) |>
+  mutate(util = runif(12, 0.6, 0.98),
+         # Planted case 4. Devgarh and Lalganj spent more than their budget
+         util = replace(util, district %in% c("Devgarh", "Lalganj"), c(1.18, 1.27)),
+         amt_be = round(amt_exp / util, -5)) |>
+  select(district, amt_be)
+
+# Small helpers for amounts in prose
+lakh  <- function(x) round(x / 1e5, 1)
+crore <- function(x) round(x / 1e7, 2)
+```
+
+We now have three tables. Let us look at each.
+
+```{r}
+glimpse(bills)
+```
+
+`bills` is the bill register. It has `r nrow(bills)` bills worth ₹`r crore(sum(bills$amount))` crore. The columns are these.
+
+-   `bill_no` is the number given to the bill, and `bill_date` is its date.
+-   `district` and `division` tell us where the money was spent.
+-   `category` is the kind of expenditure, and `vendor` is the firm paid.
+-   `month_start` is the first day of the month of the bill. `month` is the same month as a factor, in the order of the financial year, from April to March. `quarter` is the quarter of the financial year, from 1 to 4.
+-   `amount` is the amount of the bill, in rupees.
+-   `days_to_pay` is the number of days between the bill and its payment.
+
+```{r}
+spend
+```
+
+`spend` is the monthly expenditure statement. It has one row for each district, month and category, with the number of vouchers and the expenditure. It is built from the bills, as a district would report it to the head office.
+
+```{r}
+budget
+```
+
+`budget` gives the budget estimate (BE) of each district for the year, in rupees.
 
 ## Building a basic plot using key components
 
-We will use `mtcars` data-sets, which is a default dataset in the package, to learn the concepts. Let us see what happens when `data` is provided to `ggplot` function-
+Let us see what happens when only the `data` is given to the `ggplot()` function. The package ggplot2 is loaded with `tidyverse`.
 
-```{r fig-figblank, message=FALSE, warning=FALSE, fig.height=2, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data provided to ggplot2"}
-library(tidyverse)
-ggplot(data=mtcars)
+```{r fig-figblank, fig.height=2, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data provided to ggplot2"}
+ggplot(data = bills)
 ```
 
-In @fig-figblank we can see that a blank chart/plot space has been created as our data `mtcars` has now mapped with ggplot2. Now, let us provide aesthetic mappings to this using function `aes()`, through the argument `mapping` in `ggplot2` function itself.
+In @fig-figblank we see only a blank grey space. The data is now attached to the chart, but ggplot2 does not yet know what to draw. Let us give it the aesthetic mappings, with the function `aes()`, through the argument `mapping` of `ggplot()`.
 
 ```{r fig-rgg2, fig.height=2, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data and mapping provided to ggplot2"}
-ggplot(data = mtcars, mapping = aes(x=wt, y=mpg))
+ggplot(data = bills, mapping = aes(x = amount, y = days_to_pay))
 ```
 
-In @fig-rgg2, we may now notice that apart from creating a blank space for plot, the two dimensions provided, i.e. `wt` and `mpg` have been *mapped* with `x` and `y` axes respectively. Since no geometry has been provided, the plot area is still blank. Now we will provide geometry to our dimension say *point*. To do this we will use another family of functions i.e. `geom_*` (`geom_point()` in this case specifically).
+In @fig-rgg2 the two columns `amount` and `days_to_pay` have been *mapped* to the `x` and `y` axes. Each axis now has a range and a title. But there is still no geometry, so the plot area is empty. Let us draw each bill as a point. To do this, we use the family of functions `geom_*()`, here `geom_point()`.
 
-```{r fig-rgg3, fig.height=3, fig.align='center', fig.show='hold', out.width="100%",fig.cap="Data plotted as points in a scatterplot"}
-ggplot(data = mtcars, mapping = aes(x = wt, y = mpg)) +
+```{r fig-rgg3, fig.height=3, fig.align='center', fig.show='hold', out.width="100%",fig.cap="Bills plotted as points in a scatterplot"}
+ggplot(data = bills, mapping = aes(x = amount, y = days_to_pay)) +
   geom_point()
 ```
 
-In @fig-rgg3 we may now notice that data has been plotted
-as points (due to the geometry we used `geom_point`) as soon as we added
-another layer of function `ggplot()` using a `+` sign in the earlier
-code. **Using the code above, we have actually plotted the relationship
-between weight of the vehicle (`wt`) and mileage in miles per gallon
-(`mpg`) of the vehicles available in the `mtcars` dataset.**
+In @fig-rgg3 each bill is now a point. The new layer, `geom_point()`, was added to the earlier code with a `+` sign. **This chart shows how long each bill took to be paid, against its amount.** Most bills, small or large, were paid within about five weeks. The axis of amounts shows full rupees. We will learn to show them in lakh in the section on scales.
 
-We could have plotted the data as box-plot if we had used another
-geometry say `geom_boxplot` here. Refer @fig-rgg4.
+We could also show the amounts as a box plot, by using another geometry, `geom_boxplot()`. See @fig-rgg4.
 
-```{r fig-rgg4, fig.height=3, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Data plotted as boxplot"}
-ggplot(data = mtcars, mapping = aes(y = wt)) +
+```{r fig-rgg4, fig.height=3, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Bill amounts plotted as a boxplot"}
+ggplot(data = bills, mapping = aes(y = amount)) +
   geom_boxplot()
 ```
 
-That's the basic architecture for construction of a plot in this
-package. Up to this point it may be noted that we have provided `data`
-and `aesthetics` as argument to function `ggplot` and for `geometry` we
-have used another function `geom_*` and added it to above components
-using a plus `+` sign. In the above code(s) it may also be noted that
-`data` and `mapping` are the first two arguments of function `ggplot`;
-`x` and `y` are the default first two arguments of function `aes` so we
-may draw the same plot in @fig-rgg3 using the following
-code wherein we haven't used these as named arguments. We will follow
-the same convention in subsequent sections.
+This is the basic way of building a chart in ggplot2. We give `data` and `aesthetics` to `ggplot()`. We then add a `geom_*()` function with a plus sign `+`.
+
+Notice also that `data` and `mapping` are the first two arguments of `ggplot()`. Similarly, `x` and `y` are the first two arguments of `aes()`. So we may draw the chart in @fig-rgg3 without naming these arguments. We will follow this shorter style from now on.
 
 ```
-ggplot(mtcars, aes(wt, mpg)) +
+ggplot(bills, aes(amount, days_to_pay)) +
   geom_point()
 ```
 
-Now let us discuss more on `aesthetics` and `geometries` and using these
-to build the desired plots, before moving on to other components of plot
-in the package.
+Let us now learn more about aesthetics and geometries, before moving to the other components.
 
-## Other Aesthetic attributes (color, shape, size, etc.) {#sec-AESTH}
+## Other aesthetic attributes (colour, shape, size and others) {#sec-AESTH}
 
-In previous section of this chapter we mapped the attributes in data
-using the `position` in coordinate system (`x` and/or `y` in Cartesian
-coordinate system). We can, however, map other variables in the data to
-the plot using aesthetic attributes like `shape`, `size`, `color`,
-`alpha` (transparency), etc., as shown in the image in @fig-rrgg5.
+So far, we have mapped columns of the data to *positions*, that is, to `x` and `y`. We can also map columns to other aesthetic attributes, like `shape`, `size`, `colour` and `alpha` (transparency). @fig-rrgg5 shows some of them.
 
-```{r fig-rrgg5, echo=FALSE, fig.cap="Some Common Aesthetic mappings.  Image Source: Claus Wilke's book on Fundamentals of Data Visualization", fig.align='center', fig.show='hold'}
+```{r fig-rrgg5, echo=FALSE, fig.cap="Some common aesthetic mappings, from Claus Wilke's book Fundamentals of Data Visualization", fig.align='center', fig.show='hold'}
 knitr::include_graphics("images/aes.png")
 ```
 
-These aesthetics may be divided broadly into two categories -
+These aesthetics fall into two broad groups.
 
--   aesthetics those can be mapped with `continuous` data variable(s);
-    and
--   aesthetics those can be mapped with `discrete` or categorical data
-    variables.
+-   Aesthetics that can show a `continuous` variable, like an amount.
+-   Aesthetics that can show only a `discrete` (categorical) variable, like a district.
 
-For example, `position` (coordinates in a coordinate system), `size`,
-`color`, `linewidth` can represent continuous data; but `shape`,
-`linetype` etc. aesthetics can be mapped with discrete data. Numerical
-data which can be used to represent both `continuous` and `discrete`
-data (we will see example shortly) if mapped to an aesthetic will by
-default represent continuous data and thus, need to be converted to a
-discrete data type (factor, in most of the cases will suffice) before
-mapping to an aesthetic representing discrete data.
+For example, `position`, `size`, `colour` and `linewidth` can show continuous data. But `shape` and `linetype` can show only discrete data. A numeric column is always treated as continuous by ggplot2. Some numeric columns are really codes, like a quarter number or a district code. Such a column must be converted to a discrete type, usually a factor, before mapping it to a discrete aesthetic. We will see an example shortly.
 
-Some commonly used aesthetics are -
+Some commonly used aesthetics are these.
 
--   `shape` = Display a point with `geom_point()` as a dot, star,
-    triangle, or square
--   `fill` = The interior color (e.g. of a bar or box-plot)
--   `color` = The exterior line of a `bar`, `boxplot`, etc., or the
-    point color if using `geom_point()`
--   `size` = Size of points and text
--   `linewidth` = Thickness of lines and borders (before ggplot2 version 3.4, `size` was used for this too)
--   `alpha` = Transparency (`1 = opaque`, `0 = invisible`)
--   `width` = Width of "bar plot" columns
--   `linetype` = Line type (e.g. solid, dashed, dotted)
+-   `shape` is the symbol of a point drawn by `geom_point()`, such as a dot, a triangle or a square.
+-   `fill` is the colour inside a shape, such as a bar or a box.
+-   `colour` is the colour of the outline of a bar or a box, or the colour of a point drawn by `geom_point()`.
+-   `size` is the size of points and text.
+-   `linewidth` is the thickness of lines and borders. Before ggplot2 version 3.4, `size` was used for this too.
+-   `alpha` is the transparency, from `1` (solid) to `0` (invisible).
+-   `width` is the width of the bars in a bar chart.
+-   `linetype` is the type of a line, such as solid, dashed or dotted.
 
-Some settings, like `binwidth`, the width of histogram bins, are not aesthetics but *arguments* of a particular geom. We will meet them with their geoms.
+Some settings, like `binwidth`, the width of the bins of a histogram, are not aesthetics. They are *arguments* of a particular geom. We will meet them with their geoms.
 
-### Color, the most important aesthetic
+### Colour, the most important aesthetic
 
-Data elements can be colored in a data visualisation using aesthetic
-named `color` (Alternative British spelling `colour` will also work in
-exactly same way). We can use color in a plot/visualisation primarily
-for three purposes-
+We may colour the elements of a chart with the aesthetic `colour`. The American spelling `color` works in exactly the same way. Colour is used in a chart mainly for three purposes.
 
--   highlight specific or all values.
--   grouping the data points i.e. using color to distinguish data
-    elements from each other.
--   mapping a variable, i.e. using color to represent different data
-    elements.
+-   To highlight some values, or all of them.
+-   To group the data points, so that the groups can be told apart.
+-   To show the value of a variable.
 
-To understand the use cases, let us fill the color of all points in
-@fig-rgg3 with say, `"red"` color. To do this, we can provide
-the value of `color` aesthetic directly inside the `geom_*` function
-(@fig-rgg5).
+Let us first colour all the points of @fig-rgg3 red. To do this, we give a fixed value of `colour` directly inside the `geom_*()` function (@fig-rgg5).
 
-```{r fig-rgg5, fig.height=3, fig.align='center', fig.cap="Highlighting all data points with a static color", fig.show='hold'}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(color='red')
+```{r fig-rgg5, fig.height=3, fig.align='center', fig.cap="Highlighting all data points with a static colour", fig.show='hold'}
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(colour = "red")
 ```
 
-As the argument `color='red'` was mentioned inside the `geom_point()`
-function, it turned every point to red (i.e. with a static color) in
-@fig-rgg5. But if the requirement was to highlight specific
-points in the plot, we have to use the `color` inside `aes` function. Or
-in other words, we have to use color `aesthetics` to visualise the data.
+The argument `colour = "red"` was given inside `geom_point()`, outside `aes()`. So every point turned red. But to colour the points *according to the data*, we must put `colour` inside `aes()`. In other words, we must use colour as an aesthetic mapping.
 
-So let us color the data points in @fig-rgg5 using the
-variable `cyl` (number of cylinders in the vehicle), so that the
-scatter-points are colored on the basis of number of cylinders instead.
+So let us colour the points by the column `quarter`, the quarter of the financial year in which the bill was raised.
 
-```{r fig-rgg6, fig.height=3, fig.align='center', fig.show='hold', fig.cap="Mapping a numeric variable with color aesthetic"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(color=cyl))
+```{r fig-rgg6, fig.height=3, fig.align='center', fig.show='hold', fig.cap="Mapping a numeric variable with colour aesthetic"}
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(colour = quarter))
 ```
 
-We may notice in @fig-rgg6 that scatter-points are now
-colored on the basis of number of cylinders in the cars. Simultaneously,
-a color scale has been produced as a legend. Since the `cyl` column was
-a numeric column, and we mapped that with a `continuous` type aesthetic
-color, it mapped the continuous variable with the aesthetic by default.
-Now in this case, though the `cyl` is having numerical values, the plot
-will be more meaningful if the corresponding `discrete` variable is
-mapped with color aesthetic. So we can convert it into a factor type
-variable, on the fly.
+In @fig-rgg6 the points are coloured by quarter, and a colour bar appears as a legend. But the colour bar runs smoothly from 1 to 4, as if a quarter of 2.5 could exist. This happened because `quarter` is a numeric column, so ggplot2 treated it as continuous. The chart is more meaningful if we treat the quarter as a category. So let us convert it to a factor, on the fly.
 
-```{r fig-rgg7, fig.height=3, fig.align='center', fig.show='hold', fig.cap="Mapping a discrete variable with color aesthetic"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(color=as.factor(cyl)))
+```{r fig-rgg7, fig.height=3, fig.align='center', fig.show='hold', fig.cap="Mapping a discrete variable with colour aesthetic"}
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(colour = as.factor(quarter)))
 ```
 
-In @fig-rgg7 we may see that the points have been grouped
-using different color of each of the group. Readers may also that the
-`color` aesthetic was provided through `aes()` function in the second
-layer which was wrapped in `geom_point()` function. The aesthetic could
-have been wrapped in `ggplot()` layer also. So basically the following
-code will also produce exactly the same chart-
+In @fig-rgg7 each quarter now has its own colour, and the legend shows four separate keys. Here, the `colour` aesthetic was given through `aes()` inside `geom_point()`. It could also have been given inside `ggplot()`. The following code produces exactly the same chart.
 
 ```
-ggplot(mtcars, aes(wt, mpg, color = as.factor(cyl))) +
+ggplot(bills, aes(amount, days_to_pay, colour = as.factor(quarter))) +
   geom_point()
 ```
 
-So is there any difference between the two? Yes, basically aesthetics if
-provided under the `geoms`, will override those aesthetics which are
-already provided under `ggplot` function. To understand the difference,
-see the result of following code in @fig-rgg8.
+Is there any difference between the two? Yes. A value given inside a geom overrides the one given in `ggplot()`. To see this, look at the result of the following code in @fig-rgg8. The mapping in `ggplot()` asked for colours by quarter. But the fixed colour in `geom_point()` won, and all the points are red.
 
 ```{r fig-rgg8, fig.height=3, fig.align='center', fig.show='hold', fig.cap="Over-riding aesthetics"}
-ggplot(mtcars, aes(wt, mpg, color = as.factor(cyl))) +
-  geom_point(color='red')
+ggplot(bills, aes(amount, days_to_pay, colour = as.factor(quarter))) +
+  geom_point(colour = "red")
 ```
 
-As the third use-case, i.e. using color to describe the variable, let us
-analyse the mean mileage of cars for each group of cars for (i) number
-of cylinders `cyl` and (ii) number of carburetors `carb`. A good
-visualisation to plot the values will be *heat-map* (sometimes also
-called as *highlight table*). We will generate a grouped summary before
-proceeding, which can be understood using the concepts explained in
-chapter related to data manipulation in dplyr i.e. @sec-DPLYRR.
+The third use of colour is to show the value of a variable directly. Let us see the expenditure of each district in each month. A good chart for this is a *heat-map*, sometimes called a *highlight table*. We first summarise the monthly statement by district and month. The functions `summarise()` and `.by` are explained in @sec-DPLYRR.
 
-To draw the rectangular boxes in heat-map we will use another geometry
-namely `geom_tile()` and map two categorical variables with `x` and `y`
-coordinates in the Cartesian system. To fill the color values on the
-basis of variable `mpg` we will use `fill` aesthetic instead of `color`
-(we will understand the difference between `fill` and `color` aesthetics
-shortly).
+To draw the boxes of the heat-map we use another geometry, `geom_tile()`. We map the month to `x` and the district to `y`. To colour each box by the expenditure, we use the `fill` aesthetic instead of `colour`. We will see the difference between the two shortly. We divide the expenditure by `1e5` to show it in lakh.
 
-```{r fig-rgg9, fig.align='center', fig.show='hold', fig.cap="using color to plot variable directly"}
-mtcars |>
-  summarise(mpg = mean(mpg, na.rm = TRUE),
-            .by = c(cyl, carb)) |>
+```{r fig-rgg9, fig.align='center', fig.show='hold', fig.cap="Using colour to show monthly expenditure of each district"}
+spend |>
+  summarise(exp = sum(exp), .by = c(district, month)) |>
   ggplot() +
-  geom_tile(aes(x = cyl, y = carb, fill = mpg))
+  geom_tile(aes(x = month, y = district, fill = exp / 1e5))
 ```
 
-Referring plot in @fig-rgg9 we may see that cars with 4
-cylinders and 1 carburetor have highest mileage.
+In @fig-rgg9 almost every box is a similar dark blue. Two boxes stand out in light blue. Both are in March, one for Fatehpur and one for Rampur. These two districts spent far more in March than in any other month. This is our first planted case, a **March rush**.
 
-So up to now, we have seen that to map color dynamically with a
-variable, we have pass this aesthetic inside `aes` function; and
-otherwise if we intend to use color only as a static value, we may pass
-it outside the `aes` i.e. directly in the corresponding `geom` function.
-Package ggplot2 recognises most of the color names and we have discussed
-more about colors in @sec-COLORR. But what if we pass a
-static color value to `color` aesthetic inside the `aes` function? Let
-us check ourselves.
+::: callout-tip
+## Audit tip
 
-```{r fig-rgg10, fig.align='center', fig.show='hold', fig.cap="Mapping Static color inside aes"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(color='blue'))
+Heavy spending in the last month of the financial year is a classic audit concern. Funds that would otherwise lapse may be spent in a hurry, sometimes on things not needed, or booked without the work being done. A heat-map of districts against months shows such a rush at a glance. For the districts that stand out, examine the March bills for the date of supply, the date of work and the stock entries.
+:::
+
+So far, we have seen that to map colour to a variable, we pass it inside `aes()`. To use a fixed colour, we pass it outside `aes()`, directly in the geom. ggplot2 knows most colour names, and @sec-COLORR discusses colours in detail. But what if we pass a fixed colour inside `aes()`? Let us check.
+
+```{r fig-rgg10, fig.align='center', fig.show='hold', fig.cap="Mapping static colour inside aes"}
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(colour = "blue"))
 ```
 
-Interesting! GGPLOT2 has not only mapped a dummy variable called
-`'blue'` with color of points, but also created a legend. More
-interestingly the color is not what we wanted. Actually, what happened
-was, that when we mapped color aesthetic inside `aes()`, ggplot2 created
-a new variable on the fly, and then mapped it with the aesthetic and
-thus producing a legend for the newly created variable.
+Interesting! The points are not blue, and a legend has appeared with the single key "blue". What happened is this. Inside `aes()`, ggplot2 treats `"blue"` as data, not as a colour. It creates a new column on the fly, with the value `"blue"` in every row. It then maps that column to colour with its default palette, and draws a legend for it. So a fixed colour must always be given outside `aes()`.
 
-### Color Vs. Fill
+### Colour vs. fill
 
-Till now we use used `color` aesthetic with the `point` geom (@fig-rgg7) and `fill` aesthetic in `tile` geom (@fig-rgg9) to map colors to the variables. Why did we use
-different aesthetics? Typically, the `color` aesthetic changes the
-outline of a geom and the `fill` aesthetic changes the inside.
-`geom_point()` was an exception, we used `color` (not `fill`) for the
-point color. Actually, it was not an exception too. The reason was that
-the default point shape used by `geom_point()` was `shape = 19`: a solid
-circle.
+We used the `colour` aesthetic with points (@fig-rgg7) and the `fill` aesthetic with tiles (@fig-rgg9). Why two different aesthetics? Usually, `colour` changes the outline of a shape and `fill` changes the inside. Points seem to be an exception, as we used `colour` for them. In fact they are not. The default shape of `geom_point()` is `shape = 19`, a solid circle, which has no separate inside.
 
-We can see the subtle difference if we override the default shape in
-@fig-rgg7 with `shape = 21`: a circle that allows us to use
-both `fill` for the inside and `color` for the outline. (@fig-rgg11.)
+We can see the difference if we use `shape = 21` instead. This is a circle that takes both a `fill` for the inside and a `colour` for the outline (@fig-rgg11).
 
 ::: {#fig-rgg11}
 
@@ -294,71 +339,45 @@ both `fill` for the inside and `color` for the outline. (@fig-rgg11.)
 # From here on, all plots in this chapter use theme_bw()
 theme_set(theme_bw())
 
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(color=as.factor(cyl)), shape = 21, size = 4) +
-  ggtitle("Using color aesthetic")
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(colour = as.factor(quarter)), shape = 21, size = 4) +
+  ggtitle("Using colour aesthetic")
 
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(fill=as.factor(cyl)), shape = 21, size = 4) +
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(fill = as.factor(quarter)), shape = 21, size = 4) +
   ggtitle("Using fill aesthetic")
 ```
 
-Color Vs. Fill aesthetics
+Colour vs. fill aesthetics
 :::
+
+Notice the first line of the code. `theme_set(theme_bw())` gives all later charts a white background. We will learn about themes later in this chapter.
 
 ### Transparency through `alpha`
 
-In `ggplot2`, there is one more aesthetic which is used to change color
-of the geometries, `alpha` which is used to control the transparency of
-the elements in a plot. By adjusting the `alpha` value, which ranges
-from 0 (completely transparent) to 1 (fully opaque), we can manage the
-visibility and layering of overlapping elements. This is particularly
-useful when dealing with dense data, as it helps to reduce over-plotting
-and allows for better visualization of distributions and relationships.
-Usually, it is used to map a continuous variable with it. Example-
+One more aesthetic changes how colours look. `alpha` controls transparency. Its value runs from 0 (completely transparent) to 1 (fully solid). It is very useful when many points overlap. Our register has `r nrow(bills)` bills, and in @fig-rgg3 the small bills form a solid black mass. With a low `alpha`, a single point looks faint, but places where many points overlap look dark. So we can see where the bills are crowded.
 
-```{r fig-rgg12, fig.show='hold', fig.align='center', fig.cap="Setting transparency with the number of cylinders"}
-ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point(aes(alpha = cyl), size = 4)
+```{r fig-rgg12, fig.show='hold', fig.align='center', fig.cap="Setting transparency to see crowded areas"}
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
+  geom_point(alpha = 0.2, size = 3)
 ```
 
-We may see in @fig-rgg12 that the transparency of points now
-varies according to the number of cylinders i.e. `cyl` variable in the
-data. Similar to other aesthetics we may pass static value between 0 to
-1 to `alpha` for setting the transparency of geometries as desired.
+In @fig-rgg12 the darkest area is in the lower left. Most bills are small, and were paid in one to five weeks. Here we gave `alpha` a fixed value. Like any other aesthetic, `alpha` can also be mapped to a continuous column inside `aes()`, for example `aes(alpha = days_to_pay)`.
 
-### Shape Aesthetic
+### Shape aesthetic
 
-In @fig-rgg11, we already saw the shape aesthetic to change
-the shape of points from solid color to hollow color. Actually, in
-`ggplot2`, the `shape` aesthetic is used to differentiate points in a
-plot by assigning different symbols to them. Moreover, as we have
-already discussed, this aesthetic should either be mapped with a
-discrete variable; or if using shape from pre-existing shapes in the
-package (see `?points`). `ggplot2` supports a variety of shapes, such as
-circles, triangles, squares, and more, each represented by a unique
-integer or character.
+In @fig-rgg11 we already changed the shape of the points, from a solid circle to a circle with an outline. The `shape` aesthetic gives different symbols to different groups of points. As discussed, it should be mapped to a discrete variable. ggplot2 offers many shapes, such as circles, triangles and squares, each known by a number (see `?points`).
 
-For instance, when plotting data with a categorical variable, we can map
-this variable to the `shape` aesthetic to visually separate the groups.
-However, it's important to note that shapes can be less effective for
-groups with many categories, as the distinctiveness of each shape may
-diminish.
-
-So in the above plots, we may map `cyl` variable to shape instead, by
-converting it into factor variable.
+Shapes work well for a few groups. With many groups, the shapes become hard to tell apart. Let us map the `category` of the bill to shape. It is already a character column, so no conversion is needed.
 
 ```{r fig-rgg13, fig.align='center', fig.show='hold', fig.cap="Mapping shape aesthetic"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(shape=as.factor(cyl)), size = 3)
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(aes(shape = category), size = 2)
 ```
 
-In above we may notice that different shapes have been used for 4, 6 and
-8 cylinder vehicles.
+In @fig-rgg13 each of the four categories has its own symbol.
 
-**A few shapes available in `shape` aesthetics, with `fill` aesthetic
-shown in orange and `color` aesthetic shown in blue, are given in**
-@fig-shapes.
+**A few shapes available in the `shape` aesthetic are given in @fig-shapes. The `fill` aesthetic is shown in orange and the `colour` aesthetic in blue.**
 
 ```{r echo=FALSE, fig.show='hide', message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -383,416 +402,287 @@ ggsave('shapes.png', width = 12, height = 6)
 knitr::include_graphics('shapes.png')
 ```
 
-### Size Aesthetic
+### Size aesthetic
 
-As we have already seen that the `size` aesthetic controls the size of
-plot elements or geometries, such as points in a scatter plot. By
-mapping a continuous or discrete variable to `size`, we can represent
-additional dimensions of our data, making the plot more informative.
+The `size` aesthetic controls the size of elements, such as points. By mapping a column to `size`, we can show one more dimension of the data.
 
-For example, in a scatter plot of car weight versus fuel efficiency, we
-might use the `size` aesthetic to represent the horsepower of each car,
-where larger points indicate more powerful cars.
+Let us summarise the bills by district. For each district, we find the number of bills, the average days taken to pay, and the total amount. We then plot the number of bills against the average days, with the size of each point showing the total amount. Such a chart is often called a *bubble chart*.
 
 ```{r fig-rgg14, fig.align='center', fig.show='hold', fig.cap="Mapping size aesthetic"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point(aes(size=hp))
+dist_summary <- bills |>
+  summarise(n_bills  = n(),
+            avg_days = mean(days_to_pay),
+            total    = sum(amount),
+            .by = c(district, division))
+
+ggplot(dist_summary, aes(n_bills, avg_days)) +
+  geom_point(aes(size = total))
 ```
 
-In @fig-rgg14 we may see that a visual layer has been added
-that helps to identify relationships and patterns across multiple
-variables simultaneously. However, it's essential to use the `size`
-aesthetic judiciously, as overly large or small elements can distort the
-readability of the plot.
+In @fig-rgg14 the bigger bubbles are the districts that spent more. The size adds a third variable to a two-dimensional chart. But we should use `size` with care. People judge sizes poorly, and very large or very small points make a chart hard to read.
 
 ### Using multiple aesthetics simultaneously
 
-Multiple aesthetics can also be mapped simultaneously, as per
-requirement. See this example-
+Several aesthetics can be mapped at the same time. See this example.
 
 ```{r fig-rgg15, fig.align='center', fig.show='hold', fig.cap="Using multiple aesthetics"}
-ggplot(mtcars,
+ggplot(bills,
        aes(
-         x = wt,
-         y = mpg,
-         shape = as.factor(cyl),
-         color = as.factor(gear),
-         alpha = wt,
-         size = hp
+         x = amount,
+         y = days_to_pay,
+         shape = category,
+         colour = as.factor(quarter),
+         size = amount
        )) +
-  geom_point()
+  geom_point(alpha = 0.5)
 ```
 
-We will learn about some other aesthetics like `binwidth`, `linetype`,
-`width`, etc., in the next @sec-geoms when we will learn about
-the use of other geometries.
+@fig-rgg15 shows five variables at once. But it is hard to read. Just because we *can* map many aesthetics does not mean we *should*. A chart for an audit report should usually make one point, with one or two aesthetics.
 
-## More on Geoms {#sec-geoms}
+We will meet other aesthetics like `linetype` and `width` in @sec-geoms, along with the geoms that use them.
 
-In previous section we have seen that as soon as we passed a `geom_*`
-function/layer to `data` & `aesthetics` layers, the chart/graph was
-constructed. Actually, `geom_point()` function, in the background added
-three more layers i.e. `stat`, `geom` and `position`, because `geom_*`
-are actually shortcuts, which add these three layers. So in our example,
-`ggplot(mtcars, aes(wt, mpg)) + geom_point()` is actually equivalent to
--
+## More on geoms {#sec-geoms}
+
+In the last section, we saw that the chart appeared as soon as we added a `geom_*()` layer. In the background, a `geom_*()` function is a shortcut. It adds one layer that has three parts, a `stat`, a `geom` and a `position`. So `ggplot(bills, aes(amount, days_to_pay)) + geom_point()` is the same as the following code.
 
 ```{r fig-rgg16, fig.show='hold', fig.align='center', fig.cap="Components of GGPLOT2"}
 ggplot() +
   layer(
-    data = mtcars,
-    mapping = aes(wt, mpg),
+    data = bills,
+    mapping = aes(amount, days_to_pay),
     geom = "point",
     stat = "identity",
     position = "identity"
   )
 ```
 
-Some common `geoms` are listed below:
+We will rarely write `layer()` ourselves. But knowing that each geom has a `stat` and a `position` explains much of what follows. Some common geoms are listed below.
 
--   Histograms - `geom_histogram()`
--   Bar charts - `geom_bar()` or `geom_col()`
--   Box plots - `geom_boxplot()`
--   Points (e.g. scatter plots) - `geom_point()`
--   Line graphs - `geom_line()` or `geom_path()`
--   Trend lines - `geom_smooth()`
--   Heat-map - `geom_tile()`
--   Label charts using `geom_text()` and/or `geom_label()`
+-   Histograms, with `geom_histogram()`.
+-   Bar charts, with `geom_bar()` or `geom_col()`.
+-   Box plots, with `geom_boxplot()`.
+-   Points, as in scatter plots, with `geom_point()`.
+-   Line charts, with `geom_line()` or `geom_path()`.
+-   Trend lines, with `geom_smooth()`.
+-   Heat-maps, with `geom_tile()`.
+-   Text labels, with `geom_text()` and `geom_label()`.
 
-Of these, we have already seen examples of `geom_point`, `geom_boxplot`
-and `geom_tile`. Let us discuss some other geoms in a bit detail.
+We have already used `geom_point()`, `geom_boxplot()` and `geom_tile()`. Let us look at the others in some detail.
 
-### Univariate Bar Charts through `geom_bar()`
+### Univariate bar charts through `geom_bar()`
 
-Bar charts though form simplest of the visualisations but can be
-deceptive if we try to build these without understanding the mechanics
-behind the bars, literally :). Bar charts can both be univariate and
-bivariate. Even multivariate data can be visualised through bar charts.
+Bar charts are the simplest charts. But they can mislead us if we do not understand how the bars are built. Bar charts can show one variable (univariate) or two (bivariate). With colour, they can show even more.
 
-Simplest of bar charts can be a plot showing distribution of a
-categorical variable in the data. In other words, the number of data
-points available per category of the variable. Example - How many cars
-with different cylinder count are available in the data.
+The simplest bar chart shows how many rows fall in each category of a variable. For example, how many bills were raised in each quarter?
 
-```{r fig-rgg17, fig.show='hold', fig.align='center', fig.cap="Univariate Bar Chart"}
-ggplot(mtcars, aes(cyl)) +
+```{r fig-rgg17, fig.show='hold', fig.align='center', fig.cap="Univariate bar chart"}
+ggplot(bills, aes(quarter)) +
   geom_bar()
 ```
 
-In @fig-rgg17 we may see the numbers of cars available per
-category (of cylinders therein). As we have used numerical variable on
-the x-axis, a numerical scale has been shown. Also notice that our data
-was not summarised and ggplot2 itself aggregated it on the basis of
-variable passed in aesthetics (position) by applying `count` summary
-function. This can be confirmed from the label on `y` axis.
+@fig-rgg17 shows the number of bills in each quarter. As `quarter` is numeric, the `x` axis has a numeric scale. Notice also that our data was not summarised. ggplot2 counted the rows for each value of `quarter` by itself. The title of the `y` axis, `count`, confirms this.
 
-Readers are advised to note the change in x-axis as soon as the variable
-is converted to a categorical variable, by executing the code-
+Readers may run the following code to see the `x` axis change when the quarter is converted to a factor.
 
 ```
-ggplot(mtcars, aes(as.factor(cyl))) +
+ggplot(bills, aes(as.factor(quarter))) +
   geom_bar()
 ```
 
-That was about aggregating data by itself in bar-plot using `count`
-function. But sometimes, other aggregation methods may be required. That
-can be done if we understand the mechanics behind the code. Actually
-`aes(cyl)` was a shortcut to `aes(x = cyl, y = after_stat(count))` where
-`count` is a special variable representing the counts in each of the
-category present in the variable.
+Here, `geom_bar()` counted the rows. Sometimes we need another summary. To do that, we must understand what happens behind the code. In fact, `aes(quarter)` is a shortcut for `aes(x = quarter, y = after_stat(count))`. Here, `count` is a special variable, computed by the stat of the geom. It holds the number of rows in each category. The function `after_stat()` tells ggplot2 to use a value computed *after* the stat has done its work.
 
-So now, let us calculate proportions instead of count (frequency) of the
-categories available in the variable. For a change, now let us use
-another dataset `mpg` which comes by default with `ggplot2` package. We
-will analyse proportion of vehicles under each `class` (which is a
-categorical variable).
+So let us show the *proportion* of bills in each `category`, instead of the count.
 
-```{r fig-rgg18, fig.show='hold', fig.align='center', fig.cap="Univariate Bar Chart representing proportions"}
-ggplot(mpg, aes(class, y = after_stat(count/sum(count)))) +
+```{r fig-rgg18, fig.show='hold', fig.align='center', fig.cap="Univariate bar chart representing proportions"}
+ggplot(bills, aes(category, y = after_stat(count / sum(count)))) +
   geom_bar()
 ```
 
-In @fig-rgg18 we may see that now the proportions have been
-plotted (notice y axis).
+In @fig-rgg18 the `y` axis now shows proportions. Supplies have the largest share of the bills.
 
-### Bivariate Bar Charts through `geom_bar()`
+### Bivariate bar charts through `geom_bar()`
 
-We have learn how the `geom_bar()` carries out a summarisation on
-un-aggregated or granular data and draws plots for us. To tweak the
-summary function, as per our requirement, we used `y` position
-aesthetic. But in same granular data, we may sometimes require to
-perform an aggregation on another variable.
+`geom_bar()` summarises raw, row-level data and draws the bars. So far it has only counted rows. But often we need a summary of another column. For example, what is the average amount of a bill in each category?
 
-As an example let us see the mean city mileage `cty` for every `class`
-of car in `mpg` data-set. To achieve this, we will use the argument
-`stat` of `geom_bar()`, with the special value `"summary_bin"`. With it, we
-also give the argument `fun`, the summary function, which is `mean` in our case. (`stat = "summary"` works the same way for a discrete `x`.)
+To do this, we use the argument `stat` of `geom_bar()`, with the special value `"summary_bin"`. With it, we give the argument `fun`, the summary function, which is `mean` in our case. (`stat = "summary"` works the same way for a discrete `x`.)
 
-```{r fig-rgg19, fig.show='hold', fig.align='center', fig.cap="Bivariate Bar Chart representing mean milaege per class of car"}
-ggplot(mpg, aes(x = class, y = cty)) +
+```{r fig-rgg19, fig.show='hold', fig.align='center', fig.cap="Bivariate bar chart representing mean amount per category of bill"}
+ggplot(bills, aes(x = category, y = amount)) +
   geom_bar(stat = "summary_bin", fun = mean)
 ```
 
-In @fig-rgg19 we can see that `subcompact` class of cars
-has highest mean mileage in city.
+In @fig-rgg19 we see that works bills have by far the highest average amount, as we would expect.
 
-In these two sections, we have learnt to draw plots using un-aggregated
-data. However, we can also plot pre-aggregated data to bar-plots using
-`geom_bar`. So let us draw the same plot as in @fig-rgg19,
-but this time aggregating data by ourselves, beforehand. The trick is to
-use `stat = "identity"` aesthetics in a `geom_bar()` layer. We will see
-what this aesthetic is doing actually in a short-while. For a change,
-this time let's draw the plot with x and y axes flipped.
+So far, we have drawn bars from raw data. We can also draw bars from data that we have already summarised. The trick is to use `stat = "identity"` in `geom_bar()`. Let us find the average bill amount of each district ourselves, and then plot it. For a change, let us put the districts on the `y` axis. Long names are easier to read this way.
 
-```{r fig-rgg20, fig.show='hold', fig.align='center', fig.cap="Bivariate Bar Chart representing mean milaege per class of car"}
-aggregated_mpg <- mpg |>
-  summarise(mean_cty = mean(cty),
-            .by = class)
+```{r fig-rgg20, fig.show='hold', fig.align='center', fig.cap="Bivariate bar chart of mean bill amount per district, from summarised data"}
+district_avg <- bills |>
+  summarise(mean_amount = mean(amount),
+            .by = district)
 
-ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
+ggplot(district_avg, aes(x = mean_amount, y = district)) +
   geom_bar(stat = "identity")
 ```
 
-In @fig-rgg20 we can see the desired have been generated.
-Readers may try the above-mentioned code by removing `stat = "identity"`
-from the `geom_bar()`.
+@fig-rgg20 shows the chart we wanted. Readers may try the code without `stat = "identity"` to see what happens.
 
-Now, as promised we will discuss what the `stat` argument does. While
-generating summary in a bivariate chart we used `stat = "summary_bin"`
-which created summary using `fun` of un-aggregated data. Whereas
-`stat = "identity"` tells ggplot2 that data is either already aggregated
-or there is only value of `y` per category of `x` variable. So are there
-other `stat` values available for us? The answer is yes. However,
-readers are advised to plot bar charts on aggregated data using
-`geom_col` which has been discussed in subsequent sections, instead of
-trying the complex aggregations within ggplot2 as it gets trickier from
-here.
+Now, as promised, let us see what the `stat` argument does. With `stat = "summary_bin"`, ggplot2 computed a summary of raw data, using `fun`. With `stat = "identity"`, ggplot2 draws the values as they are. It assumes the data is already summarised, with only one value of `y` for each `x`. There are other `stat` values too. But summaries inside ggplot2 soon become tricky. It is better to summarise the data ourselves and draw the bars with `geom_col()`, which we discuss shortly.
 
-### Stacked bar charts through `geom_bar`
+### Stacked bar charts through `geom_bar()`
 
-In @sec-AESTH, we learnt that we can plot other variables in
-the two-dimensional plots using aesthetic attributes like color, size,
-etc. As size of the bar, in a bar chart is already mapped to a variable,
-most suitable aesthetic to be mapped to another variable is `fill` or
-`color`.
+In @sec-AESTH, we learnt to show more variables in a chart with aesthetics like colour and size. In a bar chart, the length of the bar already shows one variable. The best aesthetic for another variable is `fill` or `colour`.
 
-Let us aggregate the cars (count) on the basis of `class` again. But
-let's map `fill` to fuel type `fl` variable.
+Let us count the bills in each division again. But let us map `fill` to the `category` of the bill.
 
 ```{r fig-rgg24, fig.show='hold', fig.align='center', fig.cap="Colour stacked bar chart"}
-ggplot(mpg, aes(x = class, fill = fl)) +
+ggplot(bills, aes(x = division, fill = category)) +
   geom_bar()
 ```
 
-In @fig-rgg24 we achieved our desired results simply by
-mapping `fill` to our additional variable. Actually, this was possible
-due to the default value of the `position` argument of the `geom_bar()` layer,
-`"stack"`, which matches our requirement. By default, multiple bars occupying
-the same x position will be stacked atop one another by
-`position_stack()`.
+In @fig-rgg24 we got what we wanted, simply by mapping `fill`. This works because of the default value of the `position` argument of `geom_bar()`, which is `"stack"`. Bars at the same `x` position are stacked on top of one another by `position_stack()`.
 
-A useful argument `reverse` in this `position_stack()` is also helpful
-in reversing the order of `fill` values. E.g. if the above plot is drawn
-at y-axis instead.
+`position_stack()` has a useful argument `reverse`, which reverses the order of the stacked pieces. This helps, for example, when the chart is drawn along the `y` axis. The order of the pieces then matches the order of the legend.
 
-```{r fig-rgg25, fig.show='hold', fig.align='center', fig.cap="Colour stacked bar chart on Y axis"}
-ggplot(mpg, aes(y = class, fill = fl)) +
+```{r fig-rgg25, fig.show='hold', fig.align='center', fig.cap="Colour stacked bar chart on y axis"}
+ggplot(bills, aes(y = division, fill = category)) +
   geom_bar(position = position_stack(reverse = TRUE)) +
   theme(legend.position = "top")
 ```
 
-In @fig-rgg25 we can see that legend values now align with
-the values represented in bar chart.
+In @fig-rgg25 the pieces of the bars now follow the order of the legend.
 
-To use the bars, side by side, in a plot we can use another position
-stat function `position_dodge()`. Redrawing the same plot above with
-bars side by side-
+To place the bars side by side, we use another position function, `position_dodge()`. Let us redraw the same chart with the bars side by side.
 
-```{r fig-rgg26, fig.show='hold', fig.align='center', fig.cap="Dodged Bar Chart"}
-ggplot(mpg, aes(x = class, fill = fl)) +
+```{r fig-rgg26, fig.show='hold', fig.align='center', fig.cap="Dodged bar chart"}
+ggplot(bills, aes(x = division, fill = category)) +
   geom_bar(position = position_dodge()) +
   theme(legend.position = "top")
 ```
 
-In @fig-rgg26 we may see that separate bar for each fill
-axis have now been drawn. The bars' widths have been preserved as the
-default parameter for `preserve` inside `position_dodge()` is `total`.
-We may have to change it to `"single"` if we want bars of equal width
-irrespective of the fact that whether each fill category is available
-for each of the `x` value. Refer @fig-rgg27 wherein bars'
-widths are equal.
+In @fig-rgg26 there is now a separate bar for each category. Look at the West division. It has no vehicle hire bills, so it has only three bars. These three bars are wider than the others, because by default they share the full width of the division. This is due to the argument `preserve` of `position_dodge()`, whose default is `"total"`. If we want all bars to have the same width, we set it to `"single"`. See @fig-rgg27.
 
-```{r fig-rgg27, fig.show='hold', fig.align='center', fig.cap="Dodged Bar Chart with equal bar widths"}
-ggplot(mpg, aes(x = class, fill = fl)) +
+```{r fig-rgg27, fig.show='hold', fig.align='center', fig.cap="Dodged bar chart with equal bar widths"}
+ggplot(bills, aes(x = division, fill = category)) +
   geom_bar(position = position_dodge(preserve = "single")) +
   theme(legend.position = "top")
 ```
 
-Similar to `position_dodge` there is another `position_dodge2()`
-function which works better for bar charts. We may tweak the padding
-between bars (Refer @fig-rgg28).
+A related function, `position_dodge2()`, often works better for bar charts. It lets us set the `padding` between the bars. See @fig-rgg28.
 
-```{r fig-rgg28, fig.show='hold', fig.align='center', fig.cap="Dodged Bar Chart with padding between bars"}
-ggplot(mpg, aes(x = class, fill = fl)) +
+```{r fig-rgg28, fig.show='hold', fig.align='center', fig.cap="Dodged bar chart with padding between bars"}
+ggplot(bills, aes(x = division, fill = category)) +
   geom_bar(position = position_dodge2(preserve = "single", padding = 0.2)) +
   theme(legend.position = "top")
 ```
 
-Finally, there is one more position namely `position_fill()` which
-stacks bars and standardises each stack to have constant height. Refer
-@fig-rgg29.
+Finally, `position_fill()` stacks the bars and stretches every stack to the same height. Each bar then shows the *share* of each category, which is handy when the totals differ a lot. See @fig-rgg29.
 
 ```{r fig-rgg29, fig.show='hold', fig.align='center', fig.cap="100% stacked bar chart"}
-ggplot(mpg, aes(x = class, fill = fl)) +
+ggplot(bills, aes(x = division, fill = category)) +
   geom_bar(position = position_fill()) +
   theme(legend.position = "top")
 ```
 
-### Bar Charts through `geom_col()`
+### Bar charts through `geom_col()`
 
-As stated earlier, plotting bar charts on tedious aggregations through
-ggplot2 gets trickier, it is always advisable to plot bar charts through
-`geom_col()` in such cases after aggregating the data ourselves. The
-difference between `geom_bar` and `geom_col` is that the former uses
-`stat = "count"` by default, that is, it counts the number of cases at each x position. The
-latter uses `stat = "identity"` by default, that is, it draws the values as they are. So to draw the plot as
-in @fig-rgg20 through `geom_col()` we may not have to use
-`stat` explicitly. (Refer @fig-rgg30.)
+As we saw, summaries inside ggplot2 soon become tricky. So it is better to summarise the data ourselves, and draw the bars with `geom_col()`. The difference between the two is this. `geom_bar()` uses `stat = "count"` by default, that is, it counts the rows at each `x` position. `geom_col()` uses `stat = "identity"` by default, that is, it draws the values as they are. So to draw @fig-rgg20 with `geom_col()`, we do not need the `stat` argument at all (@fig-rgg30).
 
 ```{r fig-rgg30, fig.show='hold', fig.align='center', fig.cap="Plotting through geom col"}
-aggregated_mpg <- mpg |>
-  summarise(mean_cty = mean(cty),
-            .by = class)
-
-ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
+ggplot(district_avg, aes(x = mean_amount, y = district)) +
   geom_col()
 ```
 
-Once the readers have understood the functioning of `position` and
-`stat` arguments in `geom_bar` it is now pretty easy to draw stacked bar
-charts, dodged bar charts and 100 percent stacked bar charts through
-geom_col in a much easier way. Readers may try themselves drawing these
-charts using pre-aggregated data keeping in mind that `geom_col` is
-using `stat = “identity”` by default and is thus not performing any
-aggregation.
+Once we understand the `position` and `stat` arguments of `geom_bar()`, it is easy to draw stacked, dodged and 100 percent stacked bars with `geom_col()`. Readers may try these on summarised data. Remember that `geom_col()` uses `stat = "identity"`, so it does not summarise anything itself.
 
-### Adding labels to charts using `geom_text` or `geom_label`
+### Adding labels to charts using `geom_text()` or `geom_label()`
 
-Before learning how to draw other plots using `geom_*` family of
-functions, it is the right time to learn labelling the geometries in the
-plots.
+Before we learn other geoms, it is a good time to learn how to label a chart.
 
-To label data points in ggplot2, we can use either of the functions (i)
-`geom_text()`; (ii)`geom_label()`. `geom_text()` adds only text to the
-plot; whereas `geom_label()` draws a rectangle behind the text, making
-it easier to read.
+We may label the elements of a chart with either of two functions. `geom_text()` adds only the text. `geom_label()` also draws a box behind the text, which makes it easier to read.
 
-These functions adds text provided through `label` aesthetics, to the
-plot at the specified `x` and `y` coordinates. Moreover, we can
-customize the appearance of the labels by adding additional arguments to
-`geom_text()` -
+Both functions place the text given by the `label` aesthetic at the given `x` and `y` positions. We can change the look of the labels with these arguments.
 
--   `size` to set font size
--   `color` to color the fonts
--   `hjust` and `vjust` to adjust the labels horizontally and vertically,
-    respectively. We can modify text alignment with these aesthetics.
-    These can either be a number between `0` (left/bottom) and `1`
-    (right/top) or a character (`"left"`, `"middle"`, `"right"`,
-    `"bottom"`, `"center"`, `"top"`). There are two special alignments:
-    `"inward"` and `"outward"`. Inward always aligns text towards the
-    center, and outward aligns it away from the center.
--   `family` for font family [the options are `“sans”` (the default),
-    `“serif”`, or `“mono”`]
--   `fontface` for face of the font [options: `“plain”` (the default),
-    `“bold”`, `"italic"` or `“bold.italic”`]
+-   `size` sets the size of the font.
+-   `colour` sets the colour of the font.
+-   `hjust` and `vjust` move the labels horizontally and vertically. They take a number between `0` (left or bottom) and `1` (right or top), or a word (`"left"`, `"middle"`, `"right"`, `"bottom"`, `"center"`, `"top"`). There are two special values. `"inward"` aligns the text towards the centre, and `"outward"` aligns it away from the centre.
+-   `family` sets the font family. The options are `"sans"` (the default), `"serif"` and `"mono"`.
+-   `fontface` sets the face of the font. The options are `"plain"` (the default), `"bold"`, `"italic"` and `"bold.italic"`.
 
-Example-
+Let us label the bubble chart of districts (@fig-rgg14) with the names of the districts.
 
 ```{r fig-rgg31, fig.show='hold', fig.align='center', fig.cap="Adding labels to geoms"}
-ggplot(mtcars, aes(x = hp, y = mpg)) +
+ggplot(dist_summary, aes(x = n_bills, y = avg_days)) +
   geom_point() +
-  geom_text(aes(label = rownames(mtcars)),
+  geom_text(aes(label = district),
             size = 3,
-            color = "dodgerblue",
-            vjust = -1) # -1 pushes the label further upwards (vjust)
-
+            colour = "dodgerblue",
+            vjust = -1) # -1 pushes the label upwards
 ```
 
-In @fig-rgg31 we can see the geometries (i.e points) have
-been labelled slightly above the points (due to `vjust = -1`). We may
-observe that some labels are overlapped. There is a fantastic package
-`ggrepel` which works for `ggplot2` plots and places the overlapped
-labels in a nicer way. See @fig-rgg32.
+In @fig-rgg31 each point has its label just above it, because of `vjust = -1`. But some labels overlap. A very useful package, `ggrepel`, places such labels so that they do not overlap. See @fig-rgg32.
 
 ```{r fig-rgg32, fig.show='hold', fig.align='center', fig.cap="Adding labels to geoms through external ggrepel package"}
 # Load package
 library(ggrepel)
-# Set global options for max overlaps
+# Allow any number of overlaps to be resolved
 options(ggrepel.max.overlaps = Inf)
 
-ggplot(mtcars, aes(x = hp, y = mpg)) +
+ggplot(dist_summary, aes(x = n_bills, y = avg_days)) +
   geom_point() +
-  geom_text_repel(aes(label = rownames(mtcars)),
+  geom_text_repel(aes(label = district),
             size = 3,
-            color = "seagreen",
-            vjust = -1,
+            colour = "seagreen",
             fontface = "bold.italic")
 ```
 
-Labelling bar charts generated through granular data using `geom_bar()`
-may be sometimes tricky as we have to use `stat` functions used to
-generate summary/aggregation. See Example in @fig-rgg35
+Labelling bars drawn by `geom_bar()` from raw data is a little tricky. The label must use the same stat as the bar, and the value it computed. See the example in @fig-rgg35, which labels the number of bills in each category.
 
 ```{r fig-rgg35, fig.show='hold', fig.align='center', fig.cap="Labelled bar chart"}
 # Labelling a bar plot
-ggplot(mpg, aes(class)) +
+ggplot(bills, aes(category)) +
   geom_bar() +
   geom_text(
     aes(
-      y = after_stat(count + 2), # shift the label slightly
+      y = after_stat(count + 20), # shift the label slightly above the bar
       label = after_stat(count)
     ),
     stat = "count"
   )
 ```
 
-If we want to label chart in @fig-rgg19, we have to provide some
-special values aesthetics to `geom_text` (or `geom_label`). See @fig-rgg33.
+To label the chart in @fig-rgg19, we must give `geom_text()` the same stat and summary function as the bar. Here we show the average amount in lakh, so we divide the computed `y` by `1e5`. See @fig-rgg33.
 
-```{r fig-rgg33, fig.show='hold', fig.align='center', fig.cap="Bivariate bar chart labelled"}
-ggplot(mpg, aes(class, cty)) +
+```{r fig-rgg33, fig.show='hold', fig.align='center', fig.cap="Bivariate bar chart labelled with mean amount in lakh"}
+ggplot(bills, aes(category, amount)) +
   geom_bar(stat = "summary_bin", fun = mean) +
   geom_text(
-    aes(label = after_stat(round(y, 2))),
+    aes(label = after_stat(round(y / 1e5, 2))),
     stat = "summary_bin",
     fun = mean,
     vjust = -0.5
   )
 ```
 
-One more example of labelling boxplots with maximum value for each
-category may be -
+One more example labels each box of a box plot with its upper whisker, that is, the largest amount that is not treated as an outlier. Here `stage()` tells ggplot2 to use `amount` for the box, and the computed `xmax` for the position of the label.
 
-```{r fig-rgg34, fig.show='hold', fig.align='center', fig.cap="Upper Hinge labelled in Boxplot"}
-# Labelling the upper hinge of a boxplot,
+```{r fig-rgg34, fig.show='hold', fig.align='center', fig.cap="Upper whisker labelled in boxplot, in lakh"}
+# Labelling the upper whisker of a boxplot,
 # inspired by June Choe
-ggplot(mpg, aes(displ, class)) +
+ggplot(bills, aes(amount, category)) +
   geom_boxplot(outlier.shape = NA) +
   geom_label(
     aes(
-      label = after_stat(xmax),
-      x = stage(displ, after_stat = xmax)
+      label = after_stat(round(xmax / 1e5, 1)),
+      x = stage(amount, after_stat = xmax)
     ),
-    stat = "boxplot", hjust = -0.5
+    stat = "boxplot", hjust = -0.2
   )
 ```
 
-Labeling color stacked bar charts can also get trickier, as we have to
-provide appropriate position argument to `geom_text` layer also. See
-example in @fig-rgg36.
+Labelling stacked bars needs one more step. The labels too must be stacked, with the same `position` as the bars. See the example in @fig-rgg36.
 
 ```{r fig-rgg36, fig.show='hold', fig.align='center', fig.cap="Coloured bar chart labelled"}
-ggplot(mpg, aes(class, fill = fl)) +
+ggplot(bills, aes(division, fill = category)) +
   geom_bar() +
   geom_text(
     aes(label = after_stat(count)),
@@ -801,286 +691,271 @@ ggplot(mpg, aes(class, fill = fl)) +
   )
 ```
 
-As we have discussed the difference between `geom_bar` and `geom_col` in
-details, readers may find it pretty easier to draw the above chart
-(@fig-rgg36) using `geom_col` on pre-aggregated data. Refer
-@fig-rgg37 wherein we have to only handle the placements of
-labels through `position_stack` argument.
+It is easier to draw the same chart (@fig-rgg36) with `geom_col()` on summarised data. In @fig-rgg37 we count the bills ourselves with `count()`. We then only have to place the labels, with `position_stack()`.
 
-```{r fig-rgg37, fig.show='hold', fig.align='center', fig.cap="Coloured bar chart labelled"}
-mpg_agg <- mpg |>
-  count(class, fl)
+```{r fig-rgg37, fig.show='hold', fig.align='center', fig.cap="Coloured bar chart labelled, from summarised data"}
+bills_count <- bills |>
+  count(division, category)
 
-ggplot(mpg_agg, aes(
-  x = class,
+ggplot(bills_count, aes(
+  x = division,
   y = n,
-  fill = fl,
-  label = n # provided globally
+  fill = category,
+  label = n # given once, for all layers
 )) +
   geom_col() +
   geom_text(
-    position = position_stack(vjust = 0.5) #labels centered vertically
+    position = position_stack(vjust = 0.5) # labels centred vertically
     )
 ```
 
 ### Histograms and related plots
 
-Readers by now may have understood why ggplot2 is such a vast topic that
-often it requires separate book. Full coverage in a single chapter is
-nearly impossible. However, there are several other geoms which are not
-as trickier as `geom_bar` and simultaneously useful while analysing the
-data. One of those is `geom_histogram` which plots histogram for a
-univariate numerical (continuous variable) data.
+ggplot2 is a vast subject, and whole books are written on it. One chapter cannot cover it all. But several other geoms are simpler than `geom_bar()`, and very useful in analysis. One of these is `geom_histogram()`, which draws the distribution of a single numeric variable.
 
-Like `geom_bar` it also aggregates the data itself using default
-statistic `stat = "bin"`. For a change let us now use `diamonds`
-data-set, which is also loaded by default with ggplot2 package. It
-contains over 50,000 observations for round-cut diamonds. As an example
-let us visualise the distribution of `carat` variable.
+Like `geom_bar()`, it summarises the data itself, using its default stat, `stat = "bin"`. It divides the range of the variable into *bins* and counts the rows in each. Let us see the distribution of the bill amounts.
 
 ```{r fig-rgg38, fig.show='hold', fig.align='center', fig.cap="A simple histogram"}
-ggplot(diamonds, aes(carat)) +
+ggplot(bills, aes(amount)) +
   geom_histogram()
 ```
 
-In @fig-rgg38 a histogram has been generated, with a message
-to pick a better value for the bin width. So let us modify the bin-width to
-say, 0.025.
+@fig-rgg38 shows that most bills are small, with a long tail of large bills. ggplot2 also printed a message, asking us to choose a better bin width. By default it uses 30 bins, which rarely suits the data. So let us set the width of each bin to ₹10,000.
 
 ```{r fig-rgg21, fig.show='hold', fig.align='center', fig.cap="Histogram with custom binwidth"}
-ggplot(diamonds, aes(carat)) +
-  geom_histogram(binwidth = 0.025)
+ggplot(bills, aes(amount)) +
+  geom_histogram(binwidth = 10000)
 ```
 
-We may instead use the argument `bins` to choose the number of bins in the histogram.
-Aesthetics like `fill` or `color` may also be used.
+@fig-rgg21 shows the shape in more detail. Remember that ₹2 lakh (200000 on the axis) is the limit of the district officer's powers. An auditor would want to know whether bills pile up just below it. At this scale, nothing unusual is easy to see near 200000. But that does not prove there is nothing. By default, the bin around 200000 runs from ₹1.95 lakh to ₹2.05 lakh. It mixes the bills just below the limit with those just above it, and so it can hide a pile. The Audit tip below shows how to set the bins properly. We look at the bills near the limit closely in @sec-ggplot2-split.
 
-```{r fig-rgg39, fig.show='hold', fig.align='center', fig.cap="Filled Histogram"}
-ggplot(diamonds, aes(price, fill = cut)) +
-  geom_histogram(binwidth = 500)
+::: callout-tip
+## Audit tip
+
+When you look for bills just below a limit, make a bin end exactly at the limit. The argument `boundary` of `geom_histogram()` does this. For example, `geom_histogram(binwidth = 10000, boundary = 200000)` makes the bins run from ₹1.9 lakh to ₹2 lakh, ₹2 lakh to ₹2.1 lakh, and so on. A bin that straddles the limit would mix the bills below the limit with those above it, and blur the spike.
+:::
+
+Instead of `binwidth`, we may give the argument `bins`, the number of bins. Aesthetics like `fill` or `colour` may also be used. Let us colour the bars by category, for bills of up to ₹10 lakh.
+
+```{r fig-rgg39, fig.show='hold', fig.align='center', fig.cap="Filled histogram"}
+bills |>
+  filter(amount <= 1e6) |>
+  ggplot(aes(amount, fill = category)) +
+  geom_histogram(binwidth = 25000)
 ```
 
-Related geom is `geom_freqpoly` (short for frequency polygon) which
-display the counts with lines. So histogram in @fig-rgg39
-may be drawn as a frequency polygon using this geom layer. Refer @fig-rgg40.
+In @fig-rgg39 we see that supplies, services and vehicle hire make up the small bills. Works bills spread over a much wider range.
 
-```{r fig-rgg40, fig.show='hold', fig.align='center', fig.cap="Filled frequency polygon"}
-ggplot(diamonds, aes(price, color = cut)) +
-  geom_freqpoly(binwidth = 500)
+A related geom is `geom_freqpoly()`, short for *frequency polygon*. It shows the same counts as lines instead of bars. So the histogram in @fig-rgg39 may be drawn as a frequency polygon (@fig-rgg40). Overlapping lines are easier to compare than stacked bars.
+
+```{r fig-rgg40, fig.show='hold', fig.align='center', fig.cap="Frequency polygon by category"}
+bills |>
+  filter(amount <= 1e6) |>
+  ggplot(aes(amount, colour = category)) +
+  geom_freqpoly(binwidth = 25000)
 ```
 
-To make it easier to compare distributions with very different counts,
-we may put `density` on the `y` axis instead of the default count. Refer
-@fig-rgg41.
+The categories have very different numbers of bills. To compare their *shapes* rather than their counts, we may put `density` on the `y` axis instead of the default count. The area under each line then adds up to one. See @fig-rgg41.
 
-```{r fig-rgg41, fig.show='hold', fig.align='center', fig.cap="Filled frequency polygon with density"}
-ggplot(diamonds, aes(price, after_stat(density), colour = cut)) +
-  geom_freqpoly(binwidth = 500)
+```{r fig-rgg41, fig.show='hold', fig.align='center', fig.cap="Frequency polygon with density"}
+bills |>
+  filter(amount <= 1e6) |>
+  ggplot(aes(amount, after_stat(density), colour = category)) +
+  geom_freqpoly(binwidth = 25000)
 ```
 
-### Line Charts
+### Line charts
 
-Since almost all geoms in ggplot2 have been named intuitively, we can
-have a correct guess that line charts can be drawn using `geom_line()`.
-However, unlike geoms we have seen till now, `geom_line()` is a special
-geom and works correctly in groups. It is thus sometimes referred to as
-grouped or collective geom.
+Most geoms in ggplot2 have intuitive names. So we may correctly guess that line charts are drawn with `geom_line()`. But `geom_line()` is different from the geoms we have seen so far. It draws one line through *many* rows of data, so it must know which rows belong to the same line. It is therefore called a *collective* geom.
 
-To understand the concept of group, let us construct a simple data,
-having an index variable (for x axis), another numerical variable
-`values` and also having a categorical variable say `gr`. Let us plot
-`values` vs. `index` on a line plot.
+To understand this, let us take the monthly expenditure of two districts, Amarpur and Fatehpur, in lakh. `month_no` numbers the months of the financial year, from 1 for April to 12 for March. Let us plot the expenditure against the month.
 
-```{r fig-rgg42, fig.show='hold', fig.align='center', fig.cap="A simple line chart"}
-# Constructing example data
-set.seed(10)
-exdata <- data.frame(
-  gr = rep(c("G1", "G2"), 5),
-  index = rep(1:5, each = 2),
-  values = sample(100:200, 10)
-)
+```{r fig-rgg42, fig.show='hold', fig.align='center', fig.cap="A simple line chart, without groups"}
+two_dist <- spend |>
+  filter(district %in% c("Amarpur", "Fatehpur")) |>
+  summarise(exp_lakh = sum(exp) / 1e5, .by = c(district, month)) |>
+  mutate(month_no = as.integer(month)) |>
+  arrange(month_no)
+
 # print the data
-exdata
+two_dist
 
 # Line chart
-ggplot(exdata, aes(index, values)) +
+ggplot(two_dist, aes(month_no, exp_lakh)) +
   geom_line()
 ```
 
-In @fig-rgg42, we can see that values have been plotted but
-for each index these have been joined first then moving onto another
-index. This unintended result can be fixed by use of aesthetic `group`.
-The group aesthetic determines which observations are connected. See
-@fig-rgg43.
+@fig-rgg42 is not what we wanted. For each month, the line first joins the two districts, and then moves to the next month. We get a zigzag. This is fixed with the aesthetic `group`. The `group` aesthetic tells ggplot2 which rows are to be joined into one line. See @fig-rgg43.
 
 ```{r fig-rgg43, fig.show='hold', fig.align='center', fig.cap="A line chart without legend"}
-ggplot(exdata, aes(index, values, group = gr)) +
+ggplot(two_dist, aes(month_no, exp_lakh, group = district)) +
   geom_line()
 ```
 
-In @fig-rgg43, we got two different lines for each as
-intended, but corresponding legend to identify the group is not there.
-So, if we map `color` aesthetic with our group variable we can get the
-legend. Moreover, mapping this aesthetic may have over-riding effect (in
-this case) on `group` aesthetic, so this aesthetic will be kind of
-redundant. Refer plot in @fig-rgg44.
+In @fig-rgg43 we now have one line for each district. But we cannot tell which line is which, as there is no legend. If we map `colour` to the district instead, we get both separate lines and a legend. Mapping `colour` also forms the groups, so `group` is then not needed. See @fig-rgg44.
 
 ```{r fig-rgg44, fig.show='hold', fig.align='center', fig.cap="A line chart with legend"}
-ggplot(exdata, aes(index, values, color = gr)) +
+ggplot(two_dist, aes(month_no, exp_lakh, colour = district)) +
   geom_line()
 ```
 
-If a group isn't defined by a single variable, but instead by a
-combination of multiple variables, we may use `interaction()` to combine
-them.
+@fig-rgg44 shows the March rush in Fatehpur clearly. Its line runs close to Amarpur's for eleven months, and then shoots up in March.
 
-Now we will use two data-sets (i) `economics` and `economics_long`; both
-of which are part of `tidyr` package. Readers using `ggplot2` library
-only are thus, advised to load the package `tidyr` (or alternatively
-`tidyverse` which contains both of these packages). These data-sets
-contains some economic parameters, on a monthly basis from US.
-
-In @fig-rgg45, separate lines for each variable and for
-each of the months across the years have been plotted.
+Sometimes a line is defined not by one variable, but by a combination of several. Then we may use `interaction()` to combine them. Let us draw one line for each district and category in the monthly statement. That is `r n_distinct(spend$district)` districts times `r n_distinct(spend$category)` categories, less the categories some districts do not have. In @fig-rgg45 each combination gets its own line.
 
 ```{r fig-rgg45, fig.show='hold', fig.align='center', fig.cap="Groups in multiple variables"}
-economics_long |>
-  mutate(year = year(date),
-         month = month(date)) |>
-  ggplot(aes(year, value01, group = interaction(month, variable))) +
+ggplot(spend, aes(month, exp / 1e5, group = interaction(district, category))) +
   geom_line()
 ```
 
-There is another related geom i.e. `geom_path()` which also draws a line
-chart. While `geom_line()` connects points from left to right;
-`geom_path()` connects points in the order they appear in the data. In
-@fig-rgg46 the `exdata` we created earlier has been
-re-arranged to show the difference. Both `geom_line()` and `geom_path()`
-also understand the aesthetic `linetype`, which maps a categorical
-variable to `'solid'` (default), `'dotted'` , `'dashed'` and `'dotdash'`
-lines.
+Most lines in @fig-rgg45 stay low and flat. A few shoot up in March. These again belong to Fatehpur and Rampur.
+
+A related geom, `geom_path()`, also draws lines. `geom_line()` joins the points from left to right, in the order of `x`. `geom_path()` joins them in the order in which they appear in the data. In @fig-rgg46 we sort the months of Amarpur by the expenditure, to show the difference. `geom_line()` ignores the sorting, but `geom_path()` follows it, and jumps back and forth.
+
+Both geoms also understand the aesthetic `linetype`. It can be mapped to a categorical variable, or given a fixed value such as `"solid"` (the default), `"dotted"`, `"dashed"` or `"dotdash"`.
 
 ::: {#fig-rgg46}
 
 ```{r fig.show='hold', fig.align='center', out.width="49%"}
+amarpur <- two_dist |>
+  filter(district == "Amarpur")
 
-exdata |>
+amarpur |>
   # Rearranging the data points
-  arrange(values) |>
-  ggplot(aes(index, values)) +
+  arrange(exp_lakh) |>
+  ggplot(aes(month_no, exp_lakh)) +
   geom_line(linetype = "dotdash", linewidth = 2) +
   ggtitle("Using line geom")
 
-exdata |>
+amarpur |>
   # Rearranging the data points
-  arrange(values) |>
-  ggplot(aes(index, values)) +
+  arrange(exp_lakh) |>
+  ggplot(aes(month_no, exp_lakh)) +
   geom_path(linetype = "dotted", linewidth = 2) +
   ggtitle("Using path geom")
 ```
 
-Path vs Line geoms
+Path vs line geoms
 :::
 
-### Smoothing through `geom_smooth`
+### Smoothing through `geom_smooth()`
 
-Essentially, `geom_smooth()` adds a trend line over an existing plot, be
-it a scatter plot or line plot. For e.g. if we draw the trend of
-unemployment in US, we can use `geom_smooth` to see smoothed trend over
-the period. Refer plot in @fig-rgg48.
+`geom_smooth()` adds a trend line over a scatter plot or a line chart. For example, let us draw the total monthly expenditure of the whole scheme, in crore. We add `geom_smooth()` to see the smoothed trend over the year. See @fig-rgg48.
 
-```{r fig-rgg48, fig.show='hold', fig.align='center', fig.cap="Line Chart with smoothed trend"}
-ggplot(economics, aes(date, unemploy)) +
-  geom_line(color = "indianred4", linewidth = 1) +
+```{r fig-rgg48, fig.show='hold', fig.align='center', fig.cap="Line chart with smoothed trend"}
+monthly_total <- spend |>
+  summarise(exp_crore = sum(exp) / 1e7, .by = month_start)
+
+ggplot(monthly_total, aes(month_start, exp_crore)) +
+  geom_line(colour = "indianred4", linewidth = 1) +
   geom_smooth()
 ```
 
-A message tells us that the `method` used to smooth the curve is
-`loess`, the default for small data. The other methods available are `lm`, `glm`, `gam` etc.
-Giving the `method` and `formula` ourselves avoids the message. We may also smooth a scatter plot
-using this function, to see a regression (linear) line. Refer plot in
-@fig-rgg49.
+A message tells us that the method used to smooth the curve is `loess`, the default for small data. The other methods are `lm`, `glm` and `gam`. Giving the `method` and the `formula` ourselves avoids the message. The grey band around the trend shows its uncertainty. Notice how the trend line bends upwards at the end, pulled by the March rush.
+
+We may also smooth a scatter plot, to see a straight (linear) regression line. In the monthly statement, more vouchers should mean more expenditure. Let us plot the expenditure against the number of vouchers, for every district, month and category. See @fig-rgg49.
 
 ```{r fig-rgg49, fig.show='hold', fig.align='center', fig.cap="Scatter plot with regression line"}
-ggplot(mpg, aes(cty, hwy)) +
+ggplot(spend, aes(vouchers, exp / 1e5)) +
   geom_point() +
-  geom_smooth(method = "lm", formula = "y ~ x")
+  geom_smooth(method = "lm", formula = y ~ x)
 ```
 
-Readers may note, in @fig-rgg49, that far fewer
-points are seen in this plot than actually available due to overlapping of
-points. This overlapping issue can either be solved using `alpha`
-aesthetic or by using `jitter` method in scatter plots. `geom_jitter`
-adds a random noise to the data, so that the overlapping points are seen
-clearly. Jittered scatterplot may be seen in @fig-rgg47.
+Readers may note that in @fig-rgg49 we see far fewer points than the `r nrow(spend)` rows of `spend`. The number of vouchers is a whole number, so many points sit exactly on the same vertical lines and hide one another. This overlap can be reduced with `alpha`, or by *jittering*. `geom_jitter()` moves each point by a small random amount, so that overlapping points come apart. Here we jitter only sideways, with `width = 0.3` and `height = 0`, so that the amounts stay exact. See @fig-rgg47.
 
-```{r fig-rgg47, fig.show='hold', fig.align='center', fig.cap="Scatter plot with regression line"}
-ggplot(mpg, aes(cty, hwy)) +
-  geom_jitter() +
-  geom_smooth(method = "lm", formula = "y ~ x")
+```{r fig-rgg47, fig.show='hold', fig.align='center', fig.cap="Jittered scatter plot with regression line"}
+ggplot(spend, aes(vouchers, exp / 1e5)) +
+  geom_jitter(width = 0.3, height = 0) +
+  geom_smooth(method = "lm", formula = y ~ x)
 ```
+
+In @fig-rgg47 a few points sit far above the line. They spent much more than their number of vouchers would suggest. These are again the March bills of Fatehpur and Rampur, which were both more and bigger.
+
+::: callout-warning
+## Caution
+
+`geom_jitter()` moves the points by a random amount. That is fine for seeing where points are crowded. But never read exact values from a jittered axis, and never jitter an axis whose exact value matters to the finding. Above, we jittered only the number of vouchers, and kept the amounts exact.
+:::
 
 ### Combining multiple geoms
 
-We have already used multiple geoms in the same plot while labelling them
-as well as while smoothing the trend. Multiple geoms can be used in same
-plot, which will add further layers over the existing layers produced by
-earlier geoms. As an example let us add data points in @fig-rgg42.
+We have already used more than one geom in a chart, while labelling and while smoothing. Each geom adds a new layer over the layers before it. As an example, let us add points to the line of Amarpur.
 
-```{r fig-rgg50, fig.show='hold', fig.align='center', fig.cap="Combining Geoms"}
-ggplot(exdata, aes(index, values)) +
+```{r fig-rgg50, fig.show='hold', fig.align='center', fig.cap="Combining geoms"}
+ggplot(amarpur, aes(month_no, exp_lakh)) +
   # layer with line
-  geom_line(linewidth = 1, color = "dodgerblue") +
+  geom_line(linewidth = 1, colour = "dodgerblue") +
   # layer with points
   geom_point(shape = 21, size = 7, fill = "orange", stroke = 2)
 ```
 
-In @fig-rgg50 we can see that points have been added over
-the line. If we reverse the order, we can see in @fig-rgg51
-that the line (latter layer) is drawn over points (former layer).
+In @fig-rgg50 the points are drawn over the line. If we reverse the order, the line, now the later layer, is drawn over the points. See @fig-rgg51.
 
 ```{r fig-rgg51, fig.show='hold', fig.align='center', fig.cap="Understanding overlapping in geoms"}
-ggplot(exdata, aes(index, values))  +
+ggplot(amarpur, aes(month_no, exp_lakh))  +
   # layer with points
   geom_point(shape = 21, size = 7, fill = "orange", stroke = 2) +
   # layer with line
-  geom_line(linewidth = 1, color = "dodgerblue")
+  geom_line(linewidth = 1, colour = "dodgerblue")
 ```
 
 ### Other geoms
 
-Several other geoms which are useful to depict meaningful information in
-afore-mentioned charts are-
+Several other geoms add useful information to the charts above.
 
--   `geom_vline()`, `geom_hline` or `geom_abline()` to add vertical,
-    horizontal or other reference lines in the plot.
--   `geom_rect()` to draw a constant/reference rectangle in the data
-    using four corners of the rectangle, `xmin`, `ymin`, `xmax` and
-    `ymax`.
--   `geom_area()` which draws an area plot, which is a line plot filled
-    to the y-axis (filled lines). Multiple groups will be stacked on top
-    of each other.
+-   `geom_vline()`, `geom_hline()` and `geom_abline()` add vertical, horizontal and sloping reference lines.
+-   `geom_rect()` draws a fixed rectangle, given its four corners `xmin`, `ymin`, `xmax` and `ymax`.
+-   `geom_area()` draws an area chart, which is a line chart filled down to the `x` axis. Several groups are stacked on top of each other.
 
-Example
+Reference lines are very useful in audit. They show the limit, the norm or the budget against which the data should be judged. In the first chart of @fig-rgg52, a vertical line marks the ₹2 lakh limit, and a horizontal line marks three days. In the second chart, each point is a district, with its budget on the `x` axis and its expenditure on the `y` axis. The line drawn by `geom_abline()` has an intercept of 0 and a slope of 1. On this line, expenditure equals budget.
 
-```{r fig-rgg52, fig.show='hold', fig.align='center', fig.cap="Adding reference lines"}
-ggplot(mtcars, aes(wt, mpg)) +
-  geom_point() +
-  geom_abline(intercept = 37, slope = -5, color = "dodgerblue") +
-  geom_vline(xintercept = 3.5, color = "orange")
+::: {#fig-rgg52}
 
+```{r fig.show='hold', fig.align='center', out.width="49%"}
+ggplot(bills, aes(amount, days_to_pay)) +
+  geom_point(alpha = 0.3) +
+  geom_vline(xintercept = 2e5, colour = "orange") +
+  geom_hline(yintercept = 3, colour = "dodgerblue", linetype = "dashed")
+
+budget_vs_exp <- spend |>
+  summarise(amt_exp = sum(exp), .by = district) |>
+  left_join(budget, by = "district")
+
+ggplot(budget_vs_exp, aes(amt_be, amt_exp)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = 0, slope = 1, colour = "dodgerblue")
 ```
+
+Adding reference lines
+:::
+
+```{r}
+#| include: false
+fast <- bills |> filter(days_to_pay < 3)
+over <- budget_vs_exp |> filter(amt_exp > amt_be)
+```
+
+The first chart shows our third planted case. Normally, no bill is paid within three days. Yet `r nrow(fast)` points lie below the dashed line, in the lower right corner. They are large bills, between ₹`r lakh(min(fast$amount))` lakh and ₹`r lakh(max(fast$amount))` lakh, paid within a day. A simple filter lists them.
+
+```{r}
+bills |>
+  filter(days_to_pay < 3) |>
+  select(bill_no, district, vendor, bill_date, amount, days_to_pay)
+```
+
+All `r nrow(fast)` are works bills of `r unique(fast$district)`, paid to `r unique(fast$vendor)`. In the second chart, `r nrow(over)` points lie above the line. These districts spent more than their budget, our fourth planted case. We return to them in @sec-ggplot2-audit.
+
+::: callout-tip
+## Audit tip
+
+Very fast payment of large bills is a red flag. Proper checks of measurement, quality and sanction take time. Ask the district why these bills were paid within a day, and check whether the work was measured and certified before payment.
+:::
 
 ### List of geoms available in `ggplot2`
 
-Apart from the geoms discussed, there are many more geoms available in
-ggplot2. Some of those have been discussed in subsequent
-chapters/sections, as per the use case. However, readers may explore
-themselves those geoms if they want to explore un*chart*ered
-territories.
+There are many more geoms in ggplot2 than we have discussed. Some of them appear in later chapters, where they are needed. Readers may explore the others to chart new territory.
 
-For reference, the geoms available in the ggplot2 version used to
-compile the book, are listed in @tbl-geoms for reference.
+The geoms available in the version of ggplot2 used to build this book are listed in @tbl-geoms.
 
 ```{r tbl-geoms, echo=FALSE}
 geoms <- help.search("geom_", package = 'ggplot2')
@@ -1089,70 +964,52 @@ knitr::kable(geoms$matches[, c("Entry", "Title")], caption = "List of Geoms avai
 
 ## Modifying scales
 
-Scales in ggplot2 control the mapping from data to aesthetics so that
-the data can be seen. In other words, these provide us a way to
-customise aesthetics such as size, color, position, shape, etc.
+Scales control how data values become what we see. They turn amounts into positions on an axis, categories into colours, and values into sizes. Through scales, we can change the axes, the colours, the sizes and the shapes of a chart.
 
-In the charts we have generated so far, the aesthetic mappings with data
-were default and we haven't customised those default scales. We may
-divide our customisation requirements of these scales into three broad
-categories, which we will learn in this section.
+So far, we have used the default scales. Our needs for changing them fall into three broad groups, which we will learn in this section.
 
--   Modifying scales related to position aesthetics,
--   Modifying scale related to color (or fill) aesthetics,
--   Scales mapped to other aesthetics.
+-   Changing the scales of position, that is, the axes.
+-   Changing the scales of colour and fill.
+-   Changing the scales of other aesthetics.
 
-### Modifying scales mapped to position aesthetics i.e. transforming axes
+### Modifying scales mapped to position aesthetics, that is, transforming axes
 
-We have seen that default coordinate system used by ggplot2 is Cartesian
-and to plot the data two position aesthetics `x` and `y` are required.
-While drawing @fig-rgg2 we provided these aesthetics
-explicitly, whereas at the time of drawing bar chart in @fig-rgg17
-we provided one `x` aesthetic and ggplot2 generated `y` aesthetic by
-itself (remember `after_stat(count)`).
+The default coordinate system of ggplot2 is Cartesian, with the two position aesthetics `x` and `y`. In @fig-rgg2 we gave both of them ourselves. In the bar chart in @fig-rgg17 we gave only `x`, and ggplot2 made `y` itself (remember `after_stat(count)`).
 
-To customise position scales we have `scale_*_#()` group of functions,
-where `*` represent position aesthetic usually `x` or `y`; and `#`
-represents variable type. For example we have these two functions for
-continuous axis/variables.
+To change the position scales, we have the group of functions `scale_*_#()`. Here `*` is the position aesthetic, usually `x` or `y`, and `#` is the type of the variable. For example, these two functions are for continuous axes.
 
 ```
 scale_x_continuous(name, breaks, labels, limits, transform)
 scale_y_continuous(name, breaks, labels, limits, transform)
 ```
 
-In arguments to above functions, we can see that axis title (name), axis
-breaks, axis labels, axis limits, and transformations can be dealt with.
-See the following examples wherein we have changed the limits of axes,
-renamed them using `scale` functions (Refer @fig-scale1).
+Through these arguments, we can change the title of the axis (`name`), the positions of the tick marks (`breaks`), the text at the ticks (`labels`), the range of the axis (`limits`) and any transformation (`transform`). In @fig-scale1, we have given the axes new titles and limits with the `scale` functions. The second chart looks only at bills from ₹1.5 lakh to ₹2.5 lakh. The points between 190000 and 200000 already look more crowded than those just above 200000.
 
 ::: {#fig-scale1}
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="49%"}
-# Basic Scatter Plot
-ggplot(cars, aes(x = speed, y = dist)) +
+# Basic scatter plot
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
   geom_point()
-# Modifying scales both axis title and axis limits
-ggplot(cars, aes(x = speed, y = dist)) +
+# Modifying scales, both axis titles and axis limits
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
   geom_point() +
-  scale_x_continuous(name="Speed of cars", limits=c(10, 15)) +
-  scale_y_continuous(name="Stopping distance", limits=c(0, 150))
+  scale_x_continuous(name = "Bill amount (₹)", limits = c(150000, 250000)) +
+  scale_y_continuous(name = "Days taken to pay", limits = c(0, 60))
 ```
 
-Modifying Scales in GGplot2
+Modifying scales in ggplot2
 :::
 
-We can also apply a transformation to the axes using the `transform` argument
-(refer @fig-scale2). Before ggplot2 version 3.5, this argument was called `trans`, a name you will still see in older code.
+We can also transform an axis with the argument `transform` (@fig-scale2). Before ggplot2 version 3.5, this argument was called `trans`, a name you will still see in older code. Bill amounts are skewed. Many bills are small and a few are very large. A logarithmic scale spreads out the small bills and pulls in the large ones. Here we transform only the `x` axis.
 
-```{r fig-scale2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Transforming Axes in GGplot2"}
-ggplot(cars, aes(x = speed, y = dist)) +
-  geom_point()+
-  scale_x_continuous(transform = 'log10') +
-  scale_y_continuous(transform = 'log10')
+```{r fig-scale2, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Transforming axes in ggplot2"}
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
+  geom_point(alpha = 0.3) +
+  scale_x_continuous(transform = "log10")
 ```
 
-The transformation is actually carried out by a `"transformer"`, which describes the transformation, its inverse, and how to draw the labels. A Few of these transformations are listed in @tbl-modscales following.
+The transformation is done by a *transformer*. It describes the transformation, its inverse, and how to draw the labels. A few transformations are listed in @tbl-modscales.
 
 | Name           | Equivalent function $f(x)$ |
 |----------------|----------------------------|
@@ -1171,119 +1028,130 @@ The transformation is actually carried out by a `"transformer"`, which describes
 
 : Some transformations {#tbl-modscales}
 
-However, there are certain scale functions dedicated to transform axes in ggplot2. Some of these are listed below. Obviously all these functions have corresponding `y` variants available.
+There are also scale functions made for common transformations. Some of these are listed below. Each has a `y` version too.
 
 -   `scale_x_log10()`
 -   `scale_x_reverse()`
 -   `scale_x_sqrt()`
 
-Of these, `scale_x_reverse` or its `y` variant are sometimes really useful.
+Of these, `scale_x_reverse()` and its `y` version are often useful.
 
-In the above examples, though we have seen scale functions dealing with `numerical` data, we have plenty of other functions to deal with other data. Such as,
+So far, the scales dealt with numbers. There are scale functions for other kinds of data too, such as these.
 
--   `scale_x_date`
+-   `scale_x_date()`
 -   `scale_x_datetime()`
 -   `scale_x_discrete()`
 -   `scale_x_binned()`
 
-One example of using date scale can be of economics data. (refer @fig-scale4).
+Let us use a date scale on the monthly total of the scheme (@fig-scale4). We also show the amounts in crore, with a function from the package `scales`. We will learn more about it shortly.
 
-```{r fig-scale4, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Transforming Axes in GGplot2"}
-ggplot(economics, aes(date, psavert)) +
+```{r fig-scale4, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Date scale and amounts in crore"}
+ggplot(monthly_total, aes(month_start, exp_crore)) +
   geom_line() +
-  scale_x_date(name = "Year",
-               date_breaks = "2 years",
-               date_labels = "%y",
-               limits = c(ymd("19800101"), ymd("19991231"))) +
-  scale_y_continuous(name = "Personal Savings Rate",
-                     labels = scales::label_percent(scale = 1))
+  scale_x_date(name = "Month",
+               date_breaks = "2 months",
+               date_labels = "%b %y",
+               limits = c(ymd("20240401"), ymd("20250331"))) +
+  scale_y_continuous(name = "Expenditure",
+                     labels = scales::label_number(prefix = "₹", suffix = " crore"))
 ```
 
-In @fig-scale4, we have modified (i) name of `x` axis, (ii) breaks, which places the label, (iii) label for 2 digits of year, (iv) limited the data to be plotted using `limits`, (v) name of `y` axis and (vi) modified the labels of `y` axis as percentages; all using scale functions.
+In @fig-scale4 we have changed six things, all with scale functions.
 
-Readers may have noticed that we have modified the axes labels in plot in @fig-scale4 using `scales` package. Using `scales` library we may modify format of labels (refer plot in @fig-scale3).
+-   The title of the `x` axis.
+-   The `breaks`, that is, where the ticks are placed.
+-   The labels, to show the month and two digits of the year.
+-   The range of the data shown, with `limits`.
+-   The title of the `y` axis.
+-   The labels of the `y` axis, to show amounts in crore.
 
-```{r fig-scale3, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Transforming Axes in GGplot2"}
-state.x77 %>%
-  as.data.frame() %>%
-  ggplot(aes(Area, Illiteracy/100)) +
-  geom_point(size = 3, color = "dodgerblue") +
-  scale_x_continuous(name = "Area in Square Miles", labels = scales::label_comma()) +
-  scale_y_continuous(name = "Illiteracy as % of Population", labels = scales::label_percent())
+The package `scales` gives many functions to format the labels of an axis. In @fig-scale3 each point is a district. The `x` axis shows the total expenditure of the year, with commas, through `label_comma()`. The `y` axis shows the share of March in that expenditure, as a percentage, through `label_percent()`.
+
+```{r fig-scale3, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Formatting axis labels with the scales package"}
+spend |>
+  summarise(total = sum(exp),
+            march_share = sum(exp[month == "Mar"]) / sum(exp),
+            .by = district) |>
+  ggplot(aes(total, march_share)) +
+  geom_point(size = 3, colour = "dodgerblue") +
+  scale_x_continuous(name = "Expenditure in the year (₹)",
+                     labels = scales::label_comma()) +
+  scale_y_continuous(name = "Share of March in the year's expenditure",
+                     labels = scales::label_percent())
 ```
 
-Some other functions in `scales` library useful for displaying numerical data on axes are -
+```{r}
+#| include: false
+march_share <- spend |>
+  summarise(share = sum(exp[month == "Mar"]) / sum(exp), .by = district) |>
+  arrange(desc(share))
+```
 
--   `scales::label_bytes()` formats numbers as kilobytes, megabytes etc.
--   `scales::label_dollar()` formats numbers as currency.
--   `scales::label_ordinal()` formats numbers in rank order: 1st, 2nd, 3rd etc.
--   `scales::label_pvalue()` formats numbers as p-values: \<.05, \<.01,
-    .34, etc.
--   `scales::label_date()`
--   `scales::label_date_short()` formats dates
--   `scales::label_wrap()` useful to wrap long strings across multiple
-    lines.
+In an even year, each month would carry about 8% of the expenditure. In @fig-scale3 most districts are near that level. Two points stand far above the rest. These are `r march_share$district[1]`, with `r round(march_share$share[1] * 100)`% of its expenditure in March, and `r march_share$district[2]`, with `r round(march_share$share[2] * 100)`%.
 
-In @fig-scale4, though we have limited the scale for a fixed duration, readers may notice that there is still an empty space on both sides of the scale.  In @fig-rgg20 the space between `y` axis labels and bars may be annoying to some.  To modify this empty space on scales (usually position scales) we can use `expand` argument of `scale_*_*` function through another function `expansion`.  This function `expansion` has two arguments namely `mult` and `add`.
+::: callout-note
+`label_comma()` groups the digits in thousands, in the Western way. For example, an amount written as 3,50,00,000 in the Indian way is printed as 35,000,000. Indian readers may find this hard to read. For audit reports, it is usually better to show amounts in lakh or crore, with `scales::label_number(scale = 1e-5, suffix = " lakh")` or `scales::label_number(scale = 1e-7, suffix = " crore")`. The argument `scale` multiplies each value before it is printed.
+:::
 
-- `mult` argument takes a vector with two numeric elements which indicate range expansion factors.
-- `add` argument also takes a vector with two numeric elements but these indicate additive range expansion constants.
+Some other functions in `scales` that are useful for numeric axes are these.
 
-To understand this let's again consider the example in @fig-rgg20.  Providing `mult = c(0, 0.2)` in `expansion` adds no space on the left side of the `x` axis (continuous in this case), and space equal to `0.2` times the range of the data on the right side.  See output in @fig-scale5.
+-   `scales::label_bytes()` formats numbers as kilobytes, megabytes and so on.
+-   `scales::label_dollar()` formats numbers as currency. `scales::label_currency(prefix = "₹")` does the same with the rupee sign.
+-   `scales::label_ordinal()` formats numbers as ranks, such as 1st, 2nd and 3rd.
+-   `scales::label_pvalue()` formats numbers as p-values, such as \<.05, \<.01 and .34.
+-   `scales::label_date()` and `scales::label_date_short()` format dates.
+-   `scales::label_wrap()` wraps long text, such as long names of schemes, across several lines.
 
+In @fig-scale4, though we set the limits of the dates, there is still some empty space on both sides of the axis. Similarly, in @fig-rgg20 some readers may dislike the gap between the labels of the `y` axis and the start of the bars. To control this space on an axis, we use the argument `expand` of a `scale_*_*()` function, with the function `expansion()`. It has two arguments, `mult` and `add`.
 
-```{r fig-scale5, fig.show='hold', fig.align='center', fig.cap="Modifying scale limits though expansion"}
-aggregated_mpg <- mpg |>
-  summarise(mean_cty = mean(cty),
-            .by = class)
+-   `mult` takes two numbers, which expand the range on each side by that fraction of the range.
+-   `add` also takes two numbers, but these add a fixed amount on each side.
 
-ggplot(aggregated_mpg, aes(x = mean_cty, y = class)) +
+Let us take @fig-rgg20 again. Giving `mult = c(0, 0.2)` to `expansion()` adds no space on the left of the `x` axis. On the right it adds space equal to `0.2` times the range of the data. See @fig-scale5.
+
+```{r fig-scale5, fig.show='hold', fig.align='center', fig.cap="Modifying scale limits through expansion"}
+ggplot(district_avg, aes(x = mean_amount, y = district)) +
   geom_bar(stat = "identity") +
   scale_x_continuous(expand = expansion(mult = c(0, 0.2)))
-
 ```
 
 ### Adding secondary position axis
-Sometimes two different measures are shown in the same plot, on different scales altogether.  In such cases secondary axes can be useful for comparing datasets with different magnitudes or units, allowing for a clearer representation of diverse data sets within a single chart.
+
+Sometimes we want to read the same values in two different units. A secondary axis shows a second scale on the other side of the chart. It must be a fixed transformation of the first scale.
 
 ::: callout-warning
 ## Caution
 
-Secondary axes can sometimes lead to misleading interpretations. If not used carefully, they might obscure important trends or create confusion, especially if the scale differences are not immediately obvious to the viewer.
+A secondary axis can mislead. Readers may compare two lines or bars that are not really on the same scale. Use it only when the second axis is a fixed conversion of the first, as in the example below. Never use it to put two unrelated measures on one chart.
 :::
 
-Secondary axes can be added in ggplot2, using `sec_axis` function as an argument to `sec.axis` inside `scale`s.  As an example, we can see the two `y` axis representing same data both in degree Fahrenheit and degree Celsius in @fig-scale6.  The first argument of `sec_axis`, named `transform`, takes a transformation formula in the `~` style, where `.` stands for the values of the primary axis.  Another useful argument is `name` apart from other usual functions like `labels`, etc.
+A secondary axis is added with the function `sec_axis()`, given to the argument `sec.axis` of a scale. Its first argument, `transform`, takes a formula in the `~` style, where `.` stands for the values of the main axis. It also takes `name` and the other usual arguments, like `labels`.
 
-```{r fig-scale6, fig.show='hold', fig.align='center', fig.cap="Adding Secondary Axis"}
-airquality |>
-  mutate(Month = factor(month.abb[Month], ordered = TRUE, levels = month.abb)) |>
-  ggplot(aes(fct_rev(Month), Temp)) +
+In @fig-scale6 the bars show the total expenditure of each month, in crore. The secondary axis on the right shows the same amount as a percentage of the total budget of the scheme. Here we use `stat = "summary"` with `fun = sum`, so that `geom_bar()` adds up the rows of each month.
+
+```{r fig-scale6, fig.show='hold', fig.align='center', fig.cap="Adding secondary axis"}
+total_be_crore <- sum(budget$amt_be) / 1e7
+
+spend |>
+  ggplot(aes(month, exp / 1e7)) +
   geom_bar(
     stat = "summary",
-    fun = mean
+    fun = sum
   ) +
-  scale_y_continuous(name = "Average Temp (\u00B0F)",
+  scale_y_continuous(name = "Expenditure (₹ crore)",
                      expand = expansion(mult = c(0, 0.1)),
-                     sec.axis = sec_axis(~ (. - 32) * 5 / 9,
-                                         name = " Average Temp (\u00B0C)")) +
+                     sec.axis = sec_axis(~ . / total_be_crore * 100,
+                                         name = "Per cent of the annual budget")) +
   scale_x_discrete(name = "Month")
-
 ```
 
-### Customising color (or fill) mappings
+The total budget of the scheme is ₹`r round(total_be_crore, 2)` crore. So the March bar, at ₹`r round(monthly_total$exp_crore[12], 2)` crore, is `r round(monthly_total$exp_crore[12] / total_be_crore * 100, 1)` per cent of the annual budget, as the right axis shows.
 
-*Readers are advised to read* @sec-COLORR *wherein we have
-discussed color aesthetic in pretty details.* By far we know that
-continuous data if mapped to a color aesthetic gives us a gradient color
-scale and discrete data on the other hand, provides us discrete color
-values.
+### Customising colour (or fill) mappings
 
-For continuous variables we thus have `scale_fill_continuous()` function
-in turn defaulting to `scale_fill_gradient()`. In other words, the
-default colors are picked by `scale_fill_gradient` function, which uses
-following mentioned colors. Readers may also note that all `fill` scale
-functions have a corresponding `color` scale function to be used with
-`color` aesthetic.
+*Readers may read* @sec-COLORR *where colours are discussed in detail.* We know that a continuous variable mapped to colour gives a gradient of colours, and a discrete variable gives separate colours.
+
+For continuous variables, ggplot2 uses the function `scale_fill_continuous()`, which in turn uses `scale_fill_gradient()`. The default colours of `scale_fill_gradient()` are given in its arguments, shown below for its `colour` version. Every `fill` scale function has a matching `colour` scale function, for the `colour` aesthetic.
 
 ```
 scale_colour_gradient(
@@ -1298,156 +1166,126 @@ scale_colour_gradient(
 )
 ```
 
-So we may change the desired colors in the color gradient. There are two
-more related scales.
+So we may change the colours at the two ends of the gradient. There are two more related scales.
 
--   `scale_fill_gradient2()` which produces a three-colour gradient with
-    specified midpoint
--   `scale_fill_gradientn()` which produces an n-colour gradient.
+-   `scale_fill_gradient2()` makes a three-colour gradient, with a chosen `midpoint`.
+-   `scale_fill_gradientn()` makes a gradient of any number of colours.
 
-The usage may be clear with the following examples.
+`scale_fill_gradient2()` is very useful in audit, because we often have a natural middle value. Let us redraw the heat-map of @fig-rgg9. This time, each box shows the share of the month in the district's expenditure for the year. In an even year, each month would carry one-twelfth. So we set the `midpoint` to `1/12`. Months above it turn red, and months below it turn green.
 
-```{r fig-rgg53, fig.show='hold', fig.align='center', fig.cap="Customising Fill scale"}
-economics |>
-  mutate(month = month(date, label = TRUE, abbr = TRUE),
-         year = year(date)) |>
-  ggplot(aes(year, month)) +
-  geom_tile(aes(fill = psavert)) +
-  scale_fill_gradient2(low = "red",
-                       high = "seagreen",
-                       midpoint = mean(economics$psavert))
+```{r fig-rgg53, fig.show='hold', fig.align='center', fig.cap="Customising fill scale with a midpoint"}
+spend |>
+  summarise(exp = sum(exp), .by = c(district, month)) |>
+  mutate(share = exp / sum(exp), .by = district) |>
+  ggplot(aes(month, district)) +
+  geom_tile(aes(fill = share)) +
+  scale_fill_gradient2(low = "seagreen",
+                       high = "firebrick",
+                       midpoint = 1 / 12,
+                       labels = scales::label_percent())
 ```
 
-If however, the variable mapped with `fill` or `color` scale is
-discrete, the default scale picked up by ggplot2 is
-`scale_fill_discrete` which picks its values from corresponding
-`scale_fill_hue()` by default.
+In @fig-rgg53 March of Fatehpur and Rampur is now dark red, while the other months are pale. A well chosen midpoint makes the chart tell its story.
 
-However, for discrete color/fill scales it is advised to use `brewer`
-palettes as described in @sec-COLORR, due to slight
-complexity involved in `hue` scales. Moreover, if we want to pick our
-colors manually, we may use `scale_fill_manual()` which takes color
-values from a named vector where names are the categories available in
-the variable. See the following example in @fig-rgg54.
+If the variable mapped to `fill` or `colour` is discrete, ggplot2 uses `scale_fill_discrete()`. By default, this takes its colours from `scale_fill_hue()`.
+
+For discrete colours, it is usually better to use the `brewer` palettes described in @sec-COLORR. If we want to choose the colours ourselves, we use `scale_fill_manual()`. It takes the colours from a named vector, whose names are the categories in the data. See the example in @fig-rgg54.
 
 ::: {#fig-rgg54}
 
 ```{r fig.show='hold', fig.align='center', out.width="49%"}
-ggplot(mpg, aes(fl, fill = fl)) +
+ggplot(bills, aes(category, fill = category)) +
   geom_bar()
 
-ggplot(mpg, aes(fl, fill = fl)) +
+ggplot(bills, aes(category, fill = category)) +
   geom_bar() +
-  scale_fill_manual(values = c(c = "seagreen", d = "tomato4",
-                               e = "dodgerblue", p = "cadetblue3",
-                               r = "indianred"))
+  scale_fill_manual(values = c(Works = "seagreen", Supplies = "tomato4",
+                               Services = "dodgerblue",
+                               `Vehicle hire` = "cadetblue3"))
 ```
 
-Customising Fill scale manually
+Customising fill scale manually
 :::
 
-Another set of scales in ggplot2, sometimes useful are
-`scale_color_identity()` which are useful when the data has already been
-scaled, i.e. it already represents aesthetic values that ggplot2 can
-handle directly. See the following example in @fig-rgg55.
+Notice the backticks around `` `Vehicle hire` ``. A name with a space must be written this way.
+
+Another useful group of scales is `scale_colour_identity()` and `scale_fill_identity()`. These are used when the data already holds the colours themselves. Suppose the audit team has rated the risk of four districts, and has stored the colour of each rating in the data. See @fig-rgg55.
 
 ::: {#fig-rgg55}
 
 ```{r fig.show='hold', fig.align='center', out.width="49%"}
-df <- data.frame(
-  x = 1:4,
-  y = 1:4,
-  colour = c("red", "green", "blue", "yellow")
+ratings <- tibble(
+  district = c("Devgarh", "Fatehpur", "Lalganj", "Rampur"),
+  rating   = c("High", "Medium", "High", "Medium"),
+  colour   = c("firebrick", "orange", "firebrick", "orange")
 )
 
-ggplot(df, aes(x, y)) +
+ggplot(ratings, aes(district, rating)) +
   geom_tile(aes(fill = colour))
 
-ggplot(df, aes(x, y)) +
+ggplot(ratings, aes(district, rating)) +
   geom_tile(aes(fill = colour)) +
   scale_fill_identity()
-
 ```
 
-Identity Color Scale
+Identity colour scale
 :::
+
+In the first chart, ggplot2 treats the colour names as ordinary categories and picks its own colours. In the second, `scale_fill_identity()` uses the colours as they are, and draws no legend.
 
 ### Other scale aesthetics
 
-Similar to position and color/fill scales there are scale functions for
-other aesthetics which are appropriately named and can be used to modify
-mappings as per our requirement. For e.g. to change shape aesthetic with
-that of values available in data, we have `scale_shape_identity()` or to
-change shapes manually we have `scale_shape_manual` which takes a named
-vector. Readers are advised to go through these functions through their
-help pages and use-cases by themselves.
-
+Other aesthetics have their own scale functions, named in the same way. For example, to take the shapes from the data, we have `scale_shape_identity()`. To choose the shapes ourselves, we have `scale_shape_manual()`, which takes a named vector. Readers may explore these functions through their help pages.
 
 ## Coordinate systems
 
-So far, we know that default coordinate system adopted by ggplot2 is
-Cartesian, which requires `x` and `y` position aesthetics to map data in
-two-dimensional plots. It uses `coord_cartesian()` function along with
-its default values. Other linear coordinate systems are `coord_flip()`,
-which flips x and y axes; and `coord_fixed()` which preserves the fixed
-aspect ratio.
+The default coordinate system of ggplot2 is Cartesian, with the `x` and `y` positions. It uses the function `coord_cartesian()` with its default values. Two other linear systems are `coord_flip()`, which swaps the `x` and `y` axes, and `coord_fixed()`, which keeps a fixed ratio between the units of the two axes.
 
-`coord_cartesian()` has arguments `xlim` and `ylim` which can be used to
-set limits of `x` and `y` axes respectively, but unlike `limits`
-argument of `scale_*_*` function does not discard the data, which is out
-of the limits. As an example, refer three plots in @fig-rgg56, wherein `scale_x_continuous` has changed the shape of
-smoothed curve as the data out of the plot has been discarded.
+`coord_cartesian()` has the arguments `xlim` and `ylim`, which set the visible range of the axes. Unlike the `limits` argument of a `scale_*_*()` function, they do *not* throw away the data outside the range. They only zoom in. Let us see this on the scatter plot of expenditure against vouchers, with a trend line. In @fig-rgg56, `scale_x_continuous()` has changed the shape of the smooth curve, because it threw away the data outside its limits. `coord_cartesian()` kept the curve unchanged.
 
 ::: {#fig-rgg56}
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="33%"}
-base <- ggplot(mpg, aes(displ, hwy)) +
+base <- ggplot(spend, aes(vouchers, exp / 1e5)) +
   geom_point() +
   geom_smooth()
 
 # Full dataset
 base
 
-# Scaling to 4--6 throws away data outside that range
-base + scale_x_continuous(limits = c(4, 6))
+# Scaling to 2--6 throws away data outside that range
+base + scale_x_continuous(limits = c(2, 6))
 
-# Zooming to 4--6 keeps all the data but only shows some of it
-base + coord_cartesian(xlim = c(4, 6))
-
+# Zooming to 2--6 keeps all the data but only shows some of it
+base + coord_cartesian(xlim = c(2, 6))
 ```
 
 Setting limits
 :::
 
-Another coordinate system `coord_flip`, flips the axes and is useful to
-flip the axes. One thing to note that here `x` axis is drawn vertically
-and thus, if any `geom` is drawn which takes `x` value will take the
-values from vertical axis and not from horizontal axis.
+::: callout-warning
+## Caution
 
-However there are other coordinate systems available in ggplot2, which
-have been listed in @tbl-coords for ready reference.
+Setting `limits` in a scale removes the rows outside the limits *before* any stat is computed. A trend line, a box plot or a mean drawn on the chart then changes quietly. ggplot2 gives only a warning about removed rows. To zoom in on part of a chart, use `coord_cartesian()` instead.
+:::
+
+`coord_flip()` swaps the axes. Note that the `x` axis is then drawn vertically. So any geom that takes an `x` value will place it along the vertical axis, not the horizontal one.
+
+There are other coordinate systems in ggplot2. They are listed in @tbl-coords.
 
 ```{r tbl-coords, echo=FALSE}
 coords <- help.search("coord_", package = 'ggplot2')
 knitr::kable(coords$matches[, c("Entry", "Title")], caption = "List of Coordinate Systems available in ggplot2")
 ```
 
-Out of the listed coordinate systems, some are really important and
-cannot be skipped for gaining the basic architecture of ggplot2. Do you
-know that a pie chart is basically a bar chart drawn in polar coordinate
-system? The answer is yes. So let's understand polar coordinate system
-and recently introduced radial coordinate system which help us to draw a
-pie chart.
+Some of these are important for understanding how ggplot2 works. For example, did you know that a pie chart is simply a bar chart drawn in a polar coordinate system? Let us see how, with the polar and the newer radial coordinate systems.
 
-In the following code, a 100% stacked bar chart (flipped on y axis) is
-converted to a pie chart by adopting `coord_polar()` and to a bulls-eye
-chart by setting `theta` position aesthetic to `"y"` position. Refer
-three plots in @fig-rgg57.
+In the following code, we draw a single stacked bar of the bills by category. We then turn it into a pie chart with `coord_polar()`. Setting the `theta` argument to `"y"` turns it into a bulls-eye chart instead. See the three charts in @fig-rgg57.
 
 ::: {#fig-rgg57}
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="33%"}
-base <- ggplot(mtcars, aes(y = factor(1), fill = factor(cyl))) +
+base <- ggplot(bills, aes(y = factor(1), fill = category)) +
   geom_bar(width = 1) +
   scale_y_discrete(name = NULL,
                    guide = "none",
@@ -1464,12 +1302,10 @@ base + coord_polar()
 base + coord_polar(theta = "y")
 ```
 
-Polar Coordinates
+Polar coordinates
 :::
 
-By recently introduced `coord_radial` which is specifically designed for
-pie charts, the base layer (i.e. 100% stacked bar chart) can be
-converted to a pie chart. (Refer plots in @fig-rgg58.)
+The newer `coord_radial()` can also turn the same stacked bar into a pie chart (@fig-rgg58).
 
 ::: {#fig-rgg58}
 
@@ -1479,37 +1315,30 @@ base + coord_radial()
 
 # Without expansion
 base + coord_radial(expand = FALSE)
-
-
 ```
 
-Using Radial Coordinates
+Using radial coordinates
 :::
 
-The `coord_radial` can also be used to create donut charts easily by
-setting parameter `inner.radius` as can be seen in @fig-rgg59.
+`coord_radial()` also makes donut charts easily, through its argument `inner.radius`. See @fig-rgg59.
 
-```{r fig-rgg59, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', fig.cap="Donut Charts with Radial Coordinates"}
-
+```{r fig-rgg59, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', fig.cap="Donut chart with radial coordinates"}
 # Donut Chart
 base + coord_radial(expand = FALSE,
                     inner.radius = 0.5)
-
 ```
 
-`coord_radial` also places the labels automatically, while adjusting
-`inner.radius`. Refer plots in @fig-rgg60.
+`coord_radial()` also keeps the labels in place when the inner radius changes. In @fig-rgg60 we count the bills in each category, and label each slice with its count.
 
 ::: {#fig-rgg60}
 
 ```{r warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', out.width="49%"}
-
-base2 <- mpg |>
-    count(class) |>
-  ggplot(aes(y = n, x = "", fill = class)) +
+base2 <- bills |>
+  count(category) |>
+  ggplot(aes(y = n, x = "", fill = category)) +
   geom_col() +
   geom_text(aes(label = n),
-                 position = position_stack(vjust = 0.5))
+            position = position_stack(vjust = 0.5))
 
 base2 + coord_polar(theta = "y")
 
@@ -1517,102 +1346,98 @@ base2 +
   coord_radial(expand = FALSE,
                theta = "y",
                inner.radius = 0.5)
-
 ```
 
-Labels adjustments in Donut Charts with Radial Coordinates
+Label adjustments in donut charts with radial coordinates
 :::
 
-Though there is a lot more that can be done in `coord_radial` , one
-final example of using `coord_radial` can be drawing bar plots in
-circle, as shown in @fig-rgg61.
+::: callout-note
+Pie and donut charts are popular, but people compare angles and areas poorly. With more than three or four slices, a sorted bar chart is almost always easier to read. Use a pie chart only to show a few shares of one whole.
+:::
+
+`coord_radial()` can do much more. One last example draws a bar chart in a circle (@fig-rgg61). Each bar is a district, and its height is the expenditure of the year in crore. The bars are coloured by division.
 
 ```{r fig-rgg61, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', fig.cap="Bar plot in circle"}
-mtcars |>
-  #arrange(-mpg) |>
-  rownames_to_column('Car') |>
-  ggplot(aes(seq_along(mpg), mpg, fill = factor(cyl))) +
+spend |>
+  summarise(exp_crore = round(sum(exp) / 1e7, 1), .by = c(district, division)) |>
+  ggplot(aes(seq_along(exp_crore), exp_crore, fill = division)) +
   geom_col(width = 1,
-           color = "white") +
-  geom_text(aes(y = 32, label = Car),
+           colour = "white") +
+  geom_text(aes(y = 5, label = district),
             angle = 90,
             hjust = 1) +
   geom_text(
-    aes(y = 32, label = mpg),
+    aes(y = 5, label = exp_crore),
     angle = 90,
     hjust = -1,
     fontface = "bold"
   ) +
   coord_radial(rotate.angle = TRUE, expand = FALSE)  +
-  scale_fill_manual(values = c("dodgerblue", "seagreen", "orange"), guide = "none") +
+  scale_fill_manual(values = c("dodgerblue", "seagreen", "orange", "orchid"),
+                    guide = "none") +
   theme_void() +
   theme(panel.background = element_rect(fill = "aliceblue")) +
-  ggtitle("Miles per gallon for different cars") +
+  ggtitle("Expenditure of districts, 2024-25 (₹ crore)") +
   theme(plot.title = element_text(size = 15,
                                   face = "bold", hjust = 0.5))
 ```
 
 ## Faceting
 
-When there is a lot of data, it can be hard to distinguish different groups in one plot,
-even with colours and shapes. An alternative is
-to use faceting. Facets, or "small-multiples", are
-used to split one plot into a multi-panel figure, with one panel
-("facet") per group of data. The same type of plot is created multiple
-times, each one using a sub-group of the same dataset.
+When there is a lot of data, it can be hard to tell the groups apart in one chart, even with colours and shapes. Another way is *faceting*. Facets, or *small multiples*, split one chart into many panels, one for each group of data. The same chart is drawn many times, each time for one part of the data.
 
-In `ggplot2` faceting can be achieved using either of the functions -
+In ggplot2 there are two functions for faceting.
 
--   `facet_wrap()` creates one panel for each level of a single variable,
-    and wraps the panels into rows, like words in a paragraph. We may
-    specify the number of columns with the `ncol` argument.
--   `facet_grid()` creates a grid of panels, with the levels of one variable
-    as rows and of another as columns.
+-   `facet_wrap()` makes one panel for each value of a single variable. It wraps the panels into rows, like words in a paragraph. We may set the number of columns with the argument `ncol`.
+-   `facet_grid()` makes a grid of panels, with the values of one variable as rows and those of another as columns.
 
-Both functions have a `scales` argument, which lets each panel have its own axis range (`scales = "free"`), instead of a common one.
+Both functions have a `scales` argument. With `scales = "free"`, each panel gets its own axis range, instead of a common one.
 
-Let us understand this with the following examples. In @fig-rgg62, `facet_wrap()` has been used. We specify
-the variable to use for faceting with the `~` operator. `facet_wrap(~ variable)` creates
-one panel for each level of the variable. This is useful when we have
-a single categorical variable that we want to use for faceting.
+Let us see an example. In @fig-rgg62 we use `facet_wrap()` to draw the monthly expenditure of each district in its own panel. The variable for the panels is given after the `~` sign. `facet_wrap(~ district)` makes one panel for each district.
 
-```{r fig-rgg62, fig.show='hold', fig.align='center', fig.cap="Wrapping sub plots in facets"}
-ggplot(mpg, aes(x = displ, y = hwy)) +
-  geom_point() +
-  facet_wrap(~ class, ncol = 2)
+```{r fig-rgg62, fig.show='hold', fig.align='center', fig.height=6, fig.cap="Wrapping sub plots in facets"}
+spend |>
+  summarise(exp_lakh = sum(exp) / 1e5, .by = c(district, month)) |>
+  ggplot(aes(x = as.integer(month), y = exp_lakh)) +
+  geom_col() +
+  facet_wrap(~ district, ncol = 3) +
+  scale_x_continuous(breaks = c(1, 4, 7, 10)) +
+  labs(x = "Month of the financial year (1 = April)")
 ```
 
-On the other hand, `facet_grid()` arranges the panels in a grid, with a different
-variable on each side. For example, `facet_grid(variable1 ~ variable2)` creates a
-grid with the levels of `variable1` as rows and those of `variable2` as
-columns. This is useful when we want to compare a relationship across the
-combinations of two other variables. See the example in @fig-rgg63, with years as rows and classes of car as columns.
+With all panels on the same scale, the tall March bars of Fatehpur and Rampur jump out of @fig-rgg62. The other ten panels look alike. We placed the breaks of the `x` axis at the first month of each quarter, with `scale_x_continuous(breaks = c(1, 4, 7, 10))`.
 
-```{r fig-rgg63, fig.show='hold', fig.align='center', fig.cap="Grid alignment of sub plots in facets"}
-ggplot(mpg, aes(x = displ, y = hwy)) +
-  geom_point() +
-  facet_grid(year ~ class)
+`facet_grid()`, on the other hand, places the panels in a grid, with a different variable on each side. For example, `facet_grid(variable1 ~ variable2)` makes a grid with the values of `variable1` as rows and those of `variable2` as columns. This is useful to compare a pattern across the combinations of two variables. In @fig-rgg63 the rows are the categories of bills and the columns are the divisions. Each panel has one line for each district of the division.
+
+```{r fig-rgg63, fig.show='hold', fig.align='center', fig.height=6, fig.cap="Grid alignment of sub plots in facets"}
+ggplot(spend, aes(x = as.integer(month), y = exp / 1e5, group = district)) +
+  geom_line() +
+  facet_grid(category ~ division, scales = "free_y") +
+  scale_x_continuous(breaks = c(1, 4, 7, 10)) +
+  labs(x = "Month of the financial year (1 = April)", y = "Expenditure (₹ lakh)")
 ```
 
-## Labeling and Annotating Charts
+Here we used `scales = "free_y"`, so that each row of panels has its own `y` axis. The small vehicle hire bills would otherwise look flat beside the large works bills. Notice also that the West column has no vehicle hire lines at all. Facets show such gaps clearly.
 
-Labeling is an essential aspect of data visualisation because it provides context and information about the data being presented. Labels can include titles, axis labels, legends, and annotations that describe the data and provide important information that helps the viewer understand what they are looking at. Proper labelling can help to make the data more understandable, clear, and accessible, which enhances its overall value and impact.
+## Labelling and annotating charts
+
+Labels give a chart its context. Titles, axis titles, legends and notes tell the reader what is shown and what to look at. Good labels make a chart clear and easy to use, and give it more value.
 
 ### Annotations
 
-We have already covered use of `geoms` like `geom_text`, `geom_label`, `geom_vline`, `geom_abline`, etc., used to label or annotate geometries in a plot. There are several other geoms used to annotate charts in ggplot2. Let us discuss a few of these.
+We have already used geoms like `geom_text()`, `geom_label()`, `geom_vline()` and `geom_abline()` to label or mark a chart. A few other geoms are also used to annotate charts.
 
--   `geom_rect()` is used to draw a rectangle in plot area using aesthetics `xmin`, `xmax`, `ymin` and `ymax`
--   `geom_segment()` can create a line segment.
+-   `geom_rect()` draws a rectangle in the plot area, using the aesthetics `xmin`, `xmax`, `ymin` and `ymax`.
+-   `geom_segment()` draws a line segment.
 
-Moreover, there is a helper function `annotate` which also adds geoms to a plot, but unlike a typical geom function, the properties of the geoms are not mapped from variables of a data frame, but are instead passed in as vectors. This is useful for adding small annotations (such as text labels) or if we have our data in vectors, and for some reason don't want to put them in a data frame. See an example in plot in @fig-rrgg63 wherein we have added five annotation elements (i) a rectangle, (ii) two text labels and (iii) two arrows.
+There is also a helper function, `annotate()`. It adds a geom to a chart, but its values are not taken from the columns of a data frame. They are given directly, as single values or short vectors. This is handy for a few notes, such as a label or an arrow. See the example in @fig-rrgg63, where we add five notes to the monthly total of the scheme. These are (i) a shaded rectangle, (ii) two pieces of text and (iii) two arrows.
 
 ```{r fig-rrgg63, fig.show='hold', fig.align='center', fig.cap="Annotating charts"}
-ggplot(economics, aes(date, unemploy)) +
+ggplot(monthly_total, aes(month_start, exp_crore)) +
   annotate(
     geom = "rect",
-    xmin = ymd("20071201"),
-    xmax = ymd("20091231"),
+    xmin = ymd("20250215"),
+    xmax = ymd("20250315"),
     ymin = -Inf,
     ymax = Inf,
     fill = "orange",
@@ -1620,71 +1445,73 @@ ggplot(economics, aes(date, unemploy)) +
   ) +
   annotate(
     geom = "label",
-    x = ymd("20070801"),
-    y = 2500,
-    label = "Global Financial Crisis",
+    x = ymd("20241201"),
+    y = 3.9,
+    label = "Year-end spending",
     hjust = 1
   ) +
   annotate(
     geom = "curve",
-    xend = ymd("20080101"),
-    yend = 4000,
-    x = ymd("20000101"),
-    y = 3000,
-    curvature = -0.5,
-    arrow = arrow(length = unit(0.5, 'cm'))
+    x = ymd("20241205"),
+    y = 3.9,
+    xend = ymd("20250210"),
+    yend = 4.1,
+    curvature = -0.3,
+    arrow = arrow(length = unit(0.3, "cm"))
   ) +
   annotate(
     geom = "text",
-    x = ymd("20070801"),
-    y = 14000,
-    label = "Sharp rise in unemployment",
-    hjust = 1,
+    x = ymd("20240601"),
+    y = 3.4,
+    label = "Steady months",
+    hjust = 0,
     fontface = "bold.italic"
   ) +
   annotate(
     geom = "curve",
-    xend = ymd("20080701"),
-    yend = 12000,
-    x = ymd("20000101"),
-    y = 13500,
-    curvature = 0.5,
-    arrow = arrow(length = unit(0.5, 'cm'))
+    x = ymd("20240710"),
+    y = 3.3,
+    xend = ymd("20240801"),
+    yend = 2.8,
+    curvature = 0.3,
+    arrow = arrow(length = unit(0.3, "cm"))
   ) +
-  geom_line(color = "indianred4")
+  geom_line(colour = "indianred4")
 ```
+
+The positions of these notes were chosen by looking at the chart. If the data changes, they may need to be moved.
 
 ### Labels
 
-Effective labelling is crucial for ensuring that plots are accessible and comprehensible to a wider audience. To achieve this, it's important to use full variable names for axis and legend labels, as this enhances clarity. The plot's `title` and `subtitle` should be employed to communicate the primary insights and key takeaways, making the information more digestible at a glance. The `caption` serves as a valuable space to include details about the data source, providing context and credibility. Furthermore, the `tag` feature can be utilized to add identification markers, which is particularly helpful when comparing or displaying multiple plots within a project.
+Good labels make a chart easy to understand for every reader. Use full, readable names for the axes and the legends, not column names. Use the `title` and the `subtitle` to state the main point of the chart. Use the `caption` for the source of the data. A `tag` marks the chart with a number, which helps when a report has many charts.
 
-There are several ways to add labels to ggplot2 charts, but we will focus on using the `labs()` function, which allows us to add `titles`, `subtitles`, `axis labels`, and other annotations like `caption`, etc., to the plot. Example -
+There are several ways to add labels in ggplot2. We will use the function `labs()`, which sets the title, subtitle, axis titles, legend titles, caption and tag in one place. See @fig-rgg64.
 
 ```{r fig-rgg64, fig.show='hold', fig.align='center', fig.cap="A properly labelled chart"}
-ggplot(mtcars, aes(x = hp, y = mpg, color = factor(cyl))) +
-  geom_point() +
-  labs(title = "Scatter plot of mpg vs. hp",
-       subtitle = "Data from mtcars dataset",
-       x = "Horsepower",
-       y = "Miles per gallon",
-       color = "Cylinders",
-       caption = "Source: R datasets",
-       tag = "Chart-1")
+ggplot(bills, aes(x = amount / 1e5, y = days_to_pay, colour = category)) +
+  geom_point(alpha = 0.5) +
+  labs(title = "Large bills were not paid faster than small ones",
+       subtitle = "Except for a few works bills paid within a day",
+       x = "Bill amount (₹ lakh)",
+       y = "Days taken to pay",
+       colour = "Category",
+       caption = "Data from the bill register of the scheme, 2024-25",
+       tag = "Chart 1")
 ```
 
 ### Labels from a dictionary, new in ggplot2 4.0
 
-Data received from departments often has coded column names, like `amt_sanc` or `dist_cd`. From version 4.0, we can give `labs()` a *dictionary*, a named vector which maps column names to readable labels. Every axis and legend title is then taken from it.
+Data received from departments often has coded column names, like `amt_sanc` or `dist_cd`. From version 4.0, we can give `labs()` a *dictionary*. This is a named vector that maps column names to readable labels. Every axis and legend title is then taken from it.
 
 ```{r}
 #| label: fig-labsdict
 #| fig-cap: "Axis and legend titles taken from a data dictionary"
-dictionary <- c(displ = "Engine displacement (litres)",
-                hwy   = "Highway mileage (miles per gallon)",
-                drv   = "Drive")
+dictionary <- c(amount      = "Bill amount (₹)",
+                days_to_pay = "Days taken to pay",
+                category    = "Category of bill")
 
-ggplot(mpg, aes(displ, hwy, colour = drv)) +
-  geom_point() +
+ggplot(bills, aes(amount, days_to_pay, colour = category)) +
+  geom_point(alpha = 0.5) +
   labs(dictionary = dictionary)
 ```
 
@@ -1692,9 +1519,9 @@ A single dictionary can be kept for a whole dataset, and used for every chart ma
 
 ## Themes
 
-Till now (except in a few cases) we have used the default themes of plots generated in ggplot2. Themes can be however be used to customise the appearance, visual aesthetics by exercising fine control over the non-data elements in the plot.  We can customize the appearance of plots, such as the axis labels, titles, background colours, and font sizes, styles, etc. by applying themes to the plot.
+So far, except in a few cases, we have used the standard look of ggplot2. *Themes* control the look of everything in a chart that is not data. This includes the background, the grid lines, the fonts, the sizes of text and the position of the legend.
 
-There are certain complete themes available in `ggplot2` which set all of the theme elements to values designed to work harmoniously.  Default theme applied to a plot in ggplot2 is `theme_gray()`.  A complete list of themes available in ggplot2 is given in the @tbl-themesp below:
+ggplot2 has some *complete themes*, which set all these elements to values that work well together. The default theme is `theme_gray()`. The complete themes are listed in @tbl-themesp.
 
 | Theme name         | Description                                                                                                                                                                                                                                |
 |--------------------|----------------------------------------------------|
@@ -1710,64 +1537,45 @@ There are certain complete themes available in `ggplot2` which set all of the th
 
 : Themes in ggplot2 {#tbl-themesp}
 
-Example plots having four of such themes can be seen in @fig-theme1.
+@fig-theme1 shows the same chart in four of these themes.
 
 ```{r fig-theme1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Some complete themes available in ggplot2"}
-
 library(patchwork)
-t1 <- ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  labs(title = "Theme Minimal",
-       x = "Weight (1000 lbs)",
-       y = "Miles per Gallon") +
-  theme_minimal() +
-  theme(plot.title = element_text(face = "bold", color = "indianred4"))
+theme_demo <- function(theme_fun, title) {
+  ggplot(bills, aes(x = amount / 1e5, y = days_to_pay)) +
+    geom_point(alpha = 0.3) +
+    labs(title = title,
+         x = "Bill amount (₹ lakh)",
+         y = "Days taken to pay") +
+    theme_fun() +
+    theme(plot.title = element_text(face = "bold", colour = "indianred4"))
+}
 
-t2 <- ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  labs(title = "Theme Void",
-       x = "Weight (1000 lbs)",
-       y = "Miles per Gallon") +
-  theme_void()+
-  theme(plot.title = element_text(face = "bold", color = "indianred4"))
-
-t3 <- ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  labs(title = "Theme Classic",
-       x = "Weight (1000 lbs)",
-       y = "Miles per Gallon") +
-  theme_classic()+
-  theme(plot.title = element_text(face = "bold", color = "indianred4"))
-
-t4 <- ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  labs(title = "Theme Dark",
-       x = "Weight (1000 lbs)",
-       y = "Miles per Gallon") +
-  theme_dark()+
-  theme(plot.title = element_text(face = "bold", color = "indianred4"))
+t1 <- theme_demo(theme_minimal, "Theme Minimal")
+t2 <- theme_demo(theme_void, "Theme Void")
+t3 <- theme_demo(theme_classic, "Theme Classic")
+t4 <- theme_demo(theme_dark, "Theme Dark")
 
 (t1 + t2) / (t3 + t4)
 ```
 
-Individual elements can also, however, be modified through function `theme` available in ggplot2.  This `theme` function should consist of `element` name which is to be modified, as an argument to the function.  That element can then be modified through providing values to that argument, which most of the times is provided through `element function` like `element_text`, etc.  Some of the elements commonly requiring a customisation through theme function is explained in @fig-rgg65.
+We can also change single elements of a theme, with the function `theme()`. Each argument of `theme()` is the name of an element, such as `plot.title` or `axis.text.x`. The new value is usually given through an *element function*, such as `element_text()`, `element_line()` or `element_rect()`. @fig-rgg65 shows some elements that are often changed.
 
 ```{r fig-rgg65, echo=FALSE, fig.cap="Some theme elements", fig.align='center', fig.show='hold', out.height="40%", out.width="95%"}
 knitr::include_graphics("images/elements.png")
 ```
 
-As an example refer plot in @fig-theme2 wherein certain plot elements have been modified using `theme` function.
+In @fig-theme2 several elements of a chart have been changed with `theme()`.
 
-```{r fig-theme2, fig.align='center', fig.show='hold', fig.cap="Customising Themes in GGplot2"}
-myplot<- ggplot(mpg, aes(x = cty, y = hwy)) +
-  geom_point(size = 2, position = position_jitter(seed = 42), aes(color = factor(class))) +
-  geom_point(shape=21, size = 4.5, position = position_jitter(seed = 42), aes(color = factor(class))) +
-  geom_smooth(method = "lm", se = FALSE, formula = "y ~ x", linewidth = 0.5) +
-  labs(title = "City Vs. Highway Mileages",
-       caption = "Data Source: MPG Dataset",
-       x = "Mileage in City (Miles per Gallon)",
-       y = "Mileage in Highway (Miles per Gallon)",
-       color = "Class") +
+```{r fig-theme2, fig.align='center', fig.show='hold', fig.cap="Customising themes in ggplot2"}
+myplot <- ggplot(bills, aes(x = amount / 1e5, y = days_to_pay)) +
+  geom_point(size = 2, alpha = 0.6, aes(colour = category)) +
+  geom_smooth(method = "lm", se = FALSE, formula = y ~ x, linewidth = 0.5) +
+  labs(title = "Bill amount and days taken to pay",
+       caption = "Data from the bill register, 2024-25",
+       x = "Bill amount (₹ lakh)",
+       y = "Days taken to pay",
+       colour = "Category") +
   theme(
     panel.background = element_rect(fill = NA),
     axis.line = element_line(colour = "seagreen4",
@@ -1789,18 +1597,18 @@ myplot<- ggplot(mpg, aes(x = cty, y = hwy)) +
 myplot
 ```
 
-Notice two settings for the legend. `legend.position = "inside"` places the legend inside the plot area, and `legend.position.inside = c(1, 1)` gives its position, here the top right corner. (Before ggplot2 version 3.5, a pair of numbers was given directly to `legend.position`.)
+Notice two settings for the legend. `legend.position = "inside"` places the legend inside the plot area. `legend.position.inside = c(1, 1)` gives its position, here the top right corner. Before ggplot2 version 3.5, a pair of numbers was given directly to `legend.position`.
 
-We can combine several customisation options into a theme of our own, and apply it to all plots with `theme_set()`. This is useful for giving all charts of an audit report the same look.
+We can combine several such settings into a theme of our own, and apply it to all charts with `theme_set()`. This gives all the charts of an audit report the same look.
 
 ### Ink and paper, new in ggplot2 4.0
 
-From version 4.0, the complete themes have three arguments which change the whole look at once. `ink` is the colour of the foreground, like text, lines and points. `paper` is the colour of the background. And `accent` is the colour used for highlights, like the line of `geom_smooth()`.
+From version 4.0, the complete themes have three arguments that change the whole look at once. `ink` is the colour of the foreground, such as text, lines and points. `paper` is the colour of the background. `accent` is the colour used for highlights, such as the line of `geom_smooth()`.
 
 ```{r}
 #| label: fig-inkpaper
 #| fig-cap: "A complete theme recoloured with ink, paper and accent"
-ggplot(mpg, aes(displ, hwy)) +
+ggplot(spend, aes(vouchers, exp / 1e5)) +
   geom_point() +
   geom_smooth(method = "lm", formula = y ~ x) +
   theme_bw(ink = "navy", paper = "ivory", accent = "firebrick")
@@ -1808,33 +1616,86 @@ ggplot(mpg, aes(displ, hwy)) +
 
 One line gives a consistent house style, without changing a dozen theme elements one by one.
 
-## A chart for an audit report {#sec-ggplot2-audit}
+## Audit use case, bills just below the limit {#sec-ggplot2-split}
 
-Let us put several of these features together, in the kind of chart that appears in audit reports. We have the budget and the expenditure of 12 districts under a scheme, in rupees. We want to show the *utilisation*, expenditure as a percentage of budget, with the districts sorted, amounts in lakh, and the districts which spent more than their budget highlighted.
+A district officer may pass a bill of up to ₹2 lakh. A larger purchase needs the sanction of a higher authority, and often a tender. An officer who wants to avoid this may split one large purchase into several bills, each just below ₹2 lakh. This is called *splitting of bills* or *splitting of sanctions*. In @fig-rgg21 we saw a hint of it. Let us now examine it properly.
+
+First, let us look closely at the bills between ₹1.5 lakh and ₹2.5 lakh. Bins of ₹5,000 end exactly at the limit, through `boundary`. Amounts are shown in lakh.
+
+```{r fig-split1, fig.align='center', fig.cap="Bills between 1.5 and 2.5 lakh, with the limit of 2 lakh"}
+near_limit <- bills |>
+  filter(between(amount, 150000, 250000))
+
+ggplot(near_limit, aes(amount)) +
+  geom_histogram(binwidth = 5000, boundary = 200000,
+                 fill = "grey60", colour = "white") +
+  geom_vline(xintercept = 200000, linetype = "dashed", colour = "firebrick") +
+  scale_x_continuous(labels = scales::label_number(scale = 1e-5, accuracy = 0.1,
+                                                   suffix = " lakh")) +
+  labs(x = "Bill amount", y = "Number of bills",
+       title = "Bills pile up just below the limit of ₹2 lakh")
+```
 
 ```{r}
-#| code-fold: true
-#| code-summary: "Code to create the district data"
-set.seed(310)
-districts <- tibble(
-  dist_name = c("Amarpur", "Belapur", "Chandpur", "Devgarh", "Fatehpur", "Gopalganj",
-                "Haripur", "Kishanpur", "Lalganj", "Madhopur", "Narsinghpur", "Rampur"),
-  amt_be    = round(runif(12, 200, 900) * 1e5),       # budget estimate
-) |>
-  mutate(amt_exp = round(amt_be * runif(12, 0.55, 1.05)))
-# Planted. Two districts spent well over their budget
-districts$amt_exp[c(4, 9)] <- round(districts$amt_be[c(4, 9)] * c(1.18, 1.27))
+#| include: false
+just_below <- bills |> filter(amount >= 190000, amount < 200000)
+just_above <- bills |> filter(amount >= 200000, amount < 210000)
 ```
+
+In @fig-split1 the two bars just left of the dashed line are far taller than the rest. There are `r nrow(just_below)` bills between ₹1.9 lakh and ₹2 lakh, but only `r nrow(just_above)` between ₹2 lakh and ₹2.1 lakh. In a natural set of bills, the counts on the two sides of the line should be similar.
+
+Who raised these bills? Let us count them by district and vendor.
+
+```{r}
+just_below |>
+  count(district, vendor, sort = TRUE) |>
+  head(5)
+```
+
+```{r}
+#| include: false
+top_pair <- just_below |> count(district, vendor, sort = TRUE) |> slice(1)
+top_bills <- bills |> filter(district == top_pair$district, vendor == top_pair$vendor)
+```
+
+One pair stands far above the rest. `r top_pair$district` paid `r top_pair$n` bills just below the limit to `r top_pair$vendor`. Let us draw the same histogram again, now with the bills of this district in colour. We stack the colours with `fill`, and choose them with `scale_fill_manual()`.
+
+```{r fig-split2, fig.align='center', fig.cap="Bills just below the limit, with the bills of Devgarh highlighted"}
+near_limit |>
+  mutate(devgarh = if_else(district == "Devgarh", "Devgarh", "Other districts")) |>
+  ggplot(aes(amount, fill = devgarh)) +
+  geom_histogram(binwidth = 5000, boundary = 200000, colour = "white") +
+  geom_vline(xintercept = 200000, linetype = "dashed") +
+  scale_x_continuous(labels = scales::label_number(scale = 1e-5, accuracy = 0.1,
+                                                   suffix = " lakh")) +
+  scale_fill_manual(values = c(Devgarh = "firebrick", `Other districts` = "grey70")) +
+  labs(x = "Bill amount", y = "Number of bills", fill = NULL,
+       title = "The pile below ₹2 lakh comes almost entirely from Devgarh") +
+  theme(legend.position = "top")
+```
+
+@fig-split2 makes the point at once. Without Devgarh, the bars on the two sides of the limit would be of similar height. The `r top_pair$n` bills of `r top_pair$vendor` add up to ₹`r lakh(sum(top_bills$amount))` lakh. Together they are far above the officer's limit of ₹2 lakh.
+
+What should the auditor do next?
+
+-   Call for the files of these `r top_pair$n` bills. Check whether they were for the same item, ordered around the same time.
+-   Check whether a single requirement existed that should have been sanctioned by the higher authority, and procured by tender.
+-   Compare the rates paid with the market rates, or with rates paid by other districts.
+-   Record the chart, the list of bills and the replies of the district in the working papers.
+
+## Audit use case, a chart for the audit report {#sec-ggplot2-audit}
+
+Let us put several features together, in the kind of chart that appears in audit reports. For each of the 12 districts, we have the budget estimate and the expenditure of the year. We want to show the *utilisation*, that is, the expenditure as a percentage of the budget. We want the districts sorted, the amounts in lakh, and the districts that spent more than their budget highlighted. The table `budget_vs_exp`, made for @fig-rgg52, has what we need.
 
 ```{r}
 #| label: fig-utilisation
 #| fig-cap: "Utilisation of funds by districts, with excess expenditure highlighted"
 #| fig-height: 5
-districts |>
+budget_vs_exp |>
   mutate(utilisation = amt_exp / amt_be,
          excess      = utilisation > 1,
-         dist_name   = fct_reorder(dist_name, utilisation)) |>
-  ggplot(aes(utilisation, dist_name, fill = excess)) +
+         district    = fct_reorder(district, utilisation)) |>
+  ggplot(aes(utilisation, district, fill = excess)) +
   geom_col() +
   geom_vline(xintercept = 1, linetype = "dashed") +
   geom_text(aes(label = scales::label_number(scale = 1e-5, accuracy = 1, big.mark = ",",
@@ -1851,28 +1712,34 @@ districts |>
   theme(legend.position = "top")
 ```
 
+```{r}
+#| include: false
+over <- over |> mutate(excess = amt_exp - amt_be, util = amt_exp / amt_be) |> arrange(desc(util))
+```
+
 Each choice in this chart serves the reader.
 
-- The districts are sorted by utilisation with `fct_reorder()`, so the order itself tells the story.
-- Only the districts which exceeded their budget are in colour. Everything else is grey, so the eye goes straight to them.
-- The dashed line at 100% gives a reference, so the reader does not have to judge the lengths of bars.
-- The labels show the expenditure in lakh, the unit used in Indian government reports, with `scales::label_number(scale = 1e-5, suffix = " lakh")`.
-- The title says what is shown, and the caption explains the marks.
+-   The districts are sorted by utilisation with `fct_reorder()`, so the order itself tells the story.
+-   Only the districts that exceeded their budget are in colour. Everything else is grey, so the eye goes straight to them.
+-   The dashed line at 100% gives a reference. The reader does not have to judge the lengths of the bars.
+-   The labels show the expenditure in lakh, the unit used in Indian government reports, with `scales::label_number(scale = 1e-5, suffix = " lakh")`.
+-   The title says what is shown, and the caption explains the marks.
+
+@fig-utilisation shows that `r over$district[1]` spent `r round(over$util[1] * 100)`% of its budget, an excess of ₹`r lakh(over$excess[1])` lakh. `r over$district[2]` spent `r round(over$util[2] * 100)`%, an excess of ₹`r lakh(over$excess[2])` lakh. The next steps for the auditor are to check whether the excess was covered by a re-appropriation or a supplementary grant, and whether it was regularised. Notice also that these are the same two districts flagged earlier. Lalganj paid large bills within a day, and Devgarh split its bills. A chart that brings several findings together is strong evidence for the report.
 
 ::: callout-tip
 ## Audit tip
 
-A chart in an audit report should make *one* point clearly. Decide the point first, then remove everything that does not serve it. Use colour for emphasis, not for decoration, and always show the reference, like the budget, the norm or the average, against which the reader should judge.
+A chart in an audit report should make *one* point clearly. Decide the point first, then remove everything that does not serve it. Use colour for emphasis, not for decoration. Always show the reference, like the budget, the norm or the average, against which the reader should judge.
 :::
 
+## Saving and exporting plots
 
-## Saving/exporting plots
+After making a chart, we usually want to save it for a report or a presentation. There are many ways to save a chart. We will look at three of them.
 
-Of course, after creating charts/plots we would like to save them for further usage in our reports/documents, etc. Though there may be many options to save a plot to disk, we will be focusing on three different methods.
+### Saving through RStudio menu {.unnumbered}
 
-### Saving through Rstudio menu {.unnumbered}
-
-To save a graph using the RStudio menus, go to the Plots tab and choose `Export`.
+To save a chart through the menus of RStudio, go to the Plots tab and choose `Export`.
 
 ```{r fig-export1, echo=FALSE, fig.align='center', fig.show='hold', fig.cap="Exporting Charts", out.width="95%"}
 knitr::include_graphics('images/export.png')
@@ -1880,15 +1747,15 @@ knitr::include_graphics('images/export.png')
 
 Three options are available here.
 
--   Save as Image
--   Save as PDF
--   Copy to clipboard.
+-   Save as Image.
+-   Save as PDF.
+-   Copy to Clipboard.
 
-We can use the options as per requirement.
+We can use whichever suits our need.
 
 ### Saving through code {.unnumbered}
 
-We may also save our plots using function `ggsave()` here. Its syntax is simple
+We may also save a chart with the function `ggsave()`. Its syntax is simple.
 
 ```
 ggsave(
@@ -1907,11 +1774,13 @@ ggsave(
 )
 ```
 
-All arguments are simple to understand. Thus for example if we need to save the plot we generated in @fig-theme2,  we can use `ggsave`.
+The arguments are easy to understand. For example, to save the chart we made in @fig-theme2, which we stored as `myplot`, we may write the following.
 
 ```
-ggsave('Mileages.png', myplot, height = 10, width = 8)
+ggsave("bill_amount_days.png", myplot, height = 8, width = 10)
 ```
+
+The type of file is taken from the extension of the file name, here `.png`. Giving the same `width` and `height` to every chart keeps the charts of a report alike.
 
 ::: callout-tip
 ## Audit tip
@@ -1919,23 +1788,17 @@ ggsave('Mileages.png', myplot, height = 10, width = 8)
 Prefer saving charts with code over the menu. The script then records exactly how each chart in the report was made. Keep it with your working papers, so that a reviewer can draw the same chart again from the same data.
 :::
 
-### Graphics Devices (Base R Plots) {.unnumbered}
+### Graphics devices (base R plots) {.unnumbered}
 
-If we have created plots outside of ggplot (with `plot()`, `hist()`,
-`boxplot()`, etc.), we cannot use `ggsave()` to save our plots since it
-only supports plots made with ggplot.
+Charts made outside ggplot2, with `plot()`, `hist()`, `boxplot()` and other base R functions, cannot be saved with `ggsave()`. It works only for charts made with ggplot2.
 
-Base R provides a way to save these plots with its graphic device
-functions. There are three steps involved in this process-
+Base R saves such charts through its *graphics device* functions. There are three steps.
 
--   Specify the file extension and properties (size, resolution, etc.)
-    along with units
--   create the plot, in base R or/and ggplot2
--   Signal that the plot is finished and save it by running `dev.off()`.
-    Thus, using this way we can insert as many charts in a single pdf
-    without turning off the device till our pdf is ready.
+-   Open a file of the chosen type, giving its size, resolution and units.
+-   Draw the chart, in base R or ggplot2, or both.
+-   Close the file with `dev.off()`. Until we do this, every chart drawn goes into the same file. So we can put many charts into one PDF before closing it.
 
-Example-
+Here is an example.
 
 ```{r}
 # Creates a png file
@@ -1946,12 +1809,11 @@ png(
   units = "in",
   res = 300
 )
-# Prints a ggplot2 in it
-ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  geom_abline(intercept = 5,
-              slope = 3,
-              color = "seagreen")
+# Prints a ggplot2 chart in it
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
+  geom_point(alpha = 0.3) +
+  geom_vline(xintercept = 2e5,
+             colour = "seagreen")
 # Device is off
 dev.off()
 
@@ -1959,34 +1821,34 @@ dev.off()
 pdf(file = "two_page.pdf",
     width = 6,
     height = 4)
-#first plot
-plot(mtcars$wt, mtcars$mpg)
-abline(a = 5, b = 3, col = "red")
-# Second Plot
-ggplot(mtcars, aes(x = wt, y = mpg)) +
-  geom_point() +
-  geom_abline(intercept = 5,
-              slope = 3,
-              color = "seagreen")
+# First plot, in base R
+plot(bills$amount, bills$days_to_pay)
+abline(v = 2e5, col = "red")
+# Second plot, in ggplot2
+ggplot(bills, aes(x = amount, y = days_to_pay)) +
+  geom_point(alpha = 0.3) +
+  geom_vline(xintercept = 2e5,
+             colour = "seagreen")
 # Device Off
 dev.off()
 ```
 
 ## A suggested workflow
 
-1.  **Decide the one point first.** Before writing any code, decide what the chart should tell the reader, such as which districts spent more than their budget. Then choose the geom that suits it. Use bars to compare amounts, lines for trends over months, and a histogram or box plot for the spread of payments.
-2.  **Summarise the data yourself.** Aggregate the payment register by district, scheme or vendor first, and draw the bars with `geom_col()`. This is easier to check than a summary done inside `geom_bar()`.
-3.  **Map variables with care.** Put a variable inside `aes()` only when it should change the look of the chart. Convert numeric codes, like district codes or month numbers, with `as.factor()` before mapping them to colour or shape.
-4.  **Sort and highlight.** Order the bars with `fct_reorder()`, so the order itself tells the story. Keep most of the chart grey, and use colour from `scale_fill_manual()` only for the cases that need attention.
-5.  **Add the reference.** Draw the budget, the norm or the average as a line with `geom_vline()` or `geom_hline()`. The reader can then judge each bar against it.
-6.  **Format the numbers.** Show amounts in lakh or crore and shares as percentages, with the label functions of `scales`. To zoom in, use `coord_cartesian()` rather than `limits`, so that no data is dropped.
-7.  **Label the chart.** Give a title that states the point, readable axis titles, and the data source in the caption, all with `labs()`. Set one theme for all charts of the report with `theme_set()`.
-8.  **Save at a fixed size.** Save each chart with `ggsave()`, giving the width and height, so that all charts in the report look alike.
+1.  **Decide the one point first.** Before writing any code, decide what the chart should tell the reader, such as which districts spent more than their budget. Then choose the geom that suits it. Use bars to compare amounts, lines for trends over months, a heat-map for districts against months, and a histogram or box plot for the spread of bills.
+2.  **Summarise the data yourself.** Aggregate the bill register by district, month or category first, and draw the bars with `geom_col()`. This is easier to check than a summary done inside `geom_bar()`.
+3.  **Map variables with care.** Put a variable inside `aes()` only when it should change the look of the chart. Give fixed colours outside `aes()`. Convert numeric codes, like district codes or quarter numbers, with `as.factor()` before mapping them to colour or shape.
+4.  **Look for the unusual.** Use a histogram with a bin ending at the limit to find bills just below it. Use a heat-map or facets to find a month or a district that stands apart. Use reference lines to find points beyond the norm.
+5.  **Sort and highlight.** Order the bars with `fct_reorder()`, so the order itself tells the story. Keep most of the chart grey, and use colour from `scale_fill_manual()` only for the cases that need attention.
+6.  **Add the reference.** Draw the budget, the limit, the norm or the average as a line with `geom_vline()`, `geom_hline()` or `geom_abline()`. The reader can then judge each bar or point against it.
+7.  **Format the numbers.** Show amounts in lakh or crore and shares as percentages, with the label functions of `scales`. To zoom in, use `coord_cartesian()` rather than `limits`, so that no data is dropped.
+8.  **Label the chart.** Give a title that states the point, readable axis titles, and the data source in the caption, all with `labs()`. Set one theme for all charts of the report with `theme_set()`.
+9.  **Save at a fixed size.** Save each chart with `ggsave()`, giving the width and height, so that all charts in the report look alike. Keep the script with the working papers.
 
 ::: callout-important
 ## Remember
 
-A chart in an audit report should make one point clearly. Use colour for emphasis, not for decoration, and always show the reference against which the reader should judge. Setting `limits` in a scale throws away the data outside them, which can quietly change a trend line or a summary.
+A chart in an audit report should make one point clearly. Use colour for emphasis, not for decoration, and always show the reference against which the reader should judge. Setting `limits` in a scale throws away the data outside them, which can quietly change a trend line or a summary. A pattern in a chart is a lead, not a finding. Confirm it from the records before reporting it.
 :::
 
 ## Summary of functions used
@@ -1994,18 +1856,29 @@ A chart in an audit report should make one point clearly. Use colour for emphasi
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
 | `ggplot()`, `aes()` | ggplot2 | Start a plot with data, and map variables to aesthetics |
-| `geom_point()`, `geom_line()`, `geom_path()`, `geom_smooth()` | ggplot2 | Scatter plots, lines and trend lines |
-| `geom_bar()`, `geom_col()`, `geom_histogram()`, `geom_freqpoly()` | ggplot2 | Bars from counts or values, and distributions |
+| `layer()` | ggplot2 | Add a layer with its geom, stat and position spelt out |
+| `geom_point()`, `geom_jitter()` | ggplot2 | Scatter plots, with or without random jitter |
+| `geom_line()`, `geom_path()`, `geom_smooth()` | ggplot2 | Lines, paths in data order, and trend lines |
+| `geom_bar()`, `geom_col()` | ggplot2 | Bars from counts or summaries, or from values as they are |
+| `geom_histogram()`, `geom_freqpoly()` | ggplot2 | Distributions, as bars or lines (`binwidth`, `bins`, `boundary`) |
 | `geom_boxplot()`, `geom_tile()` | ggplot2 | Box plots and heat-maps |
 | `geom_text()`, `geom_label()`, `geom_text_repel()` | ggplot2, ggrepel | Labels on a plot |
-| `geom_vline()`, `geom_hline()`, `geom_abline()`, `annotate()` | ggplot2 | Reference lines and annotations |
-| `position_stack()`, `position_dodge()`, `position_fill()` | ggplot2 | Stacked, side by side, and 100% stacked bars |
-| `scale_x_continuous()`, `scale_x_date()`, `scale_fill_manual()` and others | ggplot2 | Control axes, colours and other mappings |
-| `label_percent()`, `label_comma()`, `label_number()` | scales | Format axis and data labels |
+| `geom_vline()`, `geom_hline()`, `geom_abline()` | ggplot2 | Reference lines |
+| `geom_rect()`, `geom_segment()`, `geom_area()`, `annotate()` | ggplot2 | Rectangles, segments, area charts and one-off notes |
+| `after_stat()`, `stage()` | ggplot2 | Use values computed by a stat, such as `count` |
+| `interaction()` | base R | Combine two variables into one group |
+| `position_stack()`, `position_dodge()`, `position_dodge2()`, `position_fill()` | ggplot2 | Stacked, side by side, and 100% stacked bars |
+| `scale_x_continuous()`, `scale_x_log10()`, `scale_x_date()`, `scale_x_discrete()` and others | ggplot2 | Control the axes (`name`, `breaks`, `labels`, `limits`, `transform`) |
+| `expansion()`, `sec_axis()` | ggplot2 | Space at the ends of an axis, and a secondary axis |
+| `scale_fill_gradient()`, `scale_fill_gradient2()`, `scale_fill_gradientn()` | ggplot2 | Colour gradients for continuous variables |
+| `scale_fill_manual()`, `scale_fill_identity()`, `scale_shape_identity()` | ggplot2 | Colours or shapes chosen by us, or taken from the data |
+| `label_percent()`, `label_comma()`, `label_number()`, `label_currency()` | scales | Format axis and data labels |
 | `coord_cartesian()`, `coord_flip()`, `coord_polar()`, `coord_radial()` | ggplot2 | Coordinate systems, zooming, and pie or donut charts |
 | `facet_wrap()`, `facet_grid()` | ggplot2 | Small multiples, one panel per group |
-| `labs()` | ggplot2 | Titles, axis labels, caption and tag, or a label dictionary |
+| `labs()`, `ggtitle()` | ggplot2 | Titles, axis labels, caption and tag, or a label dictionary |
 | `theme_bw()` and other complete themes, `theme()`, `theme_set()` | ggplot2 | Overall look, individual elements, and a default theme |
+| `element_text()`, `element_line()`, `element_rect()` | ggplot2 | Set the look of a theme element |
+| `fct_reorder()` | forcats | Sort the bars of a chart by a value |
 | `ggsave()`, `png()`, `pdf()`, `dev.off()` | ggplot2, base R | Save plots to files |
 
 : Functions used in this chapter {#tbl-ggplotfunctions}

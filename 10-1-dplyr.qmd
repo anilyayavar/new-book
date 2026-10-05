@@ -5,11 +5,15 @@ source("_common.R")
 
 # Transforming Data with dplyr {#sec-DPLYRR}
 
-Most of the work in any analysis is transforming data. Selecting the columns we need, keeping the rows that matter, creating new columns, sorting, and summarising by groups. The package `dplyr` [@R-dplyr], part of the core `tidyverse`, does all this with a small set of functions, which are easy to read even for someone who does not know R.
+Suppose we receive the payment register of a Public Works division for 2024-25. It has a few hundred vouchers, or a few lakh, with a dozen columns each. Our questions are simple. Which vouchers were paid by the Nashik office? What did each office spend? Which bills were just below the sanction limit? Was GST charged at the right rate? Which were the ten largest payments?
+
+To answer any of these, we must first *transform* the data. We select the columns we need, keep the rows that matter, create new columns, sort, and summarise by groups. Most of the work in any audit analysis is of this kind. The package `dplyr` [@R-dplyr], part of the core `tidyverse`, does all this with a small set of functions. They are easy to read, even for someone who does not know R.
+
+In this chapter we learn these functions one by one, on a small payment register with a few irregularities planted in it. We find a voucher with the wrong GST rate, a vendor paid in several bills just below ₹1 lakh, and works paid beyond their sanctioned amount. By the end, we can write each audit test as one readable chain of steps.
 
 **Prerequisites**
 
-We load `dplyr` through `tidyverse`. In this book we join steps with the *native pipe* `|>`, which comes with R itself, from version 4.1. You will also see the older pipe `%>%` in many books and websites. For everyday use the two work alike.
+We load `dplyr` through `tidyverse`. In this book we join steps with the *native pipe* `|>`, which comes with R itself, from version 4.1 (@sec-pipes). You will also see the older pipe `%>%` in many books and websites. For everyday use the two work alike.
 
 ```{r}
 #| message: false
@@ -45,7 +49,80 @@ Many auditors know SQL from audit software or databases. The main dplyr verbs ha
 In fact, dplyr code can be translated into SQL and run on a database, through the package `dbplyr`.
 :::
 
-Let us learn each of these.
+## Our data, a payment register {#sec-dplyr-data}
+
+Our register belongs to an imaginary Public Works division with four sub-division offices, at Pune, Nashik, Nagpur and Kolhapur. Each row is one payment voucher of the financial year 2024-25. All names are made up. Two kinds of irregularity are planted in the data, and we find them in this chapter. The code that creates the data is folded. New readers need not worry about it now. You may come back to it at the end of the chapter, when every verb in it will be familiar.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the payment register"
+set.seed(2025)
+offices <- c("Pune", "Nashik", "Nagpur", "Kolhapur")
+vendor_master <- tibble(
+  vendor_id   = sprintf("V%02d", 1:10),
+  vendor_name = c("Shree Ganesh Builders", "Patil Constructions", "Deshmukh Traders",
+                  "Sai Krupa Enterprises", "Jadhav Electricals", "Kulkarni & Sons",
+                  "Mahalaxmi Suppliers", "Gawande Infra", "Shinde Transport",
+                  "Om Stationers")
+)
+
+# Ordinary vouchers
+n <- 110
+vouchers <- tibble(
+  office      = sample(offices, n, replace = TRUE, prob = c(0.3, 0.25, 0.25, 0.2)),
+  vendor_id   = sample(vendor_master$vendor_id, n, replace = TRUE),
+  object_head = sample(c("Works", "Maintenance", "Supplies", "Office expenses"), n,
+                       replace = TRUE, prob = c(0.35, 0.3, 0.2, 0.15)),
+  bill_date   = as.Date("2024-04-01") + sample(0:340, n, replace = TRUE),
+  taxable     = round(exp(runif(n, log(8000), log(1500000))), -2),
+  gst_pct     = 18
+)
+
+# Planted 1. Five supply bills of one vendor at Nashik, each just below Rs 1 lakh
+split_bills <- tibble(
+  office = "Nashik", vendor_id = "V04", object_head = "Supplies",
+  bill_date = as.Date("2025-01-06") + c(0, 3, 6, 9, 13),
+  taxable = c(84300, 83900, 84700, 82600, 84500), gst_pct = 18
+)
+vouchers <- bind_rows(vouchers, split_bills)
+
+# Planted 2. GST charged at 28% instead of 18% on three bills
+wrong_gst <- sample(which(vouchers$vendor_id != "V04"), 3)
+vouchers$gst_pct[wrong_gst] <- 28
+
+vouchers <- vouchers |>
+  mutate(voucher_date = bill_date + sample(5:30, n(), replace = TRUE),
+         amt_gst   = round(taxable * gst_pct / 100),
+         amt_gross = taxable + amt_gst,
+         amt_tds   = round(taxable * 0.02),
+         amt_net   = amt_gross - amt_tds,
+         mode      = if_else(amt_gross > 200000, "RTGS",
+                             sample(c("NEFT", "Cheque"), n(), replace = TRUE,
+                                    prob = c(0.7, 0.3)))) |>
+  arrange(voucher_date) |>
+  mutate(voucher_no = sprintf("PV/24-25/%03d", row_number())) |>
+  left_join(vendor_master, by = "vendor_id") |>
+  select(voucher_no, voucher_date, office, vendor_id, vendor_name, object_head,
+         bill_date, amt_gross, amt_gst, amt_tds, amt_net, mode)
+```
+
+Let us have a look at it with `glimpse()`, which shows every column on its own line, with its type and its first few values.
+
+```{r}
+glimpse(vouchers)
+```
+
+The register has `r nrow(vouchers)` vouchers, worth ₹`r round(sum(vouchers$amt_gross) / 1e5, 2)` lakh in all. The columns are these.
+
+- `voucher_no` and `voucher_date` identify the payment voucher.
+- `office` is the sub-division office which made the payment.
+- `vendor_id` and `vendor_name` tell us who was paid.
+- `object_head` is the head of account, like works, maintenance or supplies.
+- `bill_date` is the date of the vendor's bill.
+- `amt_gross` is the bill amount including GST. `amt_gst` is the GST in it, and `amt_tds` is the income tax deducted at source. `amt_net` is the amount actually paid, the gross amount less TDS.
+- `mode` is the mode of payment, RTGS, NEFT or cheque.
+
+Let us learn each verb now.
 
 ## Column verb `select()`
 
@@ -60,51 +137,51 @@ data_frame |>
 knitr::include_graphics("images/select_dplyr.png")
 ```
 
-For example, let us try our hands on the `mtcars` dataset.
-Example-1
+Let us keep only the names of the vendors.
+
 ```{r}
-mtcars |>
-  select(mpg)
+vouchers |>
+  select(vendor_name)
 ```
 
-**Note** that the output is still a data frame, unlike `mtcars[['mpg']]`, which returns a vector. We can select several columns at once. Example-2
+**Note** that the output is still a data frame, unlike `vouchers[['vendor_name']]`, which returns a vector. We can select several columns at once.
 
 ```{r}
-mtcars |>
-  select(mpg, qsec) |>
+vouchers |>
+  select(voucher_no, amt_gross) |>
   head()
 ```
 
-We can also give column numbers instead of names. Example-3
+We can also give column numbers instead of names. Column 4 is `vendor_id` and column 6 is `object_head`.
 
 ```{r}
-mtcars |>
+vouchers |>
   select(4, 6) |>
   tail()
 ```
 
-We can also use `select()` to reorder the columns, with the *helper* `everything()`, which means "all the other columns". See this example.
+We can also use `select()` to reorder the columns, with the *helper* `everything()`, which means "all the other columns". Let us bring the amount and the vendor to the front.
 
 ```{r}
-mtcars |>
-  select(qsec, mpg, everything()) |>
+vouchers |>
+  select(amt_gross, vendor_name, everything()) |>
   names()
 ```
 
-We may also mix column names and column numbers. See
+We may also mix column names and column numbers.
 
 ```{r}
-mtcars |>
-  select(5, 7, mpg, everything()) |>
+vouchers |>
+  select(3, 1, amt_net, everything()) |>
   names()
 ```
 
-The operator `:` selects a range of consecutive columns. Ex-
+The operator `:` selects a range of consecutive columns. Here are the four amount columns, which sit side by side.
 
 ```{r}
-mtcars |>
-  select(mpg:drat) |>
-  head(n=4)
+vouchers |>
+  select(amt_gross:amt_net) |>
+  head(n = 4)
 ```
 
 **Other selection helpers**
@@ -116,28 +193,24 @@ Apart from `everything()`, there are other helpers which select columns by a con
 - `contains('ABC')` selects all columns whose names __contain__ `ABC`.
 - `num_range('A', 1:3)` selects the columns named `A1`, `A2` and `A3`.
 
-Some Examples.
-
-Example-1: This selects all the columns whose names end with `"color"`.
+This is why a consistent naming of columns pays. All our amount columns start with `amt_`, and both date columns end with `_date`. So we can pick them as a group. This selects the date columns.
 
 ```{r}
-starwars |>
-  select(ends_with('color'))
+vouchers |>
+  select(ends_with('_date'))
 ```
 
-Example-2: This selects all the columns whose names contain `"or"`.
+This selects all the columns whose names contain `"vendor"`.
 
 ```{r}
-starwars |>
-  select(contains('or'))
+vouchers |>
+  select(contains('vendor'))
 ```
 
-**Using `where()`**: This helper selects the columns for which a *function*, applied to the column's values, returns `TRUE`.
-
-Example-3: This selects all numeric columns of the dataset.
+**Using `where()`.** This helper selects the columns for which a *function*, applied to the column's values, returns `TRUE`. This selects all the numeric columns, which here are the four amount columns.
 
 ```{r}
-starwars |>
+vouchers |>
   select(where(is.numeric))
 ```
 
@@ -149,30 +222,33 @@ This is perhaps the most important function of `dplyr`. It creates new columns, 
 knitr::include_graphics("images/mutate_dplyr.png")
 ```
 
-More than one column can be added at once, and a newly created column can be used to create another in the same step. See this example.
+More than one column can be added at once, and a newly created column can be used to create another in the same step. Let us write the vendor names in capitals, work out the taxable value of each bill, and then the GST rate charged on it.
 
 ```{r}
-starwars |>
-  select(name:mass) |>
-  mutate(name_upper = toupper(name),
-         BMI = mass/(height/100)^2)
+vouchers |>
+  select(voucher_no, vendor_name, amt_gross, amt_gst) |>
+  mutate(vendor_upper = toupper(vendor_name),
+         taxable  = amt_gross - amt_gst,
+         gst_rate = round(amt_gst / taxable * 100, 1))
 ```
+
+The column `taxable`, created in the second line, was used at once in the third. We use the GST rate again when we learn `filter()`.
 
 By default, new columns are added at the end of the data frame. The argument `.before` or `.after` places them elsewhere. There is a cousin of `mutate()`, `transmute()`, which keeps only the newly created columns, though `mutate()` with its argument `.keep = "none"` now does the same.
 
 ```{r}
-starwars |>
-  transmute(name_upper = toupper(name))
+vouchers |>
+  transmute(voucher_no, amt_lakh = round(amt_gross / 1e5, 2))
 ```
 
-**Group totals on every row.** Another good use of `mutate()` is to calculate a summary and show it on each row. For example, the share of each car's weight in the total weight of the first six cars in `mtcars`.
+**Group totals on every row.** Another good use of `mutate()` is to calculate a summary and show it on each row. For example, the share of each of the first six vouchers in their total.
 
 ```{r}
-mtcars |>
+vouchers |>
   head() |>
-  select(wt) |>
-  mutate(total_wt = sum(wt),
-         wt_proportion = wt*100/total_wt)
+  select(voucher_no, amt_gross) |>
+  mutate(total = sum(amt_gross),
+         share_pct = round(amt_gross * 100 / total, 1))
 ```
 
 Two useful helper functions are
@@ -181,10 +257,10 @@ Two useful helper functions are
 2. `n_distinct()`, which counts the number of distinct values of a variable.
 
 ```{r}
-mtcars |>
-  select(1:5) |>
-  mutate(total_cars = n(),
-         cyl_types  = n_distinct(cyl)) |>
+vouchers |>
+  select(voucher_no, office, vendor_id) |>
+  mutate(total_vouchers = n(),
+         vendors_paid   = n_distinct(vendor_id)) |>
   head()
 ```
 
@@ -199,30 +275,30 @@ knitr::include_graphics("images/rename_dplyr.png")
 See this example. The new name comes first.
 
 ```{r}
-mtcars |>
-  rename(miles_per_gallon = mpg) |>
+vouchers |>
+  rename(payee = vendor_name) |>
   head(3)
 ```
 
 **Note** that `select()` can also rename columns, but it drops all the columns not selected. Check this.
 
 ```{r}
-mtcars |>
-  select(miles_per_gallon = mpg) |>
+vouchers |>
+  select(payee = vendor_name) |>
   head(3)
 ```
 
 ## Column verb `relocate()`
 
-It moves a column, or a block of columns, to just before the column given in the argument `.before`, or just after the one given in `.after`. See this example.
+It moves a column, or a block of columns, to just before the column given in the argument `.before`, or just after the one given in `.after`. Let us move both date columns next to the voucher number, so that the bill date and the payment date can be read together.
 
 ```{r}
-starwars |>
-  relocate(ends_with('color'), .after = name) |>
+vouchers |>
+  relocate(ends_with('_date'), .after = voucher_no) |>
   head(5)
 ```
 
-## Row verb `filter`
+## Row verb `filter()`
 
 This verb subsets the data, that is, it keeps the rows which meet a condition. Refer to @fig-filterr for an illustration.
 
@@ -230,28 +306,41 @@ This verb subsets the data, that is, it keeps the rows which meet a condition. R
 knitr::include_graphics("images/filter_dplyr.png")
 ```
 
-See this example.
+Let us keep the vouchers of two offices.
 
 ```{r}
-starwars |>
-  filter(eye_color %in% c('red', 'yellow'))
+vouchers |>
+  filter(office %in% c('Nashik', 'Kolhapur'))
 ```
 
-Several conditions can be given at once. Example
+Several conditions can be given at once. Here are the vouchers of Nashik of ₹5 lakh or more.
 
 ```{r}
-starwars |>
-  filter(skin_color == 'white',
-         height >= 150)
+vouchers |>
+  filter(office == 'Nashik',
+         amt_gross >= 500000)
 ```
 
-**Note** that these conditions apply together, as if joined by `AND`. For `OR`, use `|` explicitly.
+**Note** that these conditions apply together, as if joined by `AND`. For `OR`, use `|` explicitly. This counts the vouchers which are either of Nashik or of ₹5 lakh or more.
 
 ```{r}
-starwars |>
-  filter(skin_color == 'white' | height >= 150) |>
+vouchers |>
+  filter(office == 'Nashik' | amt_gross >= 500000) |>
   nrow()
 ```
+
+**A first audit check.** Now let us join `mutate()` and `filter()`. In our register, GST is charged at 18% on every bill. Any other rate needs an explanation. So let us work out the rate on each bill, and keep the bills where it is not 18%.
+
+```{r}
+gst_exceptions <- vouchers |>
+  mutate(taxable  = amt_gross - amt_gst,
+         gst_rate = round(amt_gst / taxable * 100, 1)) |>
+  filter(gst_rate != 18) |>
+  select(voucher_no, office, vendor_name, taxable, amt_gst, gst_rate)
+gst_exceptions
+```
+
+`r nrow(gst_exceptions)` bills carry GST at `r unique(gst_exceptions$gst_rate)`%. The excess GST on them comes to ₹`r format(round(sum(gst_exceptions$taxable * 0.10)), big.mark = ",")`. The auditor would check the GST rate for these goods and services, and ask the office why the higher rate was paid.
 
 ### Dropping rows with `filter_out()`, and missing values {-}
 
@@ -266,7 +355,7 @@ payments <- tibble(voucher = 1:6,
 payments |> filter(!(status == "Cancelled"))
 ```
 
-Voucher 5, a payment of 80,000, has silently disappeared, though it was not cancelled. For it, `status == "Cancelled"` is `NA`, and so is its negation, and `filter()` drops rows with `NA`. From version 1.2, dplyr has `filter_out()`, which *drops* the rows for which the condition is `TRUE`, and keeps everything else, including the rows where the condition is `NA`.
+Voucher 5, a payment of ₹80,000, has silently disappeared, though it was not cancelled. For it, `status == "Cancelled"` is `NA`, and so is its negation, and `filter()` drops rows with `NA`. From version 1.2, dplyr has `filter_out()`, which *drops* the rows for which the condition is `TRUE`, and keeps everything else, including the rows where the condition is `NA`.
 
 ```{r}
 payments |> filter_out(status == "Cancelled")
@@ -286,7 +375,7 @@ payments |> filter(when_any(amount > 100000, is.na(amount)))
 `slice()` and its cousins also keep rows, but by their *position*. So `data_fr |> slice(1:5)` keeps the first five rows of `data_fr`. See this example.
 
 ```{r}
-starwars |>
+vouchers |>
   slice(4:10) # rows 4 to 10
 ```
 
@@ -303,19 +392,28 @@ Other members of the `slice()` family are
 The number of rows must be given as a *named* argument, `n = 5`. `slice_head(5)` gives an error.
 :::
 
-Example-1: The three shortest characters.
+The five largest payments of the year are a natural starting point for any audit of payments.
 
 ```{r}
-starwars |>
-  slice_min(height, n=3)
+vouchers |>
+  slice_max(amt_gross, n = 5) |>
+  select(voucher_no, office, vendor_name, object_head, amt_gross)
 ```
 
-Example-2: A random 10% of the rows.
+And the three smallest.
+
+```{r}
+vouchers |>
+  slice_min(amt_gross, n = 3) |>
+  select(voucher_no, office, vendor_name, object_head, amt_gross)
+```
+
+A random 5% of the vouchers, for detailed checking. `set.seed()` fixes the random draw, so that the same sample comes out every time, and a reviewer can repeat it.
 
 ```{r}
 set.seed(2022)
-starwars |>
-  slice_sample(prop = 0.1) #sample 10% rows
+vouchers |>
+  slice_sample(prop = 0.05) # sample 5% of the rows
 ```
 
 ## Row verb `arrange()`
@@ -326,15 +424,21 @@ This verb also works on rows. It *rearranges* them in the order of one or more c
 knitr::include_graphics("images/arrange_dplyr.png")
 ```
 
-Example-
+Let us sort the vouchers by the date of the bill, and look at the first five.
 
 ```{r}
-starwars |>
-  arrange(height) |>
+vouchers |>
+  arrange(bill_date) |>
   slice(1:5)
 ```
 
-To sort in descending order, wrap the column in `desc()`, like `arrange(desc(height))`.
+To sort in descending order, wrap the column in `desc()`. We may also sort by several columns. This sorts by office, and within each office, by amount, largest first.
+
+```{r}
+vouchers |>
+  arrange(office, desc(amt_gross)) |>
+  select(voucher_no, office, vendor_name, amt_gross)
+```
 
 ## Group verb `group_by()`
 
@@ -347,58 +451,56 @@ knitr::include_graphics("images/groupby_dplyr.png")
 Note the output of this simple example.
 
 ```{r}
-starwars |>
-  group_by(sex)
+vouchers |>
+  group_by(office)
 ```
 
-**Note** that the output now has `r n_groups(group_by(starwars, sex))` groups, though the data shown looks the same. A missing value, `NA`, forms a group of its own.
+**Note** that the output now has `r n_groups(group_by(vouchers, office))` groups, one for each office, though the data shown looks the same. If the grouping column had a missing value, `NA`, it would form a group of its own.
 
-So grouping is useful only in combination with other verbs.
-
-Example-1: How many characters have the same skin colour as each character?
+So grouping is useful only in combination with other verbs. How many vouchers has each vendor received? Let us show that count on every row.
 
 ```{r}
-starwars |>
-  select(name, skin_color) |>
-  group_by(skin_color) |>
-  mutate(total_with_s_c = n())
+vouchers |>
+  select(voucher_no, vendor_name) |>
+  group_by(vendor_name) |>
+  mutate(vouchers_of_vendor = n())
 ```
 
-Example- 2: Sample 2 rows of each `cyl` size from `mtcars`.
+Grouping also lets us sample within groups. This draws two vouchers from each office, so that every office is covered.
 
 ```{r}
 set.seed(123)
-mtcars |>
-  group_by(cyl) |>
-  slice_sample(n=2)
+vouchers |>
+  group_by(office) |>
+  slice_sample(n = 2) |>
+  select(voucher_no, office, vendor_name, amt_gross)
 ```
 
 Also note that the grouping variable(s) are always kept in the output. If we leave them out of `select()`, dplyr adds them back, and tells us so.
 
 ```{r}
-mtcars |>
-  group_by(cyl) |>
-  select(drat) |> # despite not selecting cyl
+vouchers |>
+  group_by(office) |>
+  select(amt_gross) |> # despite not selecting office
   head() # it is available in output
 ```
 
 ## Group verb `summarise()`
 
-This verb creates one summary row for each group, if the data is grouped, and otherwise one row for the whole data.
-
-Example-1:
+This verb creates one summary row for each group, if the data is grouped, and otherwise one row for the whole data. First the whole register.
 
 ```{r}
-mtcars |>
-  summarise(total_wt = sum(wt))
+vouchers |>
+  summarise(total_gross = sum(amt_gross))
 ```
 
-Example-2:
+And now one row for each office, with the number of vouchers and the total in lakh.
 
 ```{r}
-mtcars |>
-  group_by(cyl) |>
-  summarise(total_wt = sum(wt))
+vouchers |>
+  group_by(office) |>
+  summarise(vouchers   = n(),
+            total_lakh = round(sum(amt_gross) / 1e5, 2))
 ```
 
 ::: callout-warning
@@ -413,76 +515,80 @@ After `group_by()` and a verb like `mutate()` or `slice()`, the result is still 
 
 ```{r}
 set.seed(123)
-mtcars |>
-  group_by(cyl) |>
-  slice_sample(n=2) |>
+vouchers |>
+  group_by(office) |>
+  slice_sample(n = 2) |>
   ungroup()
 ```
 
-## The argument `.by` in `mutate`, `summarise`, `filter`, etc.
+## The argument `.by` in `mutate()`, `summarise()` and other verbs
 
-Grouping the data, doing the step, and then ungrouping it is somewhat cumbersome. Since dplyr version 1.1.0, the functions `mutate()`, `summarise()`, `filter()`, `slice()` and others have an argument `.by`, which groups the data for that one step only. So the following two pieces of code give exactly the same result.
+Grouping the data, doing the step, and then ungrouping it is somewhat cumbersome. Since dplyr version 1.1.0, the functions `mutate()`, `summarise()`, `filter()`, `slice()` and others have an argument `.by`, which groups the data for that one step only. So the following two pieces of code give the same result, the largest voucher of each office.
 
 ```{r}
-# Syntax - 1 (old style)
+# Syntax 1, the older style
 
-mtcars |>
-  group_by(cyl) |>
-  slice(2) |>
-  ungroup()
+vouchers |>
+  group_by(office) |>
+  slice_max(amt_gross, n = 1) |>
+  ungroup() |>
+  select(voucher_no, office, vendor_name, amt_gross)
 
-# Syntax 2 (Dplyr 1.1.0 +)
+# Syntax 2, dplyr 1.1.0 and later
 
-mtcars |>
-  slice(2, .by = cyl)
+vouchers |>
+  slice_max(amt_gross, n = 1, by = office) |>
+  select(voucher_no, office, vendor_name, amt_gross)
 ```
+
+Both give the same four vouchers. Only the order of the rows differs. `group_by()` sorts the groups, while `by` keeps them in the order in which they first appear in the data. (The `slice_*()` functions spell the argument `by`, without the dot.)
 
 With `.by`, the result is never left grouped, so there is nothing to forget. We use it throughout this book.
 
 ## Group verb `reframe()`
 
-`summarise()` must return exactly *one* row for each group. Sometimes we want more. For example, the quartiles of mileage for each number of cylinders give three numbers per group. `summarise()` refuses this, and suggests `reframe()`.
+`summarise()` must return exactly *one* row for each group. Sometimes we want more. For example, the quartiles of the bill amounts of each office give three numbers per office. `summarise()` refuses this, and suggests `reframe()`.
 
 ```{r error=TRUE}
-mtcars |>
-  summarise(q = quantile(mpg, c(0.25, 0.5, 0.75)), .by = cyl)
+vouchers |>
+  summarise(q = quantile(amt_gross, c(0.25, 0.5, 0.75)), .by = office)
 ```
 
 `reframe()` works like `summarise()`, but allows any number of rows per group.
 
 ```{r}
-mtcars |>
+vouchers |>
   reframe(probability = c(0.25, 0.5, 0.75),
-          mpg_quantile = quantile(mpg, c(0.25, 0.5, 0.75)),
-          .by = cyl)
+          amount_quantile = quantile(amt_gross, c(0.25, 0.5, 0.75)),
+          .by = office)
 ```
 
-## Other Useful functions in `dplyr`
+## Other useful functions in `dplyr`
 
 ### `if_else()` {-}
 
 This function works much like base R's `ifelse()`, with two important differences.
 
-- It has an extra argument, `missing`, for the value to use when the condition is `NA`. (See example-1.)
-- It is *strict about types*. The values for `TRUE` and `FALSE` must be of the same type. (See Example-2.)
+- It has an extra argument, `missing`, for the value to use when the condition is `NA`. (See the first example.)
+- It is *strict about types*. The values for `TRUE` and `FALSE` must be of the same type. (See the second example.)
 
-Example-1:
+Take a few entries from a ledger. A positive amount is a payment, a negative one is a recovery, and one entry has no amount.
 
 ```{r}
-x <- c(-2:2, NA)
-if_else(x>=0, "positive", "negative", missing = "missing")
+amount <- c(25000, -1200, 0, 48000, NA)
+if_else(amount >= 0, "payment", "recovery", missing = "not recorded")
 ```
 
-Example-2: Mixing text and a number.
+Now let us mix text and a number.
 
 ```{r error=TRUE}
-if_else(x>=0, "positive", 0)
+if_else(amount >= 0, "payment", 0)
 ```
 
 `if_else()` stops with an error. Base R's `ifelse()` does not complain. It silently turns the `0` into the text `"0"`.
 
 ```{r}
-ifelse(x>=0, "positive", 0)
+ifelse(amount >= 0, "payment", 0)
 ```
 
 The strictness of `if_else()` prevents such silent mistakes, which is why we prefer it. It is also much faster on large data.
@@ -500,28 +606,26 @@ case_when(
 )
 ```
 
-See this example.
+Suppose that, in our division, the sub-divisional officer may sanction a bill of up to ₹1 lakh. The Executive Engineer may sanction up to ₹10 lakh, and larger bills need the Superintending Engineer. Let us find who should have sanctioned each bill.
 
 ```{r}
-set.seed(123)
-# Generate Incomes from random (uniform) distribution
-income <- runif(7, 1, 9)*100000
-income
+vouchers <- vouchers |>
+  mutate(sanction_by = case_when(
+    amt_gross <= 100000  ~ "Sub-divisional officer",
+    amt_gross <= 1000000 ~ "Executive Engineer",
+    .default = "Superintending Engineer"
+  ))
 
-# tax brackets say 0% upto 2 lakh, then 10% upto 5 Lakh
-# then 20% upto 7.5 lakh otherwise 30%
-tax_slab <- case_when(
-  income <= 200000 ~ 0,
-  income <= 500000 ~ 10,
-  income <= 750000 ~ 20,
-  .default = 30
-)
+vouchers |>
+  select(voucher_no, amt_gross, sanction_by) |>
+  head()
+```
 
-# check tax_slab
-data.frame(
-  income=income,
-  tax_slab = tax_slab
-)
+The order of the conditions matters. A bill of ₹50,000 is also below ₹10 lakh, but the first condition catches it. The function `count()` counts the rows for each value, and is a short form of `summarise(n = n(), .by = ...)`.
+
+```{r}
+vouchers |>
+  count(sanction_by)
 ```
 
 Older code writes `TRUE ~ value` as the last line, instead of `.default`. Both work.
@@ -538,23 +642,14 @@ recode_values(
 )
 ```
 
-So, the above example could be rewritten as
+For example, the mode of payment in our register is RTGS, NEFT or cheque. For a report, we may want only two kinds, electronic and paper.
 
 ```{r}
-tax_slab <- recode_values(
-  floor(income), # Vector to be checked
-  0:200000 ~ 0, # slab 1
-  200001:500000 ~ 10, # slab 2
-  500001:750000 ~ 20, # slab 3
-  default = 30 # Slab 4
-)
-
-# check tax_slab
-data.frame(
-  income=income,
-  tax_slab = tax_slab
-)
-
+vouchers |>
+  mutate(mode_type = recode_values(mode,
+                                   c("RTGS", "NEFT") ~ "Electronic",
+                                   "Cheque" ~ "Paper")) |>
+  count(mode, mode_type)
 ```
 
 `recode_values()` also accepts a lookup table, through the arguments `from` and `to`. With `unmatched = "error"`, it stops if any value is not found in the table, instead of quietly returning `NA`. This is a safe way to convert codes into names.
@@ -583,7 +678,7 @@ Often we want to do the same thing to many columns. Round all amount columns, co
 - `.cols`, the columns, chosen with any of the selection helpers we learnt with `select()`, like `where(is.numeric)` or `starts_with("amt_")`.
 - `.fns`, a function, or a list of functions, to apply to each of them.
 
-Let us take a small set of payments, with several amount columns, as payment data usually has.
+Let us take a small set of bills, with several amount columns in paise, as bill data often has.
 
 ```{r}
 bills <- tibble(
@@ -624,7 +719,15 @@ bills |>
                    .names = "{.col}_{.fn}"))
 ```
 
-**A function written on the spot.** For a function of our own, we use the short form `\(x)`, which we learnt in @sec-purrr.
+The same works on our register, office by office. Here is the total of every amount column of each office, in lakh.
+
+```{r}
+vouchers |>
+  summarise(across(starts_with("amt_"), \(x) round(sum(x) / 1e5, 2)),
+            .by = office)
+```
+
+**A function written on the spot.** The last example used a function of our own, written in the short form `\(x)`, which we learnt in @sec-purrr. Here is another, which converts each amount column of the bills into lakh, in new columns.
 
 ```{r}
 bills |>
@@ -641,7 +744,7 @@ bills |>
 
 Bill B-104 has a negative TDS, which needs explaining.
 
-## Window functions/operations
+## Window functions
 
 With `group_by()` or `.by`, we can create *windows* in the data, and do calculations within each window separately. dplyr has several useful *window functions*, which work within such windows.
 
@@ -653,48 +756,86 @@ With `group_by()` or `.by`, we can create *windows* in the data, and do calculat
 
 These functions are very helpful with time-ordered data, like payments or entries in a ledger.
 
-Example-1: Generating row numbers and ranks
+**Row numbers and ranks.** Let us first see how the ranks differ, on five bill amounts. Two of them are equal, and one is missing.
 
 ```{r}
-# example data
-df <- data.frame(
-  val = c(10, 2, 3, 2, NA)
-)
+bill_amounts <- tibble(amount = c(50000, 12000, 18000, 12000, NA))
 
-df |>
+bill_amounts |>
   mutate(
     row = row_number(),
-    min_rank = min_rank(val),
-    dense_rank = dense_rank(val),
-    perc_rank = percent_rank(val),
-    cume_dist = cume_dist(val)
+    min_rank = min_rank(amount),
+    dense_rank = dense_rank(amount),
+    perc_rank = percent_rank(amount),
+    cume_dist = cume_dist(amount)
   )
 ```
 
-Example-2: Using previous and next values
+The two bills of ₹12,000 share rank 1. `min_rank()` then jumps to 3, while `dense_rank()` goes on to 2. The missing amount gets no rank at all.
+
+**Previous and next values.** With `lag()` and `lead()` we can put the previous and next voucher of the same vendor, at the same office, on each row. Let us look at one vendor of the Nashik office.
 
 ```{r}
-Orange |>
-  mutate(prev_circ = lag(circumference),
-         next_circ = lead(circumference),
-         .by = Tree)
+vouchers |>
+  select(voucher_no, office, vendor_name, bill_date, amt_gross) |>
+  arrange(bill_date) |>
+  mutate(prev_bill_date = lag(bill_date),
+         next_amount    = lead(amt_gross),
+         .by = c(office, vendor_name)) |>
+  filter(office == "Nashik", vendor_name == "Sai Krupa Enterprises") |>
+  select(voucher_no, bill_date, amt_gross, prev_bill_date, next_amount)
 ```
 
-Example-3: generating run length encoding/consecutive ID
+The bills of January 2025 came every three or four days, each a little below ₹1 lakh. We come back to them in the audit use case below.
+
+**Runs of the same value.** `consecutive_id()` numbers the *runs* in a column. Take six entries of a cash book, in the order they were written.
 
 ```{r}
-df <- data.frame(
-  grp = c("A", "B", "B", "A", "A", "B"),
-  value = c(1, 2, 3 , 4, 5, 6)
+cash_book <- tibble(
+  entry  = 1:6,
+  type   = c("Receipt", "Payment", "Payment", "Receipt", "Receipt", "Payment"),
+  amount = c(50000, 12000, 8000, 30000, 15000, 40000)
 )
 
-df |>
-  mutate(RLE = consecutive_id(grp))
+cash_book |>
+  mutate(run = consecutive_id(type))
 ```
+
+Each time the type changes, the run number goes up by one. Grouping by `run` then gives the total of each unbroken run of receipts or payments.
+
+## Audit use case, bills split to stay within a sanction limit {#sec-dplyr-split}
+
+We saw with `case_when()` that the sub-divisional officer may sanction a bill of up to ₹1 lakh. A purchase of more than that needs the Executive Engineer. An office may avoid the higher sanction by splitting one purchase into several bills, each just below ₹1 lakh. Let us look for this.
+
+We keep the bills between ₹90,000 and ₹1 lakh. We then count them, and total them, for each office, vendor and month of the bill. Several such bills of one vendor in one month are a warning sign.
+
+```{r}
+split_check <- vouchers |>
+  filter(amt_gross >= 90000, amt_gross < 100000) |>
+  mutate(bill_month = format(bill_date, "%Y-%m")) |>
+  summarise(bills      = n(),
+            total      = sum(amt_gross),
+            first_bill = min(bill_date),
+            last_bill  = max(bill_date),
+            .by = c(office, vendor_name, bill_month)) |>
+  arrange(desc(bills))
+split_check
+```
+
+```{r}
+#| include: false
+top_split <- slice(split_check, 1)
+```
+
+`r nrow(split_check)` groups have at least one bill in this range. Only one has more than one bill. `r top_split$vendor_name` raised `r top_split$bills` bills at `r top_split$office` between `r format(top_split$first_bill, "%d %B")` and `r format(top_split$last_bill, "%d %B %Y")`. Together they come to ₹`r round(top_split$total / 1e5, 2)` lakh, well above the limit of ₹1 lakh. The other groups have a single bill each near the limit, which is to be expected by chance.
+
+The pipe used `filter()`, `mutate()`, `summarise()` with `.by`, and `arrange()`, in that order. Each line is one step of the audit test.
+
+The data cannot tell us whether the five bills were for one purchase. The auditor would next call for the files. Was there one indent, split into five bills? Were the items the same? Was the sanction of the Executive Engineer needed and not taken? The answers go into the working papers, with copies of the bills.
 
 ## Audit use case, payments beyond the sanctioned amount {#sec-dplyr-audit}
 
-Let us put several verbs together on an audit question. Each work has a sanctioned amount, and several running bills are paid against it over time. Payments beyond the sanction are irregular. Which bill crossed the sanction, and by how much?
+Let us put several verbs together on another audit question. Each work has a sanctioned amount, and several running bills are paid against it over time. Payments beyond the sanction are irregular. Which bill crossed the sanction, and by how much?
 
 The code below creates the sanctioned amounts of three works and their running bills. Click on it to see the code.
 
@@ -716,15 +857,18 @@ ra_bills
 ```
 
 ```{r}
-ra_bills |>
+beyond <- ra_bills |>
   left_join(works, by = "work_id") |>
   arrange(work_id, paid_on) |>
   mutate(paid_so_far = cumsum(amount), .by = work_id) |>
   mutate(beyond_sanction = pmax(paid_so_far - sanctioned, 0)) |>
   filter(beyond_sanction > 0)
+beyond
 ```
 
-In one pipe, we joined the sanctioned amounts (joins are explained in @sec-joins), sorted the bills by date within each work, calculated the running total for each work with `cumsum()` and `.by`, and kept only the bills where the running total exceeded the sanction. Work W-1 crossed its sanction with the third bill, by ₹40,000. Work W-3 crossed it with the fourth bill, by ₹60,000. Work W-2 stayed within its sanction.
+In one pipe, we joined the sanctioned amounts (joins are explained in @sec-joins), sorted the bills by date within each work, calculated the running total for each work with `cumsum()` and `.by`, and kept only the bills where the running total exceeded the sanction. Work `r beyond$work_id[1]` crossed its sanction with bill `r beyond$bill_no[1]`, by ₹`r format(beyond$beyond_sanction[1], big.mark = ",", scientific = FALSE)`. Work `r beyond$work_id[2]` crossed it with bill `r beyond$bill_no[2]`, by ₹`r format(beyond$beyond_sanction[2], big.mark = ",", scientific = FALSE)`. Work W-2 stayed within its sanction.
+
+The auditor would next ask whether a fresh sanction for the higher amount was obtained before these bills were paid. If not, the excess of ₹`r round(sum(beyond$beyond_sanction) / 1e5, 2)` lakh is an irregular payment, to be reported.
 
 ::: callout-tip
 ## Audit tip
@@ -735,9 +879,9 @@ Write each analysis as one readable pipe, from the raw data to the exception lis
 ## A suggested workflow
 
 1.  **Keep only the columns you need.** Use `select()` to pick the useful columns from a wide file received from the auditee. Use `rename()` to give them clear names.
-2.  **Create the columns the test needs.** Use `mutate()` to add columns like the amount in lakh, or a flag made with `if_else()` or `case_when()`. Use `across()` when the same change applies to many amount columns.
+2.  **Create the columns the test needs.** Use `mutate()` to add columns like the amount in lakh, the GST rate, or a flag made with `if_else()` or `case_when()`. Use `across()` when the same change applies to many amount columns.
 3.  **Keep or drop rows with care.** Use `filter()` to select rows and `filter_out()` to remove them, like cancelled vouchers. Check that no row with a missing value has quietly dropped out.
-4.  **Summarise by groups.** Use `summarise()` with `.by` to get totals by office, vendor or month. Use `n()` and `n_distinct()` for counts.
+4.  **Summarise by groups.** Use `summarise()` with `.by` to get totals by office, vendor or month. Use `n()`, `n_distinct()` and `count()` for counts.
 5.  **Use window functions for running checks.** Sort with `arrange()`, then use `cumsum()`, `lag()` or ranks within each group with `.by`. This finds, for example, the running bill which crossed the sanctioned amount.
 6.  **Pick out the exceptions.** End the pipe with `filter()` or `slice_max()` to list the cases needing attention. Use `slice_sample()` to draw a sample for detailed checking.
 7.  **Reconcile the totals.** Compare the number of rows and the totals with the auditee's figures. If they differ by a few rupees, check the rounding rule first.
@@ -749,22 +893,30 @@ Write each analysis as one readable pipe, from the raw data to the exception lis
 `filter()` silently drops the rows where the condition is `NA`. Records which quietly drop out of an analysis are often the very ones which need attention. Use `filter_out()` to remove rows, and check the row count and totals after each step.
 :::
 
+## Where next
+
+Real audit data rarely comes in one table. The vendor names may be in a vendor master, and the sanctions in a separate register, as in the last use case. @sec-joins shows how to bring such tables together.
+
 ## Summary of functions used
 
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
+| `glimpse()` | dplyr | Show every column, with its type and first values |
 | `select()`, `rename()`, `relocate()` | dplyr | Choose, rename and move columns |
-| `starts_with()`, `ends_with()`, `contains()`, `where()`, `everything()` | dplyr (tidyselect) | Helpers to choose columns by name or type |
+| `starts_with()`, `ends_with()`, `contains()`, `num_range()`, `where()`, `everything()` | dplyr (tidyselect) | Helpers to choose columns by name or type |
 | `mutate()`, `transmute()` | dplyr | Create new columns |
 | `filter()`, `filter_out()`, `when_any()`, `when_all()` | dplyr | Keep or drop rows by conditions |
-| `slice()`, `slice_head()`, `slice_min()`, `slice_max()`, `slice_sample()` | dplyr | Keep rows by position, by value, or at random |
+| `slice()`, `slice_head()`, `slice_tail()`, `slice_min()`, `slice_max()`, `slice_sample()` | dplyr | Keep rows by position, by value, or at random |
 | `arrange()`, `desc()` | dplyr | Sort rows |
 | `group_by()`, `ungroup()`, `.by` | dplyr | Group and ungroup rows |
 | `summarise()`, `reframe()` | dplyr | One summary row per group, or any number of rows per group |
-| `n()`, `n_distinct()` | dplyr | Count rows and distinct values |
+| `n()`, `n_distinct()`, `count()` | dplyr | Count rows and distinct values |
 | `if_else()`, `case_when()` | dplyr | Values by conditions, safely |
 | `recode_values()`, `replace_values()` | dplyr | Recode or replace values by matching |
 | `across()`, `if_any()`, `if_all()` | dplyr | The same operation, or condition, on many columns |
-| `row_number()`, `min_rank()`, `lag()`, `lead()`, `consecutive_id()`, `cumsum()` | dplyr, base R | Window functions |
+| `row_number()`, `min_rank()`, `dense_rank()`, `percent_rank()`, `cume_dist()` | dplyr | Row numbers and ranks |
+| `lag()`, `lead()`, `consecutive_id()`, `cumsum()` | dplyr, base R | Previous and next values, runs, and running totals |
+| `left_join()` | dplyr | Add columns from another table by a key |
+| `round_half_up()` | janitor | Round halves up, as in government accounts |
 
 : Functions used in this chapter {#tbl-dplyrfunctions}
