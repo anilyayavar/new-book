@@ -32,7 +32,7 @@ The book is written in [Quarto](https://quarto.org). To build it yourself, you n
 quarto render
 ```
 
-The rendered book is written to the `_book` folder.
+The rendered book is written to the `docs` folder, which GitHub Pages publishes.
 
 ## Credits
 

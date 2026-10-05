@@ -1,0 +1,2076 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="description" content="A practical guide to data analytics for auditors, using R and the tidyverse: reading and cleaning audit data, forensic tests, sampling, statistics, machine learning, text, network and geospatial analytics, and reproducible reports, with Indian audit examples throughout.">
+<title>Gearing Up – R for Audit Analytics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./part1-foundations.html" rel="next">
+<link href="./how-to-use.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b85bc7c33db8c58e0ec93c3465666fed.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-a64f2b92d8b4b45ab5f5d9261e8b8c9d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script><link rel="stylesheet" href="style.css">
+</head>
+<body class="nav-sidebar floating quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top"><nav class="quarto-secondary-nav"><div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./00-Zero.html">Gearing Up</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav></header><!-- content --><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto"><div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">R for Audit Analytics</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/anilyayavar/new-book" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Welcome</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-preface.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-about-author.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">About the Author</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./how-to-use.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">How to Use This Book</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-Zero.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">Gearing Up</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part1-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part I: R Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Objects, Data Types and Data Structures</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-Subsets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Subsetting and Indexing</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Functions and Operators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-existing-and-useful-functions-in-base-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Useful Base R Functions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-pipes-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Pipes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-1conditionals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Conditions and Loops</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-1-functionalprog.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Functional Programming</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part2-data-ready.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part II: Getting Data Ready</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-2-workflow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Working with Files and Folders</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Importing and Exporting Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading-data-cleaning-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Cleaning Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1b-pdf-excel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Data from PDFs and Messy Excel Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-2-merge.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Combining Many Similar Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-1-dplyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Transforming Data with dplyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-2-joins.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Joining Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-tidyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Reshaping Data with tidyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8Lubridate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Dates and Times</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8b-duckdb.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Large Data with DuckDB and data.table</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part3-text-fields.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part III: Working with Text Fields</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-1Stringr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Working with Strings in stringr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Regular Expressions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex-regex-in-human-readble-format-using-rebu.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Readable Regular Expressions with rebus</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part4-explore-sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IV: Exploring and Sampling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-plot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-1ggplot2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Charts with ggplot2</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-2ggplot2-polish.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Polishing Charts for Audit Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-3Factors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Factors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-1Desc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Descriptive Statistics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-2stats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Probability Distributions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3Samp.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Random Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3b-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Statistical Tests for Auditors</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part5-forensic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part V: Forensic Tests</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17a-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Rule-Based Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-Anamolous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Benford Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-nigrini-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Nigrini’s Tests for Unusual Amounts</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-duplicates.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">32</span>&nbsp; <span class="chapter-title">Duplicate Detection</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-stringdist.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20b-record-linkage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">34</span>&nbsp; <span class="chapter-title">Record Linkage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-gaps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">35</span>&nbsp; <span class="chapter-title">Gaps in Sequences</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21b-process-mining.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">36</span>&nbsp; <span class="chapter-title">Process Mining</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part6-risk-scoring.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VI: Modelling and Risk Scoring</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">37</span>&nbsp; <span class="chapter-title">Simple Linear Regression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg-multiple.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">38</span>&nbsp; <span class="chapter-title">Multiple Regression in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4b-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">39</span>&nbsp; <span class="chapter-title">Logistic Regression for Risk Scoring</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4c-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">40</span>&nbsp; <span class="chapter-title">Decision Trees</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4d-forest.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">41</span>&nbsp; <span class="chapter-title">Random Forests</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-DEA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">42</span>&nbsp; <span class="chapter-title">Data Envelopment Analysis</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part7-hidden-patterns.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VII: Finding Hidden Patterns</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-5PCA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">43</span>&nbsp; <span class="chapter-title">Principal Component Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-6KMeans.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">44</span>&nbsp; <span class="chapter-title">Clustering with k-Means</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-7Apriori.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">45</span>&nbsp; <span class="chapter-title">Association Rules (Apriori)</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-9ts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">46</span>&nbsp; <span class="chapter-title">Time Series Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-anomaly.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">47</span>&nbsp; <span class="chapter-title">Anomaly Detection</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part8-beyond-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VIII: Beyond Tables</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">48</span>&nbsp; <span class="chapter-title">Text Analytics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-sentiment-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">49</span>&nbsp; <span class="chapter-title">Sentiment Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-visualising-text-analytics-through-wordc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">50</span>&nbsp; <span class="chapter-title">Visualising Text</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">51</span>&nbsp; <span class="chapter-title">Networks and Graph Theory</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network-applying-network-analysis-in-audit-fraud.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">52</span>&nbsp; <span class="chapter-title">Network Analysis in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">53</span>&nbsp; <span class="chapter-title">Maps</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-geo-coding-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">54</span>&nbsp; <span class="chapter-title">Geocoding</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-reverse-geo-coding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">55</span>&nbsp; <span class="chapter-title">Reverse Geocoding</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part9-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IX: Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./audit-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Audit Question Finder</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./98-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Datasets Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./99-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">R Packages Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./97-colors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">D</span>&nbsp; <span class="chapter-title">Colours in R</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+    </ul>
+</div>
+</nav><div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+<li><a href="#download-and-installation" id="toc-download-and-installation" class="nav-link active" data-scroll-target="#download-and-installation">Download and installation</a></li>
+  <li><a href="#writing-your-first-code" id="toc-writing-your-first-code" class="nav-link" data-scroll-target="#writing-your-first-code">Writing your first code</a></li>
+  <li><a href="#things-to-remember" id="toc-things-to-remember" class="nav-link" data-scroll-target="#things-to-remember">Things to remember</a></li>
+  <li><a href="#rstudio-ide" id="toc-rstudio-ide" class="nav-link" data-scroll-target="#rstudio-ide">RStudio IDE</a></li>
+  <li>
+<a href="#sec-packages-intro" id="toc-sec-packages-intro" class="nav-link" data-scroll-target="#sec-packages-intro">Packages and libraries and conflicts</a>
+  <ul class="collapse">
+<li><a href="#sec-doublec" id="toc-sec-doublec" class="nav-link" data-scroll-target="#sec-doublec">Double colon operator <code>::</code></a></li>
+  </ul>
+</li>
+  <li><a href="#sec-help" id="toc-sec-help" class="nav-link" data-scroll-target="#sec-help">Getting help within R</a></li>
+  <li><a href="#sec-TIDYVE" id="toc-sec-TIDYVE" class="nav-link" data-scroll-target="#sec-TIDYVE">tidyverse</a></li>
+  <li><a href="#a-suggested-workflow" id="toc-a-suggested-workflow" class="nav-link" data-scroll-target="#a-suggested-workflow">A suggested workflow</a></li>
+  <li><a href="#summary-of-functions-used" id="toc-summary-of-functions-used" class="nav-link" data-scroll-target="#summary-of-functions-used">Summary of functions used</a></li>
+  </ul><div class="toc-actions"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/00-Zero.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><div class="quarto-title">
+<h1 class="title">Gearing Up</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header><p>An auditor today rarely gets a few vouchers in a file. We get the whole year’s payments of a treasury, the pay bills of a department, or lakhs of beneficiary records of a scheme. A spreadsheet struggles with such data, and every check done by hand has to be done again next year. R lets us write each check once, run it on every record in seconds, and keep the code with the working papers so that anyone can repeat it.</p>
+<p>Before any of that, we need the tools on our computer. In this short chapter we install R and RStudio, write our first line of code, and learn the few habits that make audit analysis safe to repeat. We also meet packages, the add-ons that give R most of its power, and the help system that answers most of our questions.</p>
+<section id="download-and-installation" class="level2"><h2 class="anchored" data-anchor-id="download-and-installation">Download and installation</h2>
+<p>R is downloaded from <strong>The Comprehensive R Archive Network</strong>, usually called <strong>CRAN</strong>. It is a network of web servers around the world that keep identical, up-to-date copies of R and its documentation. The address is <a href="https://cran.r-project.org/">https://cran.r-project.org/</a>.</p>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div id="fig-cranportal" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-cranportal-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/CRAN.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:60.0%" alt="CRAN Portal">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-cranportal-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: CRAN Portal
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>Download the file for your operating system from the portal and install it, following the instructions. The R programming interface looks like this.</p>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div id="fig-workspace" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-workspace-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/workspace.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:70.0%" alt="R Workspace">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-workspace-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: R Workspace
+</figcaption></figure>
+</div>
+</div>
+</div>
+</section><section id="writing-your-first-code" class="level2"><h2 class="anchored" data-anchor-id="writing-your-first-code">Writing your first code</h2>
+<p>Writing code in R is easy. Type the command after the <code>&gt;</code> prompt, shown in <a href="#fig-workspace" class="quarto-xref">Figure&nbsp;<span>2</span></a>, and press the <code>Enter</code> (<code>Return</code>) key. R displays the result in the next line. For example, typing <code>45000 + 12500</code> adds two bill amounts, just as a calculator would.</p>
+<div id="fig-first" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-first-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure"><p><img src="images/first_code.png" class="quarto-figure quarto-figure-center figure-img" style="width:49.0%;height:49.0%" alt="Output for: Writing your first code"></p>
+</figure>
+</div>
+</div>
+<div class="cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure"><p><img src="images/indent.png" class="quarto-figure quarto-figure-center figure-img" style="width:49.0%;height:49.0%" alt="Output for: Writing your first code"></p>
+</figure>
+</div>
+</div>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-first-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;3: Writing the first code in R (left). Indenting code is not necessary, but it is recommended (right).
+</figcaption></figure>
+</div>
+</section><section id="things-to-remember" class="level2"><h2 class="anchored" data-anchor-id="things-to-remember">Things to remember</h2>
+<ol type="1">
+<li>R is case sensitive. Remember this while naming and calling functions or other objects. So <code>Anil</code>, <code>ANIL</code> and <code>anil</code> are three different objects in R. The same is true of data. A vendor written as <code>"RAJ TRADERS"</code> in one record and <code>"Raj Traders"</code> in another is two different values to R, a point we return to in <a href="02-basics.html#sec-string" class="quarto-xref"><span>Character</span></a>.</li>
+<li>Spaces between different pieces of code do not matter. See <a href="#fig-first" class="quarto-xref">Figure&nbsp;<span>3</span></a> above. Both <code>3+4</code> and <code>3 + 4</code> give the same result. Still, spaces make code easier to read.</li>
+<li>Parentheses <code>()</code> change the natural order of precedence, as in <code>(3 + 4) * 2</code>. They are also used to pass arguments to functions, which we will discuss in <a href="04-functions.html" class="quarto-xref"><span>3&nbsp; Functions and Operators</span></a> and onward.</li>
+<li>Code running over several lines need not be indented in R, because indents have no meaning in R. Still, proper indentation makes code much easier to read, so it is recommended. See <a href="#fig-first" class="quarto-xref">Figure&nbsp;<span>3</span></a> (right) above.</li>
+<li>If a line of code is incomplete, R shows a <code>+</code> at the start of the next line, instead of <code>&gt;</code>, and waits for the rest. This is useful when one line is not enough for the complete code. See <a href="#fig-first" class="quarto-xref">Figure&nbsp;<span>3</span></a> (right) above. If you see <code>+</code> by mistake, press <code>Esc</code> to get back to the <code>&gt;</code> prompt.</li>
+<li>Positions (indices) in R start from 1, and not from 0. We will discuss this in detail in <a href="03-Subsets.html" class="quarto-xref"><span>2&nbsp; Subsetting and Indexing</span></a>.</li>
+<li>Anything after a hash symbol <code>#</code> is a <em>comment</em>, and is not executed. If <code>#</code> appears in the middle of a line, the rest of that line is not executed. See the following example. Comments are used to
+<ul>
+<li>make code readable,</li>
+<li>explain what the code does, and why,</li>
+<li>record metadata and references, like the source of the data, and</li>
+<li>stop a line of code from running, without deleting it.</li>
+</ul>
+</li>
+</ol>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># Bill amounts of voucher 101 and 102 (this line is not executed)</span></span>
+<span><span class="fl">45000</span> <span class="op">+</span> <span class="fl">12500</span> <span class="co"># + 3000 (this part is not executed either)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 57500</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>To clear the console screen, press <code>Ctrl</code> + <code>L</code>. This only clears the screen. The objects you have created stay in memory.</p>
+</div>
+</div>
+<p>R code files normally have the extension <code>.R</code>. Other R files have other extensions, such as project files <code>.Rproj</code>, R markdown files <code>.Rmd</code> and Quarto files <code>.qmd</code>.</p>
+<p>All of the coding can be done in the R console. But code once executed in the console cannot be edited. It has to be typed again. (The up arrow key brings back the previous command.) And when the session is closed, the code is gone. So we write our code in <em>scripts</em>, that is, in <code>.R</code> files, which can be saved, edited, re-run and shared. A script is to the analysis what a working paper is to the audit. It shows exactly what was done. For writing scripts we use the most popular IDE for R, <code>RStudio</code>.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The RStudio IDE is so popular among R users that many people cannot tell R and its IDE apart. Even Stack Overflow, a popular forum for online help, asks users not to tag ‘R studio’ in general R code problems<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>.</p>
+</div>
+</div>
+</section><section id="rstudio-ide" class="level2"><h2 class="anchored" data-anchor-id="rstudio-ide">RStudio IDE</h2>
+<p>RStudio is a free and open source IDE (Integrated Development Environment) for R, available for Windows, macOS and Linux. It can be downloaded from <a href="https://posit.co/download/rstudio-desktop/">https://posit.co/download/rstudio-desktop/</a>. For our data analytics needs, the free RStudio Desktop is all we need. Install R first, and then RStudio.</p>
+<p>RStudio includes a console, an editor that highlights code and runs it directly, and tools for plots, history, debugging and managing your workspace. After installing it, a window similar to the following figure opens.</p>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div id="fig-rstud" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-rstud-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/rstudio.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:90.0%" alt="R Studio interface">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-rstud-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;4: R Studio interface
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>There are four panels.</p>
+<ul>
+<li>Top-left.
+<ul>
+<li>
+<strong>Scripts and files.</strong> The script files we work on open here. To open a new script, click the new script button <img src="images/new_script.png" class="img-fluid" alt="Output for: RStudio IDE"> just below the <em>File</em> menu, or press <code>Ctrl + Shift + N</code>.</li>
+</ul>
+</li>
+<li>Bottom-left.
+<ul>
+<li>
+<strong>R console.</strong> Here R commands are typed and their output is shown. Commands run from a script also show their output here.</li>
+</ul>
+</li>
+</ul>
+<p><img src="images/console.png" id="id" class="class" width="447" height="157" alt="Output for: RStudio IDE"> + <strong>Terminal.</strong> Here we can use the system shell of the computer. - Top-right. + <strong>Environment.</strong> It shows the objects in the current session, such as the data we have read. It can also be used to import data. + <strong>History.</strong> It lists the commands run in the current session. + <strong>Connections.</strong> It connects R to external databases. - Bottom-right. + <strong>Files.</strong> It shows the folders and files of the current working directory. + <strong>Plots.</strong> If a command draws a chart, the chart appears here.</p>
+<p><img src="images/plotspane.png" id="id" class="class" width="771" height="293" alt="Output for: RStudio IDE"> + <strong>Packages.</strong> It installs and loads packages with a mouse click. + <strong>Help.</strong> It shows the help pages of functions, including help asked for with an R command.</p>
+<p><img src="images/helppane.png" id="id" class="class" width="774" height="282" alt="Output for: RStudio IDE"> + <strong>Viewer.</strong> It shows local web content, such as an interactive table or chart.</p>
+<p><img src="images/viewerpane.png" id="id" class="class" width="752" height="272" alt="Output for: RStudio IDE"></p>
+<p>Running code from a <code>.R</code> file is slightly different from running it in the console, where pressing <code>Enter</code> runs it straight away. To run code from the script pane (top-left), we can do any of the following.</p>
+<ul>
+<li>Select the code and press <code>Ctrl + Enter</code> (<code>Command + Return</code> on a Mac).</li>
+<li>Keep the cursor anywhere in the line, or in the block of code, and press <code>Ctrl + Enter</code>. RStudio runs the whole statement, even if it spans several lines.</li>
+<li>Click the <code>Run</code> button <img src="images/run.png" class="img-fluid" alt="Output for: RStudio IDE"> at the top-right of the script pane.</li>
+<li>To run the whole script at once, press <code>Ctrl + Shift + Enter</code>, or click <code>Source</code>.</li>
+</ul>
+<p><img src="images/rstudiopanes.png" id="id" class="class" width="770" height="575" alt="Output for: RStudio IDE"></p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>For a quick overview, and for later reference, see the <a href="https://rstudio.github.io/cheatsheets/rstudio-ide.pdf">RStudio cheatsheet</a>. It is one of many cheatsheets on the <a href="https://posit.co/resources/cheatsheets/">Posit cheatsheets page</a>.</p>
+</div>
+</div>
+</section><section id="sec-packages-intro" class="level2"><h2 class="anchored" data-anchor-id="sec-packages-intro">Packages and libraries and conflicts</h2>
+<p>One of the great strengths of R is the thousands of packages (or <em>libraries</em>) written by its users and available on the <strong>Comprehensive R Archive Network</strong>, <a href="https://cran.r-project.org/">CRAN</a>. A package is a bundle of functions, data and help pages for some purpose, like reading Excel files or drawing maps. Installing one is perhaps the easiest job in R.</p>
+<p>The command is simple.</p>
+<pre><code>install.packages("library_name")</code></pre>
+<p>It downloads the package and installs it in the library folder on your computer. The name is given in quotes, and is case sensitive. It also installs the other packages it depends on. But it does not <em>load</em> the package into the current R session. A package is installed only once on a computer, but has to be loaded in every new session of R, with this command. </p>
+<pre><code><a href="https://rdrr.io/r/base/library.html">library(library_name)</a></code></pre>
+<p>Quotes are optional here, but the name is still case sensitive. So to use <code>tidyverse</code>, we run the first command once, to install it on the computer, and the second command in every new session, to load it.</p>
+<pre><code>install.packages('tidyverse')</code></pre>
+<p>The <code>Packages</code> pane of RStudio may also be used, as shown in the following image, taken from the cheatsheet.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Installing packages on an office network
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Office networks sometimes block R from downloading packages. If <code><a href="https://rdrr.io/r/utils/install.packages.html">install.packages()</a></code> fails, ask your IT section to allow access to CRAN. Alternatively, download the package file (a <code>.zip</code> on Windows) from CRAN on another computer, and install it from the <code>Packages</code> pane, with <em>Install from: Package Archive File</em>. Remember that a package may need other packages, which must be installed first.</p>
+</div>
+</div>
+<p><img src="images/pack.png" id="id" class="class" width="507" height="327" alt="Output for: Packages and libraries and conflicts"></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyverse.tidyverse.org">tidyverse</a></span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Notice the output of the <code><a href="https://rdrr.io/r/base/library.html">library()</a></code> command above. Besides listing the nine packages it has loaded, which we will discuss in <a href="#sec-TIDYVE" class="quarto-xref"><span>tidyverse</span></a>, it gives a message about <em>conflicts</em>.</p>
+<p>So what are these conflicts? When functions with exactly the same name exist in more than one loaded package, R uses the one from the package loaded <em>last</em>. Here, the package <code>stats</code>, which is part of base R, has a function <code><a href="https://dplyr.tidyverse.org/reference/filter.html">filter()</a></code>, and so does <code>dplyr</code>, loaded as part of <code>tidyverse</code>. After <code>dplyr</code> is loaded, its <code><a href="https://dplyr.tidyverse.org/reference/filter.html">filter()</a></code> is used, and the one from <code>stats</code> is said to be <em>masked</em>.</p>
+<p>If we want to use the masked <code><a href="https://dplyr.tidyverse.org/reference/filter.html">filter()</a></code> from <code>stats</code>, we can do either of two things.</p>
+<ul>
+<li>Call it with the double colon operator (see <a href="#sec-doublec" class="quarto-xref"><span>Double colon operator ::</span></a>), as <code><a href="https://rdrr.io/r/stats/filter.html">stats::filter()</a></code>.</li>
+<li>Use the package <code>conflicted</code>, which is installed along with tidyverse, and state our preference once.</li>
+</ul>
+<pre><code><a href="https://conflicted.r-lib.org/">library(conflicted)
+conflicts_prefer(stats::filter)</a></code></pre>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Caution
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Use the package <code>conflicted</code> with a little care. Once it is loaded, calling <em>any</em> conflicted function without stating a preference gives an error. This is strict, but it is also safe, because R never silently uses a function you did not intend.</p>
+</div>
+</div>
+<p>All the packages used in this book are listed in <a href="99-packages.html" class="quarto-xref"><span>Appendix C — R Packages Used in This Book</span></a>, with a single command to install them all.</p>
+<section id="sec-doublec" class="level3"><h3 class="anchored" data-anchor-id="sec-doublec">Double colon operator <code>::</code>
+</h3>
+<p>The double colon operator <code>::</code> calls a function from a particular package, as <code>package::function()</code>. It is used in at least three cases.</p>
+<ol type="1">
+<li>To use a function from an installed package without loading the whole package, like <code><a href="https://sfirke.github.io/janitor/reference/clean_names.html">janitor::clean_names()</a></code>.</li>
+<li>In case of conflicts, as discussed in the preceding section, like <code><a href="https://rdrr.io/r/stats/filter.html">stats::filter()</a></code>.</li>
+<li>To make code clearer, by showing the reader which package a function comes from. We will often write code this way in this book.</li>
+</ol></section></section><section id="sec-help" class="level2"><h2 class="anchored" data-anchor-id="sec-help">Getting help within R</h2>
+<p>R comes with a comprehensive built-in help system. We can use any of the following commands.</p>
+<pre><code><a href="https://rdrr.io/r/utils/help.start.html">help.start()   # general help
+help(foo)      # help about function `foo`
+?foo           # same as above
+??foo          # search all help pages for the word `foo`
+apropos("foo") # show all functions containing word `foo`
+example(foo)   # run the examples of function `foo`</a></code></pre>
+<p>Alternatively, the Help menu or the Help pane of RStudio can be used. The <em>Examples</em> section at the end of every help page is often the quickest way to learn a function. Copy an example into the console, run it, and change it bit by bit.</p>
+</section><section id="sec-TIDYVE" class="level2"><h2 class="anchored" data-anchor-id="sec-TIDYVE">tidyverse</h2>
+<p>The <a href="https://www.tidyverse.org/">tidyverse</a> is a <em>package of packages</em> that work in harmony, because they share a common design and way of storing data. The package <code>tidyverse</code> installs and loads them together in a single step.</p>
+<p><code>tidyverse</code> is a collection of 30 or so packages, and <code>install.packages("tidyverse")</code> installs all of them (more than 80 packages, counting the ones they depend on). But <code><a href="https://tidyverse.tidyverse.org">library(tidyverse)</a></code> loads only the <a href="https://www.tidyverse.org/packages/">nine</a> <em>core</em> packages. Others, like <code>readxl</code>, have to be loaded separately.</p>
+<ol type="1">
+<li>
+<a href="https://ggplot2.tidyverse.org/"><strong>ggplot2</strong></a> draws charts, based on <a href="https://link.springer.com/book/10.1007/0-387-28695-0"><em>The Grammar of Graphics</em></a>. We use it to show, for example, monthly expenditure of each office.</li>
+<li>
+<a href="https://dplyr.tidyverse.org/"><strong>dplyr</strong></a> gives a consistent set of verbs to filter, sort, summarise and join data. Most audit checks in this book use it.</li>
+<li>
+<a href="https://tidyr.tidyverse.org/"><strong>tidyr</strong></a> reshapes data, for example from one column per month to one row per month.</li>
+<li>
+<a href="https://readr.tidyverse.org/"><strong>readr</strong></a> reads and writes text files of tables, such as <code>.csv</code> files.</li>
+<li>
+<a href="https://purrr.tidyverse.org/"><strong>purrr</strong></a> is a toolkit for applying a function to many items, such as many files.</li>
+<li>
+<a href="https://tibble.tidyverse.org/"><strong>tibble</strong></a> gives a modern form of the data frame, which prints neatly.</li>
+<li>
+<a href="https://stringr.tidyverse.org/"><strong>stringr</strong></a> works with text, such as names, addresses and PAN. It is built on another package, <a href="https://cran.r-project.org/package=stringi">stringi</a>.</li>
+<li>
+<a href="https://forcats.tidyverse.org/"><strong>forcats</strong></a> works with factors, that is, categories like districts or schemes.</li>
+<li>
+<a href="https://lubridate.tidyverse.org/"><strong>lubridate</strong></a> works with dates and times, such as voucher dates and dates of retirement.</li>
+</ol>
+<p><code>lubridate</code> became a core package in tidyverse version 2.0. In older versions it had to be loaded separately.</p>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div id="fig-tidyverse" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-tidyverse-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/tidyverse.png" class="img-fluid quarto-figure quarto-figure-center figure-img" style="width:70.0%" alt="tidyverse">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-tidyverse-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;5: tidyverse
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>We will also work with several other <code>tidyverse</code> packages, such as these.</p>
+<ul>
+<li>
+<code>readxl</code>, to read Excel files,</li>
+<li>
+<code>hms</code>, for times of the day, and</li>
+<li>
+<code>glue</code>, to join text and values.</li>
+</ul>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Audit tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Audit analysis must be reproducible. Someone reviewing your work, or you yourself next year, should be able to re-run the code and get the same results. Package versions change, and occasionally a function changes its behaviour. So record the versions of R and the packages you used, by saving the output of <code><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo()</a></code> with your working papers.</p>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo</a></span><span class="op">(</span><span class="op">)</span>   <span class="co"># version of R, the operating system, and the packages loaded</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/utils/packageDescription.html">packageVersion</a></span><span class="op">(</span><span class="st">"dplyr"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section><section id="a-suggested-workflow" class="level2"><h2 class="anchored" data-anchor-id="a-suggested-workflow">A suggested workflow</h2>
+<p>Here is a simple routine for starting any piece of audit analysis in R.</p>
+<ol type="1">
+<li>
+<strong>Install once.</strong> Install R first and then RStudio. Install the packages you need with <code><a href="https://rdrr.io/r/utils/install.packages.html">install.packages()</a></code>, once on each computer.</li>
+<li>
+<strong>Write in a script.</strong> Open a new script and save it as a <code>.R</code> file in the folder of the audit. Do not work only in the console, because that code is lost when the session ends.</li>
+<li>
+<strong>Load packages at the top.</strong> Begin the script with the <code><a href="https://rdrr.io/r/base/library.html">library()</a></code> calls it needs. Run them in every new session.</li>
+<li>
+<strong>Read the conflicts message.</strong> If two packages have a function with the same name, call the one you mean with <code>::</code>, like <code><a href="https://rdrr.io/r/stats/filter.html">stats::filter()</a></code>.</li>
+<li>
+<strong>Comment as you go.</strong> Use <code>#</code> to note the source of the data and the reason for each step.</li>
+<li>
+<strong>Ask R for help.</strong> Use <code>?</code> or <code><a href="https://rdrr.io/r/utils/help.html">help()</a></code> on any function you are unsure of. Run its examples before using it on audit data.</li>
+<li>
+<strong>Record the versions.</strong> Save the output of <code><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo()</a></code> with your working papers, so that the analysis can be repeated.</li>
+</ol>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Remember
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Keep your work in saved scripts, not only in the console. Record the versions of R and the packages with <code><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo()</a></code>. Then a reviewer, or you yourself next year, can re-run the code and get the same results.</p>
+</div>
+</div>
+</section><section id="summary-of-functions-used" class="level2"><h2 class="anchored" data-anchor-id="summary-of-functions-used">Summary of functions used</h2>
+<div id="tbl-zerofunctions" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure"><figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-zerofunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Functions used in this chapter
+</figcaption><div aria-describedby="tbl-zerofunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 22%">
+<col style="width: 45%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>Package</th>
+<th>What it does</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/utils/install.packages.html">install.packages()</a></code></td>
+<td>utils (base R)</td>
+<td>Download and install a package, once on each computer</td>
+</tr>
+<tr class="even">
+<td><code><a href="https://rdrr.io/r/base/library.html">library()</a></code></td>
+<td>base R</td>
+<td>Load an installed package, in every new session</td>
+</tr>
+<tr class="odd">
+<td><code>package::function()</code></td>
+<td>base R</td>
+<td>Use a function from a package without loading it, or to resolve a conflict</td>
+</tr>
+<tr class="even">
+<td><code>conflicts_prefer()</code></td>
+<td>conflicted</td>
+<td>State which of two conflicting functions to use</td>
+</tr>
+<tr class="odd">
+<td>
+<code><a href="https://rdrr.io/r/utils/help.html">help()</a></code>, <code>?</code>, <code>??</code>, <code><a href="https://rdrr.io/r/utils/apropos.html">apropos()</a></code>, <code><a href="https://rdrr.io/r/utils/example.html">example()</a></code>
+</td>
+<td>utils (base R)</td>
+<td>Get help on functions</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/r/utils/sessionInfo.html">sessionInfo()</a></code>, <code><a href="https://rdrr.io/r/utils/packageDescription.html">packageVersion()</a></code>
+</td>
+<td>utils (base R)</td>
+<td>Record the versions of R and packages used</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list" style="display: none">
+<div id="ref-R-quarto" class="csl-entry" role="listitem">
+Allaire, JJ, and Christophe Dervieux. <em>Quarto: R Interface to Quarto Markdown Publishing System</em>, 2025. <a href="https://github.com/quarto-dev/quarto-r">https://github.com/quarto-dev/quarto-r</a>.
+</div>
+<div id="ref-R-visNetwork" class="csl-entry" role="listitem">
+Almende B.V. and Contributors, and Benoit Thieurmel. <em>visNetwork: Network Visualization Using Vis.js Library</em>, 2025. <a href="https://datastorm-open.github.io/visNetwork/">https://datastorm-open.github.io/visNetwork/</a>.
+</div>
+<div id="ref-igraph2023" class="csl-entry" role="listitem">
+Antonov, Michael, Gábor Csárdi, Szabolcs Horvát, Kirill Müller, Tamás Nepusz, Daniel Noom, Maëlle Salmon, Vincent Traag, Brooke Foucault Welles, and Fabio Zanini. <span>“Igraph Enables Fast and Robust Network Analysis Across Programming Languages.”</span> <em>arXiv Preprint arXiv:2311.10260</em>, 2023. <a href="https://doi.org/10.48550/arXiv.2311.10260">https://doi.org/10.48550/arXiv.2311.10260</a>.
+</div>
+<div id="ref-R-PGRdup" class="csl-entry" role="listitem">
+Aravind, J., J. Radhamani, Kalyani Srinivasan, B. Ananda Subhash, and Rishi Kumar Tyagi. <em>PGRdup: Discover Probable Duplicates in Plant Genetic Resources Collections</em>, 2026. <a href="https://cran.r-project.org/package=PGRdup">https://cran.r-project.org/package=PGRdup</a>.
+</div>
+<div id="ref-R-magrittr" class="csl-entry" role="listitem">
+Bache, Stefan Milton, and Hadley Wickham. <em>Magrittr: A Forward-Pipe Operator for r</em>, 2025. <a href="https://magrittr.tidyverse.org">https://magrittr.tidyverse.org</a>.
+</div>
+<div id="ref-R-data.table" class="csl-entry" role="listitem">
+Barrett, Tyson, Matt Dowle, Arun Srinivasan, Jan Gorecki, Michael Chirico, Toby Hocking, Benjamin Schwendinger, and Ivan Krylov. <em>Data.table: Extension of ‘Data.frame‘</em>, 2026. <a href="https://r-datatable.com">https://r-datatable.com</a>.
+</div>
+<div id="ref-frank_ben" class="csl-entry" role="listitem">
+Benford, Frank. <span>“The Law of Anomalous Numbers.”</span> <em>Proceedings of the American Philosophical Society</em> 78, no. 4 (1938): 551–72. <a href="http://www.jstor.org/stable/984802">http://www.jstor.org/stable/984802</a>.
+</div>
+<div id="ref-R-FNN" class="csl-entry" role="listitem">
+Beygelzimer, Alina, Sham Kakadet, John Langford, Sunil Arya, David Mount, and Shengqiao Li. <em>FNN: Fast Nearest Neighbor Search Algorithms and Applications</em>, 2024. <a href="https://doi.org/10.32614/CRAN.package.FNN">https://doi.org/10.32614/CRAN.package.FNN</a>.
+</div>
+<div id="ref-R-deaR" class="csl-entry" role="listitem">
+Bolos, Vicente, Vicente Coll-Serrano, and Rafael Benitez Suarez. <em>deaR: Conventional and Fuzzy Data Envelopment Analysis</em>, 2026. <a href="https://doi.org/10.32614/CRAN.package.deaR">https://doi.org/10.32614/CRAN.package.deaR</a>.
+</div>
+<div id="ref-deaR2025" class="csl-entry" role="listitem">
+Bolós, V. J., R. Benítez, and V. Coll-Serrano. <span>“deaR: Conventional and Fuzzy DEA Models with r.”</span> <em>SoftwareX</em> 31 (2025): 102266, 1–6. <a href="https://doi.org/10.1016/j.softx.2025.102266">https://doi.org/10.1016/j.softx.2025.102266</a>.
+</div>
+<div id="ref-R-SnowballC" class="csl-entry" role="listitem">
+Bouchet-Valat, Milan. <em>SnowballC: Snowball Stemmers Based on the c Libstemmer UTF-8 Library</em>, 2023. <a href="https://github.com/nalimilan/R.TeMiS">https://github.com/nalimilan/R.TeMiS</a>.
+</div>
+<div id="ref-R-tidygeocoder" class="csl-entry" role="listitem">
+Cambon, Jesse, Diego Hernangómez, Christopher Belanger, and Daniel Possenriede. <em>Tidygeocoder: Geocoding Made Easy</em>, 2025. <a href="https://jessecambon.github.io/tidygeocoder/">https://jessecambon.github.io/tidygeocoder/</a>.
+</div>
+<div id="ref-R-leaflet" class="csl-entry" role="listitem">
+Cheng, Joe, Barret Schloerke, Bhaskar Karambelkar, Yihui Xie, and Garrick Aden-Buie. <em>Leaflet: Create Interactive Web Maps with the JavaScript Leaflet Library</em>, 2025. <a href="https://rstudio.github.io/leaflet/">https://rstudio.github.io/leaflet/</a>.
+</div>
+<div id="ref-R-benford.analysis" class="csl-entry" role="listitem">
+Cinelli, Carlos. <em>Benford.analysis: Benford Analysis for Data Validation and Forensic Analytics</em>, 2018. <a href="http://github.com/carloscinelli/benford.analysis">http://github.com/carloscinelli/benford.analysis</a>.
+</div>
+<div id="ref-dea" class="csl-entry" role="listitem">
+Cooper, William, Lawrence Seiford, and Joe Zhu. <span>“Data Envelopment Analysis: History, Models, and Interpretations.”</span> In <em>Handbook on Data Envelopment Analysis</em>, 1–39, 2011. <a href="https://doi.org/10.1007/978-1-4419-6151-8_1">https://doi.org/10.1007/978-1-4419-6151-8_1</a>.
+</div>
+<div id="ref-R-isotree" class="csl-entry" role="listitem">
+Cortes, David. <em>Isotree: Isolation-Based Outlier Detection</em>, 2026. <a href="https://github.com/david-cortes/isotree">https://github.com/david-cortes/isotree</a>.
+</div>
+<div id="ref-R-rebus" class="csl-entry" role="listitem">
+Cotton, Richard. <em>Rebus: Build Regular Expressions in a Human Readable Way</em>, 2017. <a href="https://doi.org/10.32614/CRAN.package.rebus">https://doi.org/10.32614/CRAN.package.rebus</a>.
+</div>
+<div id="ref-R-igraphdata" class="csl-entry" role="listitem">
+Csardi, Gabor. <em>Igraphdata: A Collection of Network Data Sets for the Igraph Package</em>, 2015. <a href="http://igraph.org">http://igraph.org</a>.
+</div>
+<div id="ref-igraph2006" class="csl-entry" role="listitem">
+Csárdi, Gábor, and Tamás Nepusz. <span>“The Igraph Software Package for Complex Network Research.”</span> <em>InterJournal</em> Complex Systems (2006): 1695. <a href="https://igraph.org">https://igraph.org</a>.
+</div>
+<div id="ref-R-igraph" class="csl-entry" role="listitem">
+Csárdi, Gábor, Tamás Nepusz, Vincent Traag, Szabolcs Horvát, Fabio Zanini, Daniel Noom, Kirill Müller, David Schoch, and Maëlle Salmon. <em>Igraph: Network Analysis and Visualization</em>, 2026. <a href="https://r.igraph.org/">https://r.igraph.org/</a>.
+</div>
+<div id="ref-R-timetk" class="csl-entry" role="listitem">
+Dancho, Matt, and Davis Vaughan. <em>Timetk: A Tool Kit for Working with Time Series</em>, 2025. <a href="https://github.com/business-science/timetk">https://github.com/business-science/timetk</a>.
+</div>
+<div id="ref-durtschi" class="csl-entry" role="listitem">
+Durtschi, Cindy, William Hillison, and Carl Pacini. <span>“The Effective Use of Benford’s Law to Assist in Detecting Fraud in Accounting Data.”</span> <em>J. Forensic Account</em> 5 (January 2004).
+</div>
+<div id="ref-R-wordcloud" class="csl-entry" role="listitem">
+Fellows, Ian. <em>Wordcloud: Word Clouds</em>, 2018. <a href="http://blog.fellstat.com/?cat=11">http://blog.fellstat.com/?cat=11</a>.
+</div>
+<div id="ref-R-janitor" class="csl-entry" role="listitem">
+Firke, Sam. <em>Janitor: Simple Tools for Examining and Cleaning Dirty Data</em>, 2024. <a href="https://github.com/sfirke/janitor">https://github.com/sfirke/janitor</a>.
+</div>
+<div id="ref-car2019" class="csl-entry" role="listitem">
+Fox, John, and Sanford Weisberg. <em>An <span>R</span> Companion to Applied Regression</em>. Third. Thousand Oaks <span>CA</span>: Sage, 2019. <a href="https://www.john-fox.ca/Companion/">https://www.john-fox.ca/Companion/</a>.
+</div>
+<div id="ref-R-car" class="csl-entry" role="listitem">
+Fox, John, Sanford Weisberg, and Brad Price. <em>Car: Companion to Applied Regression</em>, 2026. <a href="https://github.com/bprice2652/car_repo">https://github.com/bprice2652/car_repo</a>.
+</div>
+<div id="ref-r-stringi" class="csl-entry" role="listitem">
+Gagolewski, Marek. <em>Stringi: Fast and Portable Character String Processing in r</em>, 2021. <a href="https://stringi.gagolewski.com/">https://stringi.gagolewski.com/</a>.
+</div>
+<div id="ref-mcke" class="csl-entry" role="listitem">
+Gardner, Everette S., and Ed. Mckenzie. <span>“Forecasting Trends in Time Series.”</span> <em>Management Science</em> 31, no. 10 (1985): 1237–46. <a href="https://doi.org/10.1287/mnsc.31.10.1237">https://doi.org/10.1287/mnsc.31.10.1237</a>.
+</div>
+<div id="ref-R-tidyxl" class="csl-entry" role="listitem">
+Garmonsway, Duncan. <em>Tidyxl: Read Untidy Excel Files</em>, 2023. <a href="https://github.com/nacnudus/tidyxl">https://github.com/nacnudus/tidyxl</a>.
+</div>
+<div id="ref-R-unpivotr" class="csl-entry" role="listitem">
+———. <em>Unpivotr: Unpivot Complex and Irregular Data Layouts</em>, 2024. <a href="https://github.com/nacnudus/unpivotr">https://github.com/nacnudus/unpivotr</a>.
+</div>
+<div id="ref-JSSv040i03" class="csl-entry" role="listitem">
+Grolemund, Garrett, and Hadley Wickham. <span>“Dates and Times Made Easy with Lubridate.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://doi.org/10.18637/jss.v040.i03">https://doi.org/10.18637/jss.v040.i03</a>.
+</div>
+<div id="ref-lubridate2011" class="csl-entry" role="listitem">
+———. <span>“Dates and Times Made Easy with <span class="nocase">lubridate</span>.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://www.jstatsoft.org/v40/i03/">https://www.jstatsoft.org/v40/i03/</a>.
+</div>
+<div id="ref-R-arules" class="csl-entry" role="listitem">
+Hahsler, Michael, Christian Buchta, Bettina Gruen, and Kurt Hornik. <em>Arules: Mining Association Rules and Frequent Itemsets</em>, 2026. <a href="https://github.com/mhahsler/arules">https://github.com/mhahsler/arules</a>.
+</div>
+<div id="ref-arules2011" class="csl-entry" role="listitem">
+Hahsler, Michael, Sudheer Chelluboina, Kurt Hornik, and Christian Buchta. <span>“The Arules r-Package Ecosystem: Analyzing Interesting Patterns from Large Transaction Datasets.”</span> <em>Journal of Machine Learning Research</em> 12 (2011): 1977–81. <a href="https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html">https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html</a>.
+</div>
+<div id="ref-arules2005" class="csl-entry" role="listitem">
+Hahsler, Michael, Bettina Gruen, and Kurt Hornik. <span>“Arules – <span>A</span> Computational Environment for Mining Association Rules and Frequent Item Sets.”</span> <em>Journal of Statistical Software</em> 14, no. 15 (2005): 1–25. <a href="https://doi.org/10.18637/jss.v014.i15">https://doi.org/10.18637/jss.v014.i15</a>.
+</div>
+<div id="ref-R-dbscan" class="csl-entry" role="listitem">
+Hahsler, Michael, and Matthew Piekenbrock. <em>Dbscan: Density-Based Spatial Clustering of Applications with Noise (DBSCAN) and Related Algorithms</em>, 2026. <a href="https://github.com/mhahsler/dbscan">https://github.com/mhahsler/dbscan</a>.
+</div>
+<div id="ref-dbscan2019" class="csl-entry" role="listitem">
+Hahsler, Michael, Matthew Piekenbrock, and Derek Doran. <span>“<span class="nocase">dbscan</span>: Fast Density-Based Clustering with <span>R</span>.”</span> <em>Journal of Statistical Software</em> 91, no. 1 (2019): 1–30. <a href="https://doi.org/10.18637/jss.v091.i01">https://doi.org/10.18637/jss.v091.i01</a>.
+</div>
+<div id="ref-t_hill" class="csl-entry" role="listitem">
+Hill, Theodore P. <span>“The Significant-Digit Phenomenon.”</span> <em>The American Mathematical Monthly</em> 102, no. 4 (1995): 322–27. <a href="http://www.jstor.org/stable/2974952">http://www.jstor.org/stable/2974952</a>.
+</div>
+<div id="ref-R-palmerpenguins" class="csl-entry" role="listitem">
+Horst, Allison, Alison Hill, and Kristen Gorman. <em>Palmerpenguins: Palmer Archipelago (Antarctica) Penguin Data</em>, 2022. <a href="https://allisonhorst.github.io/palmerpenguins/">https://allisonhorst.github.io/palmerpenguins/</a>.
+</div>
+<div id="ref-phonics2018" class="csl-entry" role="listitem">
+Howard, II, James P. <span>“Phonetic Algorithms in <span>R</span>.”</span> <em>Journal of Open Source Software</em> 3, no. 22 (2018): 480. <a href="https://doi.org/10.21105/joss.00480">https://doi.org/10.21105/joss.00480</a>.
+</div>
+<div id="ref-phonics2020" class="csl-entry" role="listitem">
+———. <span>“Phonetic Spelling Algorithm Implementations for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 95, no. 8 (2020): 1–21. <a href="https://doi.org/10.18637/jss.v095.i08">https://doi.org/10.18637/jss.v095.i08</a>.
+</div>
+<div id="ref-R-phonics" class="csl-entry" role="listitem">
+Howard, James. <em>Phonics: Phonetic Spelling Algorithms</em>, 2026. <a href="https://phonics.jameshoward.us">https://phonics.jameshoward.us</a>.
+</div>
+<div id="ref-forecast2008" class="csl-entry" role="listitem">
+Hyndman, Rob J, and Yeasmin Khandakar. <span>“Automatic Time Series Forecasting: The Forecast Package for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 27, no. 3 (2008): 1–22. <a href="https://doi.org/10.18637/jss.v027.i03">https://doi.org/10.18637/jss.v027.i03</a>.
+</div>
+<div id="ref-R-forecast" class="csl-entry" role="listitem">
+Hyndman, Rob, George Athanasopoulos, Christoph Bergmeir, Gabriel Caceres, Leanne Chhay, Kirill Kuroptev, Maximilian Mücke, et al. <em>Forecast: Forecasting Functions for Time Series and Linear Models</em>, 2026. <a href="https://pkg.robjhyndman.com/forecast/">https://pkg.robjhyndman.com/forecast/</a>.
+</div>
+<div id="ref-R-gt" class="csl-entry" role="listitem">
+Iannone, Richard, Joe Cheng, Barret Schloerke, Shannon Haughton, Ellis Hughes, Alexandra Lauer, Romain François, JooYoung Seo, Ken Brevoort, and Olivier Roy. <em>Gt: Easily Create Presentation-Ready Display Tables</em>, 2026. <a href="https://gt.rstudio.com">https://gt.rstudio.com</a>.
+</div>
+<div id="ref-R-pointblank" class="csl-entry" role="listitem">
+Iannone, Richard, Mauricio Vargas, and June Choe. <em>Pointblank: Data Validation and Organization of Metadata for Local and Remote Tables</em>, 2026. <a href="https://rstudio.github.io/pointblank/">https://rstudio.github.io/pointblank/</a>.
+</div>
+<div id="ref-10.2307/1390807" class="csl-entry" role="listitem">
+Ihaka, Ross, and Robert Gentleman. <span>“R: A Language for Data Analysis and Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 5, no. 3 (1996): 299–314. <a href="http://www.jstor.org/stable/1390807">http://www.jstor.org/stable/1390807</a>.
+</div>
+<div id="ref-R-colorspace" class="csl-entry" role="listitem">
+Ihaka, Ross, Paul Murrell, Kurt Hornik, Jason C. Fisher, Reto Stauffer, Claus O. Wilke, Claire D. McWhite, and Achim Zeileis. <em>Colorspace: A Toolbox for Manipulating and Assessing Colors and Palettes</em>, 2025. <a href="https://colorspace.R-Forge.R-project.org/">https://colorspace.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-R-bupaR" class="csl-entry" role="listitem">
+Janssenswillen, Gert. <em>bupaR: Business Process Analysis in r</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-edeaR" class="csl-entry" role="listitem">
+———. <em>edeaR: Exploratory and Descriptive Event-Based Data Analysis</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processcheckR" class="csl-entry" role="listitem">
+———. <em>processcheckR: Rule-Based Conformance Checking of Business Process Event Data</em>, 2025. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processmapR" class="csl-entry" role="listitem">
+———. <em>processmapR: Construct Process Maps Using Event Data</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-factoextra" class="csl-entry" role="listitem">
+Kassambara, Alboukadel, and Fabian Mundt. <em>Factoextra: Extract and Visualize the Results of Multivariate Data Analyses</em>, 2026. <a href="https://github.com/kassambara/factoextra">https://github.com/kassambara/factoextra</a>.
+</div>
+<div id="ref-R-changepoint" class="csl-entry" role="listitem">
+Killick, Rebecca. <em>Changepoint: Methods for Changepoint Detection</em>, 2024. <a href="https://github.com/rkillick/changepoint/">https://github.com/rkillick/changepoint/</a>.
+</div>
+<div id="ref-changepoint2014" class="csl-entry" role="listitem">
+Killick, Rebecca, and Idris A. Eckley. <span>“<span class="nocase">changepoint</span>: An <span>R</span> Package for Changepoint Analysis.”</span> <em>Journal of Statistical Software</em> 58, no. 3 (2014): 1–19. <a href="https://www.jstatsoft.org/article/view/v058i03">https://www.jstatsoft.org/article/view/v058i03</a>.
+</div>
+<div id="ref-R-moderndive" class="csl-entry" role="listitem">
+Kim, Albert Y., and Chester Ismay. <em>Moderndive: Tidyverse-Friendly Introductory Linear Regression</em>, 2026. <a href="https://moderndive.github.io/moderndive/">https://moderndive.github.io/moderndive/</a>.
+</div>
+<div id="ref-moderndive2021" class="csl-entry" role="listitem">
+Kim, Albert Y., Chester Ismay, and Max Kuhn. <span>“Take a Moderndive into Introductory Linear Regression with r.”</span> <em>The Journal of Open Source Education</em> 4, no. 41, 115 (2021). <a href="https://doi.org/10.21105/jose.00115">https://doi.org/10.21105/jose.00115</a>.
+</div>
+<div id="ref-R-outliers" class="csl-entry" role="listitem">
+Komsta, Lukasz. <em>Outliers: Tests for Outliers</em>, 2022. <a href="https://www.R-project.org">https://www.R-project.org</a>.
+</div>
+<div id="ref-performance2021" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, and Dominique Makowski. <span>“<span class="nocase">performance</span>: An <span>R</span> Package for Assessment, Comparison and Testing of Statistical Models.”</span> <em>Journal of Open Source Software</em> 6, no. 60 (2021): 3139. <a href="https://doi.org/10.21105/joss.03139">https://doi.org/10.21105/joss.03139</a>.
+</div>
+<div id="ref-R-performance" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Dominique Makowski, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, Brenton M. Wiernik, and Rémi Thériault. <em>Performance: Assessment of Regression Models Performance</em>, 2026. <a href="https://easystats.github.io/performance/">https://easystats.github.io/performance/</a>.
+</div>
+<div id="ref-R-cluster" class="csl-entry" role="listitem">
+Maechler, Martin, Peter Rousseeuw, Anja Struyf, and Mia Hubert. <em>Cluster: "Finding Groups in Data": Cluster Analysis Extended Rousseeuw Et Al.</em>, 2026. <a href="https://svn.r-project.org/R-packages/trunk/cluster/">https://svn.r-project.org/R-packages/trunk/cluster/</a>.
+</div>
+<div id="ref-R-rpart.plot" class="csl-entry" role="listitem">
+Milborrow, Stephen. <em>Rpart.plot: Plot Rpart Models: An Enhanced Version of Plot.rpart</em>, 2026. <a href="http://www.milbo.org/rpart-plot/index.html">http://www.milbo.org/rpart-plot/index.html</a>.
+</div>
+<div id="ref-R-duckdb" class="csl-entry" role="listitem">
+Mühleisen, Hannes, and Mark Raasveldt. <em>Duckdb: DBI Package for the DuckDB Database Management System</em>, 2026. <a href="https://r.duckdb.org/">https://r.duckdb.org/</a>.
+</div>
+<div id="ref-r-tibble" class="csl-entry" role="listitem">
+Müller, Kirill, and Hadley Wickham. <em>Tibble: Simple Data Frames</em>, 2022. <a href="https://CRAN.R-project.org/package=tibble">https://CRAN.R-project.org/package=tibble</a>.
+</div>
+<div id="ref-R-tibble" class="csl-entry" role="listitem">
+———. <em>Tibble: Simple Data Frames</em>, 2026. <a href="https://tibble.tidyverse.org/">https://tibble.tidyverse.org/</a>.
+</div>
+<div id="ref-R-RColorBrewer" class="csl-entry" role="listitem">
+Neuwirth, Erich. <em>RColorBrewer: ColorBrewer Palettes</em>, 2022. <a href="https://doi.org/10.32614/CRAN.package.RColorBrewer">https://doi.org/10.32614/CRAN.package.RColorBrewer</a>.
+</div>
+<div id="ref-newcomb" class="csl-entry" role="listitem">
+Newcomb, Simon. <span>“Note on the Frequency of Use of the Different Digits in Natural Numbers.”</span> <em>American Journal of Mathematics</em> 4, no. 1 (1881): 39–40. <a href="http://www.jstor.org/stable/2369148">http://www.jstor.org/stable/2369148</a>.
+</div>
+<div id="ref-nigrinifraud" class="csl-entry" role="listitem">
+Nigrini, Mark J. <em>Benford’s Law Applications for Forensic Accounting, Auditing and Fraud Detection</em>. 1st ed. John Wiley; Sons, Ltd, 2012. <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5">https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5</a>.
+</div>
+<div id="ref-article2007" class="csl-entry" role="listitem">
+Nigrini, Mark, and Steven Miller. <span>“Benford’s Law Applied to Hydrology Data—Results and Relevance to Other Geophysical Data.”</span> <em>Mathematical Geology</em> 39 (September 2007): 469–90. <a href="https://doi.org/10.1007/s11004-007-9109-5">https://doi.org/10.1007/s11004-007-9109-5</a>.
+</div>
+<div id="ref-articlesec" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing a Journal of Practice and Theory AUDITING J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-article2009" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing-a Journal of Practice and Theory - AUDITING-J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-R-pdftools" class="csl-entry" role="listitem">
+Ooms, Jeroen. <em>Pdftools: Text Extraction, Rendering and Converting of PDF Documents</em>, 2026. <a href="https://ropensci.r-universe.dev/pdftools">https://ropensci.r-universe.dev/pdftools</a>.
+</div>
+<div id="ref-R-writexl" class="csl-entry" role="listitem">
+Ooms, Jeroen, and Bill Denney. <em>Writexl: Export Data Frames to Excel Xlsx Format</em>, 2026. <a href="https://ropensci.r-universe.dev/writexl">https://ropensci.r-universe.dev/writexl</a>.
+</div>
+<div id="ref-R-sf" class="csl-entry" role="listitem">
+Pebesma, Edzer. <em>Sf: Simple Features for r</em>, 2026. <a href="https://r-spatial.github.io/sf/">https://r-spatial.github.io/sf/</a>.
+</div>
+<div id="ref-sf2018" class="csl-entry" role="listitem">
+———. <span>“<span class="nocase">Simple Features for R: Standardized Support for Spatial Vector Data</span>.”</span> <em><span>The R Journal</span></em> 10, no. 1 (2018): 439–46. <a href="https://doi.org/10.32614/RJ-2018-009">https://doi.org/10.32614/RJ-2018-009</a>.
+</div>
+<div id="ref-sf2023" class="csl-entry" role="listitem">
+Pebesma, Edzer, and Roger Bivand. <em><span class="nocase">Spatial Data Science: With applications in R</span></em>. <span>Chapman and Hall/CRC</span>, 2023. <a href="https://doi.org/10.1201/9780429459016">https://doi.org/10.1201/9780429459016</a>.
+</div>
+<div id="ref-R-ggraph" class="csl-entry" role="listitem">
+Pedersen, Thomas Lin. <em>Ggraph: An Implementation of Grammar of Graphics for Graphs and Networks</em>, 2025. <a href="https://ggraph.data-imaginist.com">https://ggraph.data-imaginist.com</a>.
+</div>
+<div id="ref-R-patchwork" class="csl-entry" role="listitem">
+———. <em>Patchwork: The Composer of Plots</em>, 2025. <a href="https://patchwork.data-imaginist.com">https://patchwork.data-imaginist.com</a>.
+</div>
+<div id="ref-R-PerformanceAnalytics" class="csl-entry" role="listitem">
+Peterson, Brian G., and Peter Carl. <em>PerformanceAnalytics: Econometric Tools for Performance and Risk Analysis</em>, 2026. <a href="https://github.com/braverock/PerformanceAnalytics">https://github.com/braverock/PerformanceAnalytics</a>.
+</div>
+<div id="ref-pinkham" class="csl-entry" role="listitem">
+Pinkham, Roger S. <span>“<span class="nocase">On the Distribution of First Significant Digits</span>.”</span> <em>The Annals of Mathematical Statistics</em> 32, no. 4 (1961): 1223–30. <a href="https://doi.org/10.1214/aoms/1177704862">https://doi.org/10.1214/aoms/1177704862</a>.
+</div>
+<div id="ref-R-base" class="csl-entry" role="listitem">
+R Core Team. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing, 2025. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-R-psych" class="csl-entry" role="listitem">
+Revelle, William. <em>Psych: Procedures for Psychological, Psychometric, and Personality Research</em>, 2026. <a href="https://personality-project.org/r/psych/">https://personality-project.org/r/psych/</a>.
+</div>
+<div id="ref-R-nnet" class="csl-entry" role="listitem">
+Ripley, Brian. <em>Nnet: Feed-Forward Neural Networks and Multinomial Log-Linear Models</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-MASS" class="csl-entry" role="listitem">
+Ripley, Brian, and Bill Venables. <em>MASS: Support Functions and Datasets for Venables and Ripley’s MASS</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-broom" class="csl-entry" role="listitem">
+Robinson, David, Alex Hayes, Simon Couch, and Emil Hvitfeldt. <em>Broom: Convert Statistical Objects into Tidy Tibbles</em>, 2026. <a href="https://broom.tidymodels.org/">https://broom.tidymodels.org/</a>.
+</div>
+<div id="ref-R-tidytext" class="csl-entry" role="listitem">
+Robinson, David, and Julia Silge. <em>Tidytext: Text Mining Using Dplyr, Ggplot2, and Other Tidy Tools</em>, 2025. <a href="https://juliasilge.github.io/tidytext/">https://juliasilge.github.io/tidytext/</a>.
+</div>
+<div id="ref-R-openxlsx" class="csl-entry" role="listitem">
+Schauberger, Philipp, and Alexander Walker. <em>Openxlsx: Read, Write and Edit Xlsx Files</em>, 2025. <a href="https://ycphs.github.io/openxlsx/index.html">https://ycphs.github.io/openxlsx/index.html</a>.
+</div>
+<div id="ref-R-GGally" class="csl-entry" role="listitem">
+Schloerke, Barret, Di Cook, Joseph Larmarange, Francois Briatte, Moritz Marbach, Edwin Thoen, Amos Elberg, and Jason Crowley. <em>GGally: Extension to Ggplot2</em>, 2025. <a href="https://ggobi.github.io/ggally/">https://ggobi.github.io/ggally/</a>.
+</div>
+<div id="ref-tidytext2016" class="csl-entry" role="listitem">
+Silge, Julia, and David Robinson. <span>“Tidytext: Text Mining and Analysis Using Tidy Data Principles in r.”</span> <em>JOSS</em> 1, no. 3 (2016). <a href="https://doi.org/10.21105/joss.00037">https://doi.org/10.21105/joss.00037</a>.
+</div>
+<div id="ref-R-ggrepel" class="csl-entry" role="listitem">
+Slowikowski, Kamil. <em>Ggrepel: Automatically Position Non-Overlapping Text Labels with Ggplot2</em>, 2026. <a href="https://ggrepel.slowkow.com/">https://ggrepel.slowkow.com/</a>.
+</div>
+<div id="ref-R-lubridate" class="csl-entry" role="listitem">
+Spinu, Vitalie, Garrett Grolemund, and Hadley Wickham. <em>Lubridate: Make Dealing with Dates a Little Easier</em>, 2026. <a href="https://lubridate.tidyverse.org">https://lubridate.tidyverse.org</a>.
+</div>
+<div id="ref-colorspace2009b" class="csl-entry" role="listitem">
+Stauffer, Reto, Georg J. Mayr, Markus Dabernig, and Achim Zeileis. <span>“Somewhere over the Rainbow: How to Make Effective Use of Colors in Meteorological Visualizations.”</span> <em>Bulletin of the American Meteorological Society</em> 96, no. 2 (2009): 203–16. <a href="https://doi.org/10.1175/BAMS-D-13-00155.1">https://doi.org/10.1175/BAMS-D-13-00155.1</a>.
+</div>
+<div id="ref-R-rpart" class="csl-entry" role="listitem">
+Therneau, Terry, and Beth Atkinson. <em>Rpart: Recursive Partitioning and Regression Trees</em>, 2025. <a href="https://github.com/bethatkinson/rpart">https://github.com/bethatkinson/rpart</a>.
+</div>
+<div id="ref-R-AnomalyDetection" class="csl-entry" role="listitem">
+Vallis, Owen S., Jordan Hochenbaum, and Arun Kejariwal. <em>AnomalyDetection: Anomaly Detection Using Seasonal Hybrid Extreme Studentized Deviate Test</em>, 2014. <a href="https://github.com/twitter/AnomalyDetection">https://github.com/twitter/AnomalyDetection</a>.
+</div>
+<div id="ref-stringdist2014" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, M. P. J.</span> <span>“The Stringdist Package for Approximate String Matching.”</span> <em>The <span>R</span> <span>J</span>ournal</em> 6 (2014): 111–22. <a href="https://journal.r-project.org/articles/RJ-2014-011/">https://journal.r-project.org/articles/RJ-2014-011/</a>.
+</div>
+<div id="ref-R-stringdist" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark</span>. <em>Stringdist: Approximate String Matching, Fuzzy Text Search, and String Distance Functions</em>, 2026. <a href="https://github.com/markvanderloo/stringdist">https://github.com/markvanderloo/stringdist</a>.
+</div>
+<div id="ref-validate2021" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark P. J., and Edwin de Jonge</span>. <span>“Data Validation Infrastructure for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 97, no. 10 (2021): 1–31. <a href="https://doi.org/10.18637/jss.v097.i10">https://doi.org/10.18637/jss.v097.i10</a>.
+</div>
+<div id="ref-R-validate" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark, and Edwin de Jonge</span>. <em>Validate: Data Validation Infrastructure</em>, 2025. <a href="https://github.com/data-cleaning/validate">https://github.com/data-cleaning/validate</a>.
+</div>
+<div id="ref-MASS2002" class="csl-entry" role="listitem">
+Venables, W. N., and B. D. Ripley. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-nnet2002" class="csl-entry" role="listitem">
+———. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-skimr" class="csl-entry" role="listitem">
+Waring, Elin, Michael Quinn, Amelia McNamara, Eduardo Arino de la Rubia, Hao Zhu, and Shannon Ellis. <em>Skimr: Compact and Flexible Summaries of Data</em>, 2026. <a href="https://docs.ropensci.org/skimr/">https://docs.ropensci.org/skimr/</a>.
+</div>
+<div id="ref-layered-grammar" class="csl-entry" role="listitem">
+Wickham, Hadley. <span>“A Layered Grammar of Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 19, no. 1 (2010): 3–28. <a href="https://doi.org/10.1198/jcgs.2009.07098">https://doi.org/10.1198/jcgs.2009.07098</a>.
+</div>
+<div id="ref-R-conflicted" class="csl-entry" role="listitem">
+———. <em>Conflicted: An Alternative Conflict Resolution Strategy</em>, 2023. <a href="https://conflicted.r-lib.org/">https://conflicted.r-lib.org/</a>.
+</div>
+<div id="ref-R-forcats" class="csl-entry" role="listitem">
+———. <em>Forcats: Tools for Working with Categorical Variables (Factors)</em>, 2025. <a href="https://forcats.tidyverse.org/">https://forcats.tidyverse.org/</a>.
+</div>
+<div id="ref-ggplot22016" class="csl-entry" role="listitem">
+———. <em>Ggplot2: Elegant Graphics for Data Analysis</em>. Springer-Verlag New York, 2016. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv021i12" class="csl-entry" role="listitem">
+———. <span>“Reshaping Data with the Reshape Package.”</span> <em>Journal of Statistical Software</em> 21, no. 12 (2007): 1–20. <a href="https://doi.org/10.18637/jss.v021.i12">https://doi.org/10.18637/jss.v021.i12</a>.
+</div>
+<div id="ref-R-stringr" class="csl-entry" role="listitem">
+———. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>, 2025. <a href="https://stringr.tidyverse.org">https://stringr.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv059i10" class="csl-entry" role="listitem">
+———. <span>“Tidy Data.”</span> <em>Journal of Statistical Software</em> 59, no. 10 (2014): 1–23. <a href="https://doi.org/10.18637/jss.v059.i10">https://doi.org/10.18637/jss.v059.i10</a>.
+</div>
+<div id="ref-R-tidyverse" class="csl-entry" role="listitem">
+———. <em>Tidyverse: Easily Install and Load the Tidyverse</em>, 2023. <a href="https://tidyverse.tidyverse.org">https://tidyverse.tidyverse.org</a>.
+</div>
+<div id="ref-tidyverse2019" class="csl-entry" role="listitem">
+Wickham, Hadley, Mara Averick, Jennifer Bryan, Winston Chang, Lucy D’Agostino McGowan, Romain François, Garrett Grolemund, et al. <span>“Welcome to the <span class="nocase">tidyverse</span>.”</span> <em>Journal of Open Source Software</em> 4, no. 43 (2019): 1686. <a href="https://doi.org/10.21105/joss.01686">https://doi.org/10.21105/joss.01686</a>.
+</div>
+<div id="ref-R-readxl" class="csl-entry" role="listitem">
+Wickham, Hadley, and Jennifer Bryan. <em>Readxl: Read Excel Files</em>, 2025. <a href="https://readxl.tidyverse.org">https://readxl.tidyverse.org</a>.
+</div>
+<div id="ref-R-ggplot2" class="csl-entry" role="listitem">
+<span class="nocase">Wickham, Hadley, Winston Chang, Lionel Henry, Thomas Lin Pedersen, Kohske Takahashi, Claus Wilke, Kara Woo, Hiroaki Yutani, Dewey Dunnington, and Teun van den Brand</span>. <em>Ggplot2: Create Elegant Data Visualisations Using the Grammar of Graphics</em>, 2026. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-R-dplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Romain François, Lionel Henry, Kirill Müller, and Davis Vaughan. <em>Dplyr: A Grammar of Data Manipulation</em>, 2026. <a href="https://dplyr.tidyverse.org">https://dplyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-dbplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Maximilian Girlich, and Edgar Ruiz. <em>Dbplyr: A Dplyr Back End for Databases</em>, 2026. <a href="https://dbplyr.tidyverse.org/">https://dbplyr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-purrr" class="csl-entry" role="listitem">
+Wickham, Hadley, and Lionel Henry. <em>Purrr: Functional Programming Tools</em>, 2026. <a href="https://purrr.tidyverse.org/">https://purrr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-readr" class="csl-entry" role="listitem">
+Wickham, Hadley, Jim Hester, and Jennifer Bryan. <em>Readr: Read Rectangular Text Data</em>, 2026. <a href="https://readr.tidyverse.org">https://readr.tidyverse.org</a>.
+</div>
+<div id="ref-R-scales" class="csl-entry" role="listitem">
+Wickham, Hadley, Thomas Lin Pedersen, and Dana Seidel. <em>Scales: Scale Functions for Visualization</em>, 2025. <a href="https://scales.r-lib.org">https://scales.r-lib.org</a>.
+</div>
+<div id="ref-R-tidyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Davis Vaughan, and Maximilian Girlich. <em>Tidyr: Tidy Messy Data</em>, 2025. <a href="https://tidyr.tidyverse.org">https://tidyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-ranger" class="csl-entry" role="listitem">
+Wright, Marvin N. <em>Ranger: A Fast Implementation of Random Forests</em>, 2026. <a href="https://imbs-hl.github.io/ranger/">https://imbs-hl.github.io/ranger/</a>.
+</div>
+<div id="ref-ranger2017" class="csl-entry" role="listitem">
+Wright, Marvin N., and Andreas Ziegler. <span>“<span class="nocase">ranger</span>: A Fast Implementation of Random Forests for High Dimensional Data in <span>C++</span> and <span>R</span>.”</span> <em>Journal of Statistical Software</em> 77, no. 1 (2017): 1–17. <a href="https://doi.org/10.18637/jss.v077.i01">https://doi.org/10.18637/jss.v077.i01</a>.
+</div>
+<div id="ref-xie2015" class="csl-entry" role="listitem">
+Xie, Yihui. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="http://yihui.name/knitr/">http://yihui.name/knitr/</a>.
+</div>
+<div id="ref-knitr2015" class="csl-entry" role="listitem">
+———. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-knitr2014" class="csl-entry" role="listitem">
+———. <span>“Knitr: A Comprehensive Tool for Reproducible Research in <span>R</span>.”</span> In <em>Implementing Reproducible Computational Research</em>, edited by Victoria Stodden, Friedrich Leisch, and Roger D. Peng. Chapman; Hall/CRC, 2014.
+</div>
+<div id="ref-R-knitr" class="csl-entry" role="listitem">
+———. <em>Knitr: A General-Purpose Package for Dynamic Report Generation in r</em>, 2025. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-colorspace2020a" class="csl-entry" role="listitem">
+Zeileis, Achim, Jason C. Fisher, Kurt Hornik, Ross Ihaka, Claire D. McWhite, Paul Murrell, Reto Stauffer, and Claus O. Wilke. <span>“<span class="nocase">colorspace</span>: A Toolbox for Manipulating and Assessing Colors and Palettes.”</span> <em>Journal of Statistical Software</em> 96, no. 1 (2020): 1–49. <a href="https://doi.org/10.18637/jss.v096.i01">https://doi.org/10.18637/jss.v096.i01</a>.
+</div>
+<div id="ref-zoo2005" class="csl-entry" role="listitem">
+Zeileis, Achim, and Gabor Grothendieck. <span>“Zoo: S3 Infrastructure for Regular and Irregular Time Series.”</span> <em>Journal of Statistical Software</em> 14, no. 6 (2005): 1–27. <a href="https://doi.org/10.18637/jss.v014.i06">https://doi.org/10.18637/jss.v014.i06</a>.
+</div>
+<div id="ref-R-zoo" class="csl-entry" role="listitem">
+Zeileis, Achim, Gabor Grothendieck, and Jeffrey A. Ryan. <em>Zoo: S3 Infrastructure for Regular and Irregular Time Series (z’s Ordered Observations)</em>, 2025. <a href="https://zoo.R-Forge.R-project.org/">https://zoo.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-colorspace2009a" class="csl-entry" role="listitem">
+Zeileis, Achim, Kurt Hornik, and Paul Murrell. <span>“Escaping <span>RGB</span>land: Selecting Colors for Statistical Graphics.”</span> <em>Computational Statistics &amp; Data Analysis</em> 53, no. 9 (2009): 3259–70. <a href="https://doi.org/10.1016/j.csda.2008.11.033">https://doi.org/10.1016/j.csda.2008.11.033</a>.
+</div>
+</div>
+</section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><hr>
+<ol>
+<li id="fn1"><p><a href="https://stackoverflow.com/tags/rstudio/info">https://stackoverflow.com/tags/rstudio/info</a><a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol></section></main><!-- /main --><script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/anilyayavar\.github\.io\/new-book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script><nav class="page-navigation"><div class="nav-page nav-page-previous">
+      <a href="./how-to-use.html" class="pagination-link" aria-label="How to Use This Book">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">How to Use This Book</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./part1-foundations.html" class="pagination-link" aria-label="Part I: R Foundations">
+        <span class="nav-page-text">Part I: R Foundations</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer"><div class="nav-footer">
+    <div class="nav-footer-left">
+      &nbsp;
+    </div>   
+    <div class="nav-footer-center">
+<p>Built with <a href="https://www.r-project.org">R</a> and <a href="https://quarto.org">Quarto</a></p>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/00-Zero.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+    <div class="nav-footer-right">
+      &nbsp;
+    </div>
+  </div>
+</footer>
+
+
+</body></html>

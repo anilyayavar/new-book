@@ -1,0 +1,2469 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="description" content="A practical guide to data analytics for auditors, using R and the tidyverse: reading and cleaning audit data, forensic tests, sampling, statistics, machine learning, text, network and geospatial analytics, and reproducible reports, with Indian audit examples throughout.">
+<title>33&nbsp; String Similarity and Fuzzy Matching – R for Audit Analytics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./20b-record-linkage.html" rel="next">
+<link href="./20-duplicates.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b85bc7c33db8c58e0ec93c3465666fed.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-a64f2b92d8b4b45ab5f5d9261e8b8c9d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script><link rel="stylesheet" href="style.css">
+</head>
+<body class="nav-sidebar floating quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top"><nav class="quarto-secondary-nav"><div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part5-forensic.html">Part V: Forensic Tests</a></li><li class="breadcrumb-item"><a href="./15-stringdist.html"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav></header><!-- content --><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto"><div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">R for Audit Analytics</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/anilyayavar/new-book" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Welcome</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-preface.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-about-author.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">About the Author</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./how-to-use.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">How to Use This Book</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-Zero.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Gearing Up</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part1-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part I: R Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Objects, Data Types and Data Structures</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-Subsets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Subsetting and Indexing</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Functions and Operators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-existing-and-useful-functions-in-base-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Useful Base R Functions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-pipes-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Pipes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-1conditionals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Conditions and Loops</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-1-functionalprog.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Functional Programming</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part2-data-ready.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part II: Getting Data Ready</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-2-workflow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Working with Files and Folders</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Importing and Exporting Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading-data-cleaning-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Cleaning Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1b-pdf-excel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Data from PDFs and Messy Excel Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-2-merge.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Combining Many Similar Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-1-dplyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Transforming Data with dplyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-2-joins.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Joining Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-tidyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Reshaping Data with tidyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8Lubridate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Dates and Times</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8b-duckdb.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Large Data with DuckDB and data.table</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part3-text-fields.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part III: Working with Text Fields</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-1Stringr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Working with Strings in stringr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Regular Expressions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex-regex-in-human-readble-format-using-rebu.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Readable Regular Expressions with rebus</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part4-explore-sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IV: Exploring and Sampling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-plot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-1ggplot2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Charts with ggplot2</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-2ggplot2-polish.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Polishing Charts for Audit Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-3Factors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Factors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-1Desc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Descriptive Statistics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-2stats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Probability Distributions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3Samp.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Random Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3b-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Statistical Tests for Auditors</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part5-forensic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part V: Forensic Tests</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17a-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Rule-Based Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-Anamolous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Benford Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-nigrini-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Nigrini’s Tests for Unusual Amounts</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-duplicates.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">32</span>&nbsp; <span class="chapter-title">Duplicate Detection</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-stringdist.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20b-record-linkage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">34</span>&nbsp; <span class="chapter-title">Record Linkage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-gaps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">35</span>&nbsp; <span class="chapter-title">Gaps in Sequences</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21b-process-mining.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">36</span>&nbsp; <span class="chapter-title">Process Mining</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part6-risk-scoring.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VI: Modelling and Risk Scoring</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">37</span>&nbsp; <span class="chapter-title">Simple Linear Regression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg-multiple.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">38</span>&nbsp; <span class="chapter-title">Multiple Regression in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4b-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">39</span>&nbsp; <span class="chapter-title">Logistic Regression for Risk Scoring</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4c-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">40</span>&nbsp; <span class="chapter-title">Decision Trees</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4d-forest.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">41</span>&nbsp; <span class="chapter-title">Random Forests</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-DEA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">42</span>&nbsp; <span class="chapter-title">Data Envelopment Analysis</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part7-hidden-patterns.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VII: Finding Hidden Patterns</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-5PCA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">43</span>&nbsp; <span class="chapter-title">Principal Component Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-6KMeans.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">44</span>&nbsp; <span class="chapter-title">Clustering with k-Means</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-7Apriori.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">45</span>&nbsp; <span class="chapter-title">Association Rules (Apriori)</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-9ts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">46</span>&nbsp; <span class="chapter-title">Time Series Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-anomaly.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">47</span>&nbsp; <span class="chapter-title">Anomaly Detection</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part8-beyond-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VIII: Beyond Tables</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">48</span>&nbsp; <span class="chapter-title">Text Analytics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-sentiment-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">49</span>&nbsp; <span class="chapter-title">Sentiment Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-visualising-text-analytics-through-wordc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">50</span>&nbsp; <span class="chapter-title">Visualising Text</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">51</span>&nbsp; <span class="chapter-title">Networks and Graph Theory</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network-applying-network-analysis-in-audit-fraud.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">52</span>&nbsp; <span class="chapter-title">Network Analysis in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">53</span>&nbsp; <span class="chapter-title">Maps</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-geo-coding-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">54</span>&nbsp; <span class="chapter-title">Geocoding</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-reverse-geo-coding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">55</span>&nbsp; <span class="chapter-title">Reverse Geocoding</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part9-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IX: Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./audit-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Audit Question Finder</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./98-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Datasets Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./99-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">R Packages Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./97-colors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">D</span>&nbsp; <span class="chapter-title">Colours in R</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+    </ul>
+</div>
+</nav><div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+<li><a href="#why-does-an-auditor-need-string-similarity" id="toc-why-does-an-auditor-need-string-similarity" class="nav-link active" data-scroll-target="#why-does-an-auditor-need-string-similarity"><span class="header-section-number">33.1</span> Why does an auditor need string similarity?</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites"><span class="header-section-number">33.2</span> Prerequisites</a></li>
+  <li><a href="#first-clean-the-strings" id="toc-first-clean-the-strings" class="nav-link" data-scroll-target="#first-clean-the-strings"><span class="header-section-number">33.3</span> First, clean the strings</a></li>
+  <li><a href="#distance-and-similarity" id="toc-distance-and-similarity" class="nav-link" data-scroll-target="#distance-and-similarity"><span class="header-section-number">33.4</span> Distance and similarity</a></li>
+  <li>
+<a href="#edit-based-methods" id="toc-edit-based-methods" class="nav-link" data-scroll-target="#edit-based-methods"><span class="header-section-number">33.5</span> Edit-based methods</a>
+  <ul class="collapse">
+<li><a href="#levenshtein-distance" id="toc-levenshtein-distance" class="nav-link" data-scroll-target="#levenshtein-distance"><span class="header-section-number">33.5.1</span> Levenshtein distance</a></li>
+  <li><a href="#optimal-string-alignment-and-damerau-levenshtein" id="toc-optimal-string-alignment-and-damerau-levenshtein" class="nav-link" data-scroll-target="#optimal-string-alignment-and-damerau-levenshtein"><span class="header-section-number">33.5.2</span> Optimal String Alignment and Damerau-Levenshtein</a></li>
+  <li><a href="#hamming-distance" id="toc-hamming-distance" class="nav-link" data-scroll-target="#hamming-distance"><span class="header-section-number">33.5.3</span> Hamming distance</a></li>
+  <li><a href="#longest-common-subsequence" id="toc-longest-common-subsequence" class="nav-link" data-scroll-target="#longest-common-subsequence"><span class="header-section-number">33.5.4</span> Longest common subsequence</a></li>
+  <li><a href="#jaro-and-jaro-winkler" id="toc-jaro-and-jaro-winkler" class="nav-link" data-scroll-target="#jaro-and-jaro-winkler"><span class="header-section-number">33.5.5</span> Jaro and Jaro-Winkler</a></li>
+  </ul>
+</li>
+  <li>
+<a href="#token-based-methods" id="toc-token-based-methods" class="nav-link" data-scroll-target="#token-based-methods"><span class="header-section-number">33.6</span> Token-based methods</a>
+  <ul class="collapse">
+<li><a href="#q-grams" id="toc-q-grams" class="nav-link" data-scroll-target="#q-grams"><span class="header-section-number">33.6.1</span> Q-grams</a></li>
+  <li><a href="#word-order" id="toc-word-order" class="nav-link" data-scroll-target="#word-order"><span class="header-section-number">33.6.2</span> Word order</a></li>
+  </ul>
+</li>
+  <li>
+<a href="#phonetic-methods" id="toc-phonetic-methods" class="nav-link" data-scroll-target="#phonetic-methods"><span class="header-section-number">33.7</span> Phonetic methods</a>
+  <ul class="collapse">
+<li><a href="#soundex" id="toc-soundex" class="nav-link" data-scroll-target="#soundex"><span class="header-section-number">33.7.1</span> Soundex</a></li>
+  <li><a href="#metaphone" id="toc-metaphone" class="nav-link" data-scroll-target="#metaphone"><span class="header-section-number">33.7.2</span> Metaphone</a></li>
+  <li><a href="#double-metaphone" id="toc-double-metaphone" class="nav-link" data-scroll-target="#double-metaphone"><span class="header-section-number">33.7.3</span> Double Metaphone</a></li>
+  <li><a href="#full-length-double-metaphone-with-cagmetaphone" id="toc-full-length-double-metaphone-with-cagmetaphone" class="nav-link" data-scroll-target="#full-length-double-metaphone-with-cagmetaphone"><span class="header-section-number">33.7.4</span> Full length Double Metaphone with <code>cagmetaphone</code></a></li>
+  </ul>
+</li>
+  <li><a href="#comparing-the-methods" id="toc-comparing-the-methods" class="nav-link" data-scroll-target="#comparing-the-methods"><span class="header-section-number">33.8</span> Comparing the methods</a></li>
+  <li>
+<a href="#sec-strsim-lists" id="toc-sec-strsim-lists" class="nav-link" data-scroll-target="#sec-strsim-lists"><span class="header-section-number">33.9</span> Matching two lists, an audit use case</a>
+  <ul class="collapse">
+<li><a href="#method-1-compare-every-pair" id="toc-method-1-compare-every-pair" class="nav-link" data-scroll-target="#method-1-compare-every-pair"><span class="header-section-number">33.9.1</span> Method 1, compare every pair</a></li>
+  <li><a href="#method-2-amatch" id="toc-method-2-amatch" class="nav-link" data-scroll-target="#method-2-amatch"><span class="header-section-number">33.9.2</span> Method 2, <code>amatch()</code></a></li>
+  </ul>
+</li>
+  <li><a href="#choosing-a-cut-off" id="toc-choosing-a-cut-off" class="nav-link" data-scroll-target="#choosing-a-cut-off"><span class="header-section-number">33.10</span> Choosing a cut-off</a></li>
+  <li><a href="#large-lists" id="toc-large-lists" class="nav-link" data-scroll-target="#large-lists"><span class="header-section-number">33.11</span> Large lists</a></li>
+  <li><a href="#a-suggested-workflow" id="toc-a-suggested-workflow" class="nav-link" data-scroll-target="#a-suggested-workflow"><span class="header-section-number">33.12</span> A suggested workflow</a></li>
+  <li><a href="#summary-of-functions-used" id="toc-summary-of-functions-used" class="nav-link" data-scroll-target="#summary-of-functions-used"><span class="header-section-number">33.13</span> Summary of functions used</a></li>
+  </ul><div class="toc-actions"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/15-stringdist.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part5-forensic.html">Part V: Forensic Tests</a></li><li class="breadcrumb-item"><a href="./15-stringdist.html"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></a></li></ol></nav><div class="quarto-title">
+<h1 class="title"><span id="sec-strsim" class="quarto-section-identifier"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header><p>Comparing two numbers is easy. We can subtract one from the other, or use any of several statistical measures. Comparing two pieces of text is not so simple. Is <em>Geeta</em> the same as <em>Gita</em>? Is <em>M/s Sharma Traders</em> the same as <em>Sharma Trader’s</em>? Is <em>Mohd. Iqbal</em> the same person as <em>Mohammad Iqbal</em>? A computer, checking for exact equality, will say “no” to all three.</p>
+<p><strong>String similarity</strong> methods solve this problem. They take two strings and return a score that tells how alike they are. A good method should give a high score to <em>Geeta</em> and <em>Gita</em>, but not to <em>Apple</em> and <em>Microsoft</em>. Matching strings in this approximate way is often called <strong>fuzzy matching</strong>.</p>
+<p>Over several decades, many methods have been developed for this. They have different strengths and weaknesses. They fall into three broad groups.</p>
+<ul>
+<li>
+<strong>Edit-based (lexical) methods</strong> count how many small changes, like adding, removing or swapping letters, turn one string into the other. They are good at catching typing and spelling mistakes.</li>
+<li>
+<strong>Token-based methods</strong> break strings into small pieces, such as groups of letters or whole words, and compare the pieces. They are less affected by the order of words.</li>
+<li>
+<strong>Phonetic methods</strong> compare how strings <em>sound</em>. They are good at catching different spellings of the same name.</li>
+</ul>
+<section id="why-does-an-auditor-need-string-similarity" class="level2" data-number="33.1"><h2 data-number="33.1" class="anchored" data-anchor-id="why-does-an-auditor-need-string-similarity">
+<span class="header-section-number">33.1</span> Why does an auditor need string similarity?</h2>
+<p>Names and addresses are typed by different people, at different times, in different systems. So the same person or firm is rarely written the same way everywhere. Exact matching misses such cases. Fuzzy matching finds them. Typical audit uses include these.</p>
+<ul>
+<li>
+<strong>Duplicate beneficiaries or vendors</strong>, registered twice with slightly different names, as we saw in <a href="20-duplicates.html#sec-dup-fuzzy" class="quarto-xref"><span>Section 32.8</span></a>.</li>
+<li>
+<strong>Conflict of interest.</strong> Matching the names of vendors’ proprietors, partners or directors against the list of employees.</li>
+<li>
+<strong>Ineligible beneficiaries.</strong> Matching a list of beneficiaries against a list of deceased persons, government employees or income-tax payers, when there is no common ID.</li>
+<li>
+<strong>Ghost employees.</strong> Matching the pay roll against attendance or posting records.</li>
+<li>
+<strong>Linking two databases</strong> that were never designed to be linked, such as a scheme database and a land record.</li>
+</ul></section><section id="prerequisites" class="level2" data-number="33.2"><h2 data-number="33.2" class="anchored" data-anchor-id="prerequisites">
+<span class="header-section-number">33.2</span> Prerequisites</h2>
+<p>We will mainly use the <code>stringdist</code> package. For phonetic codes, we also use <code>phonics</code> and <code>cagmetaphone</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyverse.tidyverse.org">tidyverse</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/markvanderloo/stringdist">stringdist</a></span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section><section id="first-clean-the-strings" class="level2" data-number="33.3"><h2 data-number="33.3" class="anchored" data-anchor-id="first-clean-the-strings">
+<span class="header-section-number">33.3</span> First, clean the strings</h2>
+<p>Before measuring similarity, we should remove differences that do not matter. Otherwise, the methods waste their effort on them. For Indian names and firm names, common steps are these.</p>
+<ul>
+<li>
+<strong>Case.</strong> Convert everything to the same case. Most methods treat <em>A</em> and <em>a</em> as different letters.</li>
+<li>
+<strong>Punctuation and extra spaces.</strong> Remove full stops, apostrophes and commas, and squeeze multiple spaces into one.</li>
+<li>
+<strong>Titles and common words.</strong> Remove <em>Dr</em>, <em>Shri</em>, <em>Smt</em>, <em>Mr</em>, <em>Ms</em>, <em>M/s</em>, and words like <em>and sons</em> or <em>pvt ltd</em>, when they do not help to tell entities apart.</li>
+<li>
+<strong>Common short forms.</strong> Make <em>Mohd</em> and <em>Md</em> into <em>Mohammad</em>, and similar.</li>
+</ul>
+<p>Let us write a small function for this, using <code>stringr</code> functions that we learnt in <a href="14-1Stringr.html" class="quarto-xref"><span>Chapter 18</span></a>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">clean_name</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">x</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/case.html">str_to_lower</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_remove.html">str_remove_all</a></span><span class="op">(</span><span class="st">"['’]"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_replace.html">str_replace_all</a></span><span class="op">(</span><span class="st">"[[:punct:]]"</span>, <span class="st">" "</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_replace.html">str_replace_all</a></span><span class="op">(</span><span class="st">"\\b(dr|shri|smt|mr|mrs|ms|m s|kumari|late)\\b"</span>, <span class="st">" "</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_replace.html">str_replace_all</a></span><span class="op">(</span><span class="st">"\\b(mohd|md)\\b"</span>, <span class="st">"mohammad"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_trim.html">str_squish</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="fu">clean_name</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Dr. Suchitra"</span>, <span class="st">"M/s Sharma Trader's"</span>, <span class="st">"Mohd. Iqbal"</span>, <span class="st">"Shri  R.K.  Gupta"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "suchitra"       "sharma traders" "mohammad iqbal" "r k gupta"     </code></pre>
+</div>
+</div>
+<p>We first remove apostrophes, so that <em>Trader’s</em> becomes <em>traders</em> and not <em>trader s</em>. Then <code>[[:punct:]]</code>, which matches any other punctuation mark, is replaced by a space. <code>\\b</code> marks the boundary of a word, so that <em>dr</em> is removed only as a whole word, and not from the middle of <em>Indra</em>. We discussed such patterns in <a href="14-2Regex.html" class="quarto-xref"><span>Chapter 19</span></a>.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Audit tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Keep the original names in one column and the cleaned names in another. Match on the cleaned names, but always report the original names. The auditee will recognise <em>M/s Sharma Trader’s</em>, not <em>sharma trader</em>.</p>
+</div>
+</div>
+</section><section id="distance-and-similarity" class="level2" data-number="33.4"><h2 data-number="33.4" class="anchored" data-anchor-id="distance-and-similarity">
+<span class="header-section-number">33.4</span> Distance and similarity</h2>
+<p><code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist()</a></code> returns a <strong>distance</strong>. Zero means the strings are identical, and larger numbers mean more different. Its companion <code><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim()</a></code> returns a <strong>similarity</strong> between 0 and 1. One means identical, and zero means completely different. The two carry the same information, scaled differently.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"helo"</span>, <span class="st">"hello"</span>, method <span class="op">=</span> <span class="st">"lv"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="st">"helo"</span>, <span class="st">"hello"</span>, method <span class="op">=</span> <span class="st">"lv"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.8</code></pre>
+</div>
+</div>
+<p>Both functions are vectorised. They compare the first element of one vector with the first of the other, the second with the second, and so on. Their main arguments are these.</p>
+<ul>
+<li>
+<code>a</code> and <code>b</code> are the two strings, or vectors of strings, to be compared.</li>
+<li>
+<code>method</code> is the method to use. The default is <code>osa</code>, explained below. Others include <code>lv</code>, <code>dl</code>, <code>hamming</code>, <code>lcs</code>, <code>qgram</code>, <code>cosine</code>, <code>jaccard</code>, <code>jw</code> and <code>soundex</code>.</li>
+<li>
+<code>q</code> is the size of the letter groups, for the token-based methods.</li>
+<li>
+<code>p</code> is the Winkler prefix factor, for the <code>jw</code> method.</li>
+</ul>
+<p>Similarity is often easier to work with, because it is on the same 0 to 1 scale for every method, whatever the length of the strings.</p>
+</section><section id="edit-based-methods" class="level2" data-number="33.5"><h2 data-number="33.5" class="anchored" data-anchor-id="edit-based-methods">
+<span class="header-section-number">33.5</span> Edit-based methods</h2>
+<p>Edit-based methods count the smallest number of changes needed to turn one string into another. They match strings based on a simple model of typing errors.</p>
+<section id="levenshtein-distance" class="level3" data-number="33.5.1"><h3 data-number="33.5.1" class="anchored" data-anchor-id="levenshtein-distance">
+<span class="header-section-number">33.5.1</span> Levenshtein distance</h3>
+<p>It is named after <em>Vladimir Levenshtein</em>, who considered this distance in 1965. The Levenshtein distance between two words is the minimum number of single-character edits, that is, insertions, deletions or substitutions, required to change one word into the other. It is often simply called the <em>edit distance</em>.</p>
+<p>For the two words <em>helo</em> and <em>hello</em>, there is a missing letter <em>l</em>. To change <em>helo</em> into <em>hello</em>, we need to insert just that one letter. So the distance is <code>1</code>, as we saw above.</p>
+</section><section id="optimal-string-alignment-and-damerau-levenshtein" class="level3" data-number="33.5.2"><h3 data-number="33.5.2" class="anchored" data-anchor-id="optimal-string-alignment-and-damerau-levenshtein">
+<span class="header-section-number">33.5.2</span> Optimal String Alignment and Damerau-Levenshtein</h3>
+<p>Consider <em>atharv</em> and its typo <em>ahtarv</em>. The letters <em>th</em> have been swapped to <em>ht</em>. Such swaps, called <strong>transpositions</strong>, are among the most common typing errors. Levenshtein counts a swap as two substitutions. <strong>Optimal String Alignment</strong> (<code>osa</code>) and <strong>Damerau-Levenshtein</strong> (<code>dl</code>) count it as a single edit.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>lv  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"lv"</span><span class="op">)</span>,</span>
+<span>  osa <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"osa"</span><span class="op">)</span>,</span>
+<span>  dl  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"dl"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code> lv osa  dl 
+  2   1   1 </code></pre>
+</div>
+</div>
+<p>This is why <code>osa</code> is the default method of <code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist()</a></code>. For most typing errors, <code>osa</code> and <code>dl</code> give the same answer.</p>
+</section><section id="hamming-distance" class="level3" data-number="33.5.3"><h3 data-number="33.5.3" class="anchored" data-anchor-id="hamming-distance">
+<span class="header-section-number">33.5.3</span> Hamming distance</h3>
+<p>This distance is computed by placing one string over the other, and counting the positions where the letters differ. It was designed for strings of the <strong>same length</strong>, such as codes. For strings of different lengths, <code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist()</a></code> returns <code>Inf</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"ABCPS1234K"</span>, <span class="st">"ABCPS1234K"</span><span class="op">)</span>,</span>
+<span>           <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"ABCPS1243K"</span>, <span class="st">"ABCPS123K"</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"hamming"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1]   2 Inf</code></pre>
+</div>
+</div>
+<p>The first pair, two PAN-like codes with two digits swapped, differs in 2 positions. The second pair has different lengths, so the distance is infinite. Hamming distance is useful for fixed-length identifiers like PAN, IFSC, vehicle numbers or account numbers of a known length.</p>
+</section><section id="longest-common-subsequence" class="level3" data-number="33.5.4"><h3 data-number="33.5.4" class="anchored" data-anchor-id="longest-common-subsequence">
+<span class="header-section-number">33.5.4</span> Longest common subsequence</h3>
+<p>The <code>lcs</code> method looks for the longest <strong>subsequence</strong>, that is, letters appearing in the same order, though not necessarily next to each other, that both strings share. The distance is the number of letters left out of it, in both strings together.</p>
+</section><section id="jaro-and-jaro-winkler" class="level3" data-number="33.5.5"><h3 data-number="33.5.5" class="anchored" data-anchor-id="jaro-and-jaro-winkler">
+<span class="header-section-number">33.5.5</span> Jaro and Jaro-Winkler</h3>
+<p>The <strong>Jaro</strong> method gives a high score to two strings if</p>
+<ol type="1">
+<li>they contain the same characters, not too far from each other, and</li>
+<li>the matching characters appear in the same order.</li>
+</ol>
+<p>To be exact, two characters count as matching only if they are no further apart than one less than half the length of the longer string. So if the longer string has 6 letters, a letter of the first string must be found within 2 positions of the same place in the second.</p>
+<p><strong>Jaro-Winkler</strong> (<code>jw</code>) adds a bonus when the strings <em>begin</em> alike, controlled by the argument <code>p</code>, usually set to 0.1. The idea is that people rarely make mistakes in the first few letters of a name. Without <code>p</code>, the <code>jw</code> method gives the plain Jaro distance.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>jaro          <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"martha"</span>, <span class="st">"marhta"</span>, method <span class="op">=</span> <span class="st">"jw"</span><span class="op">)</span>,</span>
+<span>  jaro_winkler  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"martha"</span>, <span class="st">"marhta"</span>, method <span class="op">=</span> <span class="st">"jw"</span>, p <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>        jaro jaro_winkler 
+  0.05555556   0.03888889 </code></pre>
+</div>
+</div>
+<p>Jaro-Winkler distance always lies between 0 and 1, whatever the length of the strings. This makes it easy to use one cut-off for all names, which is why it is very popular for matching names.</p>
+</section></section><section id="token-based-methods" class="level2" data-number="33.6"><h2 data-number="33.6" class="anchored" data-anchor-id="token-based-methods">
+<span class="header-section-number">33.6</span> Token-based methods</h2>
+<p>Token-based methods break each string into small pieces and compare the sets of pieces.</p>
+<section id="q-grams" class="level3" data-number="33.6.1"><h3 data-number="33.6.1" class="anchored" data-anchor-id="q-grams">
+<span class="header-section-number">33.6.1</span> Q-grams</h3>
+<p>A <strong>q-gram</strong> is a group of <code>q</code> consecutive characters. To illustrate, take <code>q = 3</code>. Groups of three letters are also called <em>trigrams</em>. For <em>atharv</em> and its possible typo <em>ahtarv</em>, the trigrams are as follows.</p>
+<ul>
+<li>For <em>atharv</em>, <code>{ath, tha, har, arv}</code>
+</li>
+<li>For <em>ahtarv</em>, <code>{aht, hta, tar, arv}</code>
+</li>
+</ul>
+<p>Only one trigram, <em>arv</em>, is common to both. Two measures can be built from these sets.</p>
+<ul>
+<li>The <strong>q-gram distance</strong> (<code>qgram</code>) counts the trigrams that are present in one string but not in the other. Here 3 of each string’s 4 trigrams are unmatched, so the distance is 6.</li>
+<li>The <strong>Jaccard</strong> distance (<code>jaccard</code>) divides the number of <em>shared</em> trigrams by the number of <em>distinct</em> trigrams in the two strings together. Together, there are 7 distinct trigrams, and only 1 is shared. So the Jaccard similarity is 1/7, about 14%, and the Jaccard distance is 6/7.</li>
+</ul>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>qgram   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"qgram"</span>, q <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  jaccard <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"jaccard"</span>, q <span class="op">=</span> <span class="fl">3</span><span class="op">)</span>,</span>
+<span>  jaccard_similarity <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="st">"atharv"</span>, <span class="st">"ahtarv"</span>, method <span class="op">=</span> <span class="st">"jaccard"</span>, q <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>             qgram            jaccard jaccard_similarity 
+         6.0000000          0.8571429          0.1428571 </code></pre>
+</div>
+</div>
+<p>We can see that q-grams are not very effective for transpositions. A single swap of two letters breaks several trigrams at once. The <strong>cosine</strong> method (<code>cosine</code>) is a close cousin, which compares how often each q-gram occurs.</p>
+</section><section id="word-order" class="level3" data-number="33.6.2"><h3 data-number="33.6.2" class="anchored" data-anchor-id="word-order">
+<span class="header-section-number">33.6.2</span> Word order</h3>
+<p>Token-based methods have one big advantage. They are not much affected by the <strong>order</strong> of words. In Indian records, the same person may be written as <em>Rajesh Kumar Sharma</em> in one place and <em>Sharma Rajesh Kumar</em> in another.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">pair</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"rajesh kumar sharma"</span>, <span class="st">"sharma rajesh kumar"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span>osa     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">pair</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">pair</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, method <span class="op">=</span> <span class="st">"osa"</span><span class="op">)</span>,</span>
+<span>  jw      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">pair</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">pair</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, method <span class="op">=</span> <span class="st">"jw"</span>, p <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>  qgram_2 <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">pair</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">pair</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, method <span class="op">=</span> <span class="st">"qgram"</span>, q <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>  cosine  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">pair</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>, <span class="va">pair</span><span class="op">[</span><span class="fl">2</span><span class="op">]</span>, method <span class="op">=</span> <span class="st">"cosine"</span>, q <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>      osa        jw   qgram_2    cosine 
+0.2631579 0.8421053 0.8888889 0.9166667 </code></pre>
+</div>
+</div>
+<p>OSA, a pure edit-based measure, sees these as very different. Jaro-Winkler is in between. The token-based measures see them as nearly the same. Another simple trick, which works with any method, is to <strong>sort the words</strong> of each name before comparing.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">sort_words</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://purrr.tidyverse.org/reference/map.html">map_chr</a></span><span class="op">(</span><span class="fu"><a href="https://stringr.tidyverse.org/reference/str_split.html">str_split</a></span><span class="op">(</span><span class="va">x</span>, <span class="st">" "</span><span class="op">)</span>, \<span class="op">(</span><span class="va">w</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sort.html">sort</a></span><span class="op">(</span><span class="va">w</span><span class="op">)</span>, collapse <span class="op">=</span> <span class="st">" "</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="fu">sort_words</span><span class="op">(</span><span class="va">pair</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "kumar rajesh sharma" "kumar rajesh sharma"</code></pre>
+</div>
+</div>
+<p>After sorting, both names become <em>kumar rajesh sharma</em>, and every method sees them as identical.</p>
+</section></section><section id="phonetic-methods" class="level2" data-number="33.7"><h2 data-number="33.7" class="anchored" data-anchor-id="phonetic-methods">
+<span class="header-section-number">33.7</span> Phonetic methods</h2>
+<p><em>Phonetic matching methods</em> compare strings by how they sound. Consider <em>Geeta</em> and <em>Gita</em>. They sound alike, so one person may write <em>Geeta</em> and another <em>Gita</em>. Neither is a misspelling of the other. They simply sound the same.</p>
+<section id="soundex" class="level3" data-number="33.7.1"><h3 data-number="33.7.1" class="anchored" data-anchor-id="soundex">
+<span class="header-section-number">33.7.1</span> Soundex</h3>
+<p>Created by <em>Robert Russell</em> and <em>Margaret King Odell</em> in 1918, this method was meant to match names and surnames based on the basic rules of English pronunciation. Similar-sounding names get the same code. The code keeps the first letter, followed by three digits for the next few consonant sounds. <code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist()</a></code> gives <code>0</code> when two strings have the same Soundex code, and <code>1</code> otherwise.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"geeta"</span>, <span class="st">"susheel"</span>, <span class="st">"ram"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"gita"</span>, <span class="st">"sushil"</span>, <span class="st">"rama"</span><span class="op">)</span>, method <span class="op">=</span> <span class="st">"soundex"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0 0 0</code></pre>
+</div>
+</div>
+<p>Because Soundex looks at only the first few sounds, long names that merely <em>begin</em> alike also match. We saw this problem with firm names in <a href="20-duplicates.html#sec-dup-fuzzy" class="quarto-xref"><span>Section 32.8</span></a>.</p>
+</section><section id="metaphone" class="level3" data-number="33.7.2"><h3 data-number="33.7.2" class="anchored" data-anchor-id="metaphone">
+<span class="header-section-number">33.7.2</span> Metaphone</h3>
+<p>Developed by <em>Lawrence Philips</em> in 1990, Metaphone is more accurate than Soundex, because it takes groups of letters into account, such as <em>ph</em> sounding like <em>f</em>. Its disadvantage shows up with names that are not English, as it is based on the rules of English pronunciation. The <code>phonics</code> package calculates it.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://phonics.jameshoward.us">phonics</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://phonics.jameshoward.us/reference/metaphone.html">metaphone</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"geeta"</span>, <span class="st">"gita"</span>, <span class="st">"susheel"</span>, <span class="st">"sushil"</span>, <span class="st">"laxmi"</span>, <span class="st">"lakshmi"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "JT"   "JT"   "SXL"  "SXL"  "LKSM" "LKXM"</code></pre>
+</div>
+</div>
+<p><em>Geeta</em> and <em>Gita</em> get the same code, and so do <em>Susheel</em> and <em>Sushil</em>. But <em>Laxmi</em> and <em>Lakshmi</em> do not. Metaphone codes <em>x</em> as <em>KS</em> and <em>sh</em> as <em>X</em>, so the two names get <em>LKSM</em> and <em>LKXM</em>. Such variations, very common in Indian names, are better handled during cleaning, for example by replacing <em>ksh</em> with <em>x</em> in both lists before matching.</p>
+<p><code><a href="https://phonics.jameshoward.us/reference/metaphone.html">metaphone()</a></code> works on single words. It cannot handle spaces or other special characters, so we apply it to cleaned single words, or to each word of a name separately.</p>
+</section><section id="double-metaphone" class="level3" data-number="33.7.3"><h3 data-number="33.7.3" class="anchored" data-anchor-id="double-metaphone">
+<span class="header-section-number">33.7.3</span> Double Metaphone</h3>
+<p>Following Metaphone, <em>Philips</em> also designed the <strong>Double Metaphone</strong>. As its name suggests, it returns two codes, a <em>primary</em> and a <em>secondary</em> one, so there are more chances to match. At the same time, it means a higher chance of a false match. There are three matching levels.</p>
+<ul>
+<li>Primary code against primary code is the <strong>strongest</strong> match.</li>
+<li>Secondary code against primary code is a <strong>normal</strong> match.</li>
+<li>Secondary code against secondary code is the <strong>weakest</strong> match.</li>
+</ul>
+<p><em>Philips</em> later refined it further, as <strong>Metaphone 3</strong>. That algorithm is, however, proprietary and not open-source.</p>
+<p>Double Metaphone can be calculated with the function <code><a href="https://aravind-j.github.io/PGRdup/reference/DoubleMetaphone.html">DoubleMetaphone()</a></code> from the <code>PGRdup</code> package. The function is vectorised. It returns a list of two vectors, <code>primary</code> and <code>alternate</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/message.html">suppressPackageStartupMessages</a></span><span class="op">(</span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://cran.r-project.org/package=PGRdup">PGRdup</a></span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://aravind-j.github.io/PGRdup/reference/DoubleMetaphone.html">DoubleMetaphone</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"geeta"</span>, <span class="st">"gita"</span>, <span class="st">"susheel"</span>, <span class="st">"sushil"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>$primary
+[1] "JT"  "JT"  "SXL" "SXL"
+
+$alternate
+[1] "KT"  "KT"  "SXL" "SXL"</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span><code>PGRdup</code> keeps only four characters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p><code><a href="https://aravind-j.github.io/PGRdup/reference/DoubleMetaphone.html">DoubleMetaphone()</a></code> of <code>PGRdup</code> cuts every code to its first <strong>four</strong> characters. This was the default in the original design of the algorithm. It works well for short single names like the ones above. But longer names, and names of firms, get the same code merely because they <em>begin</em> alike.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://aravind-j.github.io/PGRdup/reference/DoubleMetaphone.html">DoubleMetaphone</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Bhattacharya"</span>, <span class="st">"Bhattacharjee"</span>, <span class="st">"Sharma Traders"</span>, <span class="st">"Sharma Transport"</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">primary</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "PTKR" "PTKR" "XRMT" "XRMT"</code></pre>
+</div>
+</div>
+<p>Both surnames get <code>PTKR</code>. Both firms get <code>XRMT</code>. In audit work, where we compare full names of beneficiaries or vendors, this can produce many false matches.</p>
+</div>
+</div>
+</section><section id="full-length-double-metaphone-with-cagmetaphone" class="level3" data-number="33.7.4"><h3 data-number="33.7.4" class="anchored" data-anchor-id="full-length-double-metaphone-with-cagmetaphone">
+<span class="header-section-number">33.7.4</span> Full length Double Metaphone with <code>cagmetaphone</code>
+</h3>
+<p>To overcome this limitation, an R package was developed by <em>Atharv Tyagi</em> during an internship under the author’s guidance. It is a port of the Python reference implementation of Double Metaphone. It keeps codes of up to 32 characters instead of four. The package is not on CRAN yet, and can be installed from GitHub.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html">install_github</a></span><span class="op">(</span><span class="st">"AtharvTyagi1805/cagmetaphone"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>It has two functions. <code><a href="https://rdrr.io/pkg/cagmetaphone/man/double_metaphone.html">double_metaphone()</a></code> takes a single string and returns its two codes. <code>double_metaphone_vec()</code> takes a vector of strings and returns a data frame with columns <code>primary</code> and <code>secondary</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va">cagmetaphone</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/pkg/cagmetaphone/man/double_metaphone.html">double_metaphone</a></span><span class="op">(</span><span class="st">"Guptha"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "KP0" "KPT"</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">double_metaphone_vec</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Bhattacharya"</span>, <span class="st">"Bhattacharjee"</span>, <span class="st">"Sharma Traders"</span>, <span class="st">"Sharma Transport"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>     primary  secondary
+1       PTKR       PTKR
+2      PTKRJ      PTKRJ
+3   XRMTRTRS   XRMTRTRS
+4 XRMTRNSPRT XRMTRNSPRT</code></pre>
+</div>
+</div>
+<p>Now the four names get four different primary codes. For short names, the codes are the same as those from <code>PGRdup</code>.</p>
+<p>Let us apply the three matching levels to a few pairs of names. We write a small function, so that we can use it again later.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">dm_match</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">dm_a</span> <span class="op">&lt;-</span> <span class="fu">double_metaphone_vec</span><span class="op">(</span><span class="va">a</span><span class="op">)</span></span>
+<span>  <span class="va">dm_b</span> <span class="op">&lt;-</span> <span class="fu">double_metaphone_vec</span><span class="op">(</span><span class="va">b</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/case-and-replace-when.html">case_when</a></span><span class="op">(</span></span>
+<span>    <span class="va">dm_a</span><span class="op">$</span><span class="va">primary</span> <span class="op">==</span> <span class="va">dm_b</span><span class="op">$</span><span class="va">primary</span> <span class="op">~</span> <span class="st">"strong"</span>,</span>
+<span>    <span class="va">dm_a</span><span class="op">$</span><span class="va">secondary</span> <span class="op">==</span> <span class="va">dm_b</span><span class="op">$</span><span class="va">primary</span> <span class="op">|</span> <span class="va">dm_a</span><span class="op">$</span><span class="va">primary</span> <span class="op">==</span> <span class="va">dm_b</span><span class="op">$</span><span class="va">secondary</span> <span class="op">~</span> <span class="st">"normal"</span>,</span>
+<span>    <span class="va">dm_a</span><span class="op">$</span><span class="va">secondary</span> <span class="op">==</span> <span class="va">dm_b</span><span class="op">$</span><span class="va">secondary</span> <span class="op">~</span> <span class="st">"weak"</span>,</span>
+<span>    <span class="cn">TRUE</span> <span class="op">~</span> <span class="st">"no match"</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">nameset1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Geeta"</span>, <span class="st">"Susheel"</span>, <span class="st">"Ram"</span>, <span class="st">"Dr. Suchitra"</span><span class="op">)</span></span>
+<span><span class="va">nameset2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Gita"</span>, <span class="st">"Sushil"</span>, <span class="st">"Rama"</span>, <span class="st">"Suchitra"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span><span class="va">nameset1</span>, <span class="va">nameset2</span>,</span>
+<span>       raw     <span class="op">=</span> <span class="fu">dm_match</span><span class="op">(</span><span class="va">nameset1</span>, <span class="va">nameset2</span><span class="op">)</span>,</span>
+<span>       cleaned <span class="op">=</span> <span class="fu">dm_match</span><span class="op">(</span><span class="fu">clean_name</span><span class="op">(</span><span class="va">nameset1</span><span class="op">)</span>, <span class="fu">clean_name</span><span class="op">(</span><span class="va">nameset2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 4
+  nameset1     nameset2 raw      cleaned
+  &lt;chr&gt;        &lt;chr&gt;    &lt;chr&gt;    &lt;chr&gt;  
+1 Geeta        Gita     strong   strong 
+2 Susheel      Sushil   strong   strong 
+3 Ram          Rama     strong   strong 
+4 Dr. Suchitra Suchitra no match strong </code></pre>
+</div>
+</div>
+<p>On the raw names, <em>Dr.&nbsp;Suchitra</em> does not match <em>Suchitra</em>. The title “Dr.” changes the beginning of the code, and phonetic codes depend heavily on how a name begins. After cleaning with our <code>clean_name()</code> function, the title is gone and the two match. This shows, once again, why cleaning comes first.</p>
+</section></section><section id="comparing-the-methods" class="level2" data-number="33.8"><h2 data-number="33.8" class="anchored" data-anchor-id="comparing-the-methods">
+<span class="header-section-number">33.8</span> Comparing the methods</h2>
+<p>Let us now put all the methods side by side, on pairs of names that show typical Indian variations. We use similarities, so that all methods are on the same 0 to 1 scale.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">pairs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html">tribble</a></span><span class="op">(</span></span>
+<span>  <span class="op">~</span><span class="va">name_1</span>,                <span class="op">~</span><span class="va">name_2</span>,                 <span class="op">~</span><span class="va">variation</span>,</span>
+<span>  <span class="st">"geeta"</span>,                <span class="st">"gita"</span>,                  <span class="st">"Spelling (ee/i)"</span>,</span>
+<span>  <span class="st">"lakshmi devi"</span>,         <span class="st">"laxmi devi"</span>,            <span class="st">"Spelling (ksh/x)"</span>,</span>
+<span>  <span class="st">"atharv"</span>,               <span class="st">"ahtarv"</span>,                <span class="st">"Typing (swap)"</span>,</span>
+<span>  <span class="st">"suresh chandra"</span>,       <span class="st">"suresh chander"</span>,        <span class="st">"Spelling (ending)"</span>,</span>
+<span>  <span class="st">"rajesh kumar sharma"</span>,  <span class="st">"sharma rajesh kumar"</span>,   <span class="st">"Word order"</span>,</span>
+<span>  <span class="st">"r k gupta"</span>,            <span class="st">"ram kishan gupta"</span>,      <span class="st">"Initials"</span>,</span>
+<span>  <span class="st">"anil kumar"</span>,           <span class="st">"sunil kumar"</span>,           <span class="st">"Different person"</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">pairs</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>osa    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">name_1</span>, <span class="va">name_2</span>, method <span class="op">=</span> <span class="st">"osa"</span><span class="op">)</span>,</span>
+<span>         jw     <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">name_1</span>, <span class="va">name_2</span>, method <span class="op">=</span> <span class="st">"jw"</span>, p <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>         qgram  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="va">name_1</span>, <span class="va">name_2</span>, method <span class="op">=</span> <span class="st">"qgram"</span>, q <span class="op">=</span> <span class="fl">2</span><span class="op">)</span>,</span>
+<span>         dmeta  <span class="op">=</span> <span class="fu">dm_match</span><span class="op">(</span><span class="va">name_1</span>, <span class="va">name_2</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html">across</a></span><span class="op">(</span><span class="fu"><a href="https://tidyselect.r-lib.org/reference/where.html">where</a></span><span class="op">(</span><span class="va">is.double</span><span class="op">)</span>, \<span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">x</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html">kable</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 24%">
+<col style="width: 21%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 7%">
+<col style="width: 10%">
+</colgroup>
+<thead><tr class="header">
+<th style="text-align: left;">name_1</th>
+<th style="text-align: left;">name_2</th>
+<th style="text-align: left;">variation</th>
+<th style="text-align: right;">osa</th>
+<th style="text-align: right;">jw</th>
+<th style="text-align: right;">qgram</th>
+<th style="text-align: left;">dmeta</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">geeta</td>
+<td style="text-align: left;">gita</td>
+<td style="text-align: left;">Spelling (ee/i)</td>
+<td style="text-align: right;">0.60</td>
+<td style="text-align: right;">0.80</td>
+<td style="text-align: right;">0.29</td>
+<td style="text-align: left;">strong</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">lakshmi devi</td>
+<td style="text-align: left;">laxmi devi</td>
+<td style="text-align: left;">Spelling (ksh/x)</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: left;">no match</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">atharv</td>
+<td style="text-align: left;">ahtarv</td>
+<td style="text-align: left;">Typing (swap)</td>
+<td style="text-align: right;">0.83</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">0.40</td>
+<td style="text-align: left;">normal</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">suresh chandra</td>
+<td style="text-align: left;">suresh chander</td>
+<td style="text-align: left;">Spelling (ending)</td>
+<td style="text-align: right;">0.86</td>
+<td style="text-align: right;">0.97</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: left;">strong</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">rajesh kumar sharma</td>
+<td style="text-align: left;">sharma rajesh kumar</td>
+<td style="text-align: left;">Word order</td>
+<td style="text-align: right;">0.26</td>
+<td style="text-align: right;">0.84</td>
+<td style="text-align: right;">0.89</td>
+<td style="text-align: left;">no match</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">r k gupta</td>
+<td style="text-align: left;">ram kishan gupta</td>
+<td style="text-align: left;">Initials</td>
+<td style="text-align: right;">0.56</td>
+<td style="text-align: right;">0.74</td>
+<td style="text-align: right;">0.52</td>
+<td style="text-align: left;">no match</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">anil kumar</td>
+<td style="text-align: left;">sunil kumar</td>
+<td style="text-align: left;">Different person</td>
+<td style="text-align: right;">0.82</td>
+<td style="text-align: right;">0.91</td>
+<td style="text-align: right;">0.84</td>
+<td style="text-align: left;">no match</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Some lessons stand out from this table.</p>
+<ul>
+<li>
+<strong>No single method wins everywhere.</strong> Jaro-Winkler handles spelling and typing well. Q-grams handle word order. The phonetic code handles <em>Geeta</em> and <em>Gita</em>, but not <em>Lakshmi</em> and <em>Laxmi</em>, which need a cleaning rule.</li>
+<li>
+<strong>Initials are hard for every method.</strong> <em>R K Gupta</em> and <em>Ram Kishan Gupta</em> may well be the same person, but no method sees them as very similar. Matching on the surname, and checking initials separately, works better.</li>
+<li>
+<strong>Similar is not the same.</strong> <em>Anil Kumar</em> and <em>Sunil Kumar</em> get high scores from all the lexical methods, yet they are different people. Here the phonetic code correctly says “no match”, which shows the value of using two kinds of method together. A high score is a lead, not proof.</li>
+</ul>
+<p><a href="#tbl-strsimguide" class="quarto-xref">Table&nbsp;<span>33.1</span></a> gives a rough guide.</p>
+<div id="tbl-strsimguide" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure"><figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-strsimguide-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;33.1: Choosing a string similarity method
+</figcaption><div aria-describedby="tbl-strsimguide-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead><tr class="header">
+<th>Situation</th>
+<th>Suggested method</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>Typing mistakes in names</td>
+<td>Jaro-Winkler (<code>jw</code>, with <code>p = 0.1</code>), or OSA</td>
+</tr>
+<tr class="even">
+<td>Codes of fixed length (PAN, IFSC)</td>
+<td>Hamming, or OSA</td>
+</tr>
+<tr class="odd">
+<td>Words in a different order</td>
+<td>Q-grams or cosine, or sort the words first</td>
+</tr>
+<tr class="even">
+<td>Different spellings of the same sounding name</td>
+<td>Double Metaphone (<code>cagmetaphone</code>)</td>
+</tr>
+<tr class="odd">
+<td>Long text, like addresses</td>
+<td>Q-grams or cosine</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+</section><section id="sec-strsim-lists" class="level2" data-number="33.9"><h2 data-number="33.9" class="anchored" data-anchor-id="sec-strsim-lists">
+<span class="header-section-number">33.9</span> Matching two lists, an audit use case</h2>
+<p>So far we have compared names in pairs. In audit, we usually have two <strong>lists</strong>, and want to find which names in one list resemble names in the other. Let us take a common example, a check for <strong>conflict of interest</strong>. We have a list of employees of an office, and a list of proprietors of firms that supplied goods to it. Both lists are made up. Click on the code below to see how they were created.</p>
+<div class="cell">
+<details class="code-fold"><summary>Code to create the employee and proprietor lists</summary><div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">employees</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span></span>
+<span>  emp_id   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"E01"</span>, <span class="st">"E02"</span>, <span class="st">"E03"</span>, <span class="st">"E04"</span>, <span class="st">"E05"</span>, <span class="st">"E06"</span>, <span class="st">"E07"</span><span class="op">)</span>,</span>
+<span>  emp_name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Rakesh Kumar Verma"</span>, <span class="st">"Smt. Sunita Devi"</span>, <span class="st">"Mohd. Iqbal Khan"</span>,</span>
+<span>               <span class="st">"Pradeep Singh"</span>, <span class="st">"Kavita Sharma"</span>, <span class="st">"Anand Prakash"</span>, <span class="st">"Neha Gupta"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">proprietors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span></span>
+<span>  firm      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Verma Enterprises"</span>, <span class="st">"Sunrise Traders"</span>, <span class="st">"Iqbal &amp; Sons"</span>,</span>
+<span>                <span class="st">"Singh Suppliers"</span>, <span class="st">"Kavya Stationers"</span>, <span class="st">"Gupta Agencies"</span><span class="op">)</span>,</span>
+<span>  proprietor <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Rakesh Kr. Verma"</span>, <span class="st">"Arvind Mehta"</span>, <span class="st">"Mohammad Iqbal Khan"</span>,</span>
+<span>                 <span class="st">"Pradip Singh"</span>, <span class="st">"Kavya Sharma"</span>, <span class="st">"Neeraj Gupta"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">employees</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details><div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 7 × 2
+  emp_id emp_name          
+  &lt;chr&gt;  &lt;chr&gt;             
+1 E01    Rakesh Kumar Verma
+2 E02    Smt. Sunita Devi  
+3 E03    Mohd. Iqbal Khan  
+4 E04    Pradeep Singh     
+5 E05    Kavita Sharma     
+6 E06    Anand Prakash     
+7 E07    Neha Gupta        </code></pre>
+</div>
+<details class="code-fold"><summary>Code to create the employee and proprietor lists</summary><div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">proprietors</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details><div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 6 × 2
+  firm              proprietor         
+  &lt;chr&gt;             &lt;chr&gt;              
+1 Verma Enterprises Rakesh Kr. Verma   
+2 Sunrise Traders   Arvind Mehta       
+3 Iqbal &amp; Sons      Mohammad Iqbal Khan
+4 Singh Suppliers   Pradip Singh       
+5 Kavya Stationers  Kavya Sharma       
+6 Gupta Agencies    Neeraj Gupta       </code></pre>
+</div>
+</div>
+<section id="method-1-compare-every-pair" class="level3" data-number="33.9.1"><h3 data-number="33.9.1" class="anchored" data-anchor-id="method-1-compare-every-pair">
+<span class="header-section-number">33.9.1</span> Method 1, compare every pair</h3>
+<p>With small lists, we can simply compare every employee with every proprietor. <code><a href="https://dplyr.tidyverse.org/reference/cross_join.html">cross_join()</a></code>, which we used in <a href="20-duplicates.html#sec-dup-fuzzy" class="quarto-xref"><span>Section 32.8</span></a>, makes all the pairs. We compare the <em>cleaned</em> names, keep the pairs above a chosen similarity, and add the Double Metaphone match level as a second opinion.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">candidates</span> <span class="op">&lt;-</span> <span class="va">employees</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/cross_join.html">cross_join</a></span><span class="op">(</span><span class="va">proprietors</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>jw <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim</a></span><span class="op">(</span><span class="fu">clean_name</span><span class="op">(</span><span class="va">emp_name</span><span class="op">)</span>, <span class="fu">clean_name</span><span class="op">(</span><span class="va">proprietor</span><span class="op">)</span>,</span>
+<span>                        method <span class="op">=</span> <span class="st">"jw"</span>, p <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>         sound <span class="op">=</span> <span class="fu">dm_match</span><span class="op">(</span><span class="fu">clean_name</span><span class="op">(</span><span class="va">emp_name</span><span class="op">)</span>, <span class="fu">clean_name</span><span class="op">(</span><span class="va">proprietor</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">jw</span> <span class="op">&gt;=</span> <span class="fl">0.85</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html">arrange</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/desc.html">desc</a></span><span class="op">(</span><span class="va">jw</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">candidates</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>jw <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">jw</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html">select</a></span><span class="op">(</span><span class="va">emp_name</span>, <span class="va">proprietor</span>, <span class="va">firm</span>, <span class="va">jw</span>, <span class="va">sound</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 5 × 5
+  emp_name           proprietor          firm                 jw sound   
+  &lt;chr&gt;              &lt;chr&gt;               &lt;chr&gt;             &lt;dbl&gt; &lt;chr&gt;   
+1 Mohd. Iqbal Khan   Mohammad Iqbal Khan Iqbal &amp; Sons       1    strong  
+2 Kavita Sharma      Kavya Sharma        Kavya Stationers   0.94 no match
+3 Rakesh Kumar Verma Rakesh Kr. Verma    Verma Enterprises  0.92 no match
+4 Pradeep Singh      Pradip Singh        Singh Suppliers    0.92 strong  
+5 Neha Gupta         Neeraj Gupta        Gupta Agencies     0.91 no match</code></pre>
+</div>
+</div>
+<p>Let us read the result.</p>
+<ul>
+<li>
+<em>Rakesh Kumar Verma</em> and <em>Rakesh Kr. Verma</em> are almost certainly the same person, written with a short form. The phonetic code misses this pair, because <em>Kr</em> sounds nothing like <em>Kumar</em>. Adding a rule to our cleaning function, to expand <em>kr</em> to <em>kumar</em>, would fix it. So a “no match” from one method does not prove that two names are different.</li>
+<li>
+<em>Mohd. Iqbal Khan</em> and <em>Mohammad Iqbal Khan</em> become identical after cleaning, since our <code>clean_name()</code> function expands <em>Mohd</em>.</li>
+<li>
+<em>Pradeep Singh</em> and <em>Pradip Singh</em> are very close, and sound the same. A strong lead.</li>
+<li>
+<em>Kavita Sharma</em> and <em>Kavya Sharma</em>, and <em>Neha Gupta</em> and <em>Neeraj Gupta</em>, are close in spelling, but are probably different people. Note that the phonetic code does not match them. Such pairs show why every match must be checked against other details.</li>
+</ul></section><section id="method-2-amatch" class="level3" data-number="33.9.2"><h3 data-number="33.9.2" class="anchored" data-anchor-id="method-2-amatch">
+<span class="header-section-number">33.9.2</span> Method 2, <code>amatch()</code>
+</h3>
+<p><code>stringdist</code> has a ready function for finding, for each string, the closest match in another list. <code>amatch(x, table, maxDist)</code> returns, for each element of <code>x</code>, the position of the closest element in <code>table</code>, if it is within <code>maxDist</code>. Otherwise it returns <code>NA</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">pos</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/stringdist/man/amatch.html">amatch</a></span><span class="op">(</span><span class="fu">clean_name</span><span class="op">(</span><span class="va">employees</span><span class="op">$</span><span class="va">emp_name</span><span class="op">)</span>, <span class="fu">clean_name</span><span class="op">(</span><span class="va">proprietors</span><span class="op">$</span><span class="va">proprietor</span><span class="op">)</span>,</span>
+<span>              method <span class="op">=</span> <span class="st">"jw"</span>, p <span class="op">=</span> <span class="fl">0.1</span>, maxDist <span class="op">=</span> <span class="fl">0.15</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">employees</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>matched_proprietor <span class="op">=</span> <span class="va">proprietors</span><span class="op">$</span><span class="va">proprietor</span><span class="op">[</span><span class="va">pos</span><span class="op">]</span>,</span>
+<span>         matched_firm       <span class="op">=</span> <span class="va">proprietors</span><span class="op">$</span><span class="va">firm</span><span class="op">[</span><span class="va">pos</span><span class="op">]</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 7 × 4
+  emp_id emp_name           matched_proprietor  matched_firm     
+  &lt;chr&gt;  &lt;chr&gt;              &lt;chr&gt;               &lt;chr&gt;            
+1 E01    Rakesh Kumar Verma Rakesh Kr. Verma    Verma Enterprises
+2 E02    Smt. Sunita Devi   &lt;NA&gt;                &lt;NA&gt;             
+3 E03    Mohd. Iqbal Khan   Mohammad Iqbal Khan Iqbal &amp; Sons     
+4 E04    Pradeep Singh      Pradip Singh        Singh Suppliers  
+5 E05    Kavita Sharma      Kavya Sharma        Kavya Stationers 
+6 E06    Anand Prakash      &lt;NA&gt;                &lt;NA&gt;             
+7 E07    Neha Gupta         Neeraj Gupta        Gupta Agencies   </code></pre>
+</div>
+</div>
+<p>A Jaro-Winkler distance of 0.15 is the same as a similarity of 0.85, the cut-off we used above. <code><a href="https://rdrr.io/pkg/stringdist/man/amatch.html">amatch()</a></code> is fast and convenient, but it returns only the <em>single</em> closest match for each name. When there may be more than one candidate, the pairwise method is safer.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Audit tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A name match alone is weak evidence, especially for common names. For every candidate pair, compare a second detail, such as father’s name, date of birth, address, mobile number, PAN or bank account. In a conflict-of-interest check, a matching <em>bank account</em> or <em>address</em> between an employee and a vendor is often stronger evidence than the name itself.</p>
+</div>
+</div>
+</section></section><section id="choosing-a-cut-off" class="level2" data-number="33.10"><h2 data-number="33.10" class="anchored" data-anchor-id="choosing-a-cut-off">
+<span class="header-section-number">33.10</span> Choosing a cut-off</h2>
+<p>Every fuzzy match needs a cut-off, and every cut-off is a trade-off.</p>
+<ul>
+<li>A <strong>strict</strong> cut-off, say a Jaro-Winkler similarity of 0.95, finds few false matches, but misses many true ones.</li>
+<li>A <strong>loose</strong> cut-off, say 0.80, finds most true matches, but also many false ones, which must then be checked by hand.</li>
+</ul>
+<p>A practical approach is to start loose, sort the pairs by score, and read down the list. You will usually see that above a certain score most pairs are real, and below another score most are not. Set the cut-off between the two, keeping in mind how many pairs your team can actually check.</p>
+</section><section id="large-lists" class="level2" data-number="33.11"><h2 data-number="33.11" class="anchored" data-anchor-id="large-lists">
+<span class="header-section-number">33.11</span> Large lists</h2>
+<p>Comparing every pair becomes slow when the lists are large. Two lists of 10,000 names each give ten crore pairs. Three ideas help.</p>
+<ul>
+<li>
+<strong>Blocking.</strong> Compare names only within smaller groups that must match anyway, such as the same district, the same year of birth, or the same first letter of the surname. Blocks can also be formed by phonetic codes.</li>
+<li>
+<strong>Inequality joins.</strong> When comparing a list with itself, compare each pair only once, as we did with <code>inner_join(..., join_by(id &lt; id))</code> in <a href="20-duplicates.html#sec-dup-fuzzy" class="quarto-xref"><span>Section 32.8</span></a>.</li>
+<li>
+<strong><code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdistmatrix()</a></code>.</strong> It calculates all distances between two vectors in one call, and uses several processor cores. The argument <code>nthread</code> controls how many.</li>
+</ul>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Privacy
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Names, addresses and identity numbers are personal data. Do fuzzy matching only on secure systems approved for such data. Never paste such lists into online tools or AI chatbots.</p>
+</div>
+</div>
+</section><section id="a-suggested-workflow" class="level2" data-number="33.12"><h2 data-number="33.12" class="anchored" data-anchor-id="a-suggested-workflow">
+<span class="header-section-number">33.12</span> A suggested workflow</h2>
+<ol type="1">
+<li>
+<strong>Define the question.</strong> Which two lists, or which one list, and what would a match mean?</li>
+<li>
+<strong>Clean the names.</strong> Case, punctuation, titles, common short forms and, where useful, word order.</li>
+<li>
+<strong>Choose a method</strong> suited to the kind of variation you expect, and a second method as a check.</li>
+<li>
+<strong>Block</strong> if the lists are large.</li>
+<li>
+<strong>Compare and score</strong>, with <code><a href="https://rdrr.io/pkg/stringdist/man/stringsim.html">stringsim()</a></code>, <code><a href="https://dplyr.tidyverse.org/reference/cross_join.html">cross_join()</a></code> or <code><a href="https://rdrr.io/pkg/stringdist/man/amatch.html">amatch()</a></code>.</li>
+<li>
+<strong>Choose a cut-off</strong> by reading down the sorted list of pairs.</li>
+<li>
+<strong>Confirm each candidate</strong> with a second identifier, like date of birth, address or bank account.</li>
+<li>
+<strong>Report the original names</strong>, with the evidence for each match.</li>
+</ol>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Remember
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Fuzzy matching finds names that <em>look</em> or <em>sound</em> alike. It cannot tell whether they belong to the same person. Two different people can have very similar names, and one person can be written in very different ways. Treat every match as a question to be answered from other evidence.</p>
+</div>
+</div>
+</section><section id="summary-of-functions-used" class="level2" data-number="33.13"><h2 data-number="33.13" class="anchored" data-anchor-id="summary-of-functions-used">
+<span class="header-section-number">33.13</span> Summary of functions used</h2>
+<div id="tbl-strsimfunctions" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure"><figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-strsimfunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;33.2: Functions used in this chapter
+</figcaption><div aria-describedby="tbl-strsimfunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 22%">
+<col style="width: 45%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>Package</th>
+<th>What it does</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code><a href="https://stringr.tidyverse.org/reference/case.html">str_to_lower()</a></code>, <code><a href="https://stringr.tidyverse.org/reference/str_replace.html">str_replace_all()</a></code>, <code><a href="https://stringr.tidyverse.org/reference/str_trim.html">str_squish()</a></code>
+</td>
+<td>stringr</td>
+<td>Clean names before matching</td>
+</tr>
+<tr class="even">
+<td><code>stringdist(a, b, method)</code></td>
+<td>stringdist</td>
+<td>Distance between strings, 0 for identical</td>
+</tr>
+<tr class="odd">
+<td><code>stringsim(a, b, method)</code></td>
+<td>stringdist</td>
+<td>Similarity between strings, from 0 to 1</td>
+</tr>
+<tr class="even">
+<td><code>amatch(x, table, maxDist)</code></td>
+<td>stringdist</td>
+<td>Closest match for each string in another list</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/pkg/stringdist/man/stringdist.html">stringdistmatrix()</a></code></td>
+<td>stringdist</td>
+<td>All distances between two vectors at once</td>
+</tr>
+<tr class="even">
+<td><code><a href="https://phonics.jameshoward.us/reference/metaphone.html">metaphone()</a></code></td>
+<td>phonics</td>
+<td>Metaphone code of a single word</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://aravind-j.github.io/PGRdup/reference/DoubleMetaphone.html">DoubleMetaphone()</a></code></td>
+<td>PGRdup</td>
+<td>Double Metaphone codes, cut to four characters</td>
+</tr>
+<tr class="even">
+<td><code>double_metaphone_vec()</code></td>
+<td>cagmetaphone</td>
+<td>Full length Double Metaphone codes</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://dplyr.tidyverse.org/reference/cross_join.html">cross_join()</a></code></td>
+<td>dplyr</td>
+<td>All pairs of rows from two tables</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list" style="display: none">
+<div id="ref-R-quarto" class="csl-entry" role="listitem">
+Allaire, JJ, and Christophe Dervieux. <em>Quarto: R Interface to Quarto Markdown Publishing System</em>, 2025. <a href="https://github.com/quarto-dev/quarto-r">https://github.com/quarto-dev/quarto-r</a>.
+</div>
+<div id="ref-R-visNetwork" class="csl-entry" role="listitem">
+Almende B.V. and Contributors, and Benoit Thieurmel. <em>visNetwork: Network Visualization Using Vis.js Library</em>, 2025. <a href="https://datastorm-open.github.io/visNetwork/">https://datastorm-open.github.io/visNetwork/</a>.
+</div>
+<div id="ref-igraph2023" class="csl-entry" role="listitem">
+Antonov, Michael, Gábor Csárdi, Szabolcs Horvát, Kirill Müller, Tamás Nepusz, Daniel Noom, Maëlle Salmon, Vincent Traag, Brooke Foucault Welles, and Fabio Zanini. <span>“Igraph Enables Fast and Robust Network Analysis Across Programming Languages.”</span> <em>arXiv Preprint arXiv:2311.10260</em>, 2023. <a href="https://doi.org/10.48550/arXiv.2311.10260">https://doi.org/10.48550/arXiv.2311.10260</a>.
+</div>
+<div id="ref-R-PGRdup" class="csl-entry" role="listitem">
+Aravind, J., J. Radhamani, Kalyani Srinivasan, B. Ananda Subhash, and Rishi Kumar Tyagi. <em>PGRdup: Discover Probable Duplicates in Plant Genetic Resources Collections</em>, 2026. <a href="https://cran.r-project.org/package=PGRdup">https://cran.r-project.org/package=PGRdup</a>.
+</div>
+<div id="ref-R-magrittr" class="csl-entry" role="listitem">
+Bache, Stefan Milton, and Hadley Wickham. <em>Magrittr: A Forward-Pipe Operator for r</em>, 2025. <a href="https://magrittr.tidyverse.org">https://magrittr.tidyverse.org</a>.
+</div>
+<div id="ref-R-data.table" class="csl-entry" role="listitem">
+Barrett, Tyson, Matt Dowle, Arun Srinivasan, Jan Gorecki, Michael Chirico, Toby Hocking, Benjamin Schwendinger, and Ivan Krylov. <em>Data.table: Extension of ‘Data.frame‘</em>, 2026. <a href="https://r-datatable.com">https://r-datatable.com</a>.
+</div>
+<div id="ref-frank_ben" class="csl-entry" role="listitem">
+Benford, Frank. <span>“The Law of Anomalous Numbers.”</span> <em>Proceedings of the American Philosophical Society</em> 78, no. 4 (1938): 551–72. <a href="http://www.jstor.org/stable/984802">http://www.jstor.org/stable/984802</a>.
+</div>
+<div id="ref-R-FNN" class="csl-entry" role="listitem">
+Beygelzimer, Alina, Sham Kakadet, John Langford, Sunil Arya, David Mount, and Shengqiao Li. <em>FNN: Fast Nearest Neighbor Search Algorithms and Applications</em>, 2024. <a href="https://doi.org/10.32614/CRAN.package.FNN">https://doi.org/10.32614/CRAN.package.FNN</a>.
+</div>
+<div id="ref-R-deaR" class="csl-entry" role="listitem">
+Bolos, Vicente, Vicente Coll-Serrano, and Rafael Benitez Suarez. <em>deaR: Conventional and Fuzzy Data Envelopment Analysis</em>, 2026. <a href="https://doi.org/10.32614/CRAN.package.deaR">https://doi.org/10.32614/CRAN.package.deaR</a>.
+</div>
+<div id="ref-deaR2025" class="csl-entry" role="listitem">
+Bolós, V. J., R. Benítez, and V. Coll-Serrano. <span>“deaR: Conventional and Fuzzy DEA Models with r.”</span> <em>SoftwareX</em> 31 (2025): 102266, 1–6. <a href="https://doi.org/10.1016/j.softx.2025.102266">https://doi.org/10.1016/j.softx.2025.102266</a>.
+</div>
+<div id="ref-R-SnowballC" class="csl-entry" role="listitem">
+Bouchet-Valat, Milan. <em>SnowballC: Snowball Stemmers Based on the c Libstemmer UTF-8 Library</em>, 2023. <a href="https://github.com/nalimilan/R.TeMiS">https://github.com/nalimilan/R.TeMiS</a>.
+</div>
+<div id="ref-R-tidygeocoder" class="csl-entry" role="listitem">
+Cambon, Jesse, Diego Hernangómez, Christopher Belanger, and Daniel Possenriede. <em>Tidygeocoder: Geocoding Made Easy</em>, 2025. <a href="https://jessecambon.github.io/tidygeocoder/">https://jessecambon.github.io/tidygeocoder/</a>.
+</div>
+<div id="ref-R-leaflet" class="csl-entry" role="listitem">
+Cheng, Joe, Barret Schloerke, Bhaskar Karambelkar, Yihui Xie, and Garrick Aden-Buie. <em>Leaflet: Create Interactive Web Maps with the JavaScript Leaflet Library</em>, 2025. <a href="https://rstudio.github.io/leaflet/">https://rstudio.github.io/leaflet/</a>.
+</div>
+<div id="ref-R-benford.analysis" class="csl-entry" role="listitem">
+Cinelli, Carlos. <em>Benford.analysis: Benford Analysis for Data Validation and Forensic Analytics</em>, 2018. <a href="http://github.com/carloscinelli/benford.analysis">http://github.com/carloscinelli/benford.analysis</a>.
+</div>
+<div id="ref-dea" class="csl-entry" role="listitem">
+Cooper, William, Lawrence Seiford, and Joe Zhu. <span>“Data Envelopment Analysis: History, Models, and Interpretations.”</span> In <em>Handbook on Data Envelopment Analysis</em>, 1–39, 2011. <a href="https://doi.org/10.1007/978-1-4419-6151-8_1">https://doi.org/10.1007/978-1-4419-6151-8_1</a>.
+</div>
+<div id="ref-R-isotree" class="csl-entry" role="listitem">
+Cortes, David. <em>Isotree: Isolation-Based Outlier Detection</em>, 2026. <a href="https://github.com/david-cortes/isotree">https://github.com/david-cortes/isotree</a>.
+</div>
+<div id="ref-R-rebus" class="csl-entry" role="listitem">
+Cotton, Richard. <em>Rebus: Build Regular Expressions in a Human Readable Way</em>, 2017. <a href="https://doi.org/10.32614/CRAN.package.rebus">https://doi.org/10.32614/CRAN.package.rebus</a>.
+</div>
+<div id="ref-R-igraphdata" class="csl-entry" role="listitem">
+Csardi, Gabor. <em>Igraphdata: A Collection of Network Data Sets for the Igraph Package</em>, 2015. <a href="http://igraph.org">http://igraph.org</a>.
+</div>
+<div id="ref-igraph2006" class="csl-entry" role="listitem">
+Csárdi, Gábor, and Tamás Nepusz. <span>“The Igraph Software Package for Complex Network Research.”</span> <em>InterJournal</em> Complex Systems (2006): 1695. <a href="https://igraph.org">https://igraph.org</a>.
+</div>
+<div id="ref-R-igraph" class="csl-entry" role="listitem">
+Csárdi, Gábor, Tamás Nepusz, Vincent Traag, Szabolcs Horvát, Fabio Zanini, Daniel Noom, Kirill Müller, David Schoch, and Maëlle Salmon. <em>Igraph: Network Analysis and Visualization</em>, 2026. <a href="https://r.igraph.org/">https://r.igraph.org/</a>.
+</div>
+<div id="ref-R-timetk" class="csl-entry" role="listitem">
+Dancho, Matt, and Davis Vaughan. <em>Timetk: A Tool Kit for Working with Time Series</em>, 2025. <a href="https://github.com/business-science/timetk">https://github.com/business-science/timetk</a>.
+</div>
+<div id="ref-durtschi" class="csl-entry" role="listitem">
+Durtschi, Cindy, William Hillison, and Carl Pacini. <span>“The Effective Use of Benford’s Law to Assist in Detecting Fraud in Accounting Data.”</span> <em>J. Forensic Account</em> 5 (January 2004).
+</div>
+<div id="ref-R-wordcloud" class="csl-entry" role="listitem">
+Fellows, Ian. <em>Wordcloud: Word Clouds</em>, 2018. <a href="http://blog.fellstat.com/?cat=11">http://blog.fellstat.com/?cat=11</a>.
+</div>
+<div id="ref-R-janitor" class="csl-entry" role="listitem">
+Firke, Sam. <em>Janitor: Simple Tools for Examining and Cleaning Dirty Data</em>, 2024. <a href="https://github.com/sfirke/janitor">https://github.com/sfirke/janitor</a>.
+</div>
+<div id="ref-car2019" class="csl-entry" role="listitem">
+Fox, John, and Sanford Weisberg. <em>An <span>R</span> Companion to Applied Regression</em>. Third. Thousand Oaks <span>CA</span>: Sage, 2019. <a href="https://www.john-fox.ca/Companion/">https://www.john-fox.ca/Companion/</a>.
+</div>
+<div id="ref-R-car" class="csl-entry" role="listitem">
+Fox, John, Sanford Weisberg, and Brad Price. <em>Car: Companion to Applied Regression</em>, 2026. <a href="https://github.com/bprice2652/car_repo">https://github.com/bprice2652/car_repo</a>.
+</div>
+<div id="ref-r-stringi" class="csl-entry" role="listitem">
+Gagolewski, Marek. <em>Stringi: Fast and Portable Character String Processing in r</em>, 2021. <a href="https://stringi.gagolewski.com/">https://stringi.gagolewski.com/</a>.
+</div>
+<div id="ref-mcke" class="csl-entry" role="listitem">
+Gardner, Everette S., and Ed. Mckenzie. <span>“Forecasting Trends in Time Series.”</span> <em>Management Science</em> 31, no. 10 (1985): 1237–46. <a href="https://doi.org/10.1287/mnsc.31.10.1237">https://doi.org/10.1287/mnsc.31.10.1237</a>.
+</div>
+<div id="ref-R-tidyxl" class="csl-entry" role="listitem">
+Garmonsway, Duncan. <em>Tidyxl: Read Untidy Excel Files</em>, 2023. <a href="https://github.com/nacnudus/tidyxl">https://github.com/nacnudus/tidyxl</a>.
+</div>
+<div id="ref-R-unpivotr" class="csl-entry" role="listitem">
+———. <em>Unpivotr: Unpivot Complex and Irregular Data Layouts</em>, 2024. <a href="https://github.com/nacnudus/unpivotr">https://github.com/nacnudus/unpivotr</a>.
+</div>
+<div id="ref-JSSv040i03" class="csl-entry" role="listitem">
+Grolemund, Garrett, and Hadley Wickham. <span>“Dates and Times Made Easy with Lubridate.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://doi.org/10.18637/jss.v040.i03">https://doi.org/10.18637/jss.v040.i03</a>.
+</div>
+<div id="ref-lubridate2011" class="csl-entry" role="listitem">
+———. <span>“Dates and Times Made Easy with <span class="nocase">lubridate</span>.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://www.jstatsoft.org/v40/i03/">https://www.jstatsoft.org/v40/i03/</a>.
+</div>
+<div id="ref-R-arules" class="csl-entry" role="listitem">
+Hahsler, Michael, Christian Buchta, Bettina Gruen, and Kurt Hornik. <em>Arules: Mining Association Rules and Frequent Itemsets</em>, 2026. <a href="https://github.com/mhahsler/arules">https://github.com/mhahsler/arules</a>.
+</div>
+<div id="ref-arules2011" class="csl-entry" role="listitem">
+Hahsler, Michael, Sudheer Chelluboina, Kurt Hornik, and Christian Buchta. <span>“The Arules r-Package Ecosystem: Analyzing Interesting Patterns from Large Transaction Datasets.”</span> <em>Journal of Machine Learning Research</em> 12 (2011): 1977–81. <a href="https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html">https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html</a>.
+</div>
+<div id="ref-arules2005" class="csl-entry" role="listitem">
+Hahsler, Michael, Bettina Gruen, and Kurt Hornik. <span>“Arules – <span>A</span> Computational Environment for Mining Association Rules and Frequent Item Sets.”</span> <em>Journal of Statistical Software</em> 14, no. 15 (2005): 1–25. <a href="https://doi.org/10.18637/jss.v014.i15">https://doi.org/10.18637/jss.v014.i15</a>.
+</div>
+<div id="ref-R-dbscan" class="csl-entry" role="listitem">
+Hahsler, Michael, and Matthew Piekenbrock. <em>Dbscan: Density-Based Spatial Clustering of Applications with Noise (DBSCAN) and Related Algorithms</em>, 2026. <a href="https://github.com/mhahsler/dbscan">https://github.com/mhahsler/dbscan</a>.
+</div>
+<div id="ref-dbscan2019" class="csl-entry" role="listitem">
+Hahsler, Michael, Matthew Piekenbrock, and Derek Doran. <span>“<span class="nocase">dbscan</span>: Fast Density-Based Clustering with <span>R</span>.”</span> <em>Journal of Statistical Software</em> 91, no. 1 (2019): 1–30. <a href="https://doi.org/10.18637/jss.v091.i01">https://doi.org/10.18637/jss.v091.i01</a>.
+</div>
+<div id="ref-t_hill" class="csl-entry" role="listitem">
+Hill, Theodore P. <span>“The Significant-Digit Phenomenon.”</span> <em>The American Mathematical Monthly</em> 102, no. 4 (1995): 322–27. <a href="http://www.jstor.org/stable/2974952">http://www.jstor.org/stable/2974952</a>.
+</div>
+<div id="ref-R-palmerpenguins" class="csl-entry" role="listitem">
+Horst, Allison, Alison Hill, and Kristen Gorman. <em>Palmerpenguins: Palmer Archipelago (Antarctica) Penguin Data</em>, 2022. <a href="https://allisonhorst.github.io/palmerpenguins/">https://allisonhorst.github.io/palmerpenguins/</a>.
+</div>
+<div id="ref-phonics2018" class="csl-entry" role="listitem">
+Howard, II, James P. <span>“Phonetic Algorithms in <span>R</span>.”</span> <em>Journal of Open Source Software</em> 3, no. 22 (2018): 480. <a href="https://doi.org/10.21105/joss.00480">https://doi.org/10.21105/joss.00480</a>.
+</div>
+<div id="ref-phonics2020" class="csl-entry" role="listitem">
+———. <span>“Phonetic Spelling Algorithm Implementations for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 95, no. 8 (2020): 1–21. <a href="https://doi.org/10.18637/jss.v095.i08">https://doi.org/10.18637/jss.v095.i08</a>.
+</div>
+<div id="ref-R-phonics" class="csl-entry" role="listitem">
+Howard, James. <em>Phonics: Phonetic Spelling Algorithms</em>, 2026. <a href="https://phonics.jameshoward.us">https://phonics.jameshoward.us</a>.
+</div>
+<div id="ref-forecast2008" class="csl-entry" role="listitem">
+Hyndman, Rob J, and Yeasmin Khandakar. <span>“Automatic Time Series Forecasting: The Forecast Package for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 27, no. 3 (2008): 1–22. <a href="https://doi.org/10.18637/jss.v027.i03">https://doi.org/10.18637/jss.v027.i03</a>.
+</div>
+<div id="ref-R-forecast" class="csl-entry" role="listitem">
+Hyndman, Rob, George Athanasopoulos, Christoph Bergmeir, Gabriel Caceres, Leanne Chhay, Kirill Kuroptev, Maximilian Mücke, et al. <em>Forecast: Forecasting Functions for Time Series and Linear Models</em>, 2026. <a href="https://pkg.robjhyndman.com/forecast/">https://pkg.robjhyndman.com/forecast/</a>.
+</div>
+<div id="ref-R-gt" class="csl-entry" role="listitem">
+Iannone, Richard, Joe Cheng, Barret Schloerke, Shannon Haughton, Ellis Hughes, Alexandra Lauer, Romain François, JooYoung Seo, Ken Brevoort, and Olivier Roy. <em>Gt: Easily Create Presentation-Ready Display Tables</em>, 2026. <a href="https://gt.rstudio.com">https://gt.rstudio.com</a>.
+</div>
+<div id="ref-R-pointblank" class="csl-entry" role="listitem">
+Iannone, Richard, Mauricio Vargas, and June Choe. <em>Pointblank: Data Validation and Organization of Metadata for Local and Remote Tables</em>, 2026. <a href="https://rstudio.github.io/pointblank/">https://rstudio.github.io/pointblank/</a>.
+</div>
+<div id="ref-10.2307/1390807" class="csl-entry" role="listitem">
+Ihaka, Ross, and Robert Gentleman. <span>“R: A Language for Data Analysis and Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 5, no. 3 (1996): 299–314. <a href="http://www.jstor.org/stable/1390807">http://www.jstor.org/stable/1390807</a>.
+</div>
+<div id="ref-R-colorspace" class="csl-entry" role="listitem">
+Ihaka, Ross, Paul Murrell, Kurt Hornik, Jason C. Fisher, Reto Stauffer, Claus O. Wilke, Claire D. McWhite, and Achim Zeileis. <em>Colorspace: A Toolbox for Manipulating and Assessing Colors and Palettes</em>, 2025. <a href="https://colorspace.R-Forge.R-project.org/">https://colorspace.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-R-bupaR" class="csl-entry" role="listitem">
+Janssenswillen, Gert. <em>bupaR: Business Process Analysis in r</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-edeaR" class="csl-entry" role="listitem">
+———. <em>edeaR: Exploratory and Descriptive Event-Based Data Analysis</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processcheckR" class="csl-entry" role="listitem">
+———. <em>processcheckR: Rule-Based Conformance Checking of Business Process Event Data</em>, 2025. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processmapR" class="csl-entry" role="listitem">
+———. <em>processmapR: Construct Process Maps Using Event Data</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-factoextra" class="csl-entry" role="listitem">
+Kassambara, Alboukadel, and Fabian Mundt. <em>Factoextra: Extract and Visualize the Results of Multivariate Data Analyses</em>, 2026. <a href="https://github.com/kassambara/factoextra">https://github.com/kassambara/factoextra</a>.
+</div>
+<div id="ref-R-changepoint" class="csl-entry" role="listitem">
+Killick, Rebecca. <em>Changepoint: Methods for Changepoint Detection</em>, 2024. <a href="https://github.com/rkillick/changepoint/">https://github.com/rkillick/changepoint/</a>.
+</div>
+<div id="ref-changepoint2014" class="csl-entry" role="listitem">
+Killick, Rebecca, and Idris A. Eckley. <span>“<span class="nocase">changepoint</span>: An <span>R</span> Package for Changepoint Analysis.”</span> <em>Journal of Statistical Software</em> 58, no. 3 (2014): 1–19. <a href="https://www.jstatsoft.org/article/view/v058i03">https://www.jstatsoft.org/article/view/v058i03</a>.
+</div>
+<div id="ref-R-moderndive" class="csl-entry" role="listitem">
+Kim, Albert Y., and Chester Ismay. <em>Moderndive: Tidyverse-Friendly Introductory Linear Regression</em>, 2026. <a href="https://moderndive.github.io/moderndive/">https://moderndive.github.io/moderndive/</a>.
+</div>
+<div id="ref-moderndive2021" class="csl-entry" role="listitem">
+Kim, Albert Y., Chester Ismay, and Max Kuhn. <span>“Take a Moderndive into Introductory Linear Regression with r.”</span> <em>The Journal of Open Source Education</em> 4, no. 41, 115 (2021). <a href="https://doi.org/10.21105/jose.00115">https://doi.org/10.21105/jose.00115</a>.
+</div>
+<div id="ref-R-outliers" class="csl-entry" role="listitem">
+Komsta, Lukasz. <em>Outliers: Tests for Outliers</em>, 2022. <a href="https://www.R-project.org">https://www.R-project.org</a>.
+</div>
+<div id="ref-performance2021" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, and Dominique Makowski. <span>“<span class="nocase">performance</span>: An <span>R</span> Package for Assessment, Comparison and Testing of Statistical Models.”</span> <em>Journal of Open Source Software</em> 6, no. 60 (2021): 3139. <a href="https://doi.org/10.21105/joss.03139">https://doi.org/10.21105/joss.03139</a>.
+</div>
+<div id="ref-R-performance" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Dominique Makowski, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, Brenton M. Wiernik, and Rémi Thériault. <em>Performance: Assessment of Regression Models Performance</em>, 2026. <a href="https://easystats.github.io/performance/">https://easystats.github.io/performance/</a>.
+</div>
+<div id="ref-R-cluster" class="csl-entry" role="listitem">
+Maechler, Martin, Peter Rousseeuw, Anja Struyf, and Mia Hubert. <em>Cluster: "Finding Groups in Data": Cluster Analysis Extended Rousseeuw Et Al.</em>, 2026. <a href="https://svn.r-project.org/R-packages/trunk/cluster/">https://svn.r-project.org/R-packages/trunk/cluster/</a>.
+</div>
+<div id="ref-R-rpart.plot" class="csl-entry" role="listitem">
+Milborrow, Stephen. <em>Rpart.plot: Plot Rpart Models: An Enhanced Version of Plot.rpart</em>, 2026. <a href="http://www.milbo.org/rpart-plot/index.html">http://www.milbo.org/rpart-plot/index.html</a>.
+</div>
+<div id="ref-R-duckdb" class="csl-entry" role="listitem">
+Mühleisen, Hannes, and Mark Raasveldt. <em>Duckdb: DBI Package for the DuckDB Database Management System</em>, 2026. <a href="https://r.duckdb.org/">https://r.duckdb.org/</a>.
+</div>
+<div id="ref-r-tibble" class="csl-entry" role="listitem">
+Müller, Kirill, and Hadley Wickham. <em>Tibble: Simple Data Frames</em>, 2022. <a href="https://CRAN.R-project.org/package=tibble">https://CRAN.R-project.org/package=tibble</a>.
+</div>
+<div id="ref-R-tibble" class="csl-entry" role="listitem">
+———. <em>Tibble: Simple Data Frames</em>, 2026. <a href="https://tibble.tidyverse.org/">https://tibble.tidyverse.org/</a>.
+</div>
+<div id="ref-R-RColorBrewer" class="csl-entry" role="listitem">
+Neuwirth, Erich. <em>RColorBrewer: ColorBrewer Palettes</em>, 2022. <a href="https://doi.org/10.32614/CRAN.package.RColorBrewer">https://doi.org/10.32614/CRAN.package.RColorBrewer</a>.
+</div>
+<div id="ref-newcomb" class="csl-entry" role="listitem">
+Newcomb, Simon. <span>“Note on the Frequency of Use of the Different Digits in Natural Numbers.”</span> <em>American Journal of Mathematics</em> 4, no. 1 (1881): 39–40. <a href="http://www.jstor.org/stable/2369148">http://www.jstor.org/stable/2369148</a>.
+</div>
+<div id="ref-nigrinifraud" class="csl-entry" role="listitem">
+Nigrini, Mark J. <em>Benford’s Law Applications for Forensic Accounting, Auditing and Fraud Detection</em>. 1st ed. John Wiley; Sons, Ltd, 2012. <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5">https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5</a>.
+</div>
+<div id="ref-article2007" class="csl-entry" role="listitem">
+Nigrini, Mark, and Steven Miller. <span>“Benford’s Law Applied to Hydrology Data—Results and Relevance to Other Geophysical Data.”</span> <em>Mathematical Geology</em> 39 (September 2007): 469–90. <a href="https://doi.org/10.1007/s11004-007-9109-5">https://doi.org/10.1007/s11004-007-9109-5</a>.
+</div>
+<div id="ref-articlesec" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing a Journal of Practice and Theory AUDITING J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-article2009" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing-a Journal of Practice and Theory - AUDITING-J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-R-pdftools" class="csl-entry" role="listitem">
+Ooms, Jeroen. <em>Pdftools: Text Extraction, Rendering and Converting of PDF Documents</em>, 2026. <a href="https://ropensci.r-universe.dev/pdftools">https://ropensci.r-universe.dev/pdftools</a>.
+</div>
+<div id="ref-R-writexl" class="csl-entry" role="listitem">
+Ooms, Jeroen, and Bill Denney. <em>Writexl: Export Data Frames to Excel Xlsx Format</em>, 2026. <a href="https://ropensci.r-universe.dev/writexl">https://ropensci.r-universe.dev/writexl</a>.
+</div>
+<div id="ref-R-sf" class="csl-entry" role="listitem">
+Pebesma, Edzer. <em>Sf: Simple Features for r</em>, 2026. <a href="https://r-spatial.github.io/sf/">https://r-spatial.github.io/sf/</a>.
+</div>
+<div id="ref-sf2018" class="csl-entry" role="listitem">
+———. <span>“<span class="nocase">Simple Features for R: Standardized Support for Spatial Vector Data</span>.”</span> <em><span>The R Journal</span></em> 10, no. 1 (2018): 439–46. <a href="https://doi.org/10.32614/RJ-2018-009">https://doi.org/10.32614/RJ-2018-009</a>.
+</div>
+<div id="ref-sf2023" class="csl-entry" role="listitem">
+Pebesma, Edzer, and Roger Bivand. <em><span class="nocase">Spatial Data Science: With applications in R</span></em>. <span>Chapman and Hall/CRC</span>, 2023. <a href="https://doi.org/10.1201/9780429459016">https://doi.org/10.1201/9780429459016</a>.
+</div>
+<div id="ref-R-ggraph" class="csl-entry" role="listitem">
+Pedersen, Thomas Lin. <em>Ggraph: An Implementation of Grammar of Graphics for Graphs and Networks</em>, 2025. <a href="https://ggraph.data-imaginist.com">https://ggraph.data-imaginist.com</a>.
+</div>
+<div id="ref-R-patchwork" class="csl-entry" role="listitem">
+———. <em>Patchwork: The Composer of Plots</em>, 2025. <a href="https://patchwork.data-imaginist.com">https://patchwork.data-imaginist.com</a>.
+</div>
+<div id="ref-R-PerformanceAnalytics" class="csl-entry" role="listitem">
+Peterson, Brian G., and Peter Carl. <em>PerformanceAnalytics: Econometric Tools for Performance and Risk Analysis</em>, 2026. <a href="https://github.com/braverock/PerformanceAnalytics">https://github.com/braverock/PerformanceAnalytics</a>.
+</div>
+<div id="ref-pinkham" class="csl-entry" role="listitem">
+Pinkham, Roger S. <span>“<span class="nocase">On the Distribution of First Significant Digits</span>.”</span> <em>The Annals of Mathematical Statistics</em> 32, no. 4 (1961): 1223–30. <a href="https://doi.org/10.1214/aoms/1177704862">https://doi.org/10.1214/aoms/1177704862</a>.
+</div>
+<div id="ref-R-base" class="csl-entry" role="listitem">
+R Core Team. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing, 2025. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-R-psych" class="csl-entry" role="listitem">
+Revelle, William. <em>Psych: Procedures for Psychological, Psychometric, and Personality Research</em>, 2026. <a href="https://personality-project.org/r/psych/">https://personality-project.org/r/psych/</a>.
+</div>
+<div id="ref-R-nnet" class="csl-entry" role="listitem">
+Ripley, Brian. <em>Nnet: Feed-Forward Neural Networks and Multinomial Log-Linear Models</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-MASS" class="csl-entry" role="listitem">
+Ripley, Brian, and Bill Venables. <em>MASS: Support Functions and Datasets for Venables and Ripley’s MASS</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-broom" class="csl-entry" role="listitem">
+Robinson, David, Alex Hayes, Simon Couch, and Emil Hvitfeldt. <em>Broom: Convert Statistical Objects into Tidy Tibbles</em>, 2026. <a href="https://broom.tidymodels.org/">https://broom.tidymodels.org/</a>.
+</div>
+<div id="ref-R-tidytext" class="csl-entry" role="listitem">
+Robinson, David, and Julia Silge. <em>Tidytext: Text Mining Using Dplyr, Ggplot2, and Other Tidy Tools</em>, 2025. <a href="https://juliasilge.github.io/tidytext/">https://juliasilge.github.io/tidytext/</a>.
+</div>
+<div id="ref-R-openxlsx" class="csl-entry" role="listitem">
+Schauberger, Philipp, and Alexander Walker. <em>Openxlsx: Read, Write and Edit Xlsx Files</em>, 2025. <a href="https://ycphs.github.io/openxlsx/index.html">https://ycphs.github.io/openxlsx/index.html</a>.
+</div>
+<div id="ref-R-GGally" class="csl-entry" role="listitem">
+Schloerke, Barret, Di Cook, Joseph Larmarange, Francois Briatte, Moritz Marbach, Edwin Thoen, Amos Elberg, and Jason Crowley. <em>GGally: Extension to Ggplot2</em>, 2025. <a href="https://ggobi.github.io/ggally/">https://ggobi.github.io/ggally/</a>.
+</div>
+<div id="ref-tidytext2016" class="csl-entry" role="listitem">
+Silge, Julia, and David Robinson. <span>“Tidytext: Text Mining and Analysis Using Tidy Data Principles in r.”</span> <em>JOSS</em> 1, no. 3 (2016). <a href="https://doi.org/10.21105/joss.00037">https://doi.org/10.21105/joss.00037</a>.
+</div>
+<div id="ref-R-ggrepel" class="csl-entry" role="listitem">
+Slowikowski, Kamil. <em>Ggrepel: Automatically Position Non-Overlapping Text Labels with Ggplot2</em>, 2026. <a href="https://ggrepel.slowkow.com/">https://ggrepel.slowkow.com/</a>.
+</div>
+<div id="ref-R-lubridate" class="csl-entry" role="listitem">
+Spinu, Vitalie, Garrett Grolemund, and Hadley Wickham. <em>Lubridate: Make Dealing with Dates a Little Easier</em>, 2026. <a href="https://lubridate.tidyverse.org">https://lubridate.tidyverse.org</a>.
+</div>
+<div id="ref-colorspace2009b" class="csl-entry" role="listitem">
+Stauffer, Reto, Georg J. Mayr, Markus Dabernig, and Achim Zeileis. <span>“Somewhere over the Rainbow: How to Make Effective Use of Colors in Meteorological Visualizations.”</span> <em>Bulletin of the American Meteorological Society</em> 96, no. 2 (2009): 203–16. <a href="https://doi.org/10.1175/BAMS-D-13-00155.1">https://doi.org/10.1175/BAMS-D-13-00155.1</a>.
+</div>
+<div id="ref-R-rpart" class="csl-entry" role="listitem">
+Therneau, Terry, and Beth Atkinson. <em>Rpart: Recursive Partitioning and Regression Trees</em>, 2025. <a href="https://github.com/bethatkinson/rpart">https://github.com/bethatkinson/rpart</a>.
+</div>
+<div id="ref-R-AnomalyDetection" class="csl-entry" role="listitem">
+Vallis, Owen S., Jordan Hochenbaum, and Arun Kejariwal. <em>AnomalyDetection: Anomaly Detection Using Seasonal Hybrid Extreme Studentized Deviate Test</em>, 2014. <a href="https://github.com/twitter/AnomalyDetection">https://github.com/twitter/AnomalyDetection</a>.
+</div>
+<div id="ref-stringdist2014" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, M. P. J.</span> <span>“The Stringdist Package for Approximate String Matching.”</span> <em>The <span>R</span> <span>J</span>ournal</em> 6 (2014): 111–22. <a href="https://journal.r-project.org/articles/RJ-2014-011/">https://journal.r-project.org/articles/RJ-2014-011/</a>.
+</div>
+<div id="ref-R-stringdist" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark</span>. <em>Stringdist: Approximate String Matching, Fuzzy Text Search, and String Distance Functions</em>, 2026. <a href="https://github.com/markvanderloo/stringdist">https://github.com/markvanderloo/stringdist</a>.
+</div>
+<div id="ref-validate2021" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark P. J., and Edwin de Jonge</span>. <span>“Data Validation Infrastructure for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 97, no. 10 (2021): 1–31. <a href="https://doi.org/10.18637/jss.v097.i10">https://doi.org/10.18637/jss.v097.i10</a>.
+</div>
+<div id="ref-R-validate" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark, and Edwin de Jonge</span>. <em>Validate: Data Validation Infrastructure</em>, 2025. <a href="https://github.com/data-cleaning/validate">https://github.com/data-cleaning/validate</a>.
+</div>
+<div id="ref-MASS2002" class="csl-entry" role="listitem">
+Venables, W. N., and B. D. Ripley. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-nnet2002" class="csl-entry" role="listitem">
+———. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-skimr" class="csl-entry" role="listitem">
+Waring, Elin, Michael Quinn, Amelia McNamara, Eduardo Arino de la Rubia, Hao Zhu, and Shannon Ellis. <em>Skimr: Compact and Flexible Summaries of Data</em>, 2026. <a href="https://docs.ropensci.org/skimr/">https://docs.ropensci.org/skimr/</a>.
+</div>
+<div id="ref-layered-grammar" class="csl-entry" role="listitem">
+Wickham, Hadley. <span>“A Layered Grammar of Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 19, no. 1 (2010): 3–28. <a href="https://doi.org/10.1198/jcgs.2009.07098">https://doi.org/10.1198/jcgs.2009.07098</a>.
+</div>
+<div id="ref-R-conflicted" class="csl-entry" role="listitem">
+———. <em>Conflicted: An Alternative Conflict Resolution Strategy</em>, 2023. <a href="https://conflicted.r-lib.org/">https://conflicted.r-lib.org/</a>.
+</div>
+<div id="ref-R-forcats" class="csl-entry" role="listitem">
+———. <em>Forcats: Tools for Working with Categorical Variables (Factors)</em>, 2025. <a href="https://forcats.tidyverse.org/">https://forcats.tidyverse.org/</a>.
+</div>
+<div id="ref-ggplot22016" class="csl-entry" role="listitem">
+———. <em>Ggplot2: Elegant Graphics for Data Analysis</em>. Springer-Verlag New York, 2016. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv021i12" class="csl-entry" role="listitem">
+———. <span>“Reshaping Data with the Reshape Package.”</span> <em>Journal of Statistical Software</em> 21, no. 12 (2007): 1–20. <a href="https://doi.org/10.18637/jss.v021.i12">https://doi.org/10.18637/jss.v021.i12</a>.
+</div>
+<div id="ref-R-stringr" class="csl-entry" role="listitem">
+———. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>, 2025. <a href="https://stringr.tidyverse.org">https://stringr.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv059i10" class="csl-entry" role="listitem">
+———. <span>“Tidy Data.”</span> <em>Journal of Statistical Software</em> 59, no. 10 (2014): 1–23. <a href="https://doi.org/10.18637/jss.v059.i10">https://doi.org/10.18637/jss.v059.i10</a>.
+</div>
+<div id="ref-R-tidyverse" class="csl-entry" role="listitem">
+———. <em>Tidyverse: Easily Install and Load the Tidyverse</em>, 2023. <a href="https://tidyverse.tidyverse.org">https://tidyverse.tidyverse.org</a>.
+</div>
+<div id="ref-tidyverse2019" class="csl-entry" role="listitem">
+Wickham, Hadley, Mara Averick, Jennifer Bryan, Winston Chang, Lucy D’Agostino McGowan, Romain François, Garrett Grolemund, et al. <span>“Welcome to the <span class="nocase">tidyverse</span>.”</span> <em>Journal of Open Source Software</em> 4, no. 43 (2019): 1686. <a href="https://doi.org/10.21105/joss.01686">https://doi.org/10.21105/joss.01686</a>.
+</div>
+<div id="ref-R-readxl" class="csl-entry" role="listitem">
+Wickham, Hadley, and Jennifer Bryan. <em>Readxl: Read Excel Files</em>, 2025. <a href="https://readxl.tidyverse.org">https://readxl.tidyverse.org</a>.
+</div>
+<div id="ref-R-ggplot2" class="csl-entry" role="listitem">
+<span class="nocase">Wickham, Hadley, Winston Chang, Lionel Henry, Thomas Lin Pedersen, Kohske Takahashi, Claus Wilke, Kara Woo, Hiroaki Yutani, Dewey Dunnington, and Teun van den Brand</span>. <em>Ggplot2: Create Elegant Data Visualisations Using the Grammar of Graphics</em>, 2026. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-R-dplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Romain François, Lionel Henry, Kirill Müller, and Davis Vaughan. <em>Dplyr: A Grammar of Data Manipulation</em>, 2026. <a href="https://dplyr.tidyverse.org">https://dplyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-dbplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Maximilian Girlich, and Edgar Ruiz. <em>Dbplyr: A Dplyr Back End for Databases</em>, 2026. <a href="https://dbplyr.tidyverse.org/">https://dbplyr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-purrr" class="csl-entry" role="listitem">
+Wickham, Hadley, and Lionel Henry. <em>Purrr: Functional Programming Tools</em>, 2026. <a href="https://purrr.tidyverse.org/">https://purrr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-readr" class="csl-entry" role="listitem">
+Wickham, Hadley, Jim Hester, and Jennifer Bryan. <em>Readr: Read Rectangular Text Data</em>, 2026. <a href="https://readr.tidyverse.org">https://readr.tidyverse.org</a>.
+</div>
+<div id="ref-R-scales" class="csl-entry" role="listitem">
+Wickham, Hadley, Thomas Lin Pedersen, and Dana Seidel. <em>Scales: Scale Functions for Visualization</em>, 2025. <a href="https://scales.r-lib.org">https://scales.r-lib.org</a>.
+</div>
+<div id="ref-R-tidyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Davis Vaughan, and Maximilian Girlich. <em>Tidyr: Tidy Messy Data</em>, 2025. <a href="https://tidyr.tidyverse.org">https://tidyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-ranger" class="csl-entry" role="listitem">
+Wright, Marvin N. <em>Ranger: A Fast Implementation of Random Forests</em>, 2026. <a href="https://imbs-hl.github.io/ranger/">https://imbs-hl.github.io/ranger/</a>.
+</div>
+<div id="ref-ranger2017" class="csl-entry" role="listitem">
+Wright, Marvin N., and Andreas Ziegler. <span>“<span class="nocase">ranger</span>: A Fast Implementation of Random Forests for High Dimensional Data in <span>C++</span> and <span>R</span>.”</span> <em>Journal of Statistical Software</em> 77, no. 1 (2017): 1–17. <a href="https://doi.org/10.18637/jss.v077.i01">https://doi.org/10.18637/jss.v077.i01</a>.
+</div>
+<div id="ref-xie2015" class="csl-entry" role="listitem">
+Xie, Yihui. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="http://yihui.name/knitr/">http://yihui.name/knitr/</a>.
+</div>
+<div id="ref-knitr2015" class="csl-entry" role="listitem">
+———. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-knitr2014" class="csl-entry" role="listitem">
+———. <span>“Knitr: A Comprehensive Tool for Reproducible Research in <span>R</span>.”</span> In <em>Implementing Reproducible Computational Research</em>, edited by Victoria Stodden, Friedrich Leisch, and Roger D. Peng. Chapman; Hall/CRC, 2014.
+</div>
+<div id="ref-R-knitr" class="csl-entry" role="listitem">
+———. <em>Knitr: A General-Purpose Package for Dynamic Report Generation in r</em>, 2025. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-colorspace2020a" class="csl-entry" role="listitem">
+Zeileis, Achim, Jason C. Fisher, Kurt Hornik, Ross Ihaka, Claire D. McWhite, Paul Murrell, Reto Stauffer, and Claus O. Wilke. <span>“<span class="nocase">colorspace</span>: A Toolbox for Manipulating and Assessing Colors and Palettes.”</span> <em>Journal of Statistical Software</em> 96, no. 1 (2020): 1–49. <a href="https://doi.org/10.18637/jss.v096.i01">https://doi.org/10.18637/jss.v096.i01</a>.
+</div>
+<div id="ref-zoo2005" class="csl-entry" role="listitem">
+Zeileis, Achim, and Gabor Grothendieck. <span>“Zoo: S3 Infrastructure for Regular and Irregular Time Series.”</span> <em>Journal of Statistical Software</em> 14, no. 6 (2005): 1–27. <a href="https://doi.org/10.18637/jss.v014.i06">https://doi.org/10.18637/jss.v014.i06</a>.
+</div>
+<div id="ref-R-zoo" class="csl-entry" role="listitem">
+Zeileis, Achim, Gabor Grothendieck, and Jeffrey A. Ryan. <em>Zoo: S3 Infrastructure for Regular and Irregular Time Series (z’s Ordered Observations)</em>, 2025. <a href="https://zoo.R-Forge.R-project.org/">https://zoo.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-colorspace2009a" class="csl-entry" role="listitem">
+Zeileis, Achim, Kurt Hornik, and Paul Murrell. <span>“Escaping <span>RGB</span>land: Selecting Colors for Statistical Graphics.”</span> <em>Computational Statistics &amp; Data Analysis</em> 53, no. 9 (2009): 3259–70. <a href="https://doi.org/10.1016/j.csda.2008.11.033">https://doi.org/10.1016/j.csda.2008.11.033</a>.
+</div>
+</div>
+</section></main><!-- /main --><script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/anilyayavar\.github\.io\/new-book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script><nav class="page-navigation"><div class="nav-page nav-page-previous">
+      <a href="./20-duplicates.html" class="pagination-link" aria-label="Duplicate Detection">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">32</span>&nbsp; <span class="chapter-title">Duplicate Detection</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./20b-record-linkage.html" class="pagination-link" aria-label="Record Linkage">
+        <span class="nav-page-text"><span class="chapter-number">34</span>&nbsp; <span class="chapter-title">Record Linkage</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer"><div class="nav-footer">
+    <div class="nav-footer-left">
+      &nbsp;
+    </div>   
+    <div class="nav-footer-center">
+<p>Built with <a href="https://www.r-project.org">R</a> and <a href="https://quarto.org">Quarto</a></p>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/15-stringdist.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+    <div class="nav-footer-right">
+      &nbsp;
+    </div>
+  </div>
+</footer>
+
+
+</body></html>

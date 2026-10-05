@@ -1,0 +1,2491 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="description" content="A practical guide to data analytics for auditors, using R and the tidyverse: reading and cleaning audit data, forensic tests, sampling, statistics, machine learning, text, network and geospatial analytics, and reproducible reports, with Indian audit examples throughout.">
+<title>21&nbsp; Charts in Base R – R for Audit Analytics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./09-1ggplot2.html" rel="next">
+<link href="./part4-explore-sample.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b85bc7c33db8c58e0ec93c3465666fed.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-a64f2b92d8b4b45ab5f5d9261e8b8c9d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script><link rel="stylesheet" href="style.css">
+</head>
+<body class="nav-sidebar floating quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top"><nav class="quarto-secondary-nav"><div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part4-explore-sample.html">Part IV: Exploring and Sampling</a></li><li class="breadcrumb-item"><a href="./08-plot.html"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav></header><!-- content --><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto"><div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">R for Audit Analytics</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/anilyayavar/new-book" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Welcome</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-preface.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-about-author.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">About the Author</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./how-to-use.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">How to Use This Book</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-Zero.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Gearing Up</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part1-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part I: R Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Objects, Data Types and Data Structures</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-Subsets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Subsetting and Indexing</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Functions and Operators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-existing-and-useful-functions-in-base-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Useful Base R Functions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-pipes-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Pipes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-1conditionals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Conditions and Loops</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-1-functionalprog.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Functional Programming</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part2-data-ready.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part II: Getting Data Ready</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-2-workflow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Working with Files and Folders</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Importing and Exporting Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading-data-cleaning-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Cleaning Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1b-pdf-excel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Data from PDFs and Messy Excel Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-2-merge.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Combining Many Similar Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-1-dplyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Transforming Data with dplyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-2-joins.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Joining Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-tidyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Reshaping Data with tidyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8Lubridate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Dates and Times</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8b-duckdb.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Large Data with DuckDB and data.table</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part3-text-fields.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part III: Working with Text Fields</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-1Stringr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Working with Strings in stringr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Regular Expressions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex-regex-in-human-readble-format-using-rebu.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Readable Regular Expressions with rebus</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part4-explore-sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IV: Exploring and Sampling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-plot.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-1ggplot2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Charts with ggplot2</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-2ggplot2-polish.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Polishing Charts for Audit Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-3Factors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Factors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-1Desc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Descriptive Statistics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-2stats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Probability Distributions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3Samp.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Random Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3b-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Statistical Tests for Auditors</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part5-forensic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part V: Forensic Tests</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17a-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Rule-Based Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-Anamolous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Benford Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-nigrini-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Nigrini’s Tests for Unusual Amounts</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-duplicates.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">32</span>&nbsp; <span class="chapter-title">Duplicate Detection</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-stringdist.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20b-record-linkage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">34</span>&nbsp; <span class="chapter-title">Record Linkage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-gaps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">35</span>&nbsp; <span class="chapter-title">Gaps in Sequences</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21b-process-mining.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">36</span>&nbsp; <span class="chapter-title">Process Mining</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part6-risk-scoring.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VI: Modelling and Risk Scoring</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">37</span>&nbsp; <span class="chapter-title">Simple Linear Regression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg-multiple.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">38</span>&nbsp; <span class="chapter-title">Multiple Regression in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4b-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">39</span>&nbsp; <span class="chapter-title">Logistic Regression for Risk Scoring</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4c-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">40</span>&nbsp; <span class="chapter-title">Decision Trees</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4d-forest.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">41</span>&nbsp; <span class="chapter-title">Random Forests</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-DEA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">42</span>&nbsp; <span class="chapter-title">Data Envelopment Analysis</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part7-hidden-patterns.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VII: Finding Hidden Patterns</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-5PCA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">43</span>&nbsp; <span class="chapter-title">Principal Component Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-6KMeans.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">44</span>&nbsp; <span class="chapter-title">Clustering with k-Means</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-7Apriori.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">45</span>&nbsp; <span class="chapter-title">Association Rules (Apriori)</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-9ts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">46</span>&nbsp; <span class="chapter-title">Time Series Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-anomaly.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">47</span>&nbsp; <span class="chapter-title">Anomaly Detection</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part8-beyond-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VIII: Beyond Tables</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">48</span>&nbsp; <span class="chapter-title">Text Analytics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-sentiment-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">49</span>&nbsp; <span class="chapter-title">Sentiment Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-visualising-text-analytics-through-wordc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">50</span>&nbsp; <span class="chapter-title">Visualising Text</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">51</span>&nbsp; <span class="chapter-title">Networks and Graph Theory</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network-applying-network-analysis-in-audit-fraud.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">52</span>&nbsp; <span class="chapter-title">Network Analysis in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">53</span>&nbsp; <span class="chapter-title">Maps</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-geo-coding-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">54</span>&nbsp; <span class="chapter-title">Geocoding</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-reverse-geo-coding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">55</span>&nbsp; <span class="chapter-title">Reverse Geocoding</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part9-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IX: Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-reports.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./audit-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Audit Question Finder</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./98-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Datasets Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./99-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">R Packages Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./97-colors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">D</span>&nbsp; <span class="chapter-title">Colours in R</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+    </ul>
+</div>
+</nav><div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+<li><a href="#sec-baseplot-data" id="toc-sec-baseplot-data" class="nav-link active" data-scroll-target="#sec-baseplot-data"><span class="header-section-number">21.1</span> Our data, a bill register and a scheme</a></li>
+  <li>
+<a href="#using-plot" id="toc-using-plot" class="nav-link" data-scroll-target="#using-plot"><span class="header-section-number">21.2</span> Using <code>plot()</code></a>
+  <ul class="collapse">
+<li><a href="#a-scatter-plot" id="toc-a-scatter-plot" class="nav-link" data-scroll-target="#a-scatter-plot"><span class="header-section-number">21.2.1</span> A scatter plot</a></li>
+  <li><a href="#a-line-chart" id="toc-a-line-chart" class="nav-link" data-scroll-target="#a-line-chart"><span class="header-section-number">21.2.2</span> A line chart</a></li>
+  <li><a href="#a-bar-chart-of-counts" id="toc-a-bar-chart-of-counts" class="nav-link" data-scroll-target="#a-bar-chart-of-counts"><span class="header-section-number">21.2.3</span> A bar chart of counts</a></li>
+  <li><a href="#a-box-plot" id="toc-a-box-plot" class="nav-link" data-scroll-target="#a-box-plot"><span class="header-section-number">21.2.4</span> A box plot</a></li>
+  <li><a href="#a-density-plot" id="toc-a-density-plot" class="nav-link" data-scroll-target="#a-density-plot"><span class="header-section-number">21.2.5</span> A density plot</a></li>
+  </ul>
+</li>
+  <li>
+<a href="#bar-plots-using-barplot" id="toc-bar-plots-using-barplot" class="nav-link" data-scroll-target="#bar-plots-using-barplot"><span class="header-section-number">21.3</span> Bar plots using <code>barplot()</code></a>
+  <ul class="collapse">
+<li><a href="#a-basic-bar-chart" id="toc-a-basic-bar-chart" class="nav-link" data-scroll-target="#a-basic-bar-chart"><span class="header-section-number">21.3.1</span> A basic bar chart</a></li>
+  <li><a href="#a-bar-chart-of-summarised-data" id="toc-a-bar-chart-of-summarised-data" class="nav-link" data-scroll-target="#a-bar-chart-of-summarised-data"><span class="header-section-number">21.3.2</span> A bar chart of summarised data</a></li>
+  <li><a href="#a-grouped-bar-chart" id="toc-a-grouped-bar-chart" class="nav-link" data-scroll-target="#a-grouped-bar-chart"><span class="header-section-number">21.3.3</span> A grouped bar chart</a></li>
+  <li><a href="#a-stacked-bar-chart" id="toc-a-stacked-bar-chart" class="nav-link" data-scroll-target="#a-stacked-bar-chart"><span class="header-section-number">21.3.4</span> A stacked bar chart</a></li>
+  <li><a href="#a-bar-chart-from-a-formula" id="toc-a-bar-chart-from-a-formula" class="nav-link" data-scroll-target="#a-bar-chart-from-a-formula"><span class="header-section-number">21.3.5</span> A bar chart from a formula</a></li>
+  </ul>
+</li>
+  <li><a href="#histograms-using-hist" id="toc-histograms-using-hist" class="nav-link" data-scroll-target="#histograms-using-hist"><span class="header-section-number">21.4</span> Histograms using <code>hist()</code></a></li>
+  <li><a href="#box-plots-using-boxplot" id="toc-box-plots-using-boxplot" class="nav-link" data-scroll-target="#box-plots-using-boxplot"><span class="header-section-number">21.5</span> Box plots using <code>boxplot()</code></a></li>
+  <li><a href="#saving-and-exporting-charts" id="toc-saving-and-exporting-charts" class="nav-link" data-scroll-target="#saving-and-exporting-charts"><span class="header-section-number">21.6</span> Saving and exporting charts</a></li>
+  <li><a href="#use-of-par" id="toc-use-of-par" class="nav-link" data-scroll-target="#use-of-par"><span class="header-section-number">21.7</span> Use of <code>par()</code></a></li>
+  <li><a href="#sec-baseplot-audit" id="toc-sec-baseplot-audit" class="nav-link" data-scroll-target="#sec-baseplot-audit"><span class="header-section-number">21.8</span> Audit use case, payments just below a limit</a></li>
+  <li><a href="#a-suggested-workflow" id="toc-a-suggested-workflow" class="nav-link" data-scroll-target="#a-suggested-workflow"><span class="header-section-number">21.9</span> A suggested workflow</a></li>
+  <li><a href="#summary-of-functions-used" id="toc-summary-of-functions-used" class="nav-link" data-scroll-target="#summary-of-functions-used"><span class="header-section-number">21.10</span> Summary of functions used</a></li>
+  </ul><div class="toc-actions"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/08-plot.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part4-explore-sample.html">Part IV: Exploring and Sampling</a></li><li class="breadcrumb-item"><a href="./08-plot.html"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></a></li></ol></nav><div class="quarto-title">
+<h1 class="title"><span id="sec-baseplot" class="quarto-section-identifier"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header><p>Suppose a Public Works Division gives us its bill register for the year. It has three thousand bills. Officers of the division may approve a bill up to ₹1 lakh. Anything above needs sanction from a higher authority. We want to know whether some bills were kept just below that limit on purpose. We also want to know whether spending rushed up in March, and whether one office pays much larger bills than the others.</p>
+<p>A table of three thousand rows will not answer these questions. Totals and averages will not answer them either. A chart will. A histogram of the bill amounts shows a pile of bills just under ₹1 lakh at a glance. A line chart of monthly spending shows the March rush. A box plot puts the offices side by side. This is why we look at the data before we summarise it.</p>
+<p>Charts also help us tell others what we found. A well drawn chart in an audit report says more than a table of numbers. It also helps us spot errors and odd values in the data.</p>
+<p>In this chapter we learn the charts that come with base R, without any extra package. We will use <code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code>, <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code>, <code><a href="https://rdrr.io/r/graphics/hist.html">hist()</a></code>, <code><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot()</a></code> and density plots, and arrange several charts on one page with <code><a href="https://rdrr.io/r/graphics/par.html">par()</a></code>. All the examples use audit data. At the end we use a histogram to find bills split to stay below the limit.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>In <a href="09-1ggplot2.html" class="quarto-xref"><span>Chapter 22</span></a> we will learn the <code>ggplot2</code> package. It is very flexible, and is built on a theory known as the “grammar of graphics”. This grammar was created by Leland Wilkinson. It is also used by other software, such as Tableau<a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> and Plotly. Base R charts are still worth learning. They need no package and are very quick for a first look at the data.</p>
+</div>
+</div>
+<section id="sec-baseplot-data" class="level2" data-number="21.1"><h2 data-number="21.1" class="anchored" data-anchor-id="sec-baseplot-data">
+<span class="header-section-number">21.1</span> Our data, a bill register and a scheme</h2>
+<p>We will use two small datasets in this chapter.</p>
+<p>The first, <code>bills</code>, is the bill register of a Public Works Division for the financial year 2024-25. The division has five sub-divisional offices. Each bill has a number, a date, the office, the head of expenditure and the amount in rupees. We have planted two irregularities in it. Our charts should bring both out.</p>
+<p>The second, <code>blocks</code>, gives the number of beneficiaries and the expenditure of a state scheme in 40 blocks of a district. The scheme pays about ₹6,000 a year to each beneficiary. So the expenditure of a block should rise in step with its beneficiaries. One block does not follow this rule.</p>
+<div class="cell">
+<details class="code-fold"><summary>Code to create the bill register and the block data</summary><div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html">set.seed</a></span><span class="op">(</span><span class="fl">77</span><span class="op">)</span></span>
+<span><span class="va">offices</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Nandgaon"</span>, <span class="st">"Sonpur"</span>, <span class="st">"Bhimtal"</span>, <span class="st">"Kesarganj"</span>, <span class="st">"Rajnagar"</span><span class="op">)</span></span>
+<span><span class="va">heads</span>   <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Repairs"</span>, <span class="st">"Supplies"</span>, <span class="st">"Electricity"</span>, <span class="st">"Travel"</span>, <span class="st">"Office expenses"</span><span class="op">)</span></span>
+<span><span class="va">fy_days</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"2024-04-01"</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="st">"2025-03-31"</span><span class="op">)</span>, by <span class="op">=</span> <span class="st">"day"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Planted. Days in March are three times as likely to get a bill (a March rush)</span></span>
+<span><span class="va">day_wt</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/ifelse.html">ifelse</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/format.html">format</a></span><span class="op">(</span><span class="va">fy_days</span>, <span class="st">"%m"</span><span class="op">)</span> <span class="op">==</span> <span class="st">"03"</span>, <span class="fl">3</span>, <span class="fl">1</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">3000</span></span>
+<span><span class="va">bills</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span></span>
+<span>  office    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="va">offices</span>, <span class="va">n</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  head      <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="va">heads</span>, <span class="va">n</span>, <span class="cn">TRUE</span>, prob <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">3</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  bill_date <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="va">fy_days</span>, <span class="va">n</span>, <span class="cn">TRUE</span>, prob <span class="op">=</span> <span class="va">day_wt</span><span class="op">)</span>,</span>
+<span>  amount    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Lognormal.html">rlnorm</a></span><span class="op">(</span><span class="va">n</span>, <span class="fu"><a href="https://rdrr.io/r/base/Log.html">log</a></span><span class="op">(</span><span class="fl">30000</span><span class="op">)</span>, <span class="fl">0.9</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Planted. 60 repair bills of Kesarganj kept just below the limit of Rs 1 lakh</span></span>
+<span><span class="va">split_bills</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span></span>
+<span>  office    <span class="op">=</span> <span class="st">"Kesarganj"</span>,</span>
+<span>  head      <span class="op">=</span> <span class="st">"Repairs"</span>,</span>
+<span>  bill_date <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="va">fy_days</span>, <span class="fl">60</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  amount    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html">runif</a></span><span class="op">(</span><span class="fl">60</span>, <span class="fl">94000</span>, <span class="fl">99999</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">bills</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html">rbind</a></span><span class="op">(</span><span class="va">bills</span>, <span class="va">split_bills</span><span class="op">)</span></span>
+<span><span class="va">bills</span> <span class="op">&lt;-</span> <span class="va">bills</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/order.html">order</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">bill_date</span><span class="op">)</span>, <span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html">rownames</a></span><span class="op">(</span><span class="va">bills</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="cn">NULL</span></span>
+<span><span class="va">bills</span><span class="op">$</span><span class="va">bill_no</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html">sprintf</a></span><span class="op">(</span><span class="st">"BL/24-25/%04d"</span>, <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">bills</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">fy_months</span> <span class="op">&lt;-</span> <span class="va">month.abb</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">4</span><span class="op">:</span><span class="fl">12</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">bills</span><span class="op">$</span><span class="va">month</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html">factor</a></span><span class="op">(</span><span class="va">month.abb</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html">as.integer</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/format.html">format</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">bill_date</span>, <span class="st">"%m"</span><span class="op">)</span><span class="op">)</span><span class="op">]</span>,</span>
+<span>                      levels <span class="op">=</span> <span class="va">fy_months</span><span class="op">)</span></span>
+<span><span class="va">bills</span><span class="op">$</span><span class="va">quarter</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"Q"</span>, <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/integer.html">as.integer</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">month</span><span class="op">)</span> <span class="op">-</span> <span class="fl">1</span><span class="op">)</span> <span class="op"><a href="https://rdrr.io/r/base/Arithmetic.html">%/%</a></span> <span class="fl">3</span> <span class="op">+</span> <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">bills</span> <span class="op">&lt;-</span> <span class="va">bills</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"bill_no"</span>, <span class="st">"bill_date"</span>, <span class="st">"month"</span>, <span class="st">"quarter"</span>, <span class="st">"office"</span>, <span class="st">"head"</span>, <span class="st">"amount"</span><span class="op">)</span><span class="op">]</span></span>
+<span></span>
+<span><span class="co"># Scheme data of 40 blocks, at about Rs 6,000 per beneficiary</span></span>
+<span><span class="va">blocks</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span></span>
+<span>  block         <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html">sprintf</a></span><span class="op">(</span><span class="st">"Block %02d"</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">40</span><span class="op">)</span>,</span>
+<span>  beneficiaries <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html">runif</a></span><span class="op">(</span><span class="fl">40</span>, <span class="fl">800</span>, <span class="fl">5000</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">beneficiaries</span> <span class="op">*</span> <span class="fl">6000</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html">runif</a></span><span class="op">(</span><span class="fl">40</span>, <span class="fl">0.92</span>, <span class="fl">1.08</span><span class="op">)</span> <span class="op">/</span> <span class="fl">1e5</span>, <span class="fl">1</span><span class="op">)</span></span>
+<span><span class="co"># Planted. Block 27 spends far more than its beneficiaries justify</span></span>
+<span><span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span><span class="op">[</span><span class="fl">27</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span><span class="op">[</span><span class="fl">27</span><span class="op">]</span> <span class="op">*</span> <span class="fl">1.7</span>, <span class="fl">1</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>Let us look at the first few rows of each.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html">head</a></span><span class="op">(</span><span class="va">bills</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>        bill_no  bill_date month quarter    office            head amount
+1 BL/24-25/0001 2024-04-01   Apr      Q1    Sonpur     Electricity  85801
+2 BL/24-25/0002 2024-04-01   Apr      Q1    Sonpur        Supplies  21666
+3 BL/24-25/0003 2024-04-01   Apr      Q1 Kesarganj         Repairs  32067
+4 BL/24-25/0004 2024-04-01   Apr      Q1    Sonpur Office expenses  98347
+5 BL/24-25/0005 2024-04-01   Apr      Q1    Sonpur        Supplies  25745
+6 BL/24-25/0006 2024-04-02   Apr      Q1  Rajnagar          Travel  27177</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/head.html">head</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>     block beneficiaries expenditure_lakh
+1 Block 01          4798            288.2
+2 Block 02          3440            192.6
+3 Block 03          2628            169.2
+4 Block 04          1233             76.9
+5 Block 05          3879            228.7
+6 Block 06          1547             90.7</code></pre>
+</div>
+</div>
+<p>The register has 3,060 bills worth ₹14.3 crore in all.</p>
+</section><section id="using-plot" class="level2" data-number="21.2"><h2 data-number="21.2" class="anchored" data-anchor-id="using-plot">
+<span class="header-section-number">21.2</span> Using <code>plot()</code>
+</h2>
+<p>The <code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code> function is very versatile. Its main use is to draw scatter plots. It can also draw line charts, box plots and other charts, depending on the data we give it. Its basic syntax is:</p>
+<pre><code>plot(x, y, ...)</code></pre>
+<p>The <code>x</code> and <code>y</code> arguments are the values for the x-axis and the y-axis. The <code>...</code> can hold many optional arguments that change how the chart looks. The most common are listed here.</p>
+<ul>
+<li>
+<code>xlab</code> is the label of the x-axis.</li>
+<li>
+<code>ylab</code> is the label of the y-axis.</li>
+<li>
+<code>main</code> is the main title of the chart.</li>
+<li>
+<code>xlim</code> and <code>ylim</code> set the limits of the x-axis and the y-axis.</li>
+<li>
+<code>type</code> is the type of chart. <code>"p"</code> draws points, <code>"l"</code> draws lines and <code>"b"</code> draws both.</li>
+<li>
+<code>col</code> is the colour of the points or lines.</li>
+<li>
+<code>pch</code> is the symbol used for the points.</li>
+<li>
+<code>cex</code> is the size of the points and text.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Here <code>x</code> and <code>y</code> are vectors, such as <code>blocks$beneficiaries</code>. In <a href="09-1ggplot2.html" class="quarto-xref"><span>Chapter 22</span></a> we will give column names instead. The examples below make this clear.</p>
+</div>
+</div>
+<section id="a-scatter-plot" class="level3" data-number="21.2.1"><h3 data-number="21.2.1" class="anchored" data-anchor-id="a-scatter-plot">
+<span class="header-section-number">21.2.1</span> A scatter plot</h3>
+<p>Let us plot the expenditure of each block against its number of beneficiaries.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">beneficiaries</span>,</span>
+<span>     <span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Number of beneficiaries"</span>,</span>
+<span>     ylab <span class="op">=</span> <span class="st">"Expenditure (Rs lakh)"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Expenditure and beneficiaries of 40 blocks"</span>,</span>
+<span>     pch <span class="op">=</span> <span class="fl">19</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-scatter" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-scatter-1.png" class="img-fluid figure-img" width="672" alt="Expenditure of each block against its beneficiaries">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-scatter-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.1: Expenditure of each block against its beneficiaries
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The points lie close to a straight line, as they should. One point sits well above the line. It is Block 27. It spent ₹9,858 per beneficiary, against a median of ₹6,086 for all blocks.</p>
+<p>We can mark that point in red with <code><a href="https://rdrr.io/r/graphics/points.html">points()</a></code>, and name it with <code><a href="https://rdrr.io/r/graphics/text.html">text()</a></code>. Both add to a chart that is already drawn.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">beneficiaries</span>, <span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Number of beneficiaries"</span>, ylab <span class="op">=</span> <span class="st">"Expenditure (Rs lakh)"</span>,</span>
+<span>     pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="st">"grey50"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/points.html">points</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">beneficiaries</span><span class="op">[</span><span class="va">odd</span><span class="op">]</span>, <span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span><span class="op">[</span><span class="va">odd</span><span class="op">]</span>,</span>
+<span>       pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="st">"red"</span>, cex <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/text.html">text</a></span><span class="op">(</span><span class="va">blocks</span><span class="op">$</span><span class="va">beneficiaries</span><span class="op">[</span><span class="va">odd</span><span class="op">]</span>, <span class="va">blocks</span><span class="op">$</span><span class="va">expenditure_lakh</span><span class="op">[</span><span class="va">odd</span><span class="op">]</span>,</span>
+<span>     labels <span class="op">=</span> <span class="va">blocks</span><span class="op">$</span><span class="va">block</span><span class="op">[</span><span class="va">odd</span><span class="op">]</span>, pos <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-scatter2" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-scatter2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-scatter2-1.png" class="img-fluid figure-img" width="672" alt="The odd block marked in red">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-scatter2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.2: The odd block marked in red
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>A scatter plot shows that two columns move together. It cannot prove that one causes the other. Here, though, the rule of the scheme tells us they <em>should</em> move together. So a point far from the line is a lead to follow up.</p>
+</section><section id="a-line-chart" class="level3" data-number="21.2.2"><h3 data-number="21.2.2" class="anchored" data-anchor-id="a-line-chart">
+<span class="header-section-number">21.2.2</span> A line chart</h3>
+<p>Let us total the bills of each month with <code><a href="https://rdrr.io/r/base/tapply.html">tapply()</a></code>, in lakh. Then we draw the totals as a line.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">monthly</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tapply.html">tapply</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span>, <span class="va">bills</span><span class="op">$</span><span class="va">month</span>, <span class="va">sum</span><span class="op">)</span> <span class="op">/</span> <span class="fl">1e5</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">monthly</span>, <span class="fl">1</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Apr   May   Jun   Jul   Aug   Sep   Oct   Nov   Dec   Jan   Feb   Mar 
+ 96.3 102.4  98.0  93.1 102.7  97.4 108.4 111.4 127.5 113.2  77.7 302.3 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">12</span>, <span class="va">monthly</span>,</span>
+<span>     type <span class="op">=</span> <span class="st">"b"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Month of the financial year (1 = April)"</span>,</span>
+<span>     ylab <span class="op">=</span> <span class="st">"Amount (Rs lakh)"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Monthly total of bills, 2024-25"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-line" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-line-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-line-1.png" class="img-fluid figure-img" width="672" alt="Monthly total of bills">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-line-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.3: Monthly total of bills
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>Here <code>type = "b"</code> draws both points and lines. With <code>type = "l"</code> we would get lines only. The total for March is ₹302.3 lakh. That is about 3 times the median of the other months. This is the March rush we planted.</p>
+</section><section id="a-bar-chart-of-counts" class="level3" data-number="21.2.3"><h3 data-number="21.2.3" class="anchored" data-anchor-id="a-bar-chart-of-counts">
+<span class="header-section-number">21.2.3</span> A bar chart of counts</h3>
+<p><code><a href="https://rdrr.io/r/base/table.html">table()</a></code> counts the bills under each head. <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code> draws the counts as bars.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html">table</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">head</span><span class="op">)</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Head of expenditure"</span>,</span>
+<span>        ylab <span class="op">=</span> <span class="st">"Number of bills"</span>,</span>
+<span>        main <span class="op">=</span> <span class="st">"Bills by head of expenditure"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-count" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-count-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-count-1.png" class="img-fluid figure-img" width="672" alt="Number of bills under each head">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-count-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.4: Number of bills under each head
+</figcaption></figure>
+</div>
+</div>
+</div>
+</section><section id="a-box-plot" class="level3" data-number="21.2.4"><h3 data-number="21.2.4" class="anchored" data-anchor-id="a-box-plot">
+<span class="header-section-number">21.2.4</span> A box plot</h3>
+<p>When <code>x</code> is a factor and <code>y</code> is numeric, <code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code> draws one box plot for each level of the factor. Let us compare the bill amounts under each head.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html">factor</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">head</span><span class="op">)</span>,</span>
+<span>     y <span class="op">=</span> <span class="va">bills</span><span class="op">$</span><span class="va">amount</span>,</span>
+<span>     log <span class="op">=</span> <span class="st">"y"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Bill amounts by head"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Head of expenditure"</span>,</span>
+<span>     ylab <span class="op">=</span> <span class="st">"Amount (Rs, log scale)"</span>,</span>
+<span>     col <span class="op">=</span> <span class="st">"darkgray"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-plotbox" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-plotbox-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-plotbox-1.png" class="img-fluid figure-img" width="672" alt="Bill amounts under each head, on a log scale">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-plotbox-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.5: Bill amounts under each head, on a log scale
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>Bill amounts are skewed. Most bills are small and a few are very large. On an ordinary scale the boxes would be squashed at the bottom. So we used <code>log = "y"</code>. On a log scale, each step up the axis multiplies the amount, rather than adding to it. The boxes now have room to show their spread.</p>
+</section><section id="a-density-plot" class="level3" data-number="21.2.5"><h3 data-number="21.2.5" class="anchored" data-anchor-id="a-density-plot">
+<span class="header-section-number">21.2.5</span> A density plot</h3>
+<p>A density plot is a smooth version of a histogram. We make it with <code><a href="https://rdrr.io/r/stats/density.html">density()</a></code>, and draw it with <code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/density.html">density</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">/</span> <span class="fl">1000</span><span class="op">)</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Density of bill amounts"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Amount (Rs thousand)"</span>, ylab <span class="op">=</span> <span class="st">"Density"</span>, col <span class="op">=</span> <span class="st">"blue"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-density" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-density-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-density-1.png" class="img-fluid figure-img" width="672" alt="Density of bill amounts">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-density-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.6: Density of bill amounts
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The curve rises sharply near zero and has a long tail to the right. That is the usual shape of amounts in accounts.</p>
+<p>Let us now learn the other chart functions of base R.</p>
+</section></section><section id="bar-plots-using-barplot" class="level2" data-number="21.3"><h2 data-number="21.3" class="anchored" data-anchor-id="bar-plots-using-barplot">
+<span class="header-section-number">21.3</span> Bar plots using <code>barplot()</code>
+</h2>
+<p>As the name suggests, <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code> draws bar charts. Its basic syntax is <code>barplot(height, ...)</code>. Here <code>height</code> is a vector giving the height of each bar. The other arguments can be seen with <code><a href="https://rdrr.io/r/graphics/barplot.html">?barplot</a></code>.</p>
+<section id="a-basic-bar-chart" class="level3" data-number="21.3.1"><h3 data-number="21.3.1" class="anchored" data-anchor-id="a-basic-bar-chart">
+<span class="header-section-number">21.3.1</span> A basic bar chart</h3>
+<p>We already have the monthly totals in <code>monthly</code>. The argument <code>names.arg</code> gives the label under each bar.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="va">monthly</span>,</span>
+<span>        names.arg <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/levels.html">levels</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">month</span><span class="op">)</span>,</span>
+<span>        main <span class="op">=</span> <span class="st">"Monthly total of bills, 2024-25"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Month"</span>, ylab <span class="op">=</span> <span class="st">"Amount (Rs lakh)"</span>,</span>
+<span>        las <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-bar1" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-bar1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-bar1-1.png" class="img-fluid figure-img" width="672" alt="Monthly totals as bars">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-bar1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.7: Monthly totals as bars
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The argument <code>las = 2</code> turns the labels on the x-axis so that they all fit.</p>
+</section><section id="a-bar-chart-of-summarised-data" class="level3" data-number="21.3.2"><h3 data-number="21.3.2" class="anchored" data-anchor-id="a-bar-chart-of-summarised-data">
+<span class="header-section-number">21.3.2</span> A bar chart of summarised data</h3>
+<p>Let us find the average bill of each office with <code><a href="https://rdrr.io/r/base/tapply.html">tapply()</a></code>, and draw the averages as horizontal bars.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">office_mean</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tapply.html">tapply</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span>, <span class="va">bills</span><span class="op">$</span><span class="va">office</span>, <span class="va">mean</span><span class="op">)</span> <span class="op">/</span> <span class="fl">1000</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">office_mean</span>, <span class="fl">1</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  Bhimtal Kesarganj  Nandgaon  Rajnagar    Sonpur 
+     47.5      48.4      45.0      46.1      46.7 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">old_par</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span>mar <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">7</span>, <span class="fl">4</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span>   <span class="co"># wider left margin for the names</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span>height <span class="op">=</span> <span class="va">office_mean</span>,</span>
+<span>        main <span class="op">=</span> <span class="st">"Average bill by office"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Average bill (Rs thousand)"</span>,</span>
+<span>        col <span class="op">=</span> <span class="st">"steelblue"</span>,</span>
+<span>        horiz <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>        las <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>        cex.names <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span><span class="va">old_par</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-bar2" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-bar2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-bar2-1.png" class="img-fluid figure-img" width="672" alt="Average bill of each office">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-bar2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.8: Average bill of each office
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p><code>horiz = TRUE</code> draws the bars sideways. <code>las = 1</code> keeps the office names upright, and <code>cex.names = 0.8</code> makes them a little smaller. The office names need more room on the left than R leaves by default. So we widened the left margin with <code>par(mar = )</code>, and restored it afterwards. We learn more about <code><a href="https://rdrr.io/r/graphics/par.html">par()</a></code> later in this chapter.</p>
+<p>The averages are close. Kesarganj is a little ahead, at ₹48.4 thousand. An average alone does not show why. We will find out at the end of this chapter.</p>
+</section><section id="a-grouped-bar-chart" class="level3" data-number="21.3.3"><h3 data-number="21.3.3" class="anchored" data-anchor-id="a-grouped-bar-chart">
+<span class="header-section-number">21.3.3</span> A grouped bar chart</h3>
+<p>Next, let us total the bills by head <em>and</em> by quarter. When <code><a href="https://rdrr.io/r/base/tapply.html">tapply()</a></code> gets two grouping columns in a <code><a href="https://rdrr.io/r/base/list.html">list()</a></code>, it gives a matrix. Each row is a head and each column a quarter.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">head_qtr</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tapply.html">tapply</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span>, <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">head</span>, <span class="va">bills</span><span class="op">$</span><span class="va">quarter</span><span class="op">)</span>, <span class="va">sum</span><span class="op">)</span> <span class="op">/</span> <span class="fl">1e5</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="va">head_qtr</span>, <span class="fl">1</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                  Q1   Q2   Q3    Q4
+Electricity     47.1 51.9 62.6  73.1
+Office expenses 58.1 49.6 64.2  93.0
+Repairs         92.4 82.7 99.9 144.3
+Supplies        74.6 81.3 89.7 142.9
+Travel          24.5 27.6 30.8  39.9</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span>height <span class="op">=</span> <span class="va">head_qtr</span>,</span>
+<span>        main <span class="op">=</span> <span class="st">"Spending by head and quarter"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Quarter"</span>, ylab <span class="op">=</span> <span class="st">"Amount (Rs lakh)"</span>,</span>
+<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"red"</span>, <span class="st">"green"</span>, <span class="st">"blue"</span>, <span class="st">"yellow"</span>, <span class="st">"purple"</span><span class="op">)</span>,</span>
+<span>        beside <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>        legend.text <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html">rownames</a></span><span class="op">(</span><span class="va">head_qtr</span><span class="op">)</span>,</span>
+<span>        args.legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"topleft"</span>, cex <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-grouped" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-grouped-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-grouped-1.png" class="img-fluid figure-img" width="672" alt="Spending under each head, quarter by quarter">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-grouped-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.9: Spending under each head, quarter by quarter
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p><code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code> draws one group of bars for each <em>column</em> of the matrix. Inside a group, it draws one bar, in its own colour, for each <em>row</em>. So we get a group for each quarter, with one bar per head. The legend names the rows. Every head rises in the fourth quarter, because of the March rush.</p>
+</section><section id="a-stacked-bar-chart" class="level3" data-number="21.3.4"><h3 data-number="21.3.4" class="anchored" data-anchor-id="a-stacked-bar-chart">
+<span class="header-section-number">21.3.4</span> A stacked bar chart</h3>
+<p>The same matrix with <code>beside = FALSE</code> <em>stacks</em> the rows inside each column. Now each bar is a quarter, and each coloured piece is a head.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="va">head_qtr</span>,</span>
+<span>        main <span class="op">=</span> <span class="st">"Spending by quarter and head"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Quarter"</span>, ylab <span class="op">=</span> <span class="st">"Amount (Rs lakh)"</span>,</span>
+<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"red"</span>, <span class="st">"green"</span>, <span class="st">"blue"</span>, <span class="st">"yellow"</span>, <span class="st">"purple"</span><span class="op">)</span>,</span>
+<span>        legend.text <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html">rownames</a></span><span class="op">(</span><span class="va">head_qtr</span><span class="op">)</span>,</span>
+<span>        args.legend <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"topleft"</span>, cex <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span>,</span>
+<span>        beside <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-stacked" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-stacked-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-stacked-1.png" class="img-fluid figure-img" width="672" alt="Spending in each quarter, made up of the heads">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-stacked-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.10: Spending in each quarter, made up of the heads
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>A stacked bar shows the total of each quarter, and how the heads make it up. A grouped bar is better for comparing one head across quarters.</p>
+</section><section id="a-bar-chart-from-a-formula" class="level3" data-number="21.3.5"><h3 data-number="21.3.5" class="anchored" data-anchor-id="a-bar-chart-from-a-formula">
+<span class="header-section-number">21.3.5</span> A bar chart from a formula</h3>
+<p>We can also give <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code> a formula and a data frame. <code><a href="https://rdrr.io/r/stats/aggregate.html">aggregate()</a></code> makes the data frame of totals. Then <code>amount ~ office</code> means “amount for each office”.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">office_total</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/aggregate.html">aggregate</a></span><span class="op">(</span><span class="va">amount</span> <span class="op">~</span> <span class="va">office</span>, data <span class="op">=</span> <span class="va">bills</span>, FUN <span class="op">=</span> <span class="va">sum</span><span class="op">)</span></span>
+<span><span class="va">office_total</span><span class="op">$</span><span class="va">amount</span> <span class="op">&lt;-</span> <span class="va">office_total</span><span class="op">$</span><span class="va">amount</span> <span class="op">/</span> <span class="fl">1e5</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="va">amount</span> <span class="op">~</span> <span class="va">office</span>, data <span class="op">=</span> <span class="va">office_total</span>,</span>
+<span>        ylab <span class="op">=</span> <span class="st">"Amount (Rs lakh)"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-formula" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-formula-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-formula-1.png" class="img-fluid figure-img" width="672" alt="Total of bills of each office">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-formula-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.11: Total of bills of each office
+</figcaption></figure>
+</div>
+</div>
+</div>
+</section></section><section id="histograms-using-hist" class="level2" data-number="21.4"><h2 data-number="21.4" class="anchored" data-anchor-id="histograms-using-hist">
+<span class="header-section-number">21.4</span> Histograms using <code>hist()</code>
+</h2>
+<p>The <code><a href="https://rdrr.io/r/graphics/hist.html">hist()</a></code> function draws a histogram. A histogram shows how the values of a numeric column are spread. The basic syntax is:</p>
+<pre><code>hist(x, breaks = "Sturges", freq = TRUE, main = NULL,
+     xlab = NULL, ylab = "Frequency", ...)</code></pre>
+<p>The arguments are these.</p>
+<ul>
+<li>
+<code>x</code> is the numeric vector to be plotted.</li>
+<li>
+<code>breaks</code> sets the bins. By default R chooses the number of bins by the Sturges formula. We can give a different number of bins, or a vector of break points.</li>
+<li>
+<code>freq</code> chooses what the y-axis shows. If <code>TRUE</code>, it shows the number of values in each bin. If <code>FALSE</code>, it shows the density.</li>
+<li>
+<code>main</code> is the title of the histogram.</li>
+<li>
+<code>xlab</code> and <code>ylab</code> are the labels of the axes.</li>
+<li>
+<code>...</code> holds more arguments for the chart, such as <code>col</code>, <code>border</code> and <code>xlim</code>.</li>
+</ul>
+<p>Let us draw a histogram of the bill amounts, in thousands of rupees.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">/</span> <span class="fl">1000</span>, breaks <span class="op">=</span> <span class="fl">50</span>, col <span class="op">=</span> <span class="st">"lightblue"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Amount (Rs thousand)"</span>, ylab <span class="op">=</span> <span class="st">"Number of bills"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Histogram of bill amounts"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-hist1" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-hist1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-hist1-1.png" class="img-fluid figure-img" width="672" alt="Histogram of bill amounts">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-hist1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.12: Histogram of bill amounts
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>Most bills are below ₹50 thousand. A few run to several lakh. A long tail on the right like this is called <em>right skew</em>.</p>
+<p>Skewed amounts are easier to see on a log scale. <code><a href="https://rdrr.io/r/base/Log.html">log10()</a></code> turns ₹10,000 into 4, ₹1 lakh into 5 and ₹10 lakh into 6. Let us draw the histogram of <code>log10(amount)</code> as a density, with <code>freq = FALSE</code>. Then we add a density curve on top of it with <code><a href="https://rdrr.io/r/graphics/lines.html">lines()</a></code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html">log10</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>,</span>
+<span>     freq <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>     breaks <span class="op">=</span> <span class="fl">40</span>,</span>
+<span>     col <span class="op">=</span> <span class="st">"grey85"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"log10 of amount (4 = Rs 10,000, 5 = Rs 1 lakh)"</span>,</span>
+<span>     main <span class="op">=</span> <span class="st">"Histogram, with density curve"</span><span class="op">)</span></span>
+<span><span class="co"># add density curve</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/lines.html">lines</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/density.html">density</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html">log10</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="st">"blue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-hist2" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-hist2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-hist2-1.png" class="img-fluid figure-img" width="672" alt="Histogram of log10 of bill amounts, with a density curve">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-hist2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.13: Histogram of log10 of bill amounts, with a density curve
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p><code><a href="https://rdrr.io/r/graphics/lines.html">lines()</a></code> adds a layer to the chart already drawn. The bars and the curve now have a smooth, bell-like shape. Look carefully at the bar just to the left of 5, that is, just below ₹1 lakh. It stands a little above the curve, while its neighbour on the right falls below it. The sign is faint here, among three thousand bills. We will come back to it.</p>
+</section><section id="box-plots-using-boxplot" class="level2" data-number="21.5"><h2 data-number="21.5" class="anchored" data-anchor-id="box-plots-using-boxplot">
+<span class="header-section-number">21.5</span> Box plots using <code>boxplot()</code>
+</h2>
+<p>A box plot is also called a box and whiskers plot. It shows the spread of a numeric column through a few summary values. <a href="#fig-boxplots" class="quarto-xref">Figure&nbsp;<span>21.14</span></a> shows how to read one.</p>
+<div class="cell" data-layout-align="center">
+<div class="cell-output-display">
+<div id="fig-boxplots" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-align="center">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-boxplots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="images/boxplots.png" class="quarto-figure quarto-figure-center figure-img" style="height:45.0%" width="336" alt="Understanding boxplots">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-boxplots-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.14: Understanding boxplots
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The syntax is <code>boxplot(x, ...)</code>. Here <code>x</code> is a numeric vector, or a list of numeric vectors. The <code>...</code> holds more arguments to change how the chart looks.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">/</span> <span class="fl">1000</span>, ylab <span class="op">=</span> <span class="st">"Amount (Rs thousand)"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-box1" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-box1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-box1-1.png" class="img-fluid figure-img" width="672" alt="Box plot of all bill amounts">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-box1-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.15: Box plot of all bill amounts
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The points above the top whisker are values far from the middle of the data. Here there are 197 of them. That is about 6% of all bills. With skewed amounts many bills fall beyond the whisker, and most of them are genuine large bills. So a point beyond the whisker is a candidate to look at, not an error.</p>
+<p>Box plots are most useful when drawn side by side for several groups. We can give a formula, such as <code>amount ~ office</code>, as we did for <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code>. Let us compare the offices.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot</a></span><span class="op">(</span><span class="va">amount</span> <span class="op">~</span> <span class="va">office</span>,</span>
+<span>        data <span class="op">=</span> <span class="va">bills</span>,</span>
+<span>        log <span class="op">=</span> <span class="st">"y"</span>,</span>
+<span>        col <span class="op">=</span> <span class="st">"lightgray"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="st">"Office"</span>, ylab <span class="op">=</span> <span class="st">"Amount (Rs, log scale)"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-box2" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-box2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-box2-1.png" class="img-fluid figure-img" width="672" alt="Bill amounts of each office, on a log scale">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-box2-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.16: Bill amounts of each office, on a log scale
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The thick line in each box is the median. Kesarganj has the highest median bill, ₹34,160, against ₹28,663 to ₹31,274 for the other offices. The difference is not large. A box plot shows the overall spread well, but it can hide a narrow pile of values. We need the histogram for that.</p>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Caution
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A log scale cannot show zero or negative values. With <code>log = "y"</code>, R leaves such values out of some charts with a warning. Other charts, like <code><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot()</a></code>, stop with an error. Real registers often have zero amounts (cancelled bills) or negative ones (reversals). Count and examine them separately before drawing a chart on a log scale.</p>
+</div>
+</div>
+</section><section id="saving-and-exporting-charts" class="level2" data-number="21.6"><h2 data-number="21.6" class="anchored" data-anchor-id="saving-and-exporting-charts">
+<span class="header-section-number">21.6</span> Saving and exporting charts</h2>
+<p>Charts can be saved from the RStudio menu or through code. Both ways are explained near the end of <a href="09-2ggplot2-polish.html" class="quarto-xref"><span>Chapter 23</span></a>, including the graphics devices used for base R charts.</p>
+</section><section id="use-of-par" class="level2" data-number="21.7"><h2 data-number="21.7" class="anchored" data-anchor-id="use-of-par">
+<span class="header-section-number">21.7</span> Use of <code>par()</code>
+</h2>
+<p>One useful function of base R graphics is <code><a href="https://rdrr.io/r/graphics/par.html">par()</a></code>. It sets or reads the graphical <strong>par</strong>ameters. In the following example, its argument <code>mfrow = c(nr, nc)</code> draws the next charts in a grid of <code>nr</code> rows and <code>nc</code> columns on the same page.</p>
+<p>Here we use a famous built-in dataset, <em>Anscombe’s quartet</em>. It has four small datasets, created by the statistician Francis Anscombe in 1973 to show why we must look at data. Let us first look at their summary statistics.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html">data.frame</a></span><span class="op">(</span>set  <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">4</span>,</span>
+<span>           mean_x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, \<span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"x"</span>, <span class="va">i</span><span class="op">)</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>           mean_y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, \<span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/mean.html">mean</a></span><span class="op">(</span><span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"y"</span>, <span class="va">i</span><span class="op">)</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>           cor_xy <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html">sapply</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>, \<span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/Round.html">round</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/cor.html">cor</a></span><span class="op">(</span><span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"x"</span>, <span class="va">i</span><span class="op">)</span><span class="op">]</span><span class="op">]</span>,</span>
+<span>                                              <span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"y"</span>, <span class="va">i</span><span class="op">)</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, <span class="fl">3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  set mean_x mean_y cor_xy
+1   1      9    7.5  0.816
+2   2      9    7.5  0.816
+3   3      9    7.5  0.816
+4   4      9    7.5  0.817</code></pre>
+</div>
+</div>
+<p>The four datasets have the same means and practically the same correlation. Now let us draw them.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">old_par</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">purrr</span><span class="fu">::</span><span class="fu"><a href="https://purrr.tidyverse.org/reference/map.html">walk</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">4</span>,</span>
+<span>     <span class="op">~</span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">'x'</span>, <span class="va">.x</span><span class="op">)</span><span class="op">]</span><span class="op">]</span>,</span>
+<span>           <span class="va">anscombe</span><span class="op">[[</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">'y'</span>, <span class="va">.x</span><span class="op">)</span><span class="op">]</span><span class="op">]</span>,</span>
+<span>           xlab <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">'x'</span>, <span class="va">.x</span><span class="op">)</span>,</span>
+<span>           ylab <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">'y'</span>, <span class="va">.x</span><span class="op">)</span>,</span>
+<span>           main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste</a></span><span class="op">(</span><span class="st">"Anscombe's Quartet Chart No."</span>, <span class="va">.x</span><span class="op">)</span><span class="op">)</span></span>
+<span>     <span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span><span class="va">old_par</span><span class="op">)</span>   <span class="co"># restore the earlier settings</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-anscombe" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-anscombe-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-anscombe-1.png" class="img-fluid figure-img" width="672" alt="Anscombe’s quartet, four datasets with the same summary statistics">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-anscombe-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.17: Anscombe’s quartet, four datasets with the same summary statistics
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The pictures are completely different. Only the first is a normal straight line relationship. The second is a curve. The third is a straight line spoiled by one outlier. In the fourth, a single point creates the whole correlation. Summary statistics alone would never tell us this. This is the strongest argument for always looking at the data.</p>
+<p><code><a href="https://rdrr.io/r/graphics/par.html">par()</a></code> returns the old settings. We saved them in <code>old_par</code> and restored them at the end. Otherwise all later charts would also be drawn four to a page.</p>
+<p>The same idea is handy in audit. We can draw a histogram, a box plot, a monthly line and a bar chart of a new register on one page, and take in the whole picture at once.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">old_par</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span>mfrow <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/Log.html">log10</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>, breaks <span class="op">=</span> <span class="fl">40</span>, main <span class="op">=</span> <span class="st">"Amounts (log10)"</span>, xlab <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot</a></span><span class="op">(</span><span class="va">amount</span> <span class="op">~</span> <span class="va">quarter</span>, data <span class="op">=</span> <span class="va">bills</span>, log <span class="op">=</span> <span class="st">"y"</span>, main <span class="op">=</span> <span class="st">"By quarter"</span>,</span>
+<span>        xlab <span class="op">=</span> <span class="cn">NULL</span>, ylab <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html">plot</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">12</span>, <span class="va">monthly</span>, type <span class="op">=</span> <span class="st">"b"</span>, main <span class="op">=</span> <span class="st">"Monthly total (Rs lakh)"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Month (1 = April)"</span>, ylab <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html">table</a></span><span class="op">(</span><span class="va">bills</span><span class="op">$</span><span class="va">office</span><span class="op">)</span>, main <span class="op">=</span> <span class="st">"Bills by office"</span>, las <span class="op">=</span> <span class="fl">2</span>, cex.names <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/par.html">par</a></span><span class="op">(</span><span class="va">old_par</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-par" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-par-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-par-1.png" class="img-fluid figure-img" width="672" alt="A first look at the bill register, four charts on one page">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-par-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.18: A first look at the bill register, four charts on one page
+</figcaption></figure>
+</div>
+</div>
+</div>
+</section><section id="sec-baseplot-audit" class="level2" data-number="21.8"><h2 data-number="21.8" class="anchored" data-anchor-id="sec-baseplot-audit">
+<span class="header-section-number">21.8</span> Audit use case, payments just below a limit</h2>
+<p>Officers of our division may approve a bill up to ₹1 lakh. Anything above needs a higher authority, or a tender. A common irregularity is to <em>split</em> a larger purchase into several bills, each just below the limit. A histogram of bill amounts can show this at a glance. Let us draw the bills between ₹50,000 and ₹1.5 lakh, in bins of ₹2,500.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">near_limit</span> <span class="op">&lt;-</span> <span class="va">bills</span><span class="op">$</span><span class="va">amount</span><span class="op">[</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">&gt;=</span> <span class="fl">50000</span> <span class="op">&amp;</span> <span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">&lt;=</span> <span class="fl">150000</span><span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/hist.html">hist</a></span><span class="op">(</span><span class="va">near_limit</span>,</span>
+<span>     breaks <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq</a></span><span class="op">(</span><span class="fl">50000</span>, <span class="fl">150000</span>, by <span class="op">=</span> <span class="fl">2500</span><span class="op">)</span>,</span>
+<span>     col <span class="op">=</span> <span class="st">"grey80"</span>, border <span class="op">=</span> <span class="st">"white"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Amount of bill (Rs)"</span>, main <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html">abline</a></span><span class="op">(</span>v <span class="op">=</span> <span class="fl">100000</span>, col <span class="op">=</span> <span class="st">"red"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-belowlimit" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-belowlimit-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-belowlimit-1.png" class="img-fluid figure-img" width="672" alt="Bills between Rs 50,000 and Rs 1.5 lakh, with the approval limit marked in red">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-belowlimit-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.19: Bills between Rs 50,000 and Rs 1.5 lakh, with the approval limit marked in red
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The number of bills falls steadily as amounts rise, as expected. The exception is a sharp spike just <em>below</em> ₹1 lakh, and a drop just after it. The bins of ₹2,500 just under the limit hold far more bills than their neighbours. Such a spike is a strong lead for splitting of purchases.</p>
+<p>The next step is to see <em>whose</em> bills these are. Let us take the bills from ₹95,000 up to the limit and count them by office and head.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">just_below</span> <span class="op">&lt;-</span> <span class="va">bills</span><span class="op">[</span><span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">&gt;=</span> <span class="fl">95000</span> <span class="op">&amp;</span> <span class="va">bills</span><span class="op">$</span><span class="va">amount</span> <span class="op">&lt;</span> <span class="fl">100000</span>, <span class="op">]</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/table.html">table</a></span><span class="op">(</span><span class="va">just_below</span><span class="op">$</span><span class="va">office</span>, <span class="va">just_below</span><span class="op">$</span><span class="va">head</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>           
+            Electricity Office expenses Repairs Supplies Travel
+  Bhimtal             2               2       2        0      0
+  Kesarganj           1               3      54        3      0
+  Nandgaon            1               0       0        2      0
+  Rajnagar            1               0       0        2      1
+  Sonpur              3               1       2        1      0</code></pre>
+</div>
+</div>
+<p>Of the 81 bills in this narrow range, 54 are repair bills of Kesarganj. The other offices have only a few each, spread over the heads. Let us draw them as bars to show the point in a report.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb36"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/barplot.html">barplot</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sort.html">sort</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html">table</a></span><span class="op">(</span><span class="va">just_below</span><span class="op">$</span><span class="va">office</span><span class="op">)</span>, decreasing <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>        col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"firebrick"</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html">rep</a></span><span class="op">(</span><span class="st">"grey70"</span>, <span class="fl">4</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>        ylab <span class="op">=</span> <span class="st">"Number of bills"</span>, main <span class="op">=</span> <span class="st">"Bills just below Rs 1 lakh"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="fig-bp-justbelow" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure"><div aria-describedby="fig-bp-justbelow-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="08-plot_files/figure-html/fig-bp-justbelow-1.png" class="img-fluid figure-img" width="672" alt="Bills of Rs 95,000 up to the limit, by office">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-bp-justbelow-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;21.20: Bills of Rs 95,000 up to the limit, by office
+</figcaption></figure>
+</div>
+</div>
+</div>
+<p>The auditor would now list the 54 repair bills of Kesarganj, sorted by date. Bills for the same work, to the same contractor, on nearby dates point to one job split into many. Ask the office for the estimates and the work orders. Then check who approved each bill and whether the combined value needed higher sanction. Put the chart, the list and the replies in the working papers. We test this pattern more formally in <a href="19-nigrini-tests.html" class="quarto-xref"><span>Chapter 31</span></a>.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Audit tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Choose the bins carefully. Too wide a bin hides the spike. Here we used bins of ₹2,500 and limited the chart to the range around the limit. Use <code><a href="https://rdrr.io/r/graphics/abline.html">abline()</a></code> to mark the limit, so that the reader sees the point at once.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>Caution
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>By default, <code><a href="https://rdrr.io/r/graphics/hist.html">hist()</a></code> counts a value that falls exactly on a break in the bin to its left. So a bill of exactly ₹1 lakh is counted in the bin just <em>below</em> the limit. Keep this in mind when the rule says “up to ₹1 lakh”, and check the bills exactly at the limit separately.</p>
+</div>
+</div>
+</section><section id="a-suggested-workflow" class="level2" data-number="21.9"><h2 data-number="21.9" class="anchored" data-anchor-id="a-suggested-workflow">
+<span class="header-section-number">21.9</span> A suggested workflow</h2>
+<ol type="1">
+<li>
+<strong>Look before you summarise.</strong> Draw a quick chart of any new data, like a bill register, before you work out totals. Anscombe’s quartet showed that summary statistics alone can hide very different patterns.</li>
+<li>
+<strong>Check the spread of amounts with <code><a href="https://rdrr.io/r/graphics/hist.html">hist()</a></code>.</strong> A histogram of amounts shows skew, outliers and unusual spikes. Try a few values of <code>breaks</code>, since bins that are too wide hide the pattern. Use <code><a href="https://rdrr.io/r/base/Log.html">log10()</a></code> for skewed amounts.</li>
+<li>
+<strong>Mark the limits with <code><a href="https://rdrr.io/r/graphics/abline.html">abline()</a></code>.</strong> Draw the financial limit, say ₹1 lakh, on the chart. A spike just below the line is a lead for split purchases.</li>
+<li>
+<strong>Compare groups with <code><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot()</a></code>.</strong> Use a formula like <code>amount ~ office</code> to compare the spread across offices or heads. Points beyond the whiskers are candidates to look at, not errors.</li>
+<li>
+<strong>Count and total categories with <code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code>.</strong> Count bills with <code><a href="https://rdrr.io/r/base/table.html">table()</a></code>, or total them with <code><a href="https://rdrr.io/r/base/tapply.html">tapply()</a></code>, and draw them as bars. Use <code>beside = TRUE</code> to compare groups side by side, or stacked bars to show the make-up of each total.</li>
+<li>
+<strong>See trends with a line chart.</strong> Plot the monthly totals with <code>type = "b"</code>. A rush in March stands out at once.</li>
+<li>
+<strong>See relationships with <code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code>.</strong> A scatter plot of two columns shows whether they move together. Mark the odd points with <code><a href="https://rdrr.io/r/graphics/points.html">points()</a></code> and <code><a href="https://rdrr.io/r/graphics/text.html">text()</a></code>. It shows association, not cause.</li>
+<li>
+<strong>Put related charts together with <code><a href="https://rdrr.io/r/graphics/par.html">par()</a></code>.</strong> Use <code>par(mfrow = )</code> to see several charts on one page. Restore the old settings afterwards.</li>
+<li>
+<strong>Follow up the leads.</strong> Take the bills in the unusual bin or group, and examine them by office, date and supporting documents.</li>
+</ol>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Remember
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>A chart is the quickest way to see what the numbers hide. Look at the data before trusting any summary. But a spike or an outlier on a chart is only a lead. Confirm it from the original records before reporting.</p>
+</div>
+</div>
+</section><section id="summary-of-functions-used" class="level2" data-number="21.10"><h2 data-number="21.10" class="anchored" data-anchor-id="summary-of-functions-used">
+<span class="header-section-number">21.10</span> Summary of functions used</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 22%">
+<col style="width: 45%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>Package</th>
+<th>What it does</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/graphics/plot.default.html">plot()</a></code></td>
+<td>base R</td>
+<td>Scatter plots, line charts (<code>type = "l"</code> or <code>"b"</code>), and box plots when <code>x</code> is a factor</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/r/graphics/points.html">points()</a></code>, <code><a href="https://rdrr.io/r/graphics/text.html">text()</a></code>
+</td>
+<td>base R</td>
+<td>Add points and labels to an existing chart</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/graphics/barplot.html">barplot()</a></code></td>
+<td>base R</td>
+<td>Bar charts, grouped (<code>beside = TRUE</code>) or stacked, from a vector, a matrix or a formula</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/r/base/table.html">table()</a></code>, <code><a href="https://rdrr.io/r/base/tapply.html">tapply()</a></code>, <code><a href="https://rdrr.io/r/stats/aggregate.html">aggregate()</a></code>
+</td>
+<td>base R</td>
+<td>Count or total values by group, to feed a chart</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/graphics/hist.html">hist()</a></code></td>
+<td>base R</td>
+<td>Histograms, with <code>breaks</code> controlling the bins</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/r/stats/density.html">density()</a></code>, <code><a href="https://rdrr.io/r/graphics/lines.html">lines()</a></code>
+</td>
+<td>base R</td>
+<td>Density curves, and adding lines to an existing chart</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/base/Log.html">log10()</a></code></td>
+<td>base R</td>
+<td>Logarithm to base 10, to spread out skewed amounts</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/r/graphics/boxplot.html">boxplot()</a></code>, <code><a href="https://rdrr.io/r/grDevices/boxplot.stats.html">boxplot.stats()</a></code>
+</td>
+<td>base R</td>
+<td>Box plots, including by groups with a formula like <code>y ~ group</code>, and the points beyond the whiskers</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/graphics/abline.html">abline()</a></code></td>
+<td>base R</td>
+<td>Adds a straight line, like a limit, to an existing chart</td>
+</tr>
+<tr class="even">
+<td>
+<code>par(mfrow = )</code>, <code>par(mar = )</code>
+</td>
+<td>base R</td>
+<td>Several charts on one page, the margins, and other graphical settings</td>
+</tr>
+</tbody>
+</table>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list" style="display: none">
+<div id="ref-R-quarto" class="csl-entry" role="listitem">
+Allaire, JJ, and Christophe Dervieux. <em>Quarto: R Interface to Quarto Markdown Publishing System</em>, 2025. <a href="https://github.com/quarto-dev/quarto-r">https://github.com/quarto-dev/quarto-r</a>.
+</div>
+<div id="ref-R-visNetwork" class="csl-entry" role="listitem">
+Almende B.V. and Contributors, and Benoit Thieurmel. <em>visNetwork: Network Visualization Using Vis.js Library</em>, 2025. <a href="https://datastorm-open.github.io/visNetwork/">https://datastorm-open.github.io/visNetwork/</a>.
+</div>
+<div id="ref-igraph2023" class="csl-entry" role="listitem">
+Antonov, Michael, Gábor Csárdi, Szabolcs Horvát, Kirill Müller, Tamás Nepusz, Daniel Noom, Maëlle Salmon, Vincent Traag, Brooke Foucault Welles, and Fabio Zanini. <span>“Igraph Enables Fast and Robust Network Analysis Across Programming Languages.”</span> <em>arXiv Preprint arXiv:2311.10260</em>, 2023. <a href="https://doi.org/10.48550/arXiv.2311.10260">https://doi.org/10.48550/arXiv.2311.10260</a>.
+</div>
+<div id="ref-R-PGRdup" class="csl-entry" role="listitem">
+Aravind, J., J. Radhamani, Kalyani Srinivasan, B. Ananda Subhash, and Rishi Kumar Tyagi. <em>PGRdup: Discover Probable Duplicates in Plant Genetic Resources Collections</em>, 2026. <a href="https://cran.r-project.org/package=PGRdup">https://cran.r-project.org/package=PGRdup</a>.
+</div>
+<div id="ref-R-magrittr" class="csl-entry" role="listitem">
+Bache, Stefan Milton, and Hadley Wickham. <em>Magrittr: A Forward-Pipe Operator for r</em>, 2025. <a href="https://magrittr.tidyverse.org">https://magrittr.tidyverse.org</a>.
+</div>
+<div id="ref-R-data.table" class="csl-entry" role="listitem">
+Barrett, Tyson, Matt Dowle, Arun Srinivasan, Jan Gorecki, Michael Chirico, Toby Hocking, Benjamin Schwendinger, and Ivan Krylov. <em>Data.table: Extension of ‘Data.frame‘</em>, 2026. <a href="https://r-datatable.com">https://r-datatable.com</a>.
+</div>
+<div id="ref-frank_ben" class="csl-entry" role="listitem">
+Benford, Frank. <span>“The Law of Anomalous Numbers.”</span> <em>Proceedings of the American Philosophical Society</em> 78, no. 4 (1938): 551–72. <a href="http://www.jstor.org/stable/984802">http://www.jstor.org/stable/984802</a>.
+</div>
+<div id="ref-R-FNN" class="csl-entry" role="listitem">
+Beygelzimer, Alina, Sham Kakadet, John Langford, Sunil Arya, David Mount, and Shengqiao Li. <em>FNN: Fast Nearest Neighbor Search Algorithms and Applications</em>, 2024. <a href="https://doi.org/10.32614/CRAN.package.FNN">https://doi.org/10.32614/CRAN.package.FNN</a>.
+</div>
+<div id="ref-R-deaR" class="csl-entry" role="listitem">
+Bolos, Vicente, Vicente Coll-Serrano, and Rafael Benitez Suarez. <em>deaR: Conventional and Fuzzy Data Envelopment Analysis</em>, 2026. <a href="https://doi.org/10.32614/CRAN.package.deaR">https://doi.org/10.32614/CRAN.package.deaR</a>.
+</div>
+<div id="ref-deaR2025" class="csl-entry" role="listitem">
+Bolós, V. J., R. Benítez, and V. Coll-Serrano. <span>“deaR: Conventional and Fuzzy DEA Models with r.”</span> <em>SoftwareX</em> 31 (2025): 102266, 1–6. <a href="https://doi.org/10.1016/j.softx.2025.102266">https://doi.org/10.1016/j.softx.2025.102266</a>.
+</div>
+<div id="ref-R-SnowballC" class="csl-entry" role="listitem">
+Bouchet-Valat, Milan. <em>SnowballC: Snowball Stemmers Based on the c Libstemmer UTF-8 Library</em>, 2023. <a href="https://github.com/nalimilan/R.TeMiS">https://github.com/nalimilan/R.TeMiS</a>.
+</div>
+<div id="ref-R-tidygeocoder" class="csl-entry" role="listitem">
+Cambon, Jesse, Diego Hernangómez, Christopher Belanger, and Daniel Possenriede. <em>Tidygeocoder: Geocoding Made Easy</em>, 2025. <a href="https://jessecambon.github.io/tidygeocoder/">https://jessecambon.github.io/tidygeocoder/</a>.
+</div>
+<div id="ref-R-leaflet" class="csl-entry" role="listitem">
+Cheng, Joe, Barret Schloerke, Bhaskar Karambelkar, Yihui Xie, and Garrick Aden-Buie. <em>Leaflet: Create Interactive Web Maps with the JavaScript Leaflet Library</em>, 2025. <a href="https://rstudio.github.io/leaflet/">https://rstudio.github.io/leaflet/</a>.
+</div>
+<div id="ref-R-benford.analysis" class="csl-entry" role="listitem">
+Cinelli, Carlos. <em>Benford.analysis: Benford Analysis for Data Validation and Forensic Analytics</em>, 2018. <a href="http://github.com/carloscinelli/benford.analysis">http://github.com/carloscinelli/benford.analysis</a>.
+</div>
+<div id="ref-dea" class="csl-entry" role="listitem">
+Cooper, William, Lawrence Seiford, and Joe Zhu. <span>“Data Envelopment Analysis: History, Models, and Interpretations.”</span> In <em>Handbook on Data Envelopment Analysis</em>, 1–39, 2011. <a href="https://doi.org/10.1007/978-1-4419-6151-8_1">https://doi.org/10.1007/978-1-4419-6151-8_1</a>.
+</div>
+<div id="ref-R-isotree" class="csl-entry" role="listitem">
+Cortes, David. <em>Isotree: Isolation-Based Outlier Detection</em>, 2026. <a href="https://github.com/david-cortes/isotree">https://github.com/david-cortes/isotree</a>.
+</div>
+<div id="ref-R-rebus" class="csl-entry" role="listitem">
+Cotton, Richard. <em>Rebus: Build Regular Expressions in a Human Readable Way</em>, 2017. <a href="https://doi.org/10.32614/CRAN.package.rebus">https://doi.org/10.32614/CRAN.package.rebus</a>.
+</div>
+<div id="ref-R-igraphdata" class="csl-entry" role="listitem">
+Csardi, Gabor. <em>Igraphdata: A Collection of Network Data Sets for the Igraph Package</em>, 2015. <a href="http://igraph.org">http://igraph.org</a>.
+</div>
+<div id="ref-igraph2006" class="csl-entry" role="listitem">
+Csárdi, Gábor, and Tamás Nepusz. <span>“The Igraph Software Package for Complex Network Research.”</span> <em>InterJournal</em> Complex Systems (2006): 1695. <a href="https://igraph.org">https://igraph.org</a>.
+</div>
+<div id="ref-R-igraph" class="csl-entry" role="listitem">
+Csárdi, Gábor, Tamás Nepusz, Vincent Traag, Szabolcs Horvát, Fabio Zanini, Daniel Noom, Kirill Müller, David Schoch, and Maëlle Salmon. <em>Igraph: Network Analysis and Visualization</em>, 2026. <a href="https://r.igraph.org/">https://r.igraph.org/</a>.
+</div>
+<div id="ref-R-timetk" class="csl-entry" role="listitem">
+Dancho, Matt, and Davis Vaughan. <em>Timetk: A Tool Kit for Working with Time Series</em>, 2025. <a href="https://github.com/business-science/timetk">https://github.com/business-science/timetk</a>.
+</div>
+<div id="ref-durtschi" class="csl-entry" role="listitem">
+Durtschi, Cindy, William Hillison, and Carl Pacini. <span>“The Effective Use of Benford’s Law to Assist in Detecting Fraud in Accounting Data.”</span> <em>J. Forensic Account</em> 5 (January 2004).
+</div>
+<div id="ref-R-wordcloud" class="csl-entry" role="listitem">
+Fellows, Ian. <em>Wordcloud: Word Clouds</em>, 2018. <a href="http://blog.fellstat.com/?cat=11">http://blog.fellstat.com/?cat=11</a>.
+</div>
+<div id="ref-R-janitor" class="csl-entry" role="listitem">
+Firke, Sam. <em>Janitor: Simple Tools for Examining and Cleaning Dirty Data</em>, 2024. <a href="https://github.com/sfirke/janitor">https://github.com/sfirke/janitor</a>.
+</div>
+<div id="ref-car2019" class="csl-entry" role="listitem">
+Fox, John, and Sanford Weisberg. <em>An <span>R</span> Companion to Applied Regression</em>. Third. Thousand Oaks <span>CA</span>: Sage, 2019. <a href="https://www.john-fox.ca/Companion/">https://www.john-fox.ca/Companion/</a>.
+</div>
+<div id="ref-R-car" class="csl-entry" role="listitem">
+Fox, John, Sanford Weisberg, and Brad Price. <em>Car: Companion to Applied Regression</em>, 2026. <a href="https://github.com/bprice2652/car_repo">https://github.com/bprice2652/car_repo</a>.
+</div>
+<div id="ref-r-stringi" class="csl-entry" role="listitem">
+Gagolewski, Marek. <em>Stringi: Fast and Portable Character String Processing in r</em>, 2021. <a href="https://stringi.gagolewski.com/">https://stringi.gagolewski.com/</a>.
+</div>
+<div id="ref-mcke" class="csl-entry" role="listitem">
+Gardner, Everette S., and Ed. Mckenzie. <span>“Forecasting Trends in Time Series.”</span> <em>Management Science</em> 31, no. 10 (1985): 1237–46. <a href="https://doi.org/10.1287/mnsc.31.10.1237">https://doi.org/10.1287/mnsc.31.10.1237</a>.
+</div>
+<div id="ref-R-tidyxl" class="csl-entry" role="listitem">
+Garmonsway, Duncan. <em>Tidyxl: Read Untidy Excel Files</em>, 2023. <a href="https://github.com/nacnudus/tidyxl">https://github.com/nacnudus/tidyxl</a>.
+</div>
+<div id="ref-R-unpivotr" class="csl-entry" role="listitem">
+———. <em>Unpivotr: Unpivot Complex and Irregular Data Layouts</em>, 2024. <a href="https://github.com/nacnudus/unpivotr">https://github.com/nacnudus/unpivotr</a>.
+</div>
+<div id="ref-JSSv040i03" class="csl-entry" role="listitem">
+Grolemund, Garrett, and Hadley Wickham. <span>“Dates and Times Made Easy with Lubridate.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://doi.org/10.18637/jss.v040.i03">https://doi.org/10.18637/jss.v040.i03</a>.
+</div>
+<div id="ref-lubridate2011" class="csl-entry" role="listitem">
+———. <span>“Dates and Times Made Easy with <span class="nocase">lubridate</span>.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://www.jstatsoft.org/v40/i03/">https://www.jstatsoft.org/v40/i03/</a>.
+</div>
+<div id="ref-R-arules" class="csl-entry" role="listitem">
+Hahsler, Michael, Christian Buchta, Bettina Gruen, and Kurt Hornik. <em>Arules: Mining Association Rules and Frequent Itemsets</em>, 2026. <a href="https://github.com/mhahsler/arules">https://github.com/mhahsler/arules</a>.
+</div>
+<div id="ref-arules2011" class="csl-entry" role="listitem">
+Hahsler, Michael, Sudheer Chelluboina, Kurt Hornik, and Christian Buchta. <span>“The Arules r-Package Ecosystem: Analyzing Interesting Patterns from Large Transaction Datasets.”</span> <em>Journal of Machine Learning Research</em> 12 (2011): 1977–81. <a href="https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html">https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html</a>.
+</div>
+<div id="ref-arules2005" class="csl-entry" role="listitem">
+Hahsler, Michael, Bettina Gruen, and Kurt Hornik. <span>“Arules – <span>A</span> Computational Environment for Mining Association Rules and Frequent Item Sets.”</span> <em>Journal of Statistical Software</em> 14, no. 15 (2005): 1–25. <a href="https://doi.org/10.18637/jss.v014.i15">https://doi.org/10.18637/jss.v014.i15</a>.
+</div>
+<div id="ref-R-dbscan" class="csl-entry" role="listitem">
+Hahsler, Michael, and Matthew Piekenbrock. <em>Dbscan: Density-Based Spatial Clustering of Applications with Noise (DBSCAN) and Related Algorithms</em>, 2026. <a href="https://github.com/mhahsler/dbscan">https://github.com/mhahsler/dbscan</a>.
+</div>
+<div id="ref-dbscan2019" class="csl-entry" role="listitem">
+Hahsler, Michael, Matthew Piekenbrock, and Derek Doran. <span>“<span class="nocase">dbscan</span>: Fast Density-Based Clustering with <span>R</span>.”</span> <em>Journal of Statistical Software</em> 91, no. 1 (2019): 1–30. <a href="https://doi.org/10.18637/jss.v091.i01">https://doi.org/10.18637/jss.v091.i01</a>.
+</div>
+<div id="ref-t_hill" class="csl-entry" role="listitem">
+Hill, Theodore P. <span>“The Significant-Digit Phenomenon.”</span> <em>The American Mathematical Monthly</em> 102, no. 4 (1995): 322–27. <a href="http://www.jstor.org/stable/2974952">http://www.jstor.org/stable/2974952</a>.
+</div>
+<div id="ref-R-palmerpenguins" class="csl-entry" role="listitem">
+Horst, Allison, Alison Hill, and Kristen Gorman. <em>Palmerpenguins: Palmer Archipelago (Antarctica) Penguin Data</em>, 2022. <a href="https://allisonhorst.github.io/palmerpenguins/">https://allisonhorst.github.io/palmerpenguins/</a>.
+</div>
+<div id="ref-phonics2018" class="csl-entry" role="listitem">
+Howard, II, James P. <span>“Phonetic Algorithms in <span>R</span>.”</span> <em>Journal of Open Source Software</em> 3, no. 22 (2018): 480. <a href="https://doi.org/10.21105/joss.00480">https://doi.org/10.21105/joss.00480</a>.
+</div>
+<div id="ref-phonics2020" class="csl-entry" role="listitem">
+———. <span>“Phonetic Spelling Algorithm Implementations for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 95, no. 8 (2020): 1–21. <a href="https://doi.org/10.18637/jss.v095.i08">https://doi.org/10.18637/jss.v095.i08</a>.
+</div>
+<div id="ref-R-phonics" class="csl-entry" role="listitem">
+Howard, James. <em>Phonics: Phonetic Spelling Algorithms</em>, 2026. <a href="https://phonics.jameshoward.us">https://phonics.jameshoward.us</a>.
+</div>
+<div id="ref-forecast2008" class="csl-entry" role="listitem">
+Hyndman, Rob J, and Yeasmin Khandakar. <span>“Automatic Time Series Forecasting: The Forecast Package for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 27, no. 3 (2008): 1–22. <a href="https://doi.org/10.18637/jss.v027.i03">https://doi.org/10.18637/jss.v027.i03</a>.
+</div>
+<div id="ref-R-forecast" class="csl-entry" role="listitem">
+Hyndman, Rob, George Athanasopoulos, Christoph Bergmeir, Gabriel Caceres, Leanne Chhay, Kirill Kuroptev, Maximilian Mücke, et al. <em>Forecast: Forecasting Functions for Time Series and Linear Models</em>, 2026. <a href="https://pkg.robjhyndman.com/forecast/">https://pkg.robjhyndman.com/forecast/</a>.
+</div>
+<div id="ref-R-gt" class="csl-entry" role="listitem">
+Iannone, Richard, Joe Cheng, Barret Schloerke, Shannon Haughton, Ellis Hughes, Alexandra Lauer, Romain François, JooYoung Seo, Ken Brevoort, and Olivier Roy. <em>Gt: Easily Create Presentation-Ready Display Tables</em>, 2026. <a href="https://gt.rstudio.com">https://gt.rstudio.com</a>.
+</div>
+<div id="ref-R-pointblank" class="csl-entry" role="listitem">
+Iannone, Richard, Mauricio Vargas, and June Choe. <em>Pointblank: Data Validation and Organization of Metadata for Local and Remote Tables</em>, 2026. <a href="https://rstudio.github.io/pointblank/">https://rstudio.github.io/pointblank/</a>.
+</div>
+<div id="ref-10.2307/1390807" class="csl-entry" role="listitem">
+Ihaka, Ross, and Robert Gentleman. <span>“R: A Language for Data Analysis and Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 5, no. 3 (1996): 299–314. <a href="http://www.jstor.org/stable/1390807">http://www.jstor.org/stable/1390807</a>.
+</div>
+<div id="ref-R-colorspace" class="csl-entry" role="listitem">
+Ihaka, Ross, Paul Murrell, Kurt Hornik, Jason C. Fisher, Reto Stauffer, Claus O. Wilke, Claire D. McWhite, and Achim Zeileis. <em>Colorspace: A Toolbox for Manipulating and Assessing Colors and Palettes</em>, 2025. <a href="https://colorspace.R-Forge.R-project.org/">https://colorspace.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-R-bupaR" class="csl-entry" role="listitem">
+Janssenswillen, Gert. <em>bupaR: Business Process Analysis in r</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-edeaR" class="csl-entry" role="listitem">
+———. <em>edeaR: Exploratory and Descriptive Event-Based Data Analysis</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processcheckR" class="csl-entry" role="listitem">
+———. <em>processcheckR: Rule-Based Conformance Checking of Business Process Event Data</em>, 2025. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processmapR" class="csl-entry" role="listitem">
+———. <em>processmapR: Construct Process Maps Using Event Data</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-factoextra" class="csl-entry" role="listitem">
+Kassambara, Alboukadel, and Fabian Mundt. <em>Factoextra: Extract and Visualize the Results of Multivariate Data Analyses</em>, 2026. <a href="https://github.com/kassambara/factoextra">https://github.com/kassambara/factoextra</a>.
+</div>
+<div id="ref-R-changepoint" class="csl-entry" role="listitem">
+Killick, Rebecca. <em>Changepoint: Methods for Changepoint Detection</em>, 2024. <a href="https://github.com/rkillick/changepoint/">https://github.com/rkillick/changepoint/</a>.
+</div>
+<div id="ref-changepoint2014" class="csl-entry" role="listitem">
+Killick, Rebecca, and Idris A. Eckley. <span>“<span class="nocase">changepoint</span>: An <span>R</span> Package for Changepoint Analysis.”</span> <em>Journal of Statistical Software</em> 58, no. 3 (2014): 1–19. <a href="https://www.jstatsoft.org/article/view/v058i03">https://www.jstatsoft.org/article/view/v058i03</a>.
+</div>
+<div id="ref-R-moderndive" class="csl-entry" role="listitem">
+Kim, Albert Y., and Chester Ismay. <em>Moderndive: Tidyverse-Friendly Introductory Linear Regression</em>, 2026. <a href="https://moderndive.github.io/moderndive/">https://moderndive.github.io/moderndive/</a>.
+</div>
+<div id="ref-moderndive2021" class="csl-entry" role="listitem">
+Kim, Albert Y., Chester Ismay, and Max Kuhn. <span>“Take a Moderndive into Introductory Linear Regression with r.”</span> <em>The Journal of Open Source Education</em> 4, no. 41, 115 (2021). <a href="https://doi.org/10.21105/jose.00115">https://doi.org/10.21105/jose.00115</a>.
+</div>
+<div id="ref-R-outliers" class="csl-entry" role="listitem">
+Komsta, Lukasz. <em>Outliers: Tests for Outliers</em>, 2022. <a href="https://www.R-project.org">https://www.R-project.org</a>.
+</div>
+<div id="ref-performance2021" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, and Dominique Makowski. <span>“<span class="nocase">performance</span>: An <span>R</span> Package for Assessment, Comparison and Testing of Statistical Models.”</span> <em>Journal of Open Source Software</em> 6, no. 60 (2021): 3139. <a href="https://doi.org/10.21105/joss.03139">https://doi.org/10.21105/joss.03139</a>.
+</div>
+<div id="ref-R-performance" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Dominique Makowski, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, Brenton M. Wiernik, and Rémi Thériault. <em>Performance: Assessment of Regression Models Performance</em>, 2026. <a href="https://easystats.github.io/performance/">https://easystats.github.io/performance/</a>.
+</div>
+<div id="ref-R-cluster" class="csl-entry" role="listitem">
+Maechler, Martin, Peter Rousseeuw, Anja Struyf, and Mia Hubert. <em>Cluster: "Finding Groups in Data": Cluster Analysis Extended Rousseeuw Et Al.</em>, 2026. <a href="https://svn.r-project.org/R-packages/trunk/cluster/">https://svn.r-project.org/R-packages/trunk/cluster/</a>.
+</div>
+<div id="ref-R-rpart.plot" class="csl-entry" role="listitem">
+Milborrow, Stephen. <em>Rpart.plot: Plot Rpart Models: An Enhanced Version of Plot.rpart</em>, 2026. <a href="http://www.milbo.org/rpart-plot/index.html">http://www.milbo.org/rpart-plot/index.html</a>.
+</div>
+<div id="ref-R-duckdb" class="csl-entry" role="listitem">
+Mühleisen, Hannes, and Mark Raasveldt. <em>Duckdb: DBI Package for the DuckDB Database Management System</em>, 2026. <a href="https://r.duckdb.org/">https://r.duckdb.org/</a>.
+</div>
+<div id="ref-r-tibble" class="csl-entry" role="listitem">
+Müller, Kirill, and Hadley Wickham. <em>Tibble: Simple Data Frames</em>, 2022. <a href="https://CRAN.R-project.org/package=tibble">https://CRAN.R-project.org/package=tibble</a>.
+</div>
+<div id="ref-R-tibble" class="csl-entry" role="listitem">
+———. <em>Tibble: Simple Data Frames</em>, 2026. <a href="https://tibble.tidyverse.org/">https://tibble.tidyverse.org/</a>.
+</div>
+<div id="ref-R-RColorBrewer" class="csl-entry" role="listitem">
+Neuwirth, Erich. <em>RColorBrewer: ColorBrewer Palettes</em>, 2022. <a href="https://doi.org/10.32614/CRAN.package.RColorBrewer">https://doi.org/10.32614/CRAN.package.RColorBrewer</a>.
+</div>
+<div id="ref-newcomb" class="csl-entry" role="listitem">
+Newcomb, Simon. <span>“Note on the Frequency of Use of the Different Digits in Natural Numbers.”</span> <em>American Journal of Mathematics</em> 4, no. 1 (1881): 39–40. <a href="http://www.jstor.org/stable/2369148">http://www.jstor.org/stable/2369148</a>.
+</div>
+<div id="ref-nigrinifraud" class="csl-entry" role="listitem">
+Nigrini, Mark J. <em>Benford’s Law Applications for Forensic Accounting, Auditing and Fraud Detection</em>. 1st ed. John Wiley; Sons, Ltd, 2012. <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5">https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5</a>.
+</div>
+<div id="ref-article2007" class="csl-entry" role="listitem">
+Nigrini, Mark, and Steven Miller. <span>“Benford’s Law Applied to Hydrology Data—Results and Relevance to Other Geophysical Data.”</span> <em>Mathematical Geology</em> 39 (September 2007): 469–90. <a href="https://doi.org/10.1007/s11004-007-9109-5">https://doi.org/10.1007/s11004-007-9109-5</a>.
+</div>
+<div id="ref-articlesec" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing a Journal of Practice and Theory AUDITING J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-article2009" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing-a Journal of Practice and Theory - AUDITING-J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-R-pdftools" class="csl-entry" role="listitem">
+Ooms, Jeroen. <em>Pdftools: Text Extraction, Rendering and Converting of PDF Documents</em>, 2026. <a href="https://ropensci.r-universe.dev/pdftools">https://ropensci.r-universe.dev/pdftools</a>.
+</div>
+<div id="ref-R-writexl" class="csl-entry" role="listitem">
+Ooms, Jeroen, and Bill Denney. <em>Writexl: Export Data Frames to Excel Xlsx Format</em>, 2026. <a href="https://ropensci.r-universe.dev/writexl">https://ropensci.r-universe.dev/writexl</a>.
+</div>
+<div id="ref-R-sf" class="csl-entry" role="listitem">
+Pebesma, Edzer. <em>Sf: Simple Features for r</em>, 2026. <a href="https://r-spatial.github.io/sf/">https://r-spatial.github.io/sf/</a>.
+</div>
+<div id="ref-sf2018" class="csl-entry" role="listitem">
+———. <span>“<span class="nocase">Simple Features for R: Standardized Support for Spatial Vector Data</span>.”</span> <em><span>The R Journal</span></em> 10, no. 1 (2018): 439–46. <a href="https://doi.org/10.32614/RJ-2018-009">https://doi.org/10.32614/RJ-2018-009</a>.
+</div>
+<div id="ref-sf2023" class="csl-entry" role="listitem">
+Pebesma, Edzer, and Roger Bivand. <em><span class="nocase">Spatial Data Science: With applications in R</span></em>. <span>Chapman and Hall/CRC</span>, 2023. <a href="https://doi.org/10.1201/9780429459016">https://doi.org/10.1201/9780429459016</a>.
+</div>
+<div id="ref-R-ggraph" class="csl-entry" role="listitem">
+Pedersen, Thomas Lin. <em>Ggraph: An Implementation of Grammar of Graphics for Graphs and Networks</em>, 2025. <a href="https://ggraph.data-imaginist.com">https://ggraph.data-imaginist.com</a>.
+</div>
+<div id="ref-R-patchwork" class="csl-entry" role="listitem">
+———. <em>Patchwork: The Composer of Plots</em>, 2025. <a href="https://patchwork.data-imaginist.com">https://patchwork.data-imaginist.com</a>.
+</div>
+<div id="ref-R-PerformanceAnalytics" class="csl-entry" role="listitem">
+Peterson, Brian G., and Peter Carl. <em>PerformanceAnalytics: Econometric Tools for Performance and Risk Analysis</em>, 2026. <a href="https://github.com/braverock/PerformanceAnalytics">https://github.com/braverock/PerformanceAnalytics</a>.
+</div>
+<div id="ref-pinkham" class="csl-entry" role="listitem">
+Pinkham, Roger S. <span>“<span class="nocase">On the Distribution of First Significant Digits</span>.”</span> <em>The Annals of Mathematical Statistics</em> 32, no. 4 (1961): 1223–30. <a href="https://doi.org/10.1214/aoms/1177704862">https://doi.org/10.1214/aoms/1177704862</a>.
+</div>
+<div id="ref-R-base" class="csl-entry" role="listitem">
+R Core Team. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing, 2025. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-R-psych" class="csl-entry" role="listitem">
+Revelle, William. <em>Psych: Procedures for Psychological, Psychometric, and Personality Research</em>, 2026. <a href="https://personality-project.org/r/psych/">https://personality-project.org/r/psych/</a>.
+</div>
+<div id="ref-R-nnet" class="csl-entry" role="listitem">
+Ripley, Brian. <em>Nnet: Feed-Forward Neural Networks and Multinomial Log-Linear Models</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-MASS" class="csl-entry" role="listitem">
+Ripley, Brian, and Bill Venables. <em>MASS: Support Functions and Datasets for Venables and Ripley’s MASS</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-broom" class="csl-entry" role="listitem">
+Robinson, David, Alex Hayes, Simon Couch, and Emil Hvitfeldt. <em>Broom: Convert Statistical Objects into Tidy Tibbles</em>, 2026. <a href="https://broom.tidymodels.org/">https://broom.tidymodels.org/</a>.
+</div>
+<div id="ref-R-tidytext" class="csl-entry" role="listitem">
+Robinson, David, and Julia Silge. <em>Tidytext: Text Mining Using Dplyr, Ggplot2, and Other Tidy Tools</em>, 2025. <a href="https://juliasilge.github.io/tidytext/">https://juliasilge.github.io/tidytext/</a>.
+</div>
+<div id="ref-R-openxlsx" class="csl-entry" role="listitem">
+Schauberger, Philipp, and Alexander Walker. <em>Openxlsx: Read, Write and Edit Xlsx Files</em>, 2025. <a href="https://ycphs.github.io/openxlsx/index.html">https://ycphs.github.io/openxlsx/index.html</a>.
+</div>
+<div id="ref-R-GGally" class="csl-entry" role="listitem">
+Schloerke, Barret, Di Cook, Joseph Larmarange, Francois Briatte, Moritz Marbach, Edwin Thoen, Amos Elberg, and Jason Crowley. <em>GGally: Extension to Ggplot2</em>, 2025. <a href="https://ggobi.github.io/ggally/">https://ggobi.github.io/ggally/</a>.
+</div>
+<div id="ref-tidytext2016" class="csl-entry" role="listitem">
+Silge, Julia, and David Robinson. <span>“Tidytext: Text Mining and Analysis Using Tidy Data Principles in r.”</span> <em>JOSS</em> 1, no. 3 (2016). <a href="https://doi.org/10.21105/joss.00037">https://doi.org/10.21105/joss.00037</a>.
+</div>
+<div id="ref-R-ggrepel" class="csl-entry" role="listitem">
+Slowikowski, Kamil. <em>Ggrepel: Automatically Position Non-Overlapping Text Labels with Ggplot2</em>, 2026. <a href="https://ggrepel.slowkow.com/">https://ggrepel.slowkow.com/</a>.
+</div>
+<div id="ref-R-lubridate" class="csl-entry" role="listitem">
+Spinu, Vitalie, Garrett Grolemund, and Hadley Wickham. <em>Lubridate: Make Dealing with Dates a Little Easier</em>, 2026. <a href="https://lubridate.tidyverse.org">https://lubridate.tidyverse.org</a>.
+</div>
+<div id="ref-colorspace2009b" class="csl-entry" role="listitem">
+Stauffer, Reto, Georg J. Mayr, Markus Dabernig, and Achim Zeileis. <span>“Somewhere over the Rainbow: How to Make Effective Use of Colors in Meteorological Visualizations.”</span> <em>Bulletin of the American Meteorological Society</em> 96, no. 2 (2009): 203–16. <a href="https://doi.org/10.1175/BAMS-D-13-00155.1">https://doi.org/10.1175/BAMS-D-13-00155.1</a>.
+</div>
+<div id="ref-R-rpart" class="csl-entry" role="listitem">
+Therneau, Terry, and Beth Atkinson. <em>Rpart: Recursive Partitioning and Regression Trees</em>, 2025. <a href="https://github.com/bethatkinson/rpart">https://github.com/bethatkinson/rpart</a>.
+</div>
+<div id="ref-R-AnomalyDetection" class="csl-entry" role="listitem">
+Vallis, Owen S., Jordan Hochenbaum, and Arun Kejariwal. <em>AnomalyDetection: Anomaly Detection Using Seasonal Hybrid Extreme Studentized Deviate Test</em>, 2014. <a href="https://github.com/twitter/AnomalyDetection">https://github.com/twitter/AnomalyDetection</a>.
+</div>
+<div id="ref-stringdist2014" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, M. P. J.</span> <span>“The Stringdist Package for Approximate String Matching.”</span> <em>The <span>R</span> <span>J</span>ournal</em> 6 (2014): 111–22. <a href="https://journal.r-project.org/articles/RJ-2014-011/">https://journal.r-project.org/articles/RJ-2014-011/</a>.
+</div>
+<div id="ref-R-stringdist" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark</span>. <em>Stringdist: Approximate String Matching, Fuzzy Text Search, and String Distance Functions</em>, 2026. <a href="https://github.com/markvanderloo/stringdist">https://github.com/markvanderloo/stringdist</a>.
+</div>
+<div id="ref-validate2021" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark P. J., and Edwin de Jonge</span>. <span>“Data Validation Infrastructure for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 97, no. 10 (2021): 1–31. <a href="https://doi.org/10.18637/jss.v097.i10">https://doi.org/10.18637/jss.v097.i10</a>.
+</div>
+<div id="ref-R-validate" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark, and Edwin de Jonge</span>. <em>Validate: Data Validation Infrastructure</em>, 2025. <a href="https://github.com/data-cleaning/validate">https://github.com/data-cleaning/validate</a>.
+</div>
+<div id="ref-MASS2002" class="csl-entry" role="listitem">
+Venables, W. N., and B. D. Ripley. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-nnet2002" class="csl-entry" role="listitem">
+———. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-skimr" class="csl-entry" role="listitem">
+Waring, Elin, Michael Quinn, Amelia McNamara, Eduardo Arino de la Rubia, Hao Zhu, and Shannon Ellis. <em>Skimr: Compact and Flexible Summaries of Data</em>, 2026. <a href="https://docs.ropensci.org/skimr/">https://docs.ropensci.org/skimr/</a>.
+</div>
+<div id="ref-layered-grammar" class="csl-entry" role="listitem">
+Wickham, Hadley. <span>“A Layered Grammar of Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 19, no. 1 (2010): 3–28. <a href="https://doi.org/10.1198/jcgs.2009.07098">https://doi.org/10.1198/jcgs.2009.07098</a>.
+</div>
+<div id="ref-R-conflicted" class="csl-entry" role="listitem">
+———. <em>Conflicted: An Alternative Conflict Resolution Strategy</em>, 2023. <a href="https://conflicted.r-lib.org/">https://conflicted.r-lib.org/</a>.
+</div>
+<div id="ref-R-forcats" class="csl-entry" role="listitem">
+———. <em>Forcats: Tools for Working with Categorical Variables (Factors)</em>, 2025. <a href="https://forcats.tidyverse.org/">https://forcats.tidyverse.org/</a>.
+</div>
+<div id="ref-ggplot22016" class="csl-entry" role="listitem">
+———. <em>Ggplot2: Elegant Graphics for Data Analysis</em>. Springer-Verlag New York, 2016. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv021i12" class="csl-entry" role="listitem">
+———. <span>“Reshaping Data with the Reshape Package.”</span> <em>Journal of Statistical Software</em> 21, no. 12 (2007): 1–20. <a href="https://doi.org/10.18637/jss.v021.i12">https://doi.org/10.18637/jss.v021.i12</a>.
+</div>
+<div id="ref-R-stringr" class="csl-entry" role="listitem">
+———. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>, 2025. <a href="https://stringr.tidyverse.org">https://stringr.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv059i10" class="csl-entry" role="listitem">
+———. <span>“Tidy Data.”</span> <em>Journal of Statistical Software</em> 59, no. 10 (2014): 1–23. <a href="https://doi.org/10.18637/jss.v059.i10">https://doi.org/10.18637/jss.v059.i10</a>.
+</div>
+<div id="ref-R-tidyverse" class="csl-entry" role="listitem">
+———. <em>Tidyverse: Easily Install and Load the Tidyverse</em>, 2023. <a href="https://tidyverse.tidyverse.org">https://tidyverse.tidyverse.org</a>.
+</div>
+<div id="ref-tidyverse2019" class="csl-entry" role="listitem">
+Wickham, Hadley, Mara Averick, Jennifer Bryan, Winston Chang, Lucy D’Agostino McGowan, Romain François, Garrett Grolemund, et al. <span>“Welcome to the <span class="nocase">tidyverse</span>.”</span> <em>Journal of Open Source Software</em> 4, no. 43 (2019): 1686. <a href="https://doi.org/10.21105/joss.01686">https://doi.org/10.21105/joss.01686</a>.
+</div>
+<div id="ref-R-readxl" class="csl-entry" role="listitem">
+Wickham, Hadley, and Jennifer Bryan. <em>Readxl: Read Excel Files</em>, 2025. <a href="https://readxl.tidyverse.org">https://readxl.tidyverse.org</a>.
+</div>
+<div id="ref-R-ggplot2" class="csl-entry" role="listitem">
+<span class="nocase">Wickham, Hadley, Winston Chang, Lionel Henry, Thomas Lin Pedersen, Kohske Takahashi, Claus Wilke, Kara Woo, Hiroaki Yutani, Dewey Dunnington, and Teun van den Brand</span>. <em>Ggplot2: Create Elegant Data Visualisations Using the Grammar of Graphics</em>, 2026. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-R-dplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Romain François, Lionel Henry, Kirill Müller, and Davis Vaughan. <em>Dplyr: A Grammar of Data Manipulation</em>, 2026. <a href="https://dplyr.tidyverse.org">https://dplyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-dbplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Maximilian Girlich, and Edgar Ruiz. <em>Dbplyr: A Dplyr Back End for Databases</em>, 2026. <a href="https://dbplyr.tidyverse.org/">https://dbplyr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-purrr" class="csl-entry" role="listitem">
+Wickham, Hadley, and Lionel Henry. <em>Purrr: Functional Programming Tools</em>, 2026. <a href="https://purrr.tidyverse.org/">https://purrr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-readr" class="csl-entry" role="listitem">
+Wickham, Hadley, Jim Hester, and Jennifer Bryan. <em>Readr: Read Rectangular Text Data</em>, 2026. <a href="https://readr.tidyverse.org">https://readr.tidyverse.org</a>.
+</div>
+<div id="ref-R-scales" class="csl-entry" role="listitem">
+Wickham, Hadley, Thomas Lin Pedersen, and Dana Seidel. <em>Scales: Scale Functions for Visualization</em>, 2025. <a href="https://scales.r-lib.org">https://scales.r-lib.org</a>.
+</div>
+<div id="ref-R-tidyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Davis Vaughan, and Maximilian Girlich. <em>Tidyr: Tidy Messy Data</em>, 2025. <a href="https://tidyr.tidyverse.org">https://tidyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-ranger" class="csl-entry" role="listitem">
+Wright, Marvin N. <em>Ranger: A Fast Implementation of Random Forests</em>, 2026. <a href="https://imbs-hl.github.io/ranger/">https://imbs-hl.github.io/ranger/</a>.
+</div>
+<div id="ref-ranger2017" class="csl-entry" role="listitem">
+Wright, Marvin N., and Andreas Ziegler. <span>“<span class="nocase">ranger</span>: A Fast Implementation of Random Forests for High Dimensional Data in <span>C++</span> and <span>R</span>.”</span> <em>Journal of Statistical Software</em> 77, no. 1 (2017): 1–17. <a href="https://doi.org/10.18637/jss.v077.i01">https://doi.org/10.18637/jss.v077.i01</a>.
+</div>
+<div id="ref-xie2015" class="csl-entry" role="listitem">
+Xie, Yihui. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="http://yihui.name/knitr/">http://yihui.name/knitr/</a>.
+</div>
+<div id="ref-knitr2015" class="csl-entry" role="listitem">
+———. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-knitr2014" class="csl-entry" role="listitem">
+———. <span>“Knitr: A Comprehensive Tool for Reproducible Research in <span>R</span>.”</span> In <em>Implementing Reproducible Computational Research</em>, edited by Victoria Stodden, Friedrich Leisch, and Roger D. Peng. Chapman; Hall/CRC, 2014.
+</div>
+<div id="ref-R-knitr" class="csl-entry" role="listitem">
+———. <em>Knitr: A General-Purpose Package for Dynamic Report Generation in r</em>, 2025. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-colorspace2020a" class="csl-entry" role="listitem">
+Zeileis, Achim, Jason C. Fisher, Kurt Hornik, Ross Ihaka, Claire D. McWhite, Paul Murrell, Reto Stauffer, and Claus O. Wilke. <span>“<span class="nocase">colorspace</span>: A Toolbox for Manipulating and Assessing Colors and Palettes.”</span> <em>Journal of Statistical Software</em> 96, no. 1 (2020): 1–49. <a href="https://doi.org/10.18637/jss.v096.i01">https://doi.org/10.18637/jss.v096.i01</a>.
+</div>
+<div id="ref-zoo2005" class="csl-entry" role="listitem">
+Zeileis, Achim, and Gabor Grothendieck. <span>“Zoo: S3 Infrastructure for Regular and Irregular Time Series.”</span> <em>Journal of Statistical Software</em> 14, no. 6 (2005): 1–27. <a href="https://doi.org/10.18637/jss.v014.i06">https://doi.org/10.18637/jss.v014.i06</a>.
+</div>
+<div id="ref-R-zoo" class="csl-entry" role="listitem">
+Zeileis, Achim, Gabor Grothendieck, and Jeffrey A. Ryan. <em>Zoo: S3 Infrastructure for Regular and Irregular Time Series (z’s Ordered Observations)</em>, 2025. <a href="https://zoo.R-Forge.R-project.org/">https://zoo.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-colorspace2009a" class="csl-entry" role="listitem">
+Zeileis, Achim, Kurt Hornik, and Paul Murrell. <span>“Escaping <span>RGB</span>land: Selecting Colors for Statistical Graphics.”</span> <em>Computational Statistics &amp; Data Analysis</em> 53, no. 9 (2009): 3259–70. <a href="https://doi.org/10.1016/j.csda.2008.11.033">https://doi.org/10.1016/j.csda.2008.11.033</a>.
+</div>
+</div>
+</section><section id="footnotes" class="footnotes footnotes-end-of-document" role="doc-endnotes"><hr>
+<ol>
+<li id="fn1"><p><a href="https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/">https://statmodeling.stat.columbia.edu/2021/05/14/tableau-and-the-grammar-of-graphics/</a><a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol></section></main><!-- /main --><script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/anilyayavar\.github\.io\/new-book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script><nav class="page-navigation"><div class="nav-page nav-page-previous">
+      <a href="./part4-explore-sample.html" class="pagination-link" aria-label="Part IV: Exploring and Sampling">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Part IV: Exploring and Sampling</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./09-1ggplot2.html" class="pagination-link" aria-label="Charts with ggplot2">
+        <span class="nav-page-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Charts with ggplot2</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer"><div class="nav-footer">
+    <div class="nav-footer-left">
+      &nbsp;
+    </div>   
+    <div class="nav-footer-center">
+<p>Built with <a href="https://www.r-project.org">R</a> and <a href="https://quarto.org">Quarto</a></p>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/08-plot.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+    <div class="nav-footer-right">
+      &nbsp;
+    </div>
+  </div>
+</footer>
+
+
+</body></html>

@@ -1,0 +1,2696 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<meta name="description" content="A practical guide to data analytics for auditors, using R and the tidyverse: reading and cleaning audit data, forensic tests, sampling, statistics, machine learning, text, network and geospatial analytics, and reproducible reports, with Indian audit examples throughout.">
+<title>56&nbsp; Reproducible Audit Reports – R for Audit Analytics</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+  margin-bottom: 0em;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./references.html" rel="next">
+<link href="./part9-reporting.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-dark-b85bc7c33db8c58e0ec93c3465666fed.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="site_libs/bootstrap/bootstrap-dark-a64f2b92d8b4b45ab5f5d9261e8b8c9d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="site_libs/bootstrap/bootstrap-631496449bf32ff9b0bb69a6bfd9195d.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="light"><script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script><link rel="stylesheet" href="style.css">
+</head>
+<body class="nav-sidebar floating quarto-light"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = false;
+    const darkModeDefault = authorPrefersDark;
+      document.querySelector('link#quarto-text-highlighting-styles.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+      document.querySelector('link#quarto-bootstrap.quarto-color-scheme-extra').rel = 'disabled-stylesheet';
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top"><nav class="quarto-secondary-nav"><div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part9-reporting.html">Part IX: Reporting</a></li><li class="breadcrumb-item"><a href="./27-reports.html"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav></header><!-- content --><div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto"><div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">R for Audit Analytics</a> 
+        <div class="sidebar-tools-main">
+    <a href="https://github.com/anilyayavar/new-book" title="Source Code" class="quarto-navigation-tool px-1" aria-label="Source Code"><i class="bi bi-github"></i></a>
+  <a href="" class="quarto-color-scheme-toggle quarto-navigation-tool  px-1" onclick="window.quartoToggleColorScheme(); return false;" title="Toggle dark mode"><i class="bi"></i></a>
+</div>
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Welcome</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-preface.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index-about-author.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">About the Author</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./how-to-use.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">How to Use This Book</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-Zero.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Gearing Up</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part1-foundations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part I: R Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-basics.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Objects, Data Types and Data Structures</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-Subsets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Subsetting and Indexing</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Functions and Operators</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-existing-and-useful-functions-in-base-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Useful Base R Functions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-functions-pipes-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Pipes</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-1conditionals.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Conditions and Loops</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-1-functionalprog.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Functional Programming</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part2-data-ready.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part II: Getting Data Ready</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-2-workflow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Working with Files and Folders</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Importing and Exporting Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1-reading-data-cleaning-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Cleaning Data</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-1b-pdf-excel.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Data from PDFs and Messy Excel Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-2-merge.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Combining Many Similar Files</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-1-dplyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Transforming Data with dplyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-2-joins.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Joining Tables</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-tidyr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Reshaping Data with tidyr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8Lubridate.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Dates and Times</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-8b-duckdb.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Large Data with DuckDB and data.table</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part3-text-fields.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part III: Working with Text Fields</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-1Stringr.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Working with Strings in stringr</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">19</span>&nbsp; <span class="chapter-title">Regular Expressions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-2Regex-regex-in-human-readble-format-using-rebu.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">20</span>&nbsp; <span class="chapter-title">Readable Regular Expressions with rebus</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part4-explore-sample.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IV: Exploring and Sampling</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-plot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">21</span>&nbsp; <span class="chapter-title">Charts in Base R</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-1ggplot2.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">22</span>&nbsp; <span class="chapter-title">Charts with ggplot2</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-2ggplot2-polish.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">23</span>&nbsp; <span class="chapter-title">Polishing Charts for Audit Reports</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-3Factors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">24</span>&nbsp; <span class="chapter-title">Factors</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-1Desc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">25</span>&nbsp; <span class="chapter-title">Descriptive Statistics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-2stats.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">26</span>&nbsp; <span class="chapter-title">Probability Distributions</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3Samp.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">27</span>&nbsp; <span class="chapter-title">Random Sampling</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-3b-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">28</span>&nbsp; <span class="chapter-title">Statistical Tests for Auditors</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part5-forensic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part V: Forensic Tests</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17a-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">29</span>&nbsp; <span class="chapter-title">Rule-Based Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./17-Anamolous.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">30</span>&nbsp; <span class="chapter-title">Benford Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./19-nigrini-tests.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">31</span>&nbsp; <span class="chapter-title">Nigrini’s Tests for Unusual Amounts</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20-duplicates.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">32</span>&nbsp; <span class="chapter-title">Duplicate Detection</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-stringdist.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">33</span>&nbsp; <span class="chapter-title">String Similarity and Fuzzy Matching</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./20b-record-linkage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">34</span>&nbsp; <span class="chapter-title">Record Linkage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21-gaps.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">35</span>&nbsp; <span class="chapter-title">Gaps in Sequences</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./21b-process-mining.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">36</span>&nbsp; <span class="chapter-title">Process Mining</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part6-risk-scoring.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VI: Modelling and Risk Scoring</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-6" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-6" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">37</span>&nbsp; <span class="chapter-title">Simple Linear Regression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4Reg-multiple.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">38</span>&nbsp; <span class="chapter-title">Multiple Regression in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4b-logistic.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">39</span>&nbsp; <span class="chapter-title">Logistic Regression for Risk Scoring</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4c-trees.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">40</span>&nbsp; <span class="chapter-title">Decision Trees</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-4d-forest.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">41</span>&nbsp; <span class="chapter-title">Random Forests</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./26-DEA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">42</span>&nbsp; <span class="chapter-title">Data Envelopment Analysis</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part7-hidden-patterns.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VII: Finding Hidden Patterns</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-7" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-7" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-5PCA.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">43</span>&nbsp; <span class="chapter-title">Principal Component Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-6KMeans.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">44</span>&nbsp; <span class="chapter-title">Clustering with k-Means</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-7Apriori.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">45</span>&nbsp; <span class="chapter-title">Association Rules (Apriori)</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-9ts.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">46</span>&nbsp; <span class="chapter-title">Time Series Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./18-anomaly.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">47</span>&nbsp; <span class="chapter-title">Anomaly Detection</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part8-beyond-tables.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part VIII: Beyond Tables</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-8" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-8" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">48</span>&nbsp; <span class="chapter-title">Text Analytics</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-sentiment-analysis.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">49</span>&nbsp; <span class="chapter-title">Sentiment Analysis</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-4text-visualising-text-analytics-through-wordc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">50</span>&nbsp; <span class="chapter-title">Visualising Text</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">51</span>&nbsp; <span class="chapter-title">Networks and Graph Theory</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-Network-applying-network-analysis-in-audit-fraud.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">52</span>&nbsp; <span class="chapter-title">Network Analysis in Audit</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">53</span>&nbsp; <span class="chapter-title">Maps</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-geo-coding-in-r.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">54</span>&nbsp; <span class="chapter-title">Geocoding</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./16-Rgeo-reverse-geo-coding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">55</span>&nbsp; <span class="chapter-title">Reverse Geocoding</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a href="./part9-reporting.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Part IX: Reporting</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-9" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-9" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./27-reports.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">References</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-10" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-10" class="collapse list-unstyled sidebar-section depth1 show">
+<li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./audit-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Audit Question Finder</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./98-datasets.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">Datasets Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./99-packages.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">C</span>&nbsp; <span class="chapter-title">R Packages Used in This Book</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./97-colors.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">D</span>&nbsp; <span class="chapter-title">Colours in R</span></span></a>
+  </div>
+</li>
+      </ul>
+</li>
+    </ul>
+</div>
+</nav><div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active"><h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+<li><a href="#sec-reports-data" id="toc-sec-reports-data" class="nav-link active" data-scroll-target="#sec-reports-data"><span class="header-section-number">56.1</span> Our audit, a scheme in five districts</a></li>
+  <li><a href="#sec-reports-functions" id="toc-sec-reports-functions" class="nav-link" data-scroll-target="#sec-reports-functions"><span class="header-section-number">56.2</span> Step 1. Put the checks in functions</a></li>
+  <li><a href="#sec-reports-gt" id="toc-sec-reports-gt" class="nav-link" data-scroll-target="#sec-reports-gt"><span class="header-section-number">56.3</span> Step 2. Formatted tables with <code>gt</code></a></li>
+  <li><a href="#sec-reports-quarto" id="toc-sec-reports-quarto" class="nav-link" data-scroll-target="#sec-reports-quarto"><span class="header-section-number">56.4</span> Step 3. A parameterised Quarto report</a></li>
+  <li><a href="#sec-reports-loop" id="toc-sec-reports-loop" class="nav-link" data-scroll-target="#sec-reports-loop"><span class="header-section-number">56.5</span> Step 4. One report for every district</a></li>
+  <li><a href="#sec-reports-excel" id="toc-sec-reports-excel" class="nav-link" data-scroll-target="#sec-reports-excel"><span class="header-section-number">56.6</span> Step 5. Excel working papers</a></li>
+  <li><a href="#sec-reports-project" id="toc-sec-reports-project" class="nav-link" data-scroll-target="#sec-reports-project"><span class="header-section-number">56.7</span> Organising an audit project</a></li>
+  <li><a href="#a-suggested-workflow" id="toc-a-suggested-workflow" class="nav-link" data-scroll-target="#a-suggested-workflow"><span class="header-section-number">56.8</span> A suggested workflow</a></li>
+  <li><a href="#summary-of-functions-used" id="toc-summary-of-functions-used" class="nav-link" data-scroll-target="#summary-of-functions-used"><span class="header-section-number">56.9</span> Summary of functions used</a></li>
+  </ul><div class="toc-actions"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/27-reports.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content"><header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./part9-reporting.html">Part IX: Reporting</a></li><li class="breadcrumb-item"><a href="./27-reports.html"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></a></li></ol></nav><div class="quarto-title">
+<h1 class="title"><span id="sec-reports" class="quarto-section-identifier"><span class="chapter-number">56</span>&nbsp; <span class="chapter-title">Reproducible Audit Reports</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header><p>Every analysis in this book ends the same way. The results have to reach someone: the audit officer, the head of the audit party, the auditee, or the report. Too often, this last step is done by hand. Figures are copied from the R console into Word, tables are pasted into Excel and formatted, and the whole process is repeated for each district, each month, each audit. Every copy is a chance for a mistake, and when the data changes, everything has to be done again.</p>
+<p>In this chapter we learn to produce the reports themselves with code.</p>
+<ul>
+<li>A <strong>Quarto report</strong> combines text, tables and charts, with every number computed from the data at the moment the report is made. Change the data, and the report updates itself.</li>
+<li>With <strong>parameters</strong>, one report template produces a separate report for every district, unit or period, in a loop.</li>
+<li>
+<strong>Excel working papers</strong>, with a summary sheet and one formatted sheet of exceptions for each check, are produced by the package <code>openxlsx</code>, ready to be handed over or filed.</li>
+</ul>
+<p>This book itself is written in Quarto, so everything you see here is a small version of the same idea.</p>
+<p><strong>Prerequisites</strong></p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyverse.tidyverse.org">tidyverse</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://gt.rstudio.com">gt</a></span><span class="op">)</span>         <span class="co"># formatted tables</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://ycphs.github.io/openxlsx/index.html">openxlsx</a></span><span class="op">)</span>   <span class="co"># Excel workbooks</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>For rendering reports from R we also need the package <code>quarto</code> (<code>install.packages("quarto")</code>), and Quarto itself, which comes with RStudio.</p>
+<section id="sec-reports-data" class="level2" data-number="56.1"><h2 data-number="56.1" class="anchored" data-anchor-id="sec-reports-data">
+<span class="header-section-number">56.1</span> Our audit, a scheme in five districts</h2>
+<p>A State’s <em>Kisan Sahayata</em> scheme pays each eligible farmer ₹2,000 in each of three instalments a year. We have the payment register and the beneficiary list for 2024-25, for five districts, and four checks to run.</p>
+<ol type="1">
+<li>Was any instalment paid more than once to the same beneficiary?</li>
+<li>Was any payment different from the entitlement of ₹2,000?</li>
+<li>Was anything paid to a beneficiary marked deceased or ineligible?</li>
+<li>Is any bank account shared by more than one beneficiary?</li>
+</ol>
+<p>The audit party wants one report for each district, to send to the District Collector, and one Excel workbook of the exceptions for each district, for verification in the field.</p>
+<div class="cell">
+<details class="code-fold"><summary>Code to create the data files</summary><div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">project_dir</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"kisan_audit"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html">dir.create</a></span><span class="op">(</span><span class="va">project_dir</span>, showWarnings <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/Random.html">set.seed</a></span><span class="op">(</span><span class="fl">2025</span><span class="op">)</span></span>
+<span><span class="va">districts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Amarpur"</span>, <span class="st">"Belapur"</span>, <span class="st">"Chandpur"</span>, <span class="st">"Devgarh"</span>, <span class="st">"Fatehpur"</span><span class="op">)</span></span>
+<span><span class="va">n_ben</span> <span class="op">&lt;-</span> <span class="fl">2500</span></span>
+<span><span class="va">beneficiaries</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span></span>
+<span>  ben_id   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html">sprintf</a></span><span class="op">(</span><span class="st">"KS%06d"</span>, <span class="fl">1</span><span class="op">:</span><span class="va">n_ben</span><span class="op">)</span>,</span>
+<span>  district <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="va">districts</span>, <span class="va">n_ben</span>, <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  status   <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Active"</span>, <span class="st">"Deceased"</span>, <span class="st">"Ineligible"</span><span class="op">)</span>, <span class="va">n_ben</span>, <span class="cn">TRUE</span>, prob <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">0.96</span>, <span class="fl">0.025</span>, <span class="fl">0.015</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  account  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sprintf.html">sprintf</a></span><span class="op">(</span><span class="st">"%011.0f"</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html">runif</a></span><span class="op">(</span><span class="va">n_ben</span>, <span class="fl">1e10</span>, <span class="fl">9.99e10</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">instalments</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span>instalment <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>,</span>
+<span>                      due <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html">as.Date</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"2024-06-15"</span>, <span class="st">"2024-10-15"</span>, <span class="st">"2025-02-15"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">payments</span> <span class="op">&lt;-</span> <span class="va">beneficiaries</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">==</span> <span class="st">"Active"</span> <span class="op">|</span> <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html">runif</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html">n</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span> <span class="op">&lt;</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">|&gt;</span>      <span class="co"># some not-active beneficiaries still paid</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/cross_join.html">cross_join</a></span><span class="op">(</span><span class="va">instalments</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>paid_on <span class="op">=</span> <span class="va">due</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">20</span>, <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html">n</a></span><span class="op">(</span><span class="op">)</span>, <span class="cn">TRUE</span><span class="op">)</span>, amount <span class="op">=</span> <span class="fl">2000</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html">select</a></span><span class="op">(</span><span class="va">ben_id</span>, <span class="va">district</span>, <span class="va">instalment</span>, <span class="va">paid_on</span>, <span class="va">amount</span>, <span class="va">account</span><span class="op">)</span></span>
+<span><span class="co"># Planted. Instalments paid twice, more often in Chandpur</span></span>
+<span><span class="va">dup</span> <span class="op">&lt;-</span> <span class="va">payments</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/slice.html">slice_sample</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fl">60</span>, weight_by <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/if_else.html">if_else</a></span><span class="op">(</span><span class="va">district</span> <span class="op">==</span> <span class="st">"Chandpur"</span>, <span class="fl">5</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html">mutate</a></span><span class="op">(</span>paid_on <span class="op">=</span> <span class="va">paid_on</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">30</span>, <span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html">n</a></span><span class="op">(</span><span class="op">)</span>, <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">payments</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html">bind_rows</a></span><span class="op">(</span><span class="va">payments</span>, <span class="va">dup</span><span class="op">)</span></span>
+<span><span class="co"># Planted. Wrong amounts</span></span>
+<span><span class="va">wrong</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">payments</span><span class="op">)</span>, <span class="fl">40</span><span class="op">)</span></span>
+<span><span class="va">payments</span><span class="op">$</span><span class="va">amount</span><span class="op">[</span><span class="va">wrong</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">4000</span>, <span class="fl">20000</span>, <span class="fl">6000</span><span class="op">)</span>, <span class="fl">40</span>, <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="co"># Planted. Six beneficiaries in Devgarh sharing one account</span></span>
+<span><span class="va">share</span> <span class="op">&lt;-</span> <span class="va">beneficiaries</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">district</span> <span class="op">==</span> <span class="st">"Devgarh"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/slice.html">slice_sample</a></span><span class="op">(</span>n <span class="op">=</span> <span class="fl">6</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/pull.html">pull</a></span><span class="op">(</span><span class="va">ben_id</span><span class="op">)</span></span>
+<span><span class="va">beneficiaries</span><span class="op">$</span><span class="va">account</span><span class="op">[</span><span class="va">beneficiaries</span><span class="op">$</span><span class="va">ben_id</span> <span class="op"><a href="https://rdrr.io/r/base/match.html">%in%</a></span> <span class="va">share</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="st">"50012345678"</span></span>
+<span><span class="va">payments</span><span class="op">$</span><span class="va">account</span><span class="op">[</span><span class="va">payments</span><span class="op">$</span><span class="va">ben_id</span> <span class="op"><a href="https://rdrr.io/r/base/match.html">%in%</a></span> <span class="va">share</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="st">"50012345678"</span></span>
+<span></span>
+<span><span class="fu"><a href="https://readr.tidyverse.org/reference/write_delim.html">write_csv</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html">arrange</a></span><span class="op">(</span><span class="va">payments</span>, <span class="va">paid_on</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">project_dir</span>, <span class="st">"payments.csv"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://readr.tidyverse.org/reference/write_delim.html">write_csv</a></span><span class="op">(</span><span class="va">beneficiaries</span>, <span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">project_dir</span>, <span class="st">"beneficiaries.csv"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/list.files.html">list.files</a></span><span class="op">(</span><span class="va">project_dir</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "beneficiaries.csv" "payments.csv"     </code></pre>
+</div>
+</div>
+</section><section id="sec-reports-functions" class="level2" data-number="56.2"><h2 data-number="56.2" class="anchored" data-anchor-id="sec-reports-functions">
+<span class="header-section-number">56.2</span> Step 1. Put the checks in functions</h2>
+<p>The first step towards any repeatable report is to write each check as a function (<a href="04-functions.html" class="quarto-xref"><span>Chapter 3</span></a>), which takes the data of one district and returns its exceptions. The functions are kept in one file, <code>checks.R</code>, which every report and every script then uses with <code>source("checks.R")</code>. A correction made once in this file applies everywhere.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">check_duplicates</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">pay</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">pay</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html">n</a></span><span class="op">(</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>, .by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="va">ben_id</span>, <span class="va">instalment</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html">arrange</a></span><span class="op">(</span><span class="va">ben_id</span>, <span class="va">instalment</span>, <span class="va">paid_on</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">check_amount</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">pay</span>, <span class="va">entitlement</span> <span class="op">=</span> <span class="fl">2000</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">pay</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">amount</span> <span class="op">!=</span> <span class="va">entitlement</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">check_status</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">pay</span>, <span class="va">ben</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">pay</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html">inner_join</a></span><span class="op">(</span><span class="va">ben</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html">select</a></span><span class="op">(</span><span class="va">ben_id</span>, <span class="va">status</span><span class="op">)</span>, by <span class="op">=</span> <span class="st">"ben_id"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">status</span> <span class="op">!=</span> <span class="st">"Active"</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">check_shared_accounts</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">ben</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">ben</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/context.html">n</a></span><span class="op">(</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span>, .by <span class="op">=</span> <span class="va">account</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html">arrange</a></span><span class="op">(</span><span class="va">account</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">run_checks</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">pay</span>, <span class="va">ben</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>duplicates      <span class="op">=</span> <span class="fu">check_duplicates</span><span class="op">(</span><span class="va">pay</span><span class="op">)</span>,</span>
+<span>       wrong_amount    <span class="op">=</span> <span class="fu">check_amount</span><span class="op">(</span><span class="va">pay</span><span class="op">)</span>,</span>
+<span>       not_active      <span class="op">=</span> <span class="fu">check_status</span><span class="op">(</span><span class="va">pay</span>, <span class="va">ben</span><span class="op">)</span>,</span>
+<span>       shared_accounts <span class="op">=</span> <span class="fu">check_shared_accounts</span><span class="op">(</span><span class="va">ben</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>run_checks()</code> returns a <em>list</em> of four data frames, one for each check. Let us try it on one district, and make the summary that the report will show.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">payments_all</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html">read_csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">project_dir</span>, <span class="st">"payments.csv"</span><span class="op">)</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span><span class="va">benef_all</span>    <span class="op">&lt;-</span> <span class="fu"><a href="https://readr.tidyverse.org/reference/read_delim.html">read_csv</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">project_dir</span>, <span class="st">"beneficiaries.csv"</span><span class="op">)</span>, show_col_types <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>                         col_types <span class="op">=</span> <span class="fu"><a href="https://readr.tidyverse.org/reference/cols.html">cols</a></span><span class="op">(</span>account <span class="op">=</span> <span class="fu"><a href="https://readr.tidyverse.org/reference/parse_atomic.html">col_character</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">summarise_checks</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">results</span>, <span class="va">entitlement</span> <span class="op">=</span> <span class="fl">2000</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">dup</span> <span class="op">&lt;-</span> <span class="va">results</span><span class="op">$</span><span class="va">duplicates</span></span>
+<span>  <span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html">tibble</a></span><span class="op">(</span></span>
+<span>    check  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Same instalment paid more than once"</span>,</span>
+<span>               <span class="st">"Amount different from the entitlement"</span>,</span>
+<span>               <span class="st">"Payment to deceased or ineligible beneficiaries"</span>,</span>
+<span>               <span class="st">"Bank account shared by more than one beneficiary"</span><span class="op">)</span>,</span>
+<span>    cases  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">dup</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/distinct.html">distinct</a></span><span class="op">(</span><span class="va">dup</span>, <span class="va">ben_id</span>, <span class="va">instalment</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>               <span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">wrong_amount</span><span class="op">)</span>,</span>
+<span>               <span class="fu"><a href="https://rdrr.io/r/base/nrow.html">nrow</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">not_active</span><span class="op">)</span>,</span>
+<span>               <span class="fu"><a href="https://dplyr.tidyverse.org/reference/n_distinct.html">n_distinct</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">shared_accounts</span><span class="op">$</span><span class="va">account</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>    amount <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">dup</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span> <span class="op">-</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/distinct.html">distinct</a></span><span class="op">(</span><span class="va">dup</span>, <span class="va">ben_id</span>, <span class="va">instalment</span>, .keep_all <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>,</span>
+<span>               <span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">wrong_amount</span><span class="op">$</span><span class="va">amount</span> <span class="op">-</span> <span class="va">entitlement</span><span class="op">)</span>,</span>
+<span>               <span class="fu"><a href="https://rdrr.io/r/base/sum.html">sum</a></span><span class="op">(</span><span class="va">results</span><span class="op">$</span><span class="va">not_active</span><span class="op">$</span><span class="va">amount</span><span class="op">)</span>,</span>
+<span>               <span class="cn">NA</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">chandpur</span> <span class="op">&lt;-</span> <span class="fu">run_checks</span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">payments_all</span>, <span class="va">district</span> <span class="op">==</span> <span class="st">"Chandpur"</span><span class="op">)</span>,</span>
+<span>                       <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">benef_all</span>, <span class="va">district</span> <span class="op">==</span> <span class="st">"Chandpur"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">summarise_checks</span><span class="op">(</span><span class="va">chandpur</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 3
+  check                                            cases amount
+  &lt;chr&gt;                                            &lt;int&gt;  &lt;dbl&gt;
+1 Same instalment paid more than once                 27  54000
+2 Amount different from the entitlement               10  72000
+3 Payment to deceased or ineligible beneficiaries     21  42000
+4 Bank account shared by more than one beneficiary     0     NA</code></pre>
+</div>
+</div>
+<p>For duplicates, the cases and the amount count only the <em>extra</em> payments, not the first, legitimate one. The shared accounts are counted as accounts, and are not valued, since the money may have reached the right people.</p>
+</section><section id="sec-reports-gt" class="level2" data-number="56.3"><h2 data-number="56.3" class="anchored" data-anchor-id="sec-reports-gt">
+<span class="header-section-number">56.3</span> Step 2. Formatted tables with <code>gt</code>
+</h2>
+<p>A tibble printed in the console is fine for the analyst, but a report needs a proper table. The package <code>gt</code> builds one step by step, much as ggplot2 builds a chart: a title, formatted numbers, a note for missing values.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu">summarise_checks</span><span class="op">(</span><span class="va">chandpur</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">gt</span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">cols_label</span><span class="op">(</span>check <span class="op">=</span> <span class="st">"Check"</span>, cases <span class="op">=</span> <span class="st">"Cases"</span>, amount <span class="op">=</span> <span class="st">"Amount (₹)"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">fmt_number</span><span class="op">(</span>columns <span class="op">=</span> <span class="va">amount</span>, decimals <span class="op">=</span> <span class="fl">0</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">sub_missing</span><span class="op">(</span>columns <span class="op">=</span> <span class="va">amount</span>, missing_text <span class="op">=</span> <span class="st">"Not valued"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">tab_header</span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Summary of exceptions"</span>, subtitle <span class="op">=</span> <span class="st">"Chandpur district, 2024-25"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">tab_source_note</span><span class="op">(</span><span class="st">"Source: payment register and beneficiary list of the scheme."</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div id="wsjujtaayg" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#wsjujtaayg table {
+  font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#wsjujtaayg thead, #wsjujtaayg tbody, #wsjujtaayg tfoot, #wsjujtaayg tr, #wsjujtaayg td, #wsjujtaayg th {
+  border-style: none;
+}
+
+#wsjujtaayg p {
+  margin: 0;
+  padding: 0;
+}
+
+#wsjujtaayg .gt_table {
+  display: table;
+  border-collapse: collapse;
+  line-height: normal;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_caption {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#wsjujtaayg .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#wsjujtaayg .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 3px;
+  padding-bottom: 5px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#wsjujtaayg .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#wsjujtaayg .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#wsjujtaayg .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#wsjujtaayg .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#wsjujtaayg .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#wsjujtaayg .gt_spanner_row {
+  border-bottom-style: hidden;
+}
+
+#wsjujtaayg .gt_group_heading {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  text-align: left;
+}
+
+#wsjujtaayg .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#wsjujtaayg .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#wsjujtaayg .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#wsjujtaayg .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#wsjujtaayg .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsjujtaayg .gt_stub_row_group {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 5px;
+  padding-right: 5px;
+  vertical-align: top;
+}
+
+#wsjujtaayg .gt_row_group_first td {
+  border-top-width: 2px;
+}
+
+#wsjujtaayg .gt_row_group_first th {
+  border-top-width: 2px;
+}
+
+#wsjujtaayg .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsjujtaayg .gt_first_summary_row {
+  border-top-style: solid;
+  border-top-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_first_summary_row.thick {
+  border-top-width: 2px;
+}
+
+#wsjujtaayg .gt_last_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsjujtaayg .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_last_grand_summary_row_top {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-bottom-style: double;
+  border-bottom-width: 6px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#wsjujtaayg .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsjujtaayg .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#wsjujtaayg .gt_sourcenote {
+  font-size: 90%;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsjujtaayg .gt_left {
+  text-align: left;
+}
+
+#wsjujtaayg .gt_center {
+  text-align: center;
+}
+
+#wsjujtaayg .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#wsjujtaayg .gt_font_normal {
+  font-weight: normal;
+}
+
+#wsjujtaayg .gt_font_bold {
+  font-weight: bold;
+}
+
+#wsjujtaayg .gt_font_italic {
+  font-style: italic;
+}
+
+#wsjujtaayg .gt_super {
+  font-size: 65%;
+}
+
+#wsjujtaayg .gt_footnote_marks {
+  font-size: 75%;
+  vertical-align: 0.4em;
+  position: initial;
+}
+
+#wsjujtaayg .gt_asterisk {
+  font-size: 100%;
+  vertical-align: 0;
+}
+
+#wsjujtaayg .gt_indent_1 {
+  text-indent: 5px;
+}
+
+#wsjujtaayg .gt_indent_2 {
+  text-indent: 10px;
+}
+
+#wsjujtaayg .gt_indent_3 {
+  text-indent: 15px;
+}
+
+#wsjujtaayg .gt_indent_4 {
+  text-indent: 20px;
+}
+
+#wsjujtaayg .gt_indent_5 {
+  text-indent: 25px;
+}
+
+#wsjujtaayg .katex-display {
+  display: inline-flex !important;
+  margin-bottom: 0.75em !important;
+}
+
+#wsjujtaayg div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+  height: 0px !important;
+}
+</style>
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-bootstrap="false">
+<thead>
+<tr class="gt_heading header">
+<td colspan="3" class="gt_heading gt_title gt_font_normal">Summary of exceptions</td>
+</tr>
+<tr class="gt_heading even">
+<td colspan="3" class="gt_heading gt_subtitle gt_font_normal gt_bottom_border">Chandpur district, 2024-25</td>
+</tr>
+<tr class="gt_col_headings header">
+<th id="check" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col">Check</th>
+<th id="cases" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">Cases</th>
+<th id="amount" class="gt_col_heading gt_columns_bottom_border gt_right" data-quarto-table-cell-role="th" scope="col">Amount (₹)</th>
+</tr>
+</thead>
+<tbody class="gt_table_body">
+<tr class="odd">
+<td class="gt_row gt_left" headers="check">Same instalment paid more than once</td>
+<td class="gt_row gt_right" headers="cases">27</td>
+<td class="gt_row gt_right" headers="amount">54,000</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="check">Amount different from the entitlement</td>
+<td class="gt_row gt_right" headers="cases">10</td>
+<td class="gt_row gt_right" headers="amount">72,000</td>
+</tr>
+<tr class="odd">
+<td class="gt_row gt_left" headers="check">Payment to deceased or ineligible beneficiaries</td>
+<td class="gt_row gt_right" headers="cases">21</td>
+<td class="gt_row gt_right" headers="amount">42,000</td>
+</tr>
+<tr class="even">
+<td class="gt_row gt_left" headers="check">Bank account shared by more than one beneficiary</td>
+<td class="gt_row gt_right" headers="cases">0</td>
+<td class="gt_row gt_right" headers="amount">Not valued</td>
+</tr>
+</tbody>
+<tfoot><tr class="gt_sourcenotes odd">
+<td colspan="3" class="gt_sourcenote">Source: payment register and beneficiary list of the scheme.</td>
+</tr></tfoot>
+</table>
+</div>
+</div>
+</div>
+<p><code>fmt_number()</code> adds the thousands separators, and <code>sub_missing()</code> writes a phrase in place of <code>NA</code>. The same table appears correctly in HTML and in Word reports.</p>
+</section><section id="sec-reports-quarto" class="level2" data-number="56.4"><h2 data-number="56.4" class="anchored" data-anchor-id="sec-reports-quarto">
+<span class="header-section-number">56.4</span> Step 3. A parameterised Quarto report</h2>
+<p>A Quarto document is a plain text file with the extension <code>.qmd</code>. It has three kinds of content.</p>
+<ul>
+<li>A <strong>header</strong>, between two lines of <code>---</code>, written in a format called YAML. It gives the title, the output formats, and other options.</li>
+<li>
+<strong>Text</strong>, written in Markdown: <code>##</code> for headings, <code>*italics*</code>, <code>**bold**</code>, lists with <code>-</code>, and so on.</li>
+<li>
+<strong>Code chunks</strong>, between <code>```{r}</code> and <code>```</code>, whose results (tables, charts, numbers) appear in the report. Numbers can also be placed inside sentences with <em>inline code</em>, written as a backtick, the letter <code>r</code>, the code, and a closing backtick.</li>
+</ul>
+<p>The key to producing many reports from one file is a <strong>parameter</strong>. In the header, under <code>params:</code>, we declare a value with a default, here the district. Inside the document, the value is available as <code>params$district</code>. Change the parameter, and the same document becomes the report for another district.</p>
+<p>Here is the complete template, <code>audit_report.qmd</code>.</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="an">title:</span><span class="co"> "Kisan Sahayata payments: audit findings"</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="an">subtitle:</span><span class="co"> "District report"</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="an">date:</span><span class="co"> today</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="an">format:</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">  html:</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co">    embed-resources: true</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co">  docx: default</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="an">params:</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="co">  district: "Amarpur"</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="co">  payments_file: "payments.csv"</span></span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="co">  beneficiaries_file: "beneficiaries.csv"</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a><span class="an">execute:</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a><span class="co">  echo: false</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="co">  warning: false</span></span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a><span class="co">  message: false</span></span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: setup</span></span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(gt)</span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"checks.R"</span>)</span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>pay_all <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>payments_file, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>ben_all <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>beneficiaries_file, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>                    <span class="at">col_types =</span> <span class="fu">cols</span>(<span class="at">account =</span> <span class="fu">col_character</span>()))</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>pay <span class="ot">&lt;-</span> pay_all <span class="sc">|&gt;</span> <span class="fu">filter</span>(district <span class="sc">==</span> params<span class="sc">$</span>district)</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>ben <span class="ot">&lt;-</span> ben_all <span class="sc">|&gt;</span> <span class="fu">filter</span>(district <span class="sc">==</span> params<span class="sc">$</span>district)</span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">run_checks</span>(pay, ben)</span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>summary_tbl <span class="ot">&lt;-</span> <span class="fu">summarise_checks</span>(results)</span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>lakh <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">paste0</span>(<span class="st">"₹"</span>, <span class="fu">format</span>(<span class="fu">round</span>(x <span class="sc">/</span> <span class="fl">1e5</span>, <span class="dv">2</span>), <span class="at">nsmall =</span> <span class="dv">2</span>), <span class="st">" lakh"</span>)</span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a><span class="fu">## District: `r params$district`</span></span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>During 2024-25, <span class="in">`r format(nrow(pay), big.mark = ",")`</span> payments totalling</span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a><span class="in">`r lakh(sum(pay$amount))`</span> were made to <span class="in">`r n_distinct(pay$ben_id)`</span> beneficiaries</span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>in <span class="in">`r params$district`</span> district. The results of the checks are summarised below.</span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>summary_tbl <span class="sc">|&gt;</span></span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">gt</span>() <span class="sc">|&gt;</span></span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">cols_label</span>(<span class="at">check =</span> <span class="st">"Check"</span>, <span class="at">cases =</span> <span class="st">"Cases"</span>, <span class="at">amount =</span> <span class="st">"Amount (₹)"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">fmt_number</span>(<span class="at">columns =</span> amount, <span class="at">decimals =</span> <span class="dv">0</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">sub_missing</span>(<span class="at">columns =</span> amount, <span class="at">missing_text =</span> <span class="st">"Not valued"</span>)</span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a>In all, <span class="in">`r lakh(sum(summary_tbl$amount, na.rm = TRUE))`</span> was paid irregularly</span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>in the cases that could be valued.</span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a><span class="fu">## Payments by month</span></span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-height: 3</span></span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a>pay <span class="sc">|&gt;</span></span>
+<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(<span class="at">month =</span> <span class="fu">floor_date</span>(paid_on, <span class="st">"month"</span>), <span class="at">wt =</span> amount, <span class="at">name =</span> <span class="st">"amount"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(month, amount <span class="sc">/</span> <span class="fl">1e5</span>)) <span class="sc">+</span></span>
+<span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="at">fill =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb9-61"><a href="#cb9-61" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">x =</span> <span class="cn">NULL</span>, <span class="at">y =</span> <span class="st">"₹ lakh"</span>) <span class="sc">+</span></span>
+<span id="cb9-62"><a href="#cb9-62" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb9-63"><a href="#cb9-63" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb9-64"><a href="#cb9-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-65"><a href="#cb9-65" aria-hidden="true" tabindex="-1"></a><span class="fu">## About this report</span></span>
+<span id="cb9-66"><a href="#cb9-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-67"><a href="#cb9-67" aria-hidden="true" tabindex="-1"></a><span class="in">```{r}</span></span>
+<span id="cb9-68"><a href="#cb9-68" aria-hidden="true" tabindex="-1"></a>data_hash <span class="ot">&lt;-</span> <span class="fu">unname</span>(tools<span class="sc">::</span><span class="fu">md5sum</span>(<span class="fu">c</span>(params<span class="sc">$</span>payments_file, params<span class="sc">$</span>beneficiaries_file)))</span>
+<span id="cb9-69"><a href="#cb9-69" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb9-70"><a href="#cb9-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-71"><a href="#cb9-71" aria-hidden="true" tabindex="-1"></a>Generated on <span class="in">`r format(Sys.time(), "%d %B %Y, %H:%M")`</span> from <span class="in">`r params$payments_file`</span></span>
+<span id="cb9-72"><a href="#cb9-72" aria-hidden="true" tabindex="-1"></a>(MD5 <span class="in">`r data_hash[1]`</span>) and <span class="in">`r params$beneficiaries_file`</span> (MD5 <span class="in">`r data_hash[2]`</span>),</span>
+<span id="cb9-73"><a href="#cb9-73" aria-hidden="true" tabindex="-1"></a>with <span class="in">`r R.version.string`</span>.</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>A few points about the template.</p>
+<ul>
+<li>
+<code>execute: echo: false</code> hides the code, so that the report shows only results. A report for the Collector should not contain R code.</li>
+<li>
+<code>embed-resources: true</code> packs the charts and styles into the single HTML file, so that it can be sent by email.</li>
+<li>Every number in the text is inline code. None is typed in, so none can go out of date.</li>
+<li>The last section records <em>when</em> the report was made, from <em>which</em> data files, identified by their hashes (<a href="06-2-workflow.html#sec-file-hash" class="quarto-xref"><span>Section 8.6</span></a>), and with which version of R. Anyone can later confirm that the report came from those files. This is the working-paper trail.</li>
+<li>
+<code>summarise_checks()</code> is also kept in <code>checks.R</code>, along with the four checks.</li>
+</ul>
+<p>To produce the report for one district from RStudio, open the file and click <strong>Render</strong>. The default district, Amarpur, is used.</p>
+</section><section id="sec-reports-loop" class="level2" data-number="56.5"><h2 data-number="56.5" class="anchored" data-anchor-id="sec-reports-loop">
+<span class="header-section-number">56.5</span> Step 4. One report for every district</h2>
+<p>To render the template for every district, we call <code>quarto_render()</code> from the package <code>quarto</code> in a loop, giving a different parameter each time with <code>execute_params</code>. Since the subtitle is part of the header, not the code, we pass it as metadata with <code>quarto_args</code>. Each report gets its own file name.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/quarto-dev/quarto-r">quarto</a></span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">districts</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"Amarpur"</span>, <span class="st">"Belapur"</span>, <span class="st">"Chandpur"</span>, <span class="st">"Devgarh"</span>, <span class="st">"Fatehpur"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://purrr.tidyverse.org/reference/map.html">walk</a></span><span class="op">(</span><span class="va">districts</span>, \<span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">fmt</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"html"</span>, <span class="st">"docx"</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu">quarto_render</span><span class="op">(</span></span>
+<span>      input          <span class="op">=</span> <span class="st">"audit_report.qmd"</span>,</span>
+<span>      output_format  <span class="op">=</span> <span class="va">fmt</span>,</span>
+<span>      output_file    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"audit_report_"</span>, <span class="va">d</span>, <span class="st">"."</span>, <span class="va">fmt</span><span class="op">)</span>,</span>
+<span>      execute_params <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html">list</a></span><span class="op">(</span>district <span class="op">=</span> <span class="va">d</span><span class="op">)</span>,</span>
+<span>      quarto_args    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="st">"--metadata"</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"subtitle:District report, "</span>, <span class="va">d</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>      quiet          <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>    <span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>This produces ten files, an HTML and a Word report for each district, in under a minute, each with its own figures, table and chart. (We have not run the loop while building this book, since it renders separate documents, but it was tested on the files created above.) When the data is corrected, or a new month’s data arrives, running the loop again regenerates every report.</p>
+<div class="callout callout-style-default callout-tip callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Audit tip
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Word (<code>docx</code>) output is usually the most convenient for audit, since draft paras and reports go through several rounds of editing by people who do not use R. Generate the Word report from Quarto, so that the numbers are right, and let the editing happen in Word. Quarto can also use your office’s Word template for styles and letterhead, through the <code>reference-doc</code> option of the <code>docx</code> format.</p>
+</div>
+</div>
+</section><section id="sec-reports-excel" class="level2" data-number="56.6"><h2 data-number="56.6" class="anchored" data-anchor-id="sec-reports-excel">
+<span class="header-section-number">56.6</span> Step 5. Excel working papers</h2>
+<p>The field party needs the exceptions themselves, one row per case, to verify against the records. An Excel workbook is the most convenient form. With <code>openxlsx</code> we can build it exactly as we want: a summary sheet, a sheet for each check, a bold header, number formats, filters and frozen header rows.</p>
+<p>We write a function that builds the workbook for one district.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">write_working_paper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">district</span>, <span class="va">pay_all</span>, <span class="va">ben_all</span>, <span class="va">folder</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">pay</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">pay_all</span>, <span class="va">district</span> <span class="op">==</span> <span class="op">!</span><span class="op">!</span><span class="va">district</span><span class="op">)</span></span>
+<span>  <span class="va">ben</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html">filter</a></span><span class="op">(</span><span class="va">ben_all</span>, <span class="va">district</span> <span class="op">==</span> <span class="op">!</span><span class="op">!</span><span class="va">district</span><span class="op">)</span></span>
+<span>  <span class="va">results</span> <span class="op">&lt;-</span> <span class="fu">run_checks</span><span class="op">(</span><span class="va">pay</span>, <span class="va">ben</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="va">wb</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/createWorkbook.html">createWorkbook</a></span><span class="op">(</span><span class="op">)</span></span>
+<span>  <span class="va">header_style</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/createStyle.html">createStyle</a></span><span class="op">(</span>textDecoration <span class="op">=</span> <span class="st">"bold"</span>, fgFill <span class="op">=</span> <span class="st">"#DDEBF7"</span>, border <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span>
+<span>  <span class="va">money_style</span>  <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/createStyle.html">createStyle</a></span><span class="op">(</span>numFmt <span class="op">=</span> <span class="st">"#,##0"</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="co"># Summary sheet</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/addWorksheet.html">addWorksheet</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/writeData.html">writeData</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste</a></span><span class="op">(</span><span class="st">"Kisan Sahayata audit, 2024-25:"</span>, <span class="va">district</span>, <span class="st">"district"</span><span class="op">)</span>,</span>
+<span>            startRow <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/addStyle.html">addStyle</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span>, <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/createStyle.html">createStyle</a></span><span class="op">(</span>textDecoration <span class="op">=</span> <span class="st">"bold"</span>, fontSize <span class="op">=</span> <span class="fl">13</span><span class="op">)</span>, rows <span class="op">=</span> <span class="fl">1</span>, cols <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/writeData.html">writeData</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span>, <span class="fu">summarise_checks</span><span class="op">(</span><span class="va">results</span><span class="op">)</span>, startRow <span class="op">=</span> <span class="fl">3</span>, headerStyle <span class="op">=</span> <span class="va">header_style</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/addStyle.html">addStyle</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span>, <span class="va">money_style</span>, rows <span class="op">=</span> <span class="fl">4</span><span class="op">:</span><span class="fl">7</span>, cols <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/setColWidths.html">setColWidths</a></span><span class="op">(</span><span class="va">wb</span>, <span class="st">"Summary"</span>, cols <span class="op">=</span> <span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, widths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html">c</a></span><span class="op">(</span><span class="fl">50</span>, <span class="fl">10</span>, <span class="fl">14</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span>  <span class="co"># One sheet per check</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">check</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/names.html">names</a></span><span class="op">(</span><span class="va">results</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/addWorksheet.html">addWorksheet</a></span><span class="op">(</span><span class="va">wb</span>, <span class="va">check</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/writeData.html">writeData</a></span><span class="op">(</span><span class="va">wb</span>, <span class="va">check</span>, <span class="va">results</span><span class="op">[[</span><span class="va">check</span><span class="op">]</span><span class="op">]</span>, headerStyle <span class="op">=</span> <span class="va">header_style</span>, withFilter <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/freezePane.html">freezePane</a></span><span class="op">(</span><span class="va">wb</span>, <span class="va">check</span>, firstRow <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/setColWidths.html">setColWidths</a></span><span class="op">(</span><span class="va">wb</span>, <span class="va">check</span>, cols <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html">seq_along</a></span><span class="op">(</span><span class="va">results</span><span class="op">[[</span><span class="va">check</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, widths <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">file</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">folder</span>, <span class="fu"><a href="https://rdrr.io/r/base/paste.html">paste0</a></span><span class="op">(</span><span class="st">"working_paper_"</span>, <span class="va">district</span>, <span class="st">".xlsx"</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/saveWorkbook.html">saveWorkbook</a></span><span class="op">(</span><span class="va">wb</span>, <span class="va">file</span>, overwrite <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">file</span></span>
+<span><span class="op">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>A few details. <code>withFilter = TRUE</code> adds the filter buttons to the header row, <code><a href="https://rdrr.io/pkg/openxlsx/man/freezePane.html">freezePane()</a></code> keeps the header visible while scrolling, and <code>setColWidths(widths = "auto")</code> fits the columns to their contents. The <code>!!district</code> inside <code><a href="https://dplyr.tidyverse.org/reference/filter.html">filter()</a></code> uses the <em>value</em> of the function’s argument, not a column of the same name, as in <a href="12-8b-duckdb.html#sec-duckdb-tests" class="quarto-xref"><span>Section 17.4</span></a>.</p>
+<p>Now one workbook for each district.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="va">wp_folder</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html">file.path</a></span><span class="op">(</span><span class="va">project_dir</span>, <span class="st">"working_papers"</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/files2.html">dir.create</a></span><span class="op">(</span><span class="va">wp_folder</span>, showWarnings <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">wp_files</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://purrr.tidyverse.org/reference/map.html">map_chr</a></span><span class="op">(</span><span class="va">districts</span>, \<span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fu">write_working_paper</span><span class="op">(</span><span class="va">d</span>, <span class="va">payments_all</span>, <span class="va">benef_all</span>, <span class="va">wp_folder</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/basename.html">basename</a></span><span class="op">(</span><span class="va">wp_files</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "working_paper_Amarpur.xlsx"  "working_paper_Belapur.xlsx" 
+[3] "working_paper_Chandpur.xlsx" "working_paper_Devgarh.xlsx" 
+[5] "working_paper_Fatehpur.xlsx"</code></pre>
+</div>
+</div>
+<p>Let us check one of them by reading it back.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/getSheetNames.html">getSheetNames</a></span><span class="op">(</span><span class="va">wp_files</span><span class="op">[</span><span class="fl">4</span><span class="op">]</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] "Summary"         "duplicates"      "wrong_amount"    "not_active"     
+[5] "shared_accounts"</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/read.xlsx.html">read.xlsx</a></span><span class="op">(</span><span class="va">wp_files</span><span class="op">[</span><span class="fl">4</span><span class="op">]</span>, sheet <span class="op">=</span> <span class="st">"Summary"</span>, startRow <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>                                             check cases amount
+1              Same instalment paid more than once     6  12000
+2            Amount different from the entitlement     7  48000
+3  Payment to deceased or ineligible beneficiaries    27  56000
+4 Bank account shared by more than one beneficiary     1     NA</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="downlit sourceCode r code-with-copy"><code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/pkg/openxlsx/man/read.xlsx.html">read.xlsx</a></span><span class="op">(</span><span class="va">wp_files</span><span class="op">[</span><span class="fl">4</span><span class="op">]</span>, sheet <span class="op">=</span> <span class="st">"shared_accounts"</span><span class="op">)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>    ben_id district status     account
+1 KS000185  Devgarh Active 50012345678
+2 KS000515  Devgarh Active 50012345678
+3 KS000978  Devgarh Active 50012345678
+4 KS001172  Devgarh Active 50012345678
+5 KS001368  Devgarh Active 50012345678
+6 KS002069  Devgarh Active 50012345678</code></pre>
+</div>
+</div>
+<p>Devgarh’s workbook lists the six beneficiaries who share one bank account, ready for the field party to verify.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The newer package <code>openxlsx2</code> offers the same features with a modern design, and is worth considering for new work. For simple output without formatting, <code><a href="https://docs.ropensci.org/writexl//reference/write_xlsx.html">writexl::write_xlsx()</a></code>, which takes a named list of data frames and writes one sheet for each, is the quickest way (<a href="07-1-reading.html" class="quarto-xref"><span>Chapter 9</span></a>).</p>
+</div>
+</div>
+</section><section id="sec-reports-project" class="level2" data-number="56.7"><h2 data-number="56.7" class="anchored" data-anchor-id="sec-reports-project">
+<span class="header-section-number">56.7</span> Organising an audit project</h2>
+<p>When reports are produced by code, the files of an audit fall naturally into a simple structure, as suggested in <a href="06-2-workflow.html" class="quarto-xref"><span>Chapter 8</span></a>.</p>
+<pre><code>kisan_audit/
+  data/                 the files received, never edited
+  checks.R              the check functions, used by everything else
+  audit_report.qmd      the report template
+  run_all.R             the loop that renders every report and working paper
+  reports/              the generated reports
+  working_papers/       the generated workbooks</code></pre>
+<p>The rule is that nothing in <code>reports/</code> or <code>working_papers/</code> is ever edited by hand. If something is wrong, the fix goes into the data, the checks or the template, and <code>run_all.R</code> is run again. Then the reports, the working papers and the code always agree, and the whole audit can be reproduced from the data files by anyone, at any time.</p>
+<div class="callout callout-style-default callout-caution callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Caution
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Generated reports are only as right as the code behind them. Before sending reports to auditees, check one or two of them thoroughly by hand: recount a few cases from the raw data, and confirm the totals against the source. Once a template is verified, every report from it can be trusted to the same standard, which is far more than can be said for reports typed by hand.</p>
+</div>
+</div>
+</section><section id="a-suggested-workflow" class="level2" data-number="56.8"><h2 data-number="56.8" class="anchored" data-anchor-id="a-suggested-workflow">
+<span class="header-section-number">56.8</span> A suggested workflow</h2>
+<ol type="1">
+<li>
+<strong>Write each check as a function</strong>, in one file, and test it on one unit.</li>
+<li>
+<strong>Make a summary function</strong> that turns the results into a report-ready table.</li>
+<li>
+<strong>Write the report template</strong> in Quarto, with a parameter for the unit, inline code for every number, and a section recording the data files, their hashes, and the date.</li>
+<li>
+<strong>Render it once</strong> for the default unit, and check it thoroughly.</li>
+<li>
+<strong>Render for every unit</strong> in a loop with <code>quarto_render()</code> and <code>execute_params</code>.</li>
+<li>
+<strong>Generate the Excel working papers</strong> with <code>openxlsx</code>, one workbook per unit.</li>
+<li>
+<strong>Never edit outputs by hand.</strong> Fix the inputs and re-run.</li>
+</ol>
+<div class="callout callout-style-default callout-important callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Remember
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>A report generated by code has no copying errors, and updates itself when the data changes.</li>
+<li>Parameters, declared under <code>params:</code> and used as <code>params$name</code>, turn one template into many reports.</li>
+<li>
+<code>quarto_render(execute_params = ...)</code> renders a template for each value in a loop.</li>
+<li>
+<code>gt</code> makes formatted tables for HTML and Word; <code>openxlsx</code> makes formatted Excel working papers.</li>
+<li>Record the data files, their hashes and the date in every report, so that it can be reproduced and verified.</li>
+</ul>
+</div>
+</div>
+</section><section id="summary-of-functions-used" class="level2" data-number="56.9"><h2 data-number="56.9" class="anchored" data-anchor-id="summary-of-functions-used">
+<span class="header-section-number">56.9</span> Summary of functions used</h2>
+<div id="tbl-reportsfunctions" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure"><figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-reportsfunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;56.1: Functions used in this chapter
+</figcaption><div aria-describedby="tbl-reportsfunctions-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 22%">
+<col style="width: 45%">
+</colgroup>
+<thead><tr class="header">
+<th>Function</th>
+<th>Package</th>
+<th>What it does</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code>gt()</code>, <code>cols_label()</code>, <code>fmt_number()</code>, <code>sub_missing()</code>, <code>tab_header()</code>, <code>tab_source_note()</code>
+</td>
+<td>gt</td>
+<td>Build a formatted table</td>
+</tr>
+<tr class="even">
+<td><code>quarto_render(execute_params, output_format, output_file, quarto_args)</code></td>
+<td>quarto</td>
+<td>Render a Quarto document with given parameters</td>
+</tr>
+<tr class="odd">
+<td><code>params$name</code></td>
+<td>Quarto</td>
+<td>Use a parameter inside a Quarto document</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/pkg/openxlsx/man/createWorkbook.html">createWorkbook()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/addWorksheet.html">addWorksheet()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/writeData.html">writeData()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/saveWorkbook.html">saveWorkbook()</a></code>
+</td>
+<td>openxlsx</td>
+<td>Build and save an Excel workbook</td>
+</tr>
+<tr class="odd">
+<td>
+<code><a href="https://rdrr.io/pkg/openxlsx/man/createStyle.html">createStyle()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/addStyle.html">addStyle()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/setColWidths.html">setColWidths()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/freezePane.html">freezePane()</a></code>
+</td>
+<td>openxlsx</td>
+<td>Format cells, size columns and freeze the header</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://rdrr.io/pkg/openxlsx/man/getSheetNames.html">getSheetNames()</a></code>, <code><a href="https://rdrr.io/pkg/openxlsx/man/read.xlsx.html">read.xlsx()</a></code>
+</td>
+<td>openxlsx</td>
+<td>Check a workbook by reading it back</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/tools/md5sum.html">tools::md5sum()</a></code></td>
+<td>tools</td>
+<td>Hash of a data file, recorded in the report</td>
+</tr>
+<tr class="even">
+<td>
+<code><a href="https://purrr.tidyverse.org/reference/map.html">walk()</a></code>, <code><a href="https://purrr.tidyverse.org/reference/map.html">map_chr()</a></code>
+</td>
+<td>purrr</td>
+<td>Repeat for every district</td>
+</tr>
+<tr class="odd">
+<td><code><a href="https://rdrr.io/r/base/dump.html">dump()</a></code></td>
+<td>base R</td>
+<td>Save R functions to a file</td>
+</tr>
+</tbody>
+</table>
+</div>
+</figure>
+</div>
+
+
+<div id="refs" class="references csl-bib-body hanging-indent" data-entry-spacing="0" role="list" style="display: none">
+<div id="ref-R-quarto" class="csl-entry" role="listitem">
+Allaire, JJ, and Christophe Dervieux. <em>Quarto: R Interface to Quarto Markdown Publishing System</em>, 2025. <a href="https://github.com/quarto-dev/quarto-r">https://github.com/quarto-dev/quarto-r</a>.
+</div>
+<div id="ref-R-visNetwork" class="csl-entry" role="listitem">
+Almende B.V. and Contributors, and Benoit Thieurmel. <em>visNetwork: Network Visualization Using Vis.js Library</em>, 2025. <a href="https://datastorm-open.github.io/visNetwork/">https://datastorm-open.github.io/visNetwork/</a>.
+</div>
+<div id="ref-igraph2023" class="csl-entry" role="listitem">
+Antonov, Michael, Gábor Csárdi, Szabolcs Horvát, Kirill Müller, Tamás Nepusz, Daniel Noom, Maëlle Salmon, Vincent Traag, Brooke Foucault Welles, and Fabio Zanini. <span>“Igraph Enables Fast and Robust Network Analysis Across Programming Languages.”</span> <em>arXiv Preprint arXiv:2311.10260</em>, 2023. <a href="https://doi.org/10.48550/arXiv.2311.10260">https://doi.org/10.48550/arXiv.2311.10260</a>.
+</div>
+<div id="ref-R-PGRdup" class="csl-entry" role="listitem">
+Aravind, J., J. Radhamani, Kalyani Srinivasan, B. Ananda Subhash, and Rishi Kumar Tyagi. <em>PGRdup: Discover Probable Duplicates in Plant Genetic Resources Collections</em>, 2026. <a href="https://cran.r-project.org/package=PGRdup">https://cran.r-project.org/package=PGRdup</a>.
+</div>
+<div id="ref-R-magrittr" class="csl-entry" role="listitem">
+Bache, Stefan Milton, and Hadley Wickham. <em>Magrittr: A Forward-Pipe Operator for r</em>, 2025. <a href="https://magrittr.tidyverse.org">https://magrittr.tidyverse.org</a>.
+</div>
+<div id="ref-R-data.table" class="csl-entry" role="listitem">
+Barrett, Tyson, Matt Dowle, Arun Srinivasan, Jan Gorecki, Michael Chirico, Toby Hocking, Benjamin Schwendinger, and Ivan Krylov. <em>Data.table: Extension of ‘Data.frame‘</em>, 2026. <a href="https://r-datatable.com">https://r-datatable.com</a>.
+</div>
+<div id="ref-frank_ben" class="csl-entry" role="listitem">
+Benford, Frank. <span>“The Law of Anomalous Numbers.”</span> <em>Proceedings of the American Philosophical Society</em> 78, no. 4 (1938): 551–72. <a href="http://www.jstor.org/stable/984802">http://www.jstor.org/stable/984802</a>.
+</div>
+<div id="ref-R-FNN" class="csl-entry" role="listitem">
+Beygelzimer, Alina, Sham Kakadet, John Langford, Sunil Arya, David Mount, and Shengqiao Li. <em>FNN: Fast Nearest Neighbor Search Algorithms and Applications</em>, 2024. <a href="https://doi.org/10.32614/CRAN.package.FNN">https://doi.org/10.32614/CRAN.package.FNN</a>.
+</div>
+<div id="ref-R-deaR" class="csl-entry" role="listitem">
+Bolos, Vicente, Vicente Coll-Serrano, and Rafael Benitez Suarez. <em>deaR: Conventional and Fuzzy Data Envelopment Analysis</em>, 2026. <a href="https://doi.org/10.32614/CRAN.package.deaR">https://doi.org/10.32614/CRAN.package.deaR</a>.
+</div>
+<div id="ref-deaR2025" class="csl-entry" role="listitem">
+Bolós, V. J., R. Benítez, and V. Coll-Serrano. <span>“deaR: Conventional and Fuzzy DEA Models with r.”</span> <em>SoftwareX</em> 31 (2025): 102266, 1–6. <a href="https://doi.org/10.1016/j.softx.2025.102266">https://doi.org/10.1016/j.softx.2025.102266</a>.
+</div>
+<div id="ref-R-SnowballC" class="csl-entry" role="listitem">
+Bouchet-Valat, Milan. <em>SnowballC: Snowball Stemmers Based on the c Libstemmer UTF-8 Library</em>, 2023. <a href="https://github.com/nalimilan/R.TeMiS">https://github.com/nalimilan/R.TeMiS</a>.
+</div>
+<div id="ref-R-tidygeocoder" class="csl-entry" role="listitem">
+Cambon, Jesse, Diego Hernangómez, Christopher Belanger, and Daniel Possenriede. <em>Tidygeocoder: Geocoding Made Easy</em>, 2025. <a href="https://jessecambon.github.io/tidygeocoder/">https://jessecambon.github.io/tidygeocoder/</a>.
+</div>
+<div id="ref-R-leaflet" class="csl-entry" role="listitem">
+Cheng, Joe, Barret Schloerke, Bhaskar Karambelkar, Yihui Xie, and Garrick Aden-Buie. <em>Leaflet: Create Interactive Web Maps with the JavaScript Leaflet Library</em>, 2025. <a href="https://rstudio.github.io/leaflet/">https://rstudio.github.io/leaflet/</a>.
+</div>
+<div id="ref-R-benford.analysis" class="csl-entry" role="listitem">
+Cinelli, Carlos. <em>Benford.analysis: Benford Analysis for Data Validation and Forensic Analytics</em>, 2018. <a href="http://github.com/carloscinelli/benford.analysis">http://github.com/carloscinelli/benford.analysis</a>.
+</div>
+<div id="ref-dea" class="csl-entry" role="listitem">
+Cooper, William, Lawrence Seiford, and Joe Zhu. <span>“Data Envelopment Analysis: History, Models, and Interpretations.”</span> In <em>Handbook on Data Envelopment Analysis</em>, 1–39, 2011. <a href="https://doi.org/10.1007/978-1-4419-6151-8_1">https://doi.org/10.1007/978-1-4419-6151-8_1</a>.
+</div>
+<div id="ref-R-isotree" class="csl-entry" role="listitem">
+Cortes, David. <em>Isotree: Isolation-Based Outlier Detection</em>, 2026. <a href="https://github.com/david-cortes/isotree">https://github.com/david-cortes/isotree</a>.
+</div>
+<div id="ref-R-rebus" class="csl-entry" role="listitem">
+Cotton, Richard. <em>Rebus: Build Regular Expressions in a Human Readable Way</em>, 2017. <a href="https://doi.org/10.32614/CRAN.package.rebus">https://doi.org/10.32614/CRAN.package.rebus</a>.
+</div>
+<div id="ref-R-igraphdata" class="csl-entry" role="listitem">
+Csardi, Gabor. <em>Igraphdata: A Collection of Network Data Sets for the Igraph Package</em>, 2015. <a href="http://igraph.org">http://igraph.org</a>.
+</div>
+<div id="ref-igraph2006" class="csl-entry" role="listitem">
+Csárdi, Gábor, and Tamás Nepusz. <span>“The Igraph Software Package for Complex Network Research.”</span> <em>InterJournal</em> Complex Systems (2006): 1695. <a href="https://igraph.org">https://igraph.org</a>.
+</div>
+<div id="ref-R-igraph" class="csl-entry" role="listitem">
+Csárdi, Gábor, Tamás Nepusz, Vincent Traag, Szabolcs Horvát, Fabio Zanini, Daniel Noom, Kirill Müller, David Schoch, and Maëlle Salmon. <em>Igraph: Network Analysis and Visualization</em>, 2026. <a href="https://r.igraph.org/">https://r.igraph.org/</a>.
+</div>
+<div id="ref-R-timetk" class="csl-entry" role="listitem">
+Dancho, Matt, and Davis Vaughan. <em>Timetk: A Tool Kit for Working with Time Series</em>, 2025. <a href="https://github.com/business-science/timetk">https://github.com/business-science/timetk</a>.
+</div>
+<div id="ref-durtschi" class="csl-entry" role="listitem">
+Durtschi, Cindy, William Hillison, and Carl Pacini. <span>“The Effective Use of Benford’s Law to Assist in Detecting Fraud in Accounting Data.”</span> <em>J. Forensic Account</em> 5 (January 2004).
+</div>
+<div id="ref-R-wordcloud" class="csl-entry" role="listitem">
+Fellows, Ian. <em>Wordcloud: Word Clouds</em>, 2018. <a href="http://blog.fellstat.com/?cat=11">http://blog.fellstat.com/?cat=11</a>.
+</div>
+<div id="ref-R-janitor" class="csl-entry" role="listitem">
+Firke, Sam. <em>Janitor: Simple Tools for Examining and Cleaning Dirty Data</em>, 2024. <a href="https://github.com/sfirke/janitor">https://github.com/sfirke/janitor</a>.
+</div>
+<div id="ref-car2019" class="csl-entry" role="listitem">
+Fox, John, and Sanford Weisberg. <em>An <span>R</span> Companion to Applied Regression</em>. Third. Thousand Oaks <span>CA</span>: Sage, 2019. <a href="https://www.john-fox.ca/Companion/">https://www.john-fox.ca/Companion/</a>.
+</div>
+<div id="ref-R-car" class="csl-entry" role="listitem">
+Fox, John, Sanford Weisberg, and Brad Price. <em>Car: Companion to Applied Regression</em>, 2026. <a href="https://github.com/bprice2652/car_repo">https://github.com/bprice2652/car_repo</a>.
+</div>
+<div id="ref-r-stringi" class="csl-entry" role="listitem">
+Gagolewski, Marek. <em>Stringi: Fast and Portable Character String Processing in r</em>, 2021. <a href="https://stringi.gagolewski.com/">https://stringi.gagolewski.com/</a>.
+</div>
+<div id="ref-mcke" class="csl-entry" role="listitem">
+Gardner, Everette S., and Ed. Mckenzie. <span>“Forecasting Trends in Time Series.”</span> <em>Management Science</em> 31, no. 10 (1985): 1237–46. <a href="https://doi.org/10.1287/mnsc.31.10.1237">https://doi.org/10.1287/mnsc.31.10.1237</a>.
+</div>
+<div id="ref-R-tidyxl" class="csl-entry" role="listitem">
+Garmonsway, Duncan. <em>Tidyxl: Read Untidy Excel Files</em>, 2023. <a href="https://github.com/nacnudus/tidyxl">https://github.com/nacnudus/tidyxl</a>.
+</div>
+<div id="ref-R-unpivotr" class="csl-entry" role="listitem">
+———. <em>Unpivotr: Unpivot Complex and Irregular Data Layouts</em>, 2024. <a href="https://github.com/nacnudus/unpivotr">https://github.com/nacnudus/unpivotr</a>.
+</div>
+<div id="ref-JSSv040i03" class="csl-entry" role="listitem">
+Grolemund, Garrett, and Hadley Wickham. <span>“Dates and Times Made Easy with Lubridate.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://doi.org/10.18637/jss.v040.i03">https://doi.org/10.18637/jss.v040.i03</a>.
+</div>
+<div id="ref-lubridate2011" class="csl-entry" role="listitem">
+———. <span>“Dates and Times Made Easy with <span class="nocase">lubridate</span>.”</span> <em>Journal of Statistical Software</em> 40, no. 3 (2011): 1–25. <a href="https://www.jstatsoft.org/v40/i03/">https://www.jstatsoft.org/v40/i03/</a>.
+</div>
+<div id="ref-R-arules" class="csl-entry" role="listitem">
+Hahsler, Michael, Christian Buchta, Bettina Gruen, and Kurt Hornik. <em>Arules: Mining Association Rules and Frequent Itemsets</em>, 2026. <a href="https://github.com/mhahsler/arules">https://github.com/mhahsler/arules</a>.
+</div>
+<div id="ref-arules2011" class="csl-entry" role="listitem">
+Hahsler, Michael, Sudheer Chelluboina, Kurt Hornik, and Christian Buchta. <span>“The Arules r-Package Ecosystem: Analyzing Interesting Patterns from Large Transaction Datasets.”</span> <em>Journal of Machine Learning Research</em> 12 (2011): 1977–81. <a href="https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html">https://jmlr.csail.mit.edu/papers/v12/hahsler11a.html</a>.
+</div>
+<div id="ref-arules2005" class="csl-entry" role="listitem">
+Hahsler, Michael, Bettina Gruen, and Kurt Hornik. <span>“Arules – <span>A</span> Computational Environment for Mining Association Rules and Frequent Item Sets.”</span> <em>Journal of Statistical Software</em> 14, no. 15 (2005): 1–25. <a href="https://doi.org/10.18637/jss.v014.i15">https://doi.org/10.18637/jss.v014.i15</a>.
+</div>
+<div id="ref-R-dbscan" class="csl-entry" role="listitem">
+Hahsler, Michael, and Matthew Piekenbrock. <em>Dbscan: Density-Based Spatial Clustering of Applications with Noise (DBSCAN) and Related Algorithms</em>, 2026. <a href="https://github.com/mhahsler/dbscan">https://github.com/mhahsler/dbscan</a>.
+</div>
+<div id="ref-dbscan2019" class="csl-entry" role="listitem">
+Hahsler, Michael, Matthew Piekenbrock, and Derek Doran. <span>“<span class="nocase">dbscan</span>: Fast Density-Based Clustering with <span>R</span>.”</span> <em>Journal of Statistical Software</em> 91, no. 1 (2019): 1–30. <a href="https://doi.org/10.18637/jss.v091.i01">https://doi.org/10.18637/jss.v091.i01</a>.
+</div>
+<div id="ref-t_hill" class="csl-entry" role="listitem">
+Hill, Theodore P. <span>“The Significant-Digit Phenomenon.”</span> <em>The American Mathematical Monthly</em> 102, no. 4 (1995): 322–27. <a href="http://www.jstor.org/stable/2974952">http://www.jstor.org/stable/2974952</a>.
+</div>
+<div id="ref-R-palmerpenguins" class="csl-entry" role="listitem">
+Horst, Allison, Alison Hill, and Kristen Gorman. <em>Palmerpenguins: Palmer Archipelago (Antarctica) Penguin Data</em>, 2022. <a href="https://allisonhorst.github.io/palmerpenguins/">https://allisonhorst.github.io/palmerpenguins/</a>.
+</div>
+<div id="ref-phonics2018" class="csl-entry" role="listitem">
+Howard, II, James P. <span>“Phonetic Algorithms in <span>R</span>.”</span> <em>Journal of Open Source Software</em> 3, no. 22 (2018): 480. <a href="https://doi.org/10.21105/joss.00480">https://doi.org/10.21105/joss.00480</a>.
+</div>
+<div id="ref-phonics2020" class="csl-entry" role="listitem">
+———. <span>“Phonetic Spelling Algorithm Implementations for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 95, no. 8 (2020): 1–21. <a href="https://doi.org/10.18637/jss.v095.i08">https://doi.org/10.18637/jss.v095.i08</a>.
+</div>
+<div id="ref-R-phonics" class="csl-entry" role="listitem">
+Howard, James. <em>Phonics: Phonetic Spelling Algorithms</em>, 2026. <a href="https://phonics.jameshoward.us">https://phonics.jameshoward.us</a>.
+</div>
+<div id="ref-forecast2008" class="csl-entry" role="listitem">
+Hyndman, Rob J, and Yeasmin Khandakar. <span>“Automatic Time Series Forecasting: The Forecast Package for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 27, no. 3 (2008): 1–22. <a href="https://doi.org/10.18637/jss.v027.i03">https://doi.org/10.18637/jss.v027.i03</a>.
+</div>
+<div id="ref-R-forecast" class="csl-entry" role="listitem">
+Hyndman, Rob, George Athanasopoulos, Christoph Bergmeir, Gabriel Caceres, Leanne Chhay, Kirill Kuroptev, Maximilian Mücke, et al. <em>Forecast: Forecasting Functions for Time Series and Linear Models</em>, 2026. <a href="https://pkg.robjhyndman.com/forecast/">https://pkg.robjhyndman.com/forecast/</a>.
+</div>
+<div id="ref-R-gt" class="csl-entry" role="listitem">
+Iannone, Richard, Joe Cheng, Barret Schloerke, Shannon Haughton, Ellis Hughes, Alexandra Lauer, Romain François, JooYoung Seo, Ken Brevoort, and Olivier Roy. <em>Gt: Easily Create Presentation-Ready Display Tables</em>, 2026. <a href="https://gt.rstudio.com">https://gt.rstudio.com</a>.
+</div>
+<div id="ref-R-pointblank" class="csl-entry" role="listitem">
+Iannone, Richard, Mauricio Vargas, and June Choe. <em>Pointblank: Data Validation and Organization of Metadata for Local and Remote Tables</em>, 2026. <a href="https://rstudio.github.io/pointblank/">https://rstudio.github.io/pointblank/</a>.
+</div>
+<div id="ref-10.2307/1390807" class="csl-entry" role="listitem">
+Ihaka, Ross, and Robert Gentleman. <span>“R: A Language for Data Analysis and Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 5, no. 3 (1996): 299–314. <a href="http://www.jstor.org/stable/1390807">http://www.jstor.org/stable/1390807</a>.
+</div>
+<div id="ref-R-colorspace" class="csl-entry" role="listitem">
+Ihaka, Ross, Paul Murrell, Kurt Hornik, Jason C. Fisher, Reto Stauffer, Claus O. Wilke, Claire D. McWhite, and Achim Zeileis. <em>Colorspace: A Toolbox for Manipulating and Assessing Colors and Palettes</em>, 2025. <a href="https://colorspace.R-Forge.R-project.org/">https://colorspace.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-R-bupaR" class="csl-entry" role="listitem">
+Janssenswillen, Gert. <em>bupaR: Business Process Analysis in r</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-edeaR" class="csl-entry" role="listitem">
+———. <em>edeaR: Exploratory and Descriptive Event-Based Data Analysis</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processcheckR" class="csl-entry" role="listitem">
+———. <em>processcheckR: Rule-Based Conformance Checking of Business Process Event Data</em>, 2025. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-processmapR" class="csl-entry" role="listitem">
+———. <em>processmapR: Construct Process Maps Using Event Data</em>, 2026. <a href="https://bupar.net/">https://bupar.net/</a>.
+</div>
+<div id="ref-R-factoextra" class="csl-entry" role="listitem">
+Kassambara, Alboukadel, and Fabian Mundt. <em>Factoextra: Extract and Visualize the Results of Multivariate Data Analyses</em>, 2026. <a href="https://github.com/kassambara/factoextra">https://github.com/kassambara/factoextra</a>.
+</div>
+<div id="ref-R-changepoint" class="csl-entry" role="listitem">
+Killick, Rebecca. <em>Changepoint: Methods for Changepoint Detection</em>, 2024. <a href="https://github.com/rkillick/changepoint/">https://github.com/rkillick/changepoint/</a>.
+</div>
+<div id="ref-changepoint2014" class="csl-entry" role="listitem">
+Killick, Rebecca, and Idris A. Eckley. <span>“<span class="nocase">changepoint</span>: An <span>R</span> Package for Changepoint Analysis.”</span> <em>Journal of Statistical Software</em> 58, no. 3 (2014): 1–19. <a href="https://www.jstatsoft.org/article/view/v058i03">https://www.jstatsoft.org/article/view/v058i03</a>.
+</div>
+<div id="ref-R-moderndive" class="csl-entry" role="listitem">
+Kim, Albert Y., and Chester Ismay. <em>Moderndive: Tidyverse-Friendly Introductory Linear Regression</em>, 2026. <a href="https://moderndive.github.io/moderndive/">https://moderndive.github.io/moderndive/</a>.
+</div>
+<div id="ref-moderndive2021" class="csl-entry" role="listitem">
+Kim, Albert Y., Chester Ismay, and Max Kuhn. <span>“Take a Moderndive into Introductory Linear Regression with r.”</span> <em>The Journal of Open Source Education</em> 4, no. 41, 115 (2021). <a href="https://doi.org/10.21105/jose.00115">https://doi.org/10.21105/jose.00115</a>.
+</div>
+<div id="ref-R-outliers" class="csl-entry" role="listitem">
+Komsta, Lukasz. <em>Outliers: Tests for Outliers</em>, 2022. <a href="https://www.R-project.org">https://www.R-project.org</a>.
+</div>
+<div id="ref-performance2021" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, and Dominique Makowski. <span>“<span class="nocase">performance</span>: An <span>R</span> Package for Assessment, Comparison and Testing of Statistical Models.”</span> <em>Journal of Open Source Software</em> 6, no. 60 (2021): 3139. <a href="https://doi.org/10.21105/joss.03139">https://doi.org/10.21105/joss.03139</a>.
+</div>
+<div id="ref-R-performance" class="csl-entry" role="listitem">
+Lüdecke, Daniel, Dominique Makowski, Mattan S. Ben-Shachar, Indrajeet Patil, Philip Waggoner, Brenton M. Wiernik, and Rémi Thériault. <em>Performance: Assessment of Regression Models Performance</em>, 2026. <a href="https://easystats.github.io/performance/">https://easystats.github.io/performance/</a>.
+</div>
+<div id="ref-R-cluster" class="csl-entry" role="listitem">
+Maechler, Martin, Peter Rousseeuw, Anja Struyf, and Mia Hubert. <em>Cluster: "Finding Groups in Data": Cluster Analysis Extended Rousseeuw Et Al.</em>, 2026. <a href="https://svn.r-project.org/R-packages/trunk/cluster/">https://svn.r-project.org/R-packages/trunk/cluster/</a>.
+</div>
+<div id="ref-R-rpart.plot" class="csl-entry" role="listitem">
+Milborrow, Stephen. <em>Rpart.plot: Plot Rpart Models: An Enhanced Version of Plot.rpart</em>, 2026. <a href="http://www.milbo.org/rpart-plot/index.html">http://www.milbo.org/rpart-plot/index.html</a>.
+</div>
+<div id="ref-R-duckdb" class="csl-entry" role="listitem">
+Mühleisen, Hannes, and Mark Raasveldt. <em>Duckdb: DBI Package for the DuckDB Database Management System</em>, 2026. <a href="https://r.duckdb.org/">https://r.duckdb.org/</a>.
+</div>
+<div id="ref-r-tibble" class="csl-entry" role="listitem">
+Müller, Kirill, and Hadley Wickham. <em>Tibble: Simple Data Frames</em>, 2022. <a href="https://CRAN.R-project.org/package=tibble">https://CRAN.R-project.org/package=tibble</a>.
+</div>
+<div id="ref-R-tibble" class="csl-entry" role="listitem">
+———. <em>Tibble: Simple Data Frames</em>, 2026. <a href="https://tibble.tidyverse.org/">https://tibble.tidyverse.org/</a>.
+</div>
+<div id="ref-R-RColorBrewer" class="csl-entry" role="listitem">
+Neuwirth, Erich. <em>RColorBrewer: ColorBrewer Palettes</em>, 2022. <a href="https://doi.org/10.32614/CRAN.package.RColorBrewer">https://doi.org/10.32614/CRAN.package.RColorBrewer</a>.
+</div>
+<div id="ref-newcomb" class="csl-entry" role="listitem">
+Newcomb, Simon. <span>“Note on the Frequency of Use of the Different Digits in Natural Numbers.”</span> <em>American Journal of Mathematics</em> 4, no. 1 (1881): 39–40. <a href="http://www.jstor.org/stable/2369148">http://www.jstor.org/stable/2369148</a>.
+</div>
+<div id="ref-nigrinifraud" class="csl-entry" role="listitem">
+Nigrini, Mark J. <em>Benford’s Law Applications for Forensic Accounting, Auditing and Fraud Detection</em>. 1st ed. John Wiley; Sons, Ltd, 2012. <a href="https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5">https://onlinelibrary.wiley.com/doi/abs/10.1002/9781119203094.ch5</a>.
+</div>
+<div id="ref-article2007" class="csl-entry" role="listitem">
+Nigrini, Mark, and Steven Miller. <span>“Benford’s Law Applied to Hydrology Data—Results and Relevance to Other Geophysical Data.”</span> <em>Mathematical Geology</em> 39 (September 2007): 469–90. <a href="https://doi.org/10.1007/s11004-007-9109-5">https://doi.org/10.1007/s11004-007-9109-5</a>.
+</div>
+<div id="ref-articlesec" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing a Journal of Practice and Theory AUDITING J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-article2009" class="csl-entry" role="listitem">
+———. <span>“Data Diagnostics Using Second-Order Tests of Benford’s Law.”</span> <em>Auditing-a Journal of Practice and Theory - AUDITING-J PRACT THEOR</em> 28 (November 2009). <a href="https://doi.org/10.2308/aud.2009.28.2.305">https://doi.org/10.2308/aud.2009.28.2.305</a>.
+</div>
+<div id="ref-R-pdftools" class="csl-entry" role="listitem">
+Ooms, Jeroen. <em>Pdftools: Text Extraction, Rendering and Converting of PDF Documents</em>, 2026. <a href="https://ropensci.r-universe.dev/pdftools">https://ropensci.r-universe.dev/pdftools</a>.
+</div>
+<div id="ref-R-writexl" class="csl-entry" role="listitem">
+Ooms, Jeroen, and Bill Denney. <em>Writexl: Export Data Frames to Excel Xlsx Format</em>, 2026. <a href="https://ropensci.r-universe.dev/writexl">https://ropensci.r-universe.dev/writexl</a>.
+</div>
+<div id="ref-R-sf" class="csl-entry" role="listitem">
+Pebesma, Edzer. <em>Sf: Simple Features for r</em>, 2026. <a href="https://r-spatial.github.io/sf/">https://r-spatial.github.io/sf/</a>.
+</div>
+<div id="ref-sf2018" class="csl-entry" role="listitem">
+———. <span>“<span class="nocase">Simple Features for R: Standardized Support for Spatial Vector Data</span>.”</span> <em><span>The R Journal</span></em> 10, no. 1 (2018): 439–46. <a href="https://doi.org/10.32614/RJ-2018-009">https://doi.org/10.32614/RJ-2018-009</a>.
+</div>
+<div id="ref-sf2023" class="csl-entry" role="listitem">
+Pebesma, Edzer, and Roger Bivand. <em><span class="nocase">Spatial Data Science: With applications in R</span></em>. <span>Chapman and Hall/CRC</span>, 2023. <a href="https://doi.org/10.1201/9780429459016">https://doi.org/10.1201/9780429459016</a>.
+</div>
+<div id="ref-R-ggraph" class="csl-entry" role="listitem">
+Pedersen, Thomas Lin. <em>Ggraph: An Implementation of Grammar of Graphics for Graphs and Networks</em>, 2025. <a href="https://ggraph.data-imaginist.com">https://ggraph.data-imaginist.com</a>.
+</div>
+<div id="ref-R-patchwork" class="csl-entry" role="listitem">
+———. <em>Patchwork: The Composer of Plots</em>, 2025. <a href="https://patchwork.data-imaginist.com">https://patchwork.data-imaginist.com</a>.
+</div>
+<div id="ref-R-PerformanceAnalytics" class="csl-entry" role="listitem">
+Peterson, Brian G., and Peter Carl. <em>PerformanceAnalytics: Econometric Tools for Performance and Risk Analysis</em>, 2026. <a href="https://github.com/braverock/PerformanceAnalytics">https://github.com/braverock/PerformanceAnalytics</a>.
+</div>
+<div id="ref-pinkham" class="csl-entry" role="listitem">
+Pinkham, Roger S. <span>“<span class="nocase">On the Distribution of First Significant Digits</span>.”</span> <em>The Annals of Mathematical Statistics</em> 32, no. 4 (1961): 1223–30. <a href="https://doi.org/10.1214/aoms/1177704862">https://doi.org/10.1214/aoms/1177704862</a>.
+</div>
+<div id="ref-R-base" class="csl-entry" role="listitem">
+R Core Team. <em>R: A Language and Environment for Statistical Computing</em>. Vienna, Austria: R Foundation for Statistical Computing, 2025. <a href="https://www.R-project.org/">https://www.R-project.org/</a>.
+</div>
+<div id="ref-R-psych" class="csl-entry" role="listitem">
+Revelle, William. <em>Psych: Procedures for Psychological, Psychometric, and Personality Research</em>, 2026. <a href="https://personality-project.org/r/psych/">https://personality-project.org/r/psych/</a>.
+</div>
+<div id="ref-R-nnet" class="csl-entry" role="listitem">
+Ripley, Brian. <em>Nnet: Feed-Forward Neural Networks and Multinomial Log-Linear Models</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-MASS" class="csl-entry" role="listitem">
+Ripley, Brian, and Bill Venables. <em>MASS: Support Functions and Datasets for Venables and Ripley’s MASS</em>, 2025. <a href="http://www.stats.ox.ac.uk/pub/MASS4/">http://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-broom" class="csl-entry" role="listitem">
+Robinson, David, Alex Hayes, Simon Couch, and Emil Hvitfeldt. <em>Broom: Convert Statistical Objects into Tidy Tibbles</em>, 2026. <a href="https://broom.tidymodels.org/">https://broom.tidymodels.org/</a>.
+</div>
+<div id="ref-R-tidytext" class="csl-entry" role="listitem">
+Robinson, David, and Julia Silge. <em>Tidytext: Text Mining Using Dplyr, Ggplot2, and Other Tidy Tools</em>, 2025. <a href="https://juliasilge.github.io/tidytext/">https://juliasilge.github.io/tidytext/</a>.
+</div>
+<div id="ref-R-openxlsx" class="csl-entry" role="listitem">
+Schauberger, Philipp, and Alexander Walker. <em>Openxlsx: Read, Write and Edit Xlsx Files</em>, 2025. <a href="https://ycphs.github.io/openxlsx/index.html">https://ycphs.github.io/openxlsx/index.html</a>.
+</div>
+<div id="ref-R-GGally" class="csl-entry" role="listitem">
+Schloerke, Barret, Di Cook, Joseph Larmarange, Francois Briatte, Moritz Marbach, Edwin Thoen, Amos Elberg, and Jason Crowley. <em>GGally: Extension to Ggplot2</em>, 2025. <a href="https://ggobi.github.io/ggally/">https://ggobi.github.io/ggally/</a>.
+</div>
+<div id="ref-tidytext2016" class="csl-entry" role="listitem">
+Silge, Julia, and David Robinson. <span>“Tidytext: Text Mining and Analysis Using Tidy Data Principles in r.”</span> <em>JOSS</em> 1, no. 3 (2016). <a href="https://doi.org/10.21105/joss.00037">https://doi.org/10.21105/joss.00037</a>.
+</div>
+<div id="ref-R-ggrepel" class="csl-entry" role="listitem">
+Slowikowski, Kamil. <em>Ggrepel: Automatically Position Non-Overlapping Text Labels with Ggplot2</em>, 2026. <a href="https://ggrepel.slowkow.com/">https://ggrepel.slowkow.com/</a>.
+</div>
+<div id="ref-R-lubridate" class="csl-entry" role="listitem">
+Spinu, Vitalie, Garrett Grolemund, and Hadley Wickham. <em>Lubridate: Make Dealing with Dates a Little Easier</em>, 2026. <a href="https://lubridate.tidyverse.org">https://lubridate.tidyverse.org</a>.
+</div>
+<div id="ref-colorspace2009b" class="csl-entry" role="listitem">
+Stauffer, Reto, Georg J. Mayr, Markus Dabernig, and Achim Zeileis. <span>“Somewhere over the Rainbow: How to Make Effective Use of Colors in Meteorological Visualizations.”</span> <em>Bulletin of the American Meteorological Society</em> 96, no. 2 (2009): 203–16. <a href="https://doi.org/10.1175/BAMS-D-13-00155.1">https://doi.org/10.1175/BAMS-D-13-00155.1</a>.
+</div>
+<div id="ref-R-rpart" class="csl-entry" role="listitem">
+Therneau, Terry, and Beth Atkinson. <em>Rpart: Recursive Partitioning and Regression Trees</em>, 2025. <a href="https://github.com/bethatkinson/rpart">https://github.com/bethatkinson/rpart</a>.
+</div>
+<div id="ref-R-AnomalyDetection" class="csl-entry" role="listitem">
+Vallis, Owen S., Jordan Hochenbaum, and Arun Kejariwal. <em>AnomalyDetection: Anomaly Detection Using Seasonal Hybrid Extreme Studentized Deviate Test</em>, 2014. <a href="https://github.com/twitter/AnomalyDetection">https://github.com/twitter/AnomalyDetection</a>.
+</div>
+<div id="ref-stringdist2014" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, M. P. J.</span> <span>“The Stringdist Package for Approximate String Matching.”</span> <em>The <span>R</span> <span>J</span>ournal</em> 6 (2014): 111–22. <a href="https://journal.r-project.org/articles/RJ-2014-011/">https://journal.r-project.org/articles/RJ-2014-011/</a>.
+</div>
+<div id="ref-R-stringdist" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark</span>. <em>Stringdist: Approximate String Matching, Fuzzy Text Search, and String Distance Functions</em>, 2026. <a href="https://github.com/markvanderloo/stringdist">https://github.com/markvanderloo/stringdist</a>.
+</div>
+<div id="ref-validate2021" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark P. J., and Edwin de Jonge</span>. <span>“Data Validation Infrastructure for <span>R</span>.”</span> <em>Journal of Statistical Software</em> 97, no. 10 (2021): 1–31. <a href="https://doi.org/10.18637/jss.v097.i10">https://doi.org/10.18637/jss.v097.i10</a>.
+</div>
+<div id="ref-R-validate" class="csl-entry" role="listitem">
+<span class="nocase">van der Loo, Mark, and Edwin de Jonge</span>. <em>Validate: Data Validation Infrastructure</em>, 2025. <a href="https://github.com/data-cleaning/validate">https://github.com/data-cleaning/validate</a>.
+</div>
+<div id="ref-MASS2002" class="csl-entry" role="listitem">
+Venables, W. N., and B. D. Ripley. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-nnet2002" class="csl-entry" role="listitem">
+———. <em>Modern Applied Statistics with s</em>. Fourth. New York: Springer, 2002. <a href="https://www.stats.ox.ac.uk/pub/MASS4/">https://www.stats.ox.ac.uk/pub/MASS4/</a>.
+</div>
+<div id="ref-R-skimr" class="csl-entry" role="listitem">
+Waring, Elin, Michael Quinn, Amelia McNamara, Eduardo Arino de la Rubia, Hao Zhu, and Shannon Ellis. <em>Skimr: Compact and Flexible Summaries of Data</em>, 2026. <a href="https://docs.ropensci.org/skimr/">https://docs.ropensci.org/skimr/</a>.
+</div>
+<div id="ref-layered-grammar" class="csl-entry" role="listitem">
+Wickham, Hadley. <span>“A Layered Grammar of Graphics.”</span> <em>Journal of Computational and Graphical Statistics</em> 19, no. 1 (2010): 3–28. <a href="https://doi.org/10.1198/jcgs.2009.07098">https://doi.org/10.1198/jcgs.2009.07098</a>.
+</div>
+<div id="ref-R-conflicted" class="csl-entry" role="listitem">
+———. <em>Conflicted: An Alternative Conflict Resolution Strategy</em>, 2023. <a href="https://conflicted.r-lib.org/">https://conflicted.r-lib.org/</a>.
+</div>
+<div id="ref-R-forcats" class="csl-entry" role="listitem">
+———. <em>Forcats: Tools for Working with Categorical Variables (Factors)</em>, 2025. <a href="https://forcats.tidyverse.org/">https://forcats.tidyverse.org/</a>.
+</div>
+<div id="ref-ggplot22016" class="csl-entry" role="listitem">
+———. <em>Ggplot2: Elegant Graphics for Data Analysis</em>. Springer-Verlag New York, 2016. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv021i12" class="csl-entry" role="listitem">
+———. <span>“Reshaping Data with the Reshape Package.”</span> <em>Journal of Statistical Software</em> 21, no. 12 (2007): 1–20. <a href="https://doi.org/10.18637/jss.v021.i12">https://doi.org/10.18637/jss.v021.i12</a>.
+</div>
+<div id="ref-R-stringr" class="csl-entry" role="listitem">
+———. <em>Stringr: Simple, Consistent Wrappers for Common String Operations</em>, 2025. <a href="https://stringr.tidyverse.org">https://stringr.tidyverse.org</a>.
+</div>
+<div id="ref-JSSv059i10" class="csl-entry" role="listitem">
+———. <span>“Tidy Data.”</span> <em>Journal of Statistical Software</em> 59, no. 10 (2014): 1–23. <a href="https://doi.org/10.18637/jss.v059.i10">https://doi.org/10.18637/jss.v059.i10</a>.
+</div>
+<div id="ref-R-tidyverse" class="csl-entry" role="listitem">
+———. <em>Tidyverse: Easily Install and Load the Tidyverse</em>, 2023. <a href="https://tidyverse.tidyverse.org">https://tidyverse.tidyverse.org</a>.
+</div>
+<div id="ref-tidyverse2019" class="csl-entry" role="listitem">
+Wickham, Hadley, Mara Averick, Jennifer Bryan, Winston Chang, Lucy D’Agostino McGowan, Romain François, Garrett Grolemund, et al. <span>“Welcome to the <span class="nocase">tidyverse</span>.”</span> <em>Journal of Open Source Software</em> 4, no. 43 (2019): 1686. <a href="https://doi.org/10.21105/joss.01686">https://doi.org/10.21105/joss.01686</a>.
+</div>
+<div id="ref-R-readxl" class="csl-entry" role="listitem">
+Wickham, Hadley, and Jennifer Bryan. <em>Readxl: Read Excel Files</em>, 2025. <a href="https://readxl.tidyverse.org">https://readxl.tidyverse.org</a>.
+</div>
+<div id="ref-R-ggplot2" class="csl-entry" role="listitem">
+<span class="nocase">Wickham, Hadley, Winston Chang, Lionel Henry, Thomas Lin Pedersen, Kohske Takahashi, Claus Wilke, Kara Woo, Hiroaki Yutani, Dewey Dunnington, and Teun van den Brand</span>. <em>Ggplot2: Create Elegant Data Visualisations Using the Grammar of Graphics</em>, 2026. <a href="https://ggplot2.tidyverse.org">https://ggplot2.tidyverse.org</a>.
+</div>
+<div id="ref-R-dplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Romain François, Lionel Henry, Kirill Müller, and Davis Vaughan. <em>Dplyr: A Grammar of Data Manipulation</em>, 2026. <a href="https://dplyr.tidyverse.org">https://dplyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-dbplyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Maximilian Girlich, and Edgar Ruiz. <em>Dbplyr: A Dplyr Back End for Databases</em>, 2026. <a href="https://dbplyr.tidyverse.org/">https://dbplyr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-purrr" class="csl-entry" role="listitem">
+Wickham, Hadley, and Lionel Henry. <em>Purrr: Functional Programming Tools</em>, 2026. <a href="https://purrr.tidyverse.org/">https://purrr.tidyverse.org/</a>.
+</div>
+<div id="ref-R-readr" class="csl-entry" role="listitem">
+Wickham, Hadley, Jim Hester, and Jennifer Bryan. <em>Readr: Read Rectangular Text Data</em>, 2026. <a href="https://readr.tidyverse.org">https://readr.tidyverse.org</a>.
+</div>
+<div id="ref-R-scales" class="csl-entry" role="listitem">
+Wickham, Hadley, Thomas Lin Pedersen, and Dana Seidel. <em>Scales: Scale Functions for Visualization</em>, 2025. <a href="https://scales.r-lib.org">https://scales.r-lib.org</a>.
+</div>
+<div id="ref-R-tidyr" class="csl-entry" role="listitem">
+Wickham, Hadley, Davis Vaughan, and Maximilian Girlich. <em>Tidyr: Tidy Messy Data</em>, 2025. <a href="https://tidyr.tidyverse.org">https://tidyr.tidyverse.org</a>.
+</div>
+<div id="ref-R-ranger" class="csl-entry" role="listitem">
+Wright, Marvin N. <em>Ranger: A Fast Implementation of Random Forests</em>, 2026. <a href="https://imbs-hl.github.io/ranger/">https://imbs-hl.github.io/ranger/</a>.
+</div>
+<div id="ref-ranger2017" class="csl-entry" role="listitem">
+Wright, Marvin N., and Andreas Ziegler. <span>“<span class="nocase">ranger</span>: A Fast Implementation of Random Forests for High Dimensional Data in <span>C++</span> and <span>R</span>.”</span> <em>Journal of Statistical Software</em> 77, no. 1 (2017): 1–17. <a href="https://doi.org/10.18637/jss.v077.i01">https://doi.org/10.18637/jss.v077.i01</a>.
+</div>
+<div id="ref-xie2015" class="csl-entry" role="listitem">
+Xie, Yihui. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="http://yihui.name/knitr/">http://yihui.name/knitr/</a>.
+</div>
+<div id="ref-knitr2015" class="csl-entry" role="listitem">
+———. <em>Dynamic Documents with <span>R</span> and Knitr</em>. 2nd ed. Boca Raton, Florida: Chapman; Hall/CRC, 2015. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-knitr2014" class="csl-entry" role="listitem">
+———. <span>“Knitr: A Comprehensive Tool for Reproducible Research in <span>R</span>.”</span> In <em>Implementing Reproducible Computational Research</em>, edited by Victoria Stodden, Friedrich Leisch, and Roger D. Peng. Chapman; Hall/CRC, 2014.
+</div>
+<div id="ref-R-knitr" class="csl-entry" role="listitem">
+———. <em>Knitr: A General-Purpose Package for Dynamic Report Generation in r</em>, 2025. <a href="https://yihui.org/knitr/">https://yihui.org/knitr/</a>.
+</div>
+<div id="ref-colorspace2020a" class="csl-entry" role="listitem">
+Zeileis, Achim, Jason C. Fisher, Kurt Hornik, Ross Ihaka, Claire D. McWhite, Paul Murrell, Reto Stauffer, and Claus O. Wilke. <span>“<span class="nocase">colorspace</span>: A Toolbox for Manipulating and Assessing Colors and Palettes.”</span> <em>Journal of Statistical Software</em> 96, no. 1 (2020): 1–49. <a href="https://doi.org/10.18637/jss.v096.i01">https://doi.org/10.18637/jss.v096.i01</a>.
+</div>
+<div id="ref-zoo2005" class="csl-entry" role="listitem">
+Zeileis, Achim, and Gabor Grothendieck. <span>“Zoo: S3 Infrastructure for Regular and Irregular Time Series.”</span> <em>Journal of Statistical Software</em> 14, no. 6 (2005): 1–27. <a href="https://doi.org/10.18637/jss.v014.i06">https://doi.org/10.18637/jss.v014.i06</a>.
+</div>
+<div id="ref-R-zoo" class="csl-entry" role="listitem">
+Zeileis, Achim, Gabor Grothendieck, and Jeffrey A. Ryan. <em>Zoo: S3 Infrastructure for Regular and Irregular Time Series (z’s Ordered Observations)</em>, 2025. <a href="https://zoo.R-Forge.R-project.org/">https://zoo.R-Forge.R-project.org/</a>.
+</div>
+<div id="ref-colorspace2009a" class="csl-entry" role="listitem">
+Zeileis, Achim, Kurt Hornik, and Paul Murrell. <span>“Escaping <span>RGB</span>land: Selecting Colors for Statistical Graphics.”</span> <em>Computational Statistics &amp; Data Analysis</em> 53, no. 9 (2009): 3259–70. <a href="https://doi.org/10.1016/j.csda.2008.11.033">https://doi.org/10.1016/j.csda.2008.11.033</a>.
+</div>
+</div>
+</section></main><!-- /main --><script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/anilyayavar\.github\.io\/new-book\/");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script><nav class="page-navigation"><div class="nav-page nav-page-previous">
+      <a href="./part9-reporting.html" class="pagination-link" aria-label="Part IX: Reporting">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Part IX: Reporting</span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./references.html" class="pagination-link" aria-label="References">
+        <span class="nav-page-text">References</span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+<footer class="footer"><div class="nav-footer">
+    <div class="nav-footer-left">
+      &nbsp;
+    </div>   
+    <div class="nav-footer-center">
+<p>Built with <a href="https://www.r-project.org">R</a> and <a href="https://quarto.org">Quarto</a></p>
+<div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/anilyayavar/new-book/edit/master/27-reports.qmd" class="toc-action"><i class="bi bi-github"></i>Edit this page</a></li><li><a href="https://github.com/anilyayavar/new-book/issues/new" class="toc-action"><i class="bi empty"></i>Report an issue</a></li></ul></div></div>
+    <div class="nav-footer-right">
+      &nbsp;
+    </div>
+  </div>
+</footer>
+
+
+</body></html>

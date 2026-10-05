@@ -1,4 +1,4 @@
-out_dir <- Sys.getenv("QUARTO_PROJECT_OUTPUT_DIR", "_book")
+out_dir <- Sys.getenv("QUARTO_PROJECT_OUTPUT_DIR", "docs")
 files <- Sys.getenv("QUARTO_PROJECT_OUTPUT_FILES")
 files <- if (nzchar(files)) strsplit(files, "\n")[[1]] else list.files(out_dir, "\\.html$", full.names = TRUE)
 files <- files[grepl("\\.html$", files) & file.exists(files)]
