@@ -5,15 +5,25 @@ source("_common.R")
 
 # Data Envelopment Analysis {#sec-dea}
 
-Data Envelopment Analysis (DEA) is a method to measure the *relative efficiency* of a set of similar units, like bank branches, schools, hospitals or offices. In DEA, these units are called **decision-making units (DMUs)**. The idea goes back to M. J. Farrell, who in 1957 measured efficiency by comparing each unit with the best performers. Abraham Charnes, William Cooper and Edwardo Rhodes turned it into a practical method in 1978. Rhodes was then studying *Program Follow Through*, a large programme for disadvantaged school children in the United States. He needed to compare schools which used several inputs, like teachers and funds, to produce several outputs, like test scores and self-esteem, with no common prices to add them up. DEA was the answer. Since then, it has been applied to banks, hospitals, police stations, ports, power plants and many other sectors.
+A district has 30 Community Health Centres. Each has some doctors, nurses and beds. Each treats patients and conducts deliveries. Some centres do much more with what they have. Some do much less. A performance audit wants to know which centres lag behind, by how much, and which records to examine first.
 
-DEA measures the relative efficiency of DMUs even when they use different combinations of inputs and produce different combinations of outputs. It does not need any prices or weights to be decided in advance. This makes it useful for finding the best performers, the units which lag behind, and by how much.
+A simple ratio, like patients per doctor, answers part of this question. But a health centre has several inputs and several outputs. A centre may look good on patients per doctor and poor on deliveries per nurse. Which ratio should the auditor trust? And how do we add up patients and deliveries, which have no common price?
 
-## How it works?
+**Data Envelopment Analysis (DEA)** solves this problem. It measures the *relative efficiency* of a set of similar units, like bank branches, schools, hospitals, bus depots or offices. In DEA, these units are called **decision-making units (DMUs)**. DEA finds the best performers in the group. It then compares every other unit with them, using all the inputs and outputs together. It does not need any prices or weights to be decided in advance.
+
+For an auditor, DEA gives three things. It shows which units lag behind, and by how much. It shows which of the best units each weak unit should be compared with. And it gives *targets*, which turn the shortfall into numbers. These may be patients not treated, or diesel not needed, which can then be valued in rupees.
+
+In this chapter we will first see the idea with a simple picture. We will then learn the functions of the `deaR` package on a small set of schools of a district. Two audit use cases follow. In the first, DEA finds weak health centres, and also a centre whose figures look too good to be true. In the second, it finds the excess diesel and staff of bus depots, and values them in rupees.
+
+## A little history
+
+The idea goes back to M. J. Farrell, who in 1957 measured efficiency by comparing each unit with the best performers. Abraham Charnes, William Cooper and Edwardo Rhodes turned it into a practical method in 1978. Rhodes was then studying a large programme for disadvantaged school children in the United States. He had to compare schools which used several inputs, like teachers and funds, to produce several outputs, like test scores. There were no common prices to add them up. DEA was the answer. Since then, it has been used for banks, hospitals, police stations, ports, power plants and many other sectors.
+
+## How DEA works
 
 Let us start with the simplest case, one input and one output. Suppose six offices, `A` to `F`, process files (output) with some staff (input). The office with the highest output per staff is the most efficient. Every other office can be compared with it. See the dashed line in @fig-deaconcept. It passes through the best office and the origin. This line is the **efficient frontier**, and the efficiency of every other office is how close it comes to this line.
 
-```{r fig-deaconcept, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Efficient frontiers with one input and one output. Dashed line: constant returns to scale. Solid line: variable returns to scale.", fig.align='center', out.width="80%"}
+```{r fig-deaconcept, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Efficient frontiers with one input and one output. The dashed line is the frontier under constant returns to scale. The solid line is the frontier under variable returns to scale.", fig.align='center', out.width="80%"}
 library(tidyverse)
 toy <- tibble(office = LETTERS[1:6],
               staff = c(2, 4, 6, 5, 8, 3),
@@ -55,108 +65,117 @@ Some terms we will meet are
 - **Orientation.** An *input oriented* model asks how much the inputs could be reduced while producing the same outputs. An *output oriented* model asks how much the outputs could be increased with the same inputs.
 - **Returns to scale.** Constant (CRS) or variable (VRS), as explained above.
 
-## Use-cases
+## Where DEA helps in audit
 
-DEA has a wide range of applications across different sectors. A few examples are
-
-- **Firm performance evaluation.** DEA can compare the efficiency of firms in an industry, or of branches of a bank, and identify the best performers.
-- **Education.** DEA can compare schools, identifying those which produce better outcomes, like higher pass percentages, with fewer resources.
-- **Healthcare.** DEA can compare hospitals and health centres, identifying those which treat more patients, or achieve better outcomes, with the staff and beds they have.
-- **Regional development.** DEA can compare districts, States or countries, to see which make the best use of their resources.
-
-## Possible uses in Audit
-
-DEA is a natural tool for *performance audit*, which asks whether resources are used economically, efficiently and effectively. Some uses are
+DEA is a natural tool for *performance audit*, which asks whether resources are used economically, efficiently and effectively. It suits any set of units doing the same kind of work, like schools, health centres, anganwadi centres, bank branches, police stations, treasuries or depots. Some uses are
 
 - **Benchmarking units.** Compare districts, offices, hospitals, schools or depots doing the same work. DEA shows which units lag behind, which of the best units they should learn from (their peers), and the targets they could reach.
 - **Selecting units for detailed audit.** Units with low efficiency scores, and the ones at the frontier, can be chosen for field visits, instead of a purely random selection.
-- **Quantifying the shortfall.** Targets tell us how much more output (patients treated, files cleared, revenue collected) was possible with the same resources, or how many resources were in excess.
-- **Testing the reported data.** DEA compares each unit with the best reported performance. If a unit reports outputs which are far too good to be true, DEA will put it on the frontier, and it will become the yardstick for others. Such a unit deserves a check of its records. We will see this in the audit example of this chapter, in @sec-dea-audit.
+- **Quantifying the shortfall.** Targets tell us how much more output (patients treated, files cleared, revenue collected) was possible with the same resources, or how many resources were in excess. The excess can be valued in rupees. We will do this for bus depots in @sec-dea-depots.
+- **Testing the reported data.** DEA compares each unit with the best reported performance. If a unit reports outputs which are far too good to be true, DEA will put it on the frontier, and it will become the yardstick for others. Such a unit deserves a check of its records. We will see this with health centres in @sec-dea-audit.
 
-## A practical example in R
+## Prerequisites
 
-We will now see a complete practical example of DEA in R.
-
-### Prerequisites
-
-We will use the package `deaR` to calculate DEA efficiency.
+We will use the package `deaR` to calculate DEA efficiency, and `tidyverse` to arrange the results.
 
 ```{r message=FALSE, warning=FALSE}
 library(deaR)
+library(tidyverse)
 ```
 
-### Sample data-set
+## A first model, schools of a district
 
-Let us assume that we have data of six stores located across India.
+Let us learn the functions of `deaR` on a small example from a school education audit.
+
+### Our sample data, twelve schools
+
+An imaginary district has 12 Government Senior Secondary Schools (GSSS). For the year 2024-25, we have two inputs and two outputs for each school.
+
+- `teachers` is the number of teachers in position.
+- `grant` is the composite school grant released to the school, in ₹ lakh.
+- `pass_10` and `pass_12` are the numbers of students who passed the Class 10 and Class 12 board examinations.
+
+We have planted two cases in this data. One school gets poor results for the teachers it has. Another receives far more grant than schools of its size. Let us see whether DEA finds them.
 
 ```{r}
-store <- data.frame(
-       Store = c('Delhi', 'Gurgaon', 'Bengaluru', 'Chennai', 'Mumbai', 'Nagpur'),
-          x1 = c(51L, 60L, 43L, 53L, 43L, 44L),
-          x2 = c(38L, 45L, 33L, 43L, 38L, 35L),
-          y1 = c(169L, 243L, 173L, 216L, 155L, 169L),
-          y2 = c(119L, 167L, 158L, 138L, 161L, 157L)
-         )
-knitr::kable(store)
+#| code-fold: true
+#| code-summary: "Code to create the school data"
+schools <- data.frame(
+  school   = c("GSSS Amarpur", "GSSS Bhagwanpur", "GSSS Chandpur", "GSSS Dharampur",
+               "GSSS Fatehgarh", "GSSS Ganeshpura", "GSSS Hariharpur", "GSSS Jagatpur",
+               "GSSS Kherwa", "GSSS Lalganj", "GSSS Madhopur", "GSSS Nayagaon"),
+  teachers = c(24L, 31L, 18L, 27L, 22L, 35L, 20L, 29L, 30L, 25L, 19L, 33L),
+  grant    = c(12.5, 15.0, 9.0, 13.5, 11.0, 17.5, 10.5, 14.0, 15.5, 19.0, 9.5, 16.0),
+  pass_10  = c(150L, 196L, 118L, 160L, 140L, 225L, 128L, 180L, 120L, 158L, 116L, 205L),
+  pass_12  = c(110L, 150L, 82L, 126L, 102L, 160L, 92L, 136L, 88L, 118L, 88L, 150L)
+)
 ```
 
-The data has two inputs, `x1` and `x2`, and two outputs, `y1` and `y2`, where
-
-- `x1` and `x2` are machine hours, and employee and management hours per week, respectively;
-- `y1` and `y2` are the quantities of products `A` and `B` produced per week, at each store.
+```{r}
+knitr::kable(schools)
+```
 
 ### Performing DEA in R
 
-Our objective is to find out which stores use their inputs efficiently. Here we assume constant returns to scale, that is, outputs double if inputs are doubled. We also take an input oriented view, asking how much the inputs could be reduced.
+Our objective is to find out which schools use their teachers and grants efficiently. We first assume constant returns to scale, that is, results should double if teachers and grants are doubled. We also take an input oriented view, asking how much the inputs could be reduced for the same results.
 
 DEA in `deaR` is a two step process.
 
-- **Step-1**: We put the data in the form the package needs, using the function `make_deadata()`. The arguments `inputs`, `outputs` and `dmus` take the column numbers (or names) in the data.
-- **Step-2**: We run the actual analysis using `model_basic()`, which takes the data created in step-1 and two other essential arguments.
-  + `orientation`: a string, `"io"` (input oriented), `"oo"` (output oriented), or `"dir"` (directional).
-  + `rts`: a string giving the type of returns to scale, `"crs"` (constant), `"vrs"` (variable), `"nirs"` (non-increasing), `"ndrs"` (non-decreasing) or `"grs"` (generalized).
+- **Step 1.** We put the data in the form the package needs, using the function `make_deadata()`. The arguments `inputs`, `outputs` and `dmus` take the column numbers (or names) in the data.
+- **Step 2.** We run the actual analysis using `model_basic()`, which takes the data created in step 1 and two other essential arguments.
+  + `orientation` is a string, `"io"` (input oriented), `"oo"` (output oriented), or `"dir"` (directional).
+  + `rts` is a string giving the type of returns to scale, `"crs"` (constant), `"vrs"` (variable), `"nirs"` (non-increasing), `"ndrs"` (non-decreasing) or `"grs"` (generalized).
   + Other arguments may be passed as needed. See `?model_basic` for more help.
 
 ```{r}
-store_dea <- make_deadata(store, inputs = 2:3, outputs = 4:5, dmus = 1)
-model <- model_basic(store_dea, orientation = 'io', rts = 'crs')
+school_dea <- make_deadata(schools, inputs = 2:3, outputs = 4:5, dmus = 1)
+model <- model_basic(school_dea, orientation = 'io', rts = 'crs')
 ```
 
 The DEA model is now stored in `model`. We can use the functions `efficiencies()`, `targets()`, `lambdas()`, `references()` and `slacks()` to see its results.
 
 ```{r}
-efficiencies(model)
+round(efficiencies(model), 3)
 ```
 
 ```{r}
 #| include: false
 st_eff <- efficiencies(model)
+n_front <- sum(st_eff > 0.9999)
 ```
 
-All stores except Delhi and Nagpur are efficient, with a score of 1. Delhi has a score of `r round(st_eff["Delhi"], 3)`. In an input oriented model, this means Delhi could produce its present outputs using only about `r round(st_eff["Delhi"] * 100)`% of its present inputs, if it worked as well as the best stores. Nagpur is close to the frontier, at `r round(st_eff["Nagpur"], 3)`.
+Only `r n_front` schools, Bhagwanpur and Chandpur, are on the frontier, with a score of 1. Most of the others are close behind, above 0.95. One school stands apart. GSSS Kherwa has a score of `r round(st_eff["GSSS Kherwa"], 3)`. In an input oriented model, this means Kherwa could produce its present results using only about `r round(st_eff["GSSS Kherwa"] * 100)`% of its present teachers and grant, if it worked as well as the best schools. This is the first school we planted.
 
-Which stores is Delhi compared with? `references()` gives the peers of each inefficient store, with their lambdas.
+Which schools is Kherwa compared with? `references()` gives the peers of each inefficient school, with their lambdas. Let us look at Kherwa's.
 
 ```{r}
-references(model)
+references(model)[["GSSS Kherwa"]]
 ```
 
-Delhi's peers are Gurgaon and Bengaluru. Take `r round(references(model)$Delhi["Gurgaon"], 2)` times Gurgaon's inputs and outputs, and add `r round(references(model)$Delhi["Bengaluru"], 2)` times Bengaluru's. This combination, a *virtual store*, produces at least what Delhi produces, with fewer inputs. Nagpur's peers are Bengaluru and Mumbai. The full table of lambdas is given by `lambdas(model)`.
+Kherwa's peers are Bhagwanpur and Chandpur. Take `r round(references(model)[["GSSS Kherwa"]]["GSSS Bhagwanpur"], 2)` times Bhagwanpur's inputs and outputs, and add `r round(references(model)[["GSSS Kherwa"]]["GSSS Chandpur"], 2)` times Chandpur's. This combination, a *virtual school*, produces at least Kherwa's results, with fewer teachers and less grant. The full table of lambdas, for every school, is given by `lambdas(model)`.
 
-`targets()` gives the levels of inputs and outputs at which each store would be efficient.
+`targets()` gives the levels of inputs and outputs at which each school would be efficient.
 
 ```{r}
 #| warning: false
-targets(model)
+school_targets <- targets(model)$target_input
+round(school_targets, 1)
 ```
 
-Delhi should be able to produce the same outputs with about `r round(targets(model)$target_input["Delhi", "x1"], 1)` machine hours instead of 51, and `r round(targets(model)$target_input["Delhi", "x2"], 1)` employee hours instead of 38. The efficient stores' targets are the same as their actual values.
+Kherwa should be able to produce its results with about `r round(school_targets["GSSS Kherwa", "teachers"])` teachers instead of 30, and a grant of ₹`r round(school_targets["GSSS Kherwa", "grant"], 1)` lakh instead of ₹15.5 lakh. The efficient schools' targets are the same as their actual values.
 
-The targets include the *slacks*. After reducing both inputs of Delhi in the same proportion, `x1` can still be reduced a little more. `slacks()` shows this extra reduction.
+The targets include the *slacks*. After reducing both inputs of a school in the same proportion, one input can sometimes be reduced still further. `slacks()` shows this extra reduction.
 
 ```{r}
-slacks(model)$slack_input
+round(slacks(model)$slack_input, 2)
 ```
+
+```{r}
+#| include: false
+lal_slack <- slacks(model)$slack_input["GSSS Lalganj", "grant"]
+```
+
+Look at GSSS Lalganj. Its efficiency score is `r round(st_eff["GSSS Lalganj"], 3)`, which looks almost perfect. Yet even after the proportional reduction, its grant can come down by a further ₹`r round(lal_slack, 1)` lakh. No other school has a slack anywhere near this. Lalganj received ₹19 lakh, more than any other school, although it has only 25 teachers. This is the second school we planted. A high score did not hide it, because we looked at the slacks.
 
 Finally, the `plot()` function gives three plots, in @fig-deaplots. The first shows how many DMUs fall in each range of efficiency. The second shows how many times each efficient DMU is a peer for others. The third draws the network of inefficient DMUs and their peers.
 
@@ -178,7 +197,7 @@ plot(model)
 Let us run the same model with variable returns to scale, and compare.
 
 ```{r}
-model_vrs <- model_basic(store_dea, orientation = 'io', rts = 'vrs')
+model_vrs <- model_basic(school_dea, orientation = 'io', rts = 'vrs')
 
 data.frame(crs = efficiencies(model),
            vrs = efficiencies(model_vrs)) |>
@@ -186,26 +205,28 @@ data.frame(crs = efficiencies(model),
   round(3)
 ```
 
-Under VRS, the scores are the same or higher, since each store is compared only with stores of a similar size. The ratio of the CRS score to the VRS score is called *scale efficiency*. It tells us how much of the inefficiency is due to the *size* of the unit rather than how well it is managed. Here, Delhi's VRS score is `r round(efficiencies(model_vrs)["Delhi"], 3)`, so most of its inefficiency is about management, not size.
+Under VRS, the scores are the same or higher, since each school is compared only with schools of a similar size. Ganeshpura, the largest school, and Madhopur, one of the smallest, now join the frontier. The ratio of the CRS score to the VRS score is called *scale efficiency*. It tells us how much of the inefficiency is due to the *size* of the unit rather than how well it is managed. Kherwa's VRS score is still only `r round(efficiencies(model_vrs)["GSSS Kherwa"], 3)`. So its problem is about management, not size.
 
 ::: callout-note
-## Which to choose?
+## Choosing between CRS and VRS
 
-Use CRS when units can freely change their size and output should grow in proportion to inputs, as with stores of a chain. Use VRS when units differ a lot in size and cannot easily change it, as with schools, hospitals or offices whose staff is fixed by sanction. When in doubt, run both and compare.
+Use CRS when units can freely change their size and output should grow in proportion to inputs, as with depots running similar buses. Use VRS when units differ a lot in size and cannot easily change it, as with schools, hospitals or offices whose staff is fixed by sanction. When in doubt, run both and compare.
 :::
 
-## An audit example: efficiency of health centres {#sec-dea-audit}
+In a real audit, these two schools would be the leads. For Kherwa, the auditor would look at the posting of teachers, the subjects they teach, attendance, and the results of earlier years. For Lalganj, the auditor would ask why it got the largest grant, and check the utilisation certificates and the purchases made from it.
 
-Let us now apply DEA in a performance audit. A district has 30 Community Health Centres (CHCs). The audit wants to know which CHCs are making poor use of their doctors, nurses and beds, and by how much.
+## Audit use case, efficiency of community health centres {#sec-dea-audit}
 
-### Our sample data
+Let us now apply DEA in a performance audit of health services. A district has 30 Community Health Centres (CHCs). The audit wants to know which CHCs are making poor use of their doctors, nurses and beds, and by how much.
 
-For each CHC we have three inputs, the number of doctors, nurses and beds, and three outputs for the year, the number of OPD patients (in thousands), in-patient admissions (IPD), and institutional deliveries. Staff and beds are fixed by sanction, and a CHC cannot easily reduce them. So the relevant question is how much *more* each CHC could deliver with what it has. We will therefore use an **output oriented** model with **variable returns to scale**.
+### Our sample data, thirty CHCs
+
+For each CHC we have three inputs, the number of doctors, nurses and beds, and three outputs for the year. These are the number of OPD patients (in thousands), in-patient admissions (IPD), and institutional deliveries. Staff and beds are fixed by sanction, and a CHC cannot easily reduce them. So the relevant question is how much *more* each CHC could deliver with what it has. We will therefore use an **output oriented** model with **variable returns to scale**.
 
 We have planted two kinds of cases.
 
 - Three CHCs, `CHC-07`, `CHC-18` and `CHC-26`, deliver about 40% less than they should, given their staff.
-- `CHC-12` has reported inflated figures of OPD patients and deliveries, more than double its actual work. Under the *Janani Suraksha Yojana*, an incentive is paid for every institutional delivery, so there is a motive to inflate the deliveries.
+- `CHC-12` has reported inflated figures of OPD patients and deliveries, more than double its actual work. Under the *Janani Suraksha Yojana* (JSY), an incentive is paid for every institutional delivery, so there is a motive to inflate the deliveries.
 
 ```{r}
 #| code-fold: true
@@ -240,9 +261,9 @@ head(chc)
 ```
 
 ::: callout-tip
-## Tip
+## Audit tip
 
-Pass a plain `data.frame` to `make_deadata()`, as we did with `as.data.frame()` above. Also keep the number of inputs and outputs small compared with the number of DMUs. A common rule of thumb is that the number of DMUs should be at least three times the number of inputs plus outputs. With too many variables, almost every DMU finds *some* weights which make it efficient, and DEA can no longer tell them apart. Here we have 30 CHCs and 6 variables, which just meets the rule.
+Keep the number of inputs and outputs small compared with the number of units. A common rule of thumb is that the number of DMUs should be at least three times the number of inputs plus outputs. With too many variables, almost every unit finds *some* weights which make it efficient, and DEA can no longer tell them apart. Here we have 30 CHCs and 6 variables, which just meets the rule. Also pass a plain `data.frame` to `make_deadata()`, as we did with `as.data.frame()` above.
 :::
 
 ### Running the model
@@ -331,7 +352,7 @@ tibble(chc = names(efficiencies(chc_super)),
 se12 <- efficiencies(chc_super)["CHC-12"]
 ```
 
-`CHC-12` stands far apart. Its score of `r round(se12, 2)` means that it could deliver only `r round(se12 * 100)`% of what it reports and *still* be on the frontier. No other CHC comes close. In real life, such performance is rarely genuine. It calls for an examination of the OPD registers, the labour room register, and the JSY payment records of `CHC-12`.
+`CHC-12` stands far apart. Its score of `r round(se12, 2)` means that it could deliver only `r round(se12 * 100)`% of what it reports and *still* be on the frontier. No other CHC comes close. In real life, such performance is rarely genuine.
 
 ### Without the doubtful CHC
 
@@ -370,11 +391,19 @@ DEA compares each unit with the *best reported* performance, and it has no way t
 DEA only knows the inputs and outputs we give it. A CHC in a remote hilly block may treat fewer patients because fewer people live near it, not because it is poorly run. Quality is also missing. Treating more patients is not better if the care is worse. Discuss the results with the department, and add such factors to the analysis where data is available.
 :::
 
-## Another audit example: excess diesel and staff in bus depots {#sec-dea-depots}
+### What the auditor does next
+
+The analysis gives two kinds of leads, and each needs a different follow-up.
+
+1. **The doubtful CHC first.** For `CHC-12`, examine the OPD registers, the labour room register, the bed head tickets and the JSY payment records. Match a sample of deliveries with the mothers' addresses and bank accounts. If the figures are inflated, the JSY payments on false deliveries are a recoverable loss.
+2. **Then the weak CHCs.** Once `CHC-12` is verified or removed, take the efficiency scores from the corrected model. For `CHC-07`, `CHC-18` and `CHC-26`, ask the department why output is low. Check staff attendance, vacant posts, equipment lying idle and the population each CHC serves.
+3. **Record the work.** Put the model, the inputs and outputs used, the peers and targets of each weak CHC, and the replies of the department in the working papers. Report the shortfall against the targets only where the reasons do not explain it.
+
+## Audit use case, excess diesel and staff in bus depots {#sec-dea-depots}
 
 In the health centres, the question was about *outputs*. Now let us take a case where the question is about *inputs*, and the answer is in rupees. Audits of State Road Transport Undertakings regularly examine the consumption of diesel and the deployment of staff in bus depots. Both are big items of cost. A depot that uses more diesel than others for the same kilometres may have poor maintenance, or pilferage. A depot with more staff than others for the same work is overstaffed.
 
-### Our sample data
+### Our sample data, twenty-five depots
 
 An imaginary State transport undertaking has 25 depots. For each depot we have two inputs for the year, the number of staff and the diesel consumed (in kilolitres), and one output, the effective kilometres operated (in lakh km). We have planted two problems.
 
@@ -414,6 +443,8 @@ depot_dea <- make_deadata(depots, inputs = 2:3, outputs = 4, dmus = 1)
 depot_model <- model_basic(depot_dea, orientation = "io", rts = "crs")
 ```
 
+### Seeing the frontier
+
 With two inputs and one output, we can actually *see* the frontier. Let us plot the staff and the diesel used by each depot *per lakh km*. A depot closer to the bottom left uses less of both for the same work. The efficient depots form the frontier, the blue line in @fig-depotfrontier. Every other depot is compared with the point where the line from the origin to it crosses the frontier.
 
 ```{r fig-depotfrontier, fig.cap="Staff and diesel per lakh km. The blue line is the efficient frontier.", fig.align='center', out.width="85%"}
@@ -440,6 +471,8 @@ ggplot(depot_ratio, aes(staff_per_km, fuel_per_km)) +
   labs(x = "Staff per lakh km", y = "Diesel (kl) per lakh km") +
   theme_bw()
 ```
+
+### Excess diesel and staff
 
 Now let us look at the efficiency scores, and the excess staff and diesel, which is the actual minus the target.
 
@@ -487,15 +520,41 @@ Never judge a unit by its efficiency score alone. The score measures only the *p
 The targets of almost every depot show *some* excess, because the frontier is made of the best depots, and normal variation puts everyone else a little behind them. Report only the large and clear gaps, as with `Depot-02`, `Depot-05` and `Depot-22` here. Confirm them with the records, like the fuel issue registers, log books, kilometre-per-litre statements and sanctioned staff strength, before calling them excess.
 :::
 
+### What the auditor does next
+
+Let us put the three depots in one table, valued in rupees, as a draft for the working papers. We use the same assumptions as above, ₹90 a litre of diesel and ₹6 lakh a year per employee. Both should be replaced by the actual rates from the undertaking's accounts.
+
+```{r}
+depot_finding <- depot_excess |>
+  filter(depot %in% c("Depot-02", "Depot-05", "Depot-22")) |>
+  transmute(depot, excess_staff, excess_fuel_kl,
+            staff_rs_lakh  = round(excess_staff * 6, 1),
+            diesel_rs_lakh = round(excess_fuel_kl * 1000 * 90 / 1e5, 1))
+
+depot_finding
+```
+
+```{r}
+#| include: false
+clear_gap <- depot_finding$staff_rs_lakh[depot_finding$depot == "Depot-02"] +
+  sum(depot_finding$diesel_rs_lakh[depot_finding$depot %in% c("Depot-05", "Depot-22")])
+```
+
+The clear gaps are the staff of `Depot-02` and the diesel of `Depot-05` and `Depot-22`. Together they come to about ₹`r round(clear_gap / 100, 1)` crore in one year. The smaller figures in the other cells come from the proportional reduction of both inputs. Report them only if the records confirm them. Even the clear gaps are a lead, not yet a finding. The next steps are these.
+
+1. **For the diesel.** Obtain the fuel issue registers and log books of `Depot-05` and `Depot-22`. Compare the kilometres per litre of each bus with its type and age. Check the stock of diesel at the depot pump with the purchases.
+2. **For the staff.** Compare the men-in-position of `Depot-02` with its sanctioned strength and with the schedules it operates. Ask why staff were not redeployed to depots in need.
+3. **Ask the undertaking.** Send the targets and the excess to the management, and record their reply. Some excess may have reasons, like hilly routes or old buses. Report what remains unexplained, valued at the actual rates.
+
 ## A suggested workflow
 
-1. **Choose comparable units.** The DMUs must do the same kind of work, like CHCs of a district or branches of a bank.
+1. **Choose comparable units.** The DMUs must do the same kind of work, like CHCs of a district or depots of a transport undertaking.
 2. **Choose a few inputs and outputs** which capture the work. Keep their number small, at most a third of the number of DMUs. Check that more input should mean more output.
 3. **Check the data.** Look for zero, missing and extreme values before running DEA, as DEA is very sensitive to them.
 4. **Choose the orientation and returns to scale.** Output oriented when inputs are fixed, input oriented when outputs are fixed. VRS when units differ a lot in size.
 5. **Run the model** with `make_deadata()` and `model_basic()`, and read the `efficiencies()`.
 6. **Check the frontier.** Count how often each efficient unit is a peer, and run `model_supereff()`. Verify the figures of units which stand far ahead.
-7. **Quantify the gaps** with `targets()` and `slacks()`, and identify the peers each weak unit can learn from with `references()`.
+7. **Quantify the gaps** with `targets()` and `slacks()`, and identify the peers each weak unit can learn from with `references()`. Value the excess inputs in rupees.
 8. **Verify and discuss** the findings with the department, keeping in mind factors which DEA does not see.
 
 ::: callout-important
@@ -503,6 +562,10 @@ The targets of almost every depot show *some* excess, because the frontier is ma
 
 DEA measures *relative* efficiency. A unit with a score of 100% is only as good as the best of the group, not necessarily good in any absolute sense. And a low score is a *lead*, not a *finding*. The reasons for it must be examined before any conclusion is drawn.
 :::
+
+## Where next
+
+DEA ranks units on a few chosen inputs and outputs. When units have many measures, @sec-pca shows how to reduce them to a few. To group similar units before comparing them, see @sec-kmeans.
 
 ## Summary of functions used
 
@@ -516,5 +579,8 @@ DEA measures *relative* efficiency. A unit with a score of 100% is only as good 
 | `slacks()` | deaR | Extra input reduction or output increase needed after the proportional change |
 | `model_supereff()` | deaR | Super-efficiency scores, to rank the efficient DMUs |
 | `plot()` on a DEA model | deaR | Plots of efficiencies, peer counts and the reference network |
+| `kable()` | knitr | Prints a data frame as a neat table |
+| `tibble()`, `mutate()`, `filter()`, `arrange()`, `summarise()` | tidyverse | Build and arrange the tables of results |
+| `map()` | purrr | Applies a function to each element of a list, here the peers of each CHC |
 
 : Functions used in this chapter {#tbl-deafunctions}
