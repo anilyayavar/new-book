@@ -35,7 +35,7 @@ The rendered book is written to the `_book` folder.
 
 ## Credits
 
-The R package [`cagmetaphone`](https://github.com/AtharvTyagi1805/cagmetaphone), used in the book for matching names by their sound, was developed by **Atharv Tyagi** during an internship under the author's guidance.
+The R package used in the book for matching names by their sound, a full implementation of the Double Metaphone algorithm, was developed by **Atharv Tyagi** during an internship under the author's guidance.
 
 ## Licence, disclaimer and feedback
 
