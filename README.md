@@ -36,7 +36,7 @@ The rendered book is written to the `docs` folder, which GitHub Pages publishes.
 
 ## Credits
 
-The R package used in the book for matching names by their sound, a full implementation of the Double Metaphone algorithm, was developed by **Atharv Tyagi** during an internship under the author's guidance.
+The R package used in the book for matching names by their sound, [`fullmetaphone`](https://github.com/anilyayavar/dblmetaphone), a full implementation of the Double Metaphone algorithm, was developed by **Atharv Tyagi** and the author.
 
 ## Licence, disclaimer and feedback
 

@@ -27,7 +27,7 @@ Names and addresses are typed by different people, at different times, in differ
 
 ## Prerequisites
 
-We will mainly use the `stringdist` package. For phonetic codes, we also use `phonics` and `cagmetaphone`.
+We will mainly use the `stringdist` package. For phonetic codes, we also use `phonics` and `fullmetaphone`.
 
 ```{r}
 #| message: false
@@ -248,24 +248,24 @@ DoubleMetaphone(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Tra
 Both surnames get `PTKR`. Both firms get `XRMT`. In audit work, where we compare full names of beneficiaries or vendors, this can produce many false matches.
 :::
 
-### Full length Double Metaphone with `cagmetaphone`
+### Full length Double Metaphone with `fullmetaphone`
 
-To overcome this limitation, an R package was developed by *Atharv Tyagi* during an internship under the author's guidance. It is a port of the Python reference implementation of Double Metaphone. It keeps codes of up to 32 characters instead of four. The package is not on CRAN yet, and can be installed from GitHub.
+To overcome this limitation, *Atharv Tyagi* and the author have developed an R package, `fullmetaphone`. It follows the rules of the reference implementation of Double Metaphone. It keeps codes of up to 32 characters instead of four. Until it is available on CRAN, it can be installed from GitHub.
 
 ```{r}
 #| eval: false
 # install.packages("remotes")
-remotes::install_github("AtharvTyagi1805/cagmetaphone")
+remotes::install_github("anilyayavar/dblmetaphone")
 ```
 
-It has two functions. `double_metaphone()` takes a single string and returns its two codes. `double_metaphone_vec()` takes a vector of strings and returns a data frame with columns `primary` and `secondary`.
+Its main function is `double_metaphone()`. It takes one name or a whole vector of names, and returns a data frame with columns `primary` and `secondary`. The package also has `metaphone()`, for the older single-code algorithm, and `sounds_like()`, which tells whether two names sound alike.
 
 ```{r}
-library(cagmetaphone)
+library(fullmetaphone)
 
 double_metaphone("Guptha")
 
-double_metaphone_vec(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))
+double_metaphone(c("Bhattacharya", "Bhattacharjee", "Sharma Traders", "Sharma Transport"))
 ```
 
 Now the four names get four different primary codes. For short names, the codes are the same as those from `PGRdup`.
@@ -274,8 +274,8 @@ Let us apply the three matching levels to a few pairs of names. We write a small
 
 ```{r}
 dm_match <- function(a, b) {
-  dm_a <- double_metaphone_vec(a)
-  dm_b <- double_metaphone_vec(b)
+  dm_a <- double_metaphone(a)
+  dm_b <- double_metaphone(b)
   case_when(
     dm_a$primary == dm_b$primary ~ "strong",
     dm_a$secondary == dm_b$primary | dm_a$primary == dm_b$secondary ~ "normal",
@@ -332,7 +332,7 @@ Some lessons stand out from this table.
 | Typing mistakes in names | Jaro-Winkler (`jw`, with `p = 0.1`), or OSA |
 | Codes of fixed length (PAN, IFSC) | Hamming, or OSA |
 | Words in a different order | Q-grams or cosine, or sort the words first |
-| Different spellings of the same sounding name | Double Metaphone (`cagmetaphone`) |
+| Different spellings of the same sounding name | Double Metaphone (`fullmetaphone`) |
 | Long text, like addresses | Q-grams or cosine |
 
 : Choosing a string similarity method {#tbl-strsimguide}
@@ -457,7 +457,7 @@ Fuzzy matching finds names that *look* or *sound* alike. It cannot tell whether 
 | `stringdistmatrix()` | stringdist | All distances between two vectors at once |
 | `metaphone()` | phonics | Metaphone code of a single word |
 | `DoubleMetaphone()` | PGRdup | Double Metaphone codes, cut to four characters |
-| `double_metaphone_vec()` | cagmetaphone | Full length Double Metaphone codes |
+| `double_metaphone()` | fullmetaphone | Full length Double Metaphone codes |
 | `cross_join()` | dplyr | All pairs of rows from two tables |
 
 : Functions used in this chapter {#tbl-strsimfunctions}

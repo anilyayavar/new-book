@@ -21,7 +21,7 @@ In this chapter we will learn how to find such duplicates in R. We will start wi
 
 ## Prerequisites
 
-We will use three packages in this chapter. `tidyverse` gives us `dplyr` and `stringr`. `janitor` gives us a very handy function `get_dupes()`. `stringdist` will help us find names which are similar but not identical. Later in the chapter, we will also use `cagmetaphone` to find names which sound alike. Its installation is explained in @sec-strsim.
+We will use three packages in this chapter. `tidyverse` gives us `dplyr` and `stringr`. `janitor` gives us a very handy function `get_dupes()`. `stringdist` will help us find names which are similar but not identical. Later in the chapter, we will also use `fullmetaphone` to find names which sound alike. Its installation is explained in @sec-strsim.
 
 ```{r}
 #| message: false
@@ -425,15 +425,15 @@ All three vendors starting with "Sharma Tr..." are treated as the same. Soundex 
 
 ### A better phonetic measure, Double Metaphone
 
-Double Metaphone is a more refined way to check whether two names *sound* alike. It gives two codes for each name, a *primary* and a *secondary* code. Comparing these codes gives three levels of match. These are strong, normal and weak, as @sec-strsim explains. The package `cagmetaphone` keeps the full code, while other packages keep only the first four characters. Full codes matter here, because firm names are long.
+Double Metaphone is a more refined way to check whether two names *sound* alike. It gives two codes for each name, a *primary* and a *secondary* code. Comparing these codes gives three levels of match. These are strong, normal and weak, as @sec-strsim explains. The package `fullmetaphone` keeps the full code, while other packages keep only the first four characters. Full codes matter here, because firm names are long.
 
-Let us calculate the codes for all our vendors. `double_metaphone_vec()` returns a data frame with two columns, `primary` and `secondary`. We attach these to the vendor master.
+Let us calculate the codes for all our vendors. `double_metaphone()` returns a data frame with two columns, `primary` and `secondary`. We attach these to the vendor master.
 
 ```{r}
-library(cagmetaphone)
+library(fullmetaphone)
 
 vendor_codes <- vendors |>
-  bind_cols(double_metaphone_vec(vendors$vendor_name))
+  bind_cols(double_metaphone(vendors$vendor_name))
 
 vendor_codes
 ```
@@ -463,7 +463,7 @@ Only our two look-alike pairs are matched. *Sharma Traders* and *Sharma Trader's
 | Jaro-Winkler | `stringdist(method = "jw")` | 0 to 1 | Names of persons and firms, with one common cut-off |
 | Q-gram | `stringdist(method = "qgram")` | 0 upwards | Longer text like addresses, where words may be rearranged |
 | Soundex | `stringdist(method = "soundex")` | 0 or 1 | Single words that sound alike, like *Geeta* and *Gita* |
-| Double Metaphone | `double_metaphone_vec()` | Strong, normal, weak or no match | Full names of persons and firms that sound alike |
+| Double Metaphone | `double_metaphone()` | Strong, normal, weak or no match | Full names of persons and firms that sound alike |
 
 : Choosing a string similarity measure {#tbl-simmeasures}
 
@@ -511,6 +511,6 @@ A duplicate found in data is a *lead*, not a *finding*. There may be a genuine r
 | `str_to_upper()`, `str_remove_all()` | stringr | Clean key columns before testing |
 | `inner_join()` with `join_by(x < y)` | dplyr | Makes each pair of records only once |
 | `stringdist()` | stringdist | Measures how different two strings are, by the chosen `method` |
-| `double_metaphone_vec()` | cagmetaphone | Gives full length primary and secondary sound codes for names |
+| `double_metaphone()` | fullmetaphone | Gives full length primary and secondary sound codes for names |
 
 : Functions used in this chapter {#tbl-dupfunctions}
