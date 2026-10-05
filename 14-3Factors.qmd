@@ -122,7 +122,11 @@ sum(shirts2_ordered >= "Large")
 sum(shirts2_f >= "Large")
 ```
 
+::: callout-warning
+## Caution
+
 Notice that the unordered factor did not stop with an error. It gave a warning, and the answer `NA`. In a long script, such a warning is easily missed, and the `NA` silently flows into later results. So always read the warnings, and use ordered factors wherever the order matters.
+:::
 
 We can check the given factor is an ordered factor or not using function `is.ordered()`.  E.g.
 ```{r}
@@ -439,6 +443,12 @@ vouchers |>
 
 Three vouchers have heads outside the approved list. *Ofice expenses* is a typing error and *supplies* differs only in case, but *Hospitality* is a head which does not exist in the approved list at all. It needs an explanation.
 
+::: callout-tip
+## Audit tip
+
+Do not correct the heads in the original column. Keep the auditee's data as received, and put any corrected head in a new column. Then the list of exceptions, and how each was resolved, can go into the working papers.
+:::
+
 ### Risk ratings, an ordered factor
 
 Audit planning often rates units as Low, Medium or High risk. These ratings have a natural order. As an ordered factor, they can be compared and filtered directly.
@@ -460,18 +470,23 @@ Without the ordered factor, `"Medium"` and `"High"` would be compared as text, a
 
 ### Top vendors and the rest
 
-Charts of expenditure by vendor usually have too many bars. A common audit chart shows the top few vendors, and puts the rest together as *Other*. Since we are interested in *money*, not in the number of payments, we lump by the amount, using the `w` argument (@fig-fctvendor).
+Charts of expenditure by vendor usually have too many bars. A common audit chart shows the top few vendors, and puts the rest together as *Other*. Since we are interested in *money*, not in the number of payments, we lump by the amount, using the `w` argument (@fig-fctvendor). The code below creates a register of 2,000 payments to 40 vendors. Click on it to see the code.
 
 ```{r}
-#| label: fig-fctvendor
-#| fig-cap: "Payments to the top 8 vendors, and all others together"
+#| code-fold: true
+#| code-summary: "Code to create the vendor payments"
 set.seed(124)
 payments <- tibble(
   vendor = sample(sprintf("Vendor %02d", 1:40), 2000, TRUE,
                   prob = c(10, 8, 6, rep(1, 37))),
   amount = round(rlnorm(2000, log(25000), 1.1))
 )
+head(payments)
+```
 
+```{r}
+#| label: fig-fctvendor
+#| fig-cap: "Payments to the top 8 vendors, and all others together"
 payments |>
   mutate(vendor = fct_lump_n(vendor, n = 8, w = amount, other_level = "All others"),
          vendor = fct_infreq(vendor, w = amount) |> fct_relevel("All others", after = Inf) |>
