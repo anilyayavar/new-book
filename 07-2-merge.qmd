@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Merging large number of similar datasets into one {#sec-merge}
+# Combining Many Similar Files {#sec-merge}
 
 Preparing data for analysis can take more time than the analysis itself, because data rarely comes in the form we need. Audit data, in particular, often comes in pieces. One Excel file with a sheet for each State, one file for each district or each month, or one file for each office. In this chapter we will see how to combine such pieces into one data frame with a few lines of code, and also the reverse, how to split one data frame into many files.
 
@@ -169,6 +169,24 @@ list.files("Data", pattern = "^data_by_.*_cyl\\.xlsx$")
 ```
 
 Three Excel files have been created in the folder `Data`, one for each number of cylinders, and each has a sheet for each number of gears.
+
+## A suggested workflow
+
+When data arrives in pieces, like one sheet for each State or one file for each district, an auditor may follow these steps.
+
+1.  **Collect the pieces in one place.** Keep all the files in one folder, and list them with `list.files()` using `pattern` and `full.names = TRUE`. For one Excel file, list its sheets with `excel_sheets()`.
+2.  **Check that nothing is missing.** Compare the list of files or sheets with the covering letter, so that a missing or extra file is noticed at once.
+3.  **Name each piece.** Use `set_names()` so that the file or sheet name travels with the data.
+4.  **Read every piece the same way.** Use `map()` and read all columns as text, so that small differences in type do not stop the binding. Clean and rename the columns if the files use different names.
+5.  **Bind with a source column.** Use `list_rbind(names_to = )` so that each row records the file or sheet it came from.
+6.  **Reconcile each piece.** Convert the amounts, then compare the rows and totals of each file with the summary sent by the office.
+7.  **Split the results back when needed.** Use `split()` and `iwalk()` to write one file for each State or office, or `write_xlsx()` for one sheet each.
+
+::: callout-important
+## Remember
+
+Always keep a column showing which file each row came from. Reconcile the rows and totals of each file before the analysis. When splitting, keep each piece together with its name, as `split()` and `iwalk()` do, so that no office gets another office's data.
+:::
 
 ## Summary of functions used
 

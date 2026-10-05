@@ -4,7 +4,7 @@ source("_common.R")
 ```
 
 
-# Date and Time calculations {#sec-lubridate}
+# Dates and Times {#sec-lubridate}
 
 ## Base R classes to deal with date and time variables
 
@@ -790,6 +790,22 @@ Before reading anything into the hours, check the **time zone** of the time stam
 ## Audit tip
 
 Always fix the *as-on date* of an ageing analysis, as we did with `as_on`, instead of using `today()`. The analysis is then reproducible, and matches the date of the accounts being audited. And make the age groups match the rules in force, like the time limit for paying bills or adjusting advances, so that the groups beyond the limit are the exceptions to report.
+:::
+
+## A suggested workflow
+
+1.  **Read the dates correctly.** Dates in files received from the auditee come in many forms. Use `dmy()`, `ymd()` or `mdy()` to match the order in the file, and check a few rows after conversion.
+2.  **Set the time zone.** Time stamps from a system log may be stored in UTC. Use `with_tz()` or `force_tz()` to get Indian Standard Time before any analysis.
+3.  **Add the financial year and quarter.** Use `quarter()` with `fiscal_start = 4`, so that April to June is the first quarter. Then summarise bills and payments by financial year and quarter.
+4.  **Check payments on Sundays and holidays.** Use `wday()` to find the day of the week, and `%in%` to compare with the list of gazetted holidays. Check both, since a holiday can fall on a weekday.
+5.  **Look at the hour of approvals.** Use `hour()` on the time stamps to find approvals made late at night or at weekends. Count them by user.
+6.  **Run validity checks.** Subtract dates to get the days taken to pay. A bill paid before it was received is either an entry error or an advance payment, and needs explanation.
+7.  **Age the pending items.** Fix an as-on date, work out the days pending, and sort them into age groups with `cut()`. Make the groups match the time limits in the rules.
+
+::: callout-important
+## Remember
+
+Dates and times are easy to misread. A wrong date order or a wrong time zone shifts every result, without any error message. Check a few converted values by hand. Fix the as-on date instead of using `today()`, so that the analysis can be repeated.
 :::
 
 ## Where next

@@ -4,7 +4,7 @@ source("_common.R")
 ```
 
 
-# Network Analytics/Graph theory in R {#sec-graph}
+# Networks and Graph Theory {#sec-graph}
 
 Network analysis has become a powerful tool in audit analytics. It lets auditors uncover relationships and patterns hidden in large datasets. Which beneficiaries share a bank account? Which firms always bid together? Does money go round in a circle between a few companies? These are questions about *connections*, and network analysis is built to answer them. Using R, auditors can construct, visualise and analyse such networks with ease, detect anomalies, and identify the key players.
 
@@ -763,6 +763,23 @@ plot(kar_comm, karate, layout = l_s)
 ```
 
 In audit, communities point to groups like bidders who bid together, firms which trade mostly among themselves, or beneficiaries who share agents. We will see this in the next chapter.
+
+## A suggested workflow
+
+1.  **Build an edge list.** From the payment register or beneficiary list, make a data frame in which each row is one link, like a beneficiary and a bank account, or a payment from one firm to another. Keep the amount and the date as further columns, so they become edge attributes.
+2.  **Create the graph.** Use `graph_from_data_frame()`. Keep it directed for payments, and use `directed = FALSE` for shared details like a common account. Give a `vertices` table to keep entities with no links, and their attributes.
+3.  **Check the graph object.** Print it and confirm the number of vertices and edges, and the attributes. Get the data back with `igraph::as_data_frame()` whenever you need to inspect it.
+4.  **Describe the whole network.** Use `vcount()`, `ecount()`, `edge_density()` and `components()` to see how big the network is and whether it falls into separate pieces.
+5.  **Find the important entities.** Calculate `degree()`, `strength()` and `betweenness()`. A bank account receiving money from many beneficiaries, or a firm acting as a bridge between groups, deserves a look.
+6.  **Find the groups.** Run `cluster_louvain()` to find communities, such as bidders who bid together or firms which trade mostly among themselves.
+7.  **Zoom into doubtful cases.** Take the ego network of a doubtful entity with `make_ego_graph()`, or a part of the graph with `induced_subgraph()`. Use `shortest_paths()` to see how two entities are linked.
+8.  **Show only what matters.** Draw the reduced network with `plot()` or `visNetwork()`. Save the interactive version with `visSave()` to share with colleagues who do not use R.
+
+::: callout-important
+## Remember
+
+A connection in a network is a lead, not a finding. Two beneficiaries may share an account for a genuine reason, so examine the records before reporting. Also check what the weights in your data mean, because `igraph` treats `weight` as a distance in measures like `betweenness()`.
+:::
 
 ## Summary of functions used
 

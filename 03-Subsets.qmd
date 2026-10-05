@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Subsetting R objects or accessing specific elements {#sec-subset}
+# Subsetting and Indexing {#sec-subset}
 
 *Subsetting* means picking out some elements of an object, like the third value of a vector, the rows of a table meeting a condition, or one item of a list. Much of audit analysis is subsetting. Picking out the payments above a limit, the bills of one vendor, or the rows with a missing date. There are several ways to subset R objects (vectors, matrices, lists and data frames), each with its own uses, and we discuss each of them here. Three operators are used, `[`, `[[` and `$`.
 
@@ -299,6 +299,25 @@ amt
 ```
 
 Assigning `NULL` to a list element removes it, as in `my_list$third <- NULL`.
+
+## A suggested workflow
+
+To prepare an exception report from a payment register, an auditor may follow these steps.
+
+1.  **Write the condition.** Express the audit rule as a comparison, like `amounts > 50000`. This gives a logical vector.
+2.  **Count the missing values first.** Check the tested column with `sum(is.na(...))`. Know how many records cannot be tested before you test the rest.
+3.  **Pick the exceptions.** Subset with the condition wrapped in `which()`, so that missing values do not slip in as rows of `NA`.
+4.  **Report the missing ones separately.** Subset with `is.na()` to list them. They are neither exceptions nor clean.
+5.  **Keep only the columns needed.** For a data frame, use `df[rows, columns]` with the names of the columns you want in the report. Use `drop = FALSE` if the result must stay a table.
+6.  **Check against a list.** Use `%in%` to test whether each code is in a given set, like a list of approved vendors.
+7.  **Type names in full.** Take out a column with `$` or `[[ ]]` using its full name. Partial matching may pick up the wrong column silently.
+8.  **Replace with care.** Assign to a subset only when needed, like marking negative amounts as `NA` for separate examination. Do it on a copy, so that the data as received stays unchanged.
+
+::: callout-important
+## Remember
+
+A condition on a missing value gives `NA`, not `FALSE`. Base R then returns a row full of `NA`s, and the real record is hidden. Always count the missing values in the tested column, and report them separately from the exceptions.
+:::
 
 ## Summary of functions used
 

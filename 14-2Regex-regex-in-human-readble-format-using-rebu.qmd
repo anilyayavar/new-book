@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Regex in human readable format using `rebus` {#sec-rebus}
+# Readable Regular Expressions with rebus {#sec-rebus}
 
 Regular expressions, as explained in the previous chapter (@sec-regex), are very powerful. However they are often difficult to read, even for the person who wrote them, a few months later. There is a package called `rebus` in R, which allows us to build complex regular expressions from human readable expressions. So instead of writing `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}` and later trying to decipher what this expression actually meant, we can use a more human-readable format -
 
@@ -477,6 +477,22 @@ The regex checks only the *shape* of a date. It accepts `31/02/2024` and `29/02/
 ## Audit tip
 
 Use regex to find dates written in the wrong *format*, and a date parser like `dmy()` to find dates that do not *exist*. A voucher dated 31 February, or a bill dated after the date of its payment, is worth a closer look. Impossible dates are sometimes typing errors, and sometimes a sign that the document was prepared later, in a hurry.
+:::
+
+## A suggested workflow
+
+1.  **Write down the official format.** Start from the rule that defines the identifier, such as PAN, IFSC or GSTIN, in plain words. For a PAN, it is five letters, then four digits, then one letter.
+2.  **Build the pattern piece by piece.** Join the parts with `%R%`, using `ascii_upper()`, `ascii_digit()`, `char_class()` and `repeated()`. Keep alternatives together with `or()`.
+3.  **Anchor the whole value.** Wrap the pattern in `exactly()`. Otherwise a longer or shorter value may pass just because a part of it matches.
+4.  **Print the pattern.** Print the `rebus` object to see the regular expression it builds. Check that it means what you intended, for example that lower case letters are not allowed by mistake.
+5.  **Test on known values.** Try the pattern with `str_detect()` on a few valid and invalid samples before running it on the whole beneficiary or vendor list.
+6.  **List the failures.** Run the pattern over the column received from the auditee and pick out the records that fail. Each one is a data quality issue to be explained.
+7.  **Check dates twice.** Use `DMY` to find dates written in the wrong format, and `dmy()` to find dates that do not exist, like 31 February. Look closely at impossible dates in vouchers and bills.
+
+::: callout-important
+## Remember
+
+A pattern checks only the shape of a value, not whether it is true. A date like 31/02/2024 passes `DMY`, and a GSTIN in the right format may have a wrong check character. Use `dmy()` for dates and `gstin_valid()` for GSTINs, and confirm doubtful cases from the records.
 :::
 
 ## Summary of functions used

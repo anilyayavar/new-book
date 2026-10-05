@@ -268,7 +268,7 @@ gss_cat |>
   coord_flip()
 ```
 
-The levels of income are already sorted in a meaningful way.  However, sometimes we may want to change order of a few levels only.  E.g. `Not applicable` in the @fig-reord6 which if re-leveled in the end may be more meaningful.  In such cases, we may use `fct_relevel`.  The function takes a factor variable and thereafter we may pass all those levels as arguments which we want to move in the end.  After rearranging the bars (levels), the plot will look like as in @fig-reord7
+The levels of income are already sorted in a meaningful way.  However, sometimes we may want to change order of a few levels only.  E.g. `Not applicable` in the @fig-reord6 which if re-levelled in the end may be more meaningful.  In such cases, we may use `fct_relevel`.  The function takes a factor variable and thereafter we may pass all those levels as arguments which we want to move in the end.  After rearranging the bars (levels), the plot will look like as in @fig-reord7
 
 ```{r fig-reord7, fig.show='hold', fig.align='center', fig.cap="Modifying levels manually"}
 gss_cat |> 
@@ -484,6 +484,22 @@ payments |>
 ```
 
 `fct_lump_n()` keeps the 8 vendors with the most money and lumps the rest. `fct_infreq()` with `w = amount` sorts the vendors by the amount paid. And `fct_relevel(..., after = Inf)` moves *All others* to the end, so that it does not look like the biggest vendor. Horizontal bars, with the vendor on the y-axis, keep long names readable. But ggplot2 draws the first level at the *bottom* of the y-axis, so we reverse the order with `fct_rev()`, to bring the biggest vendor to the top.
+
+## A suggested workflow
+
+1.  **Get the approved list.** Obtain the approved list of codes from the auditee or from the rules, such as expenditure heads, vendor types or districts. Keep it as a character vector, in a meaningful order.
+2.  **Test the codes with `fct()`.** Convert the column with `fct()`, giving the approved list as `levels`. It stops with an error and names every value that is not allowed.
+3.  **Pick out the offending records.** Convert the column with `factor()` instead, so that unapproved values become `NA`, and filter those rows. Separate simple typing errors from heads that do not exist at all.
+4.  **Count each category.** Use `fct_count()` to see how many vouchers fall under each head. A head with very few or very many entries may need a closer look.
+5.  **Use ordered factors for ratings.** Store risk ratings or grades as an ordered factor, with `ordered = TRUE`. A filter like `risk >= "Medium"` then picks the right units, which a text comparison would not.
+6.  **Tidy the level names.** Correct or combine levels with `fct_recode()` and `fct_collapse()`, for example where the same head is spelt in two ways.
+7.  **Prepare the levels for charts.** Lump the smaller vendors into *All others* with `fct_lump_n()` and `w = amount`. Sort the bars with `fct_infreq()` or `fct_reorder()`, and keep *All others* at the end with `fct_relevel()`.
+
+::: callout-important
+## Remember
+
+`factor()` turns any value not in `levels` into `NA` silently. Such records can drop out of totals without anyone noticing. Use `fct()` when the list of allowed values is known, and always read the warnings R gives.
+:::
 
 ## Summary of functions used
 

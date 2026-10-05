@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Combining Tables/tabular data {#sec-joins}
+# Joining Tables {#sec-joins}
 
 ```{r fig.cap="Most of times, joining two or more tables will be required to perform analytics", fig.align="center", echo=FALSE, out.width="75%", out.height="75%"}
 
@@ -397,6 +397,23 @@ df <- data.frame(products = c('A', 'B', 'C'))
 df |>
   cross_join(df)
 ```
+
+## A suggested workflow
+
+1.  **Know the keys.** Identify the column which links the two tables, like a vendor code, employee number or PAN. Check that it is unique in the master table.
+2.  **Stack similar files first.** When data comes as a separate file for each district or month, put the files together with `bind_rows()`. Use `.id` to keep a column showing where each row came from.
+3.  **Bring in master details with `left_join()`.** Add vendor names or sanctioned amounts to the payment register. Always give the key yourself, with `by` or `join_by()`.
+4.  **Let dplyr check the join.** Use `relationship = "many-to-one"` when each payment should match only one vendor. Use `na_matches = "never"` when keys may be missing.
+5.  **Reconcile after every join.** Compare the number of rows and the total amount before and after the join. A left join on a proper key should not change them.
+6.  **Find exceptions with `anti_join()`.** Payments to vendors not in the approved list, or beneficiaries paid but not eligible, are rows with no match. Each one is an exception to be explained.
+7.  **Use rolling joins for the rate in force.** Join bills to rate revisions with `closest()` inside `join_by()`, so that each bill gets the rate on its date. Then compare the rate charged with the rate in force.
+8.  **Use overlap joins for periods.** Use `between()` or `overlaps()` inside `join_by()` to find records whose dates fall in, or clash with, another period.
+
+::: callout-important
+## Remember
+
+A join can quietly add rows. A key which is not unique, or missing keys matching each other, can inflate the totals without any error. Always count the rows and add up the amounts before and after a join, and let `relationship` check the join for you.
+:::
 
 ## Summary of functions used
 

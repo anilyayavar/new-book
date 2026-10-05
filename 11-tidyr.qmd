@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Data Wrangling in `tidyr` {#sec-tidyr}
+# Reshaping Data with tidyr {#sec-tidyr}
 
 In this chapter we will learn to reshape data into the form most suitable for analysis. This matters a great deal in audit, because data received from offices is usually laid out for *reading*, not for analysis. A monthly statement with one column for each month, a register with "-do-" in place of repeated entries, or several values crammed into one cell.  To reshape the data, we will use `tidyr` package [@R-tidyr] which is part of core `tidyverse` and can be loaded either by calling `library(tidyr)` or `library(tidyverse)`.
 
@@ -49,7 +49,7 @@ tidyr::table5
 ```
 Let us discuss these example one by one -
 
-- `table1` fulfills all three rules stated above and is thus, in tidy format.  Notice that every observation has its own row, and each variable is stored in a separate column.
+- `table1` fulfils all three rules stated above and is thus, in tidy format.  Notice that every observation has its own row, and each variable is stored in a separate column.
 - `table2` spreads one observation over two *rows*, one for cases and one for population, with the column `type` telling which is which. So it breaks rule 2, and is not tidy.
 - `table3` stores two variables, cases and population, together in one column `rate`. So it breaks rule 1.
 - `table4a` and `table4b` store the data of one observation in two different tables, breaking rule 3. Moreover, both use *values* of the variable year, `1999` and `2000`, as column headers, so the variable year is spread over two columns, breaking rule 1 too.
@@ -217,7 +217,7 @@ if (knitr:::is_latex_output()) {
 
 ```
 
-A diagrammtic representation of the mechanics behind the function is also shown in @fig-pwide.
+A diagrammatic representation of the mechanics behind the function is also shown in @fig-pwide.
 
 ```{r fig-pwide, echo=FALSE, fig.cap="Diagrammatic representation of pivot\\_wider", fig.show='hold', fig.align='center', out.width="99%"}
 knitr::include_graphics("images/pivot_wider.png")
@@ -577,6 +577,22 @@ Chandpur's second quarter is `NA`, since none of its three months was reported. 
 ## Audit tip
 
 Pivot data longer for analysis, and wider only at the end, for presentation. And before summing or averaging data over time, always check with `complete()` that no period is silently missing. A missing month and a month with zero expenditure are different findings.
+:::
+
+## A suggested workflow
+
+1.  **Look at the layout first.** Check whether the file received from the auditee is tidy, with one column for each variable and one row for each observation. A statement with one column for each month is not tidy.
+2.  **Pivot longer for analysis.** Use `pivot_longer()` to turn month or year columns into rows. Make the month a factor in the order of the financial year, from April to March.
+3.  **Split crowded columns.** Use `separate_wider_delim()` or `separate_wider_position()` to split a value into its parts, like a GSTIN into the State code and PAN. Use `separate_rows()` when one cell holds several values.
+4.  **Fill the "-do-" entries.** Where a register leaves repeated entries blank, use `fill()` to copy the value from the row above.
+5.  **Bring back the missing periods.** Use `complete()` to add every combination of office and month. Months which were never reported then show up as `NA`.
+6.  **Analyse in long form.** Work out totals, shares and trends on the long data, like the share of March in the year's expenditure.
+7.  **Pivot wider only for the report.** Use `pivot_wider()` at the end, to present the results in a familiar layout, like district by quarter.
+
+::: callout-important
+## Remember
+
+A missing month and a month with zero expenditure are different findings. Before summing data over time, check with `complete()` that no period is silently absent. Do not fill a gap with zero unless the records show that nothing was spent.
 :::
 
 ## Summary of functions used

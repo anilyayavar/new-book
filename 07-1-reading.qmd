@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Getting data in and out of R {#sec-read}
+# Importing and Exporting Data {#sec-read}
 
 Until now, we have created our own datasets or used the sample datasets that come with R. In practice, audit data comes from outside, as files received from the auditee, downloads from portals, or extracts from databases. We have to import this data into R before analysis. After the analysis, the summaries, exception lists and charts have to be exported, for the working papers and the report. This chapter covers both.
 
@@ -282,6 +282,24 @@ Thereafter, copy the code and run `reprex()`. A small window opens in the `Viewe
 ![](images/reprex.png)
 
 For more reading please refer [this page.](https://www.tidyverse.org/help/)^[https://www.tidyverse.org/help/]
+
+## A suggested workflow
+
+For any file received from the auditee, an auditor may follow these steps.
+
+1.  **Look at the file first.** Note its format, its sheets with `excel_sheets()`, and any title rows to skip.
+2.  **Read everything as text to begin with.** Use `col_types = cols(.default = col_character())` in `read_csv()`, or `col_types = "text"` in `read_excel()`. This keeps leading zeros in codes and stops values from turning into `NA` silently.
+3.  **Check for problems.** Run `problems()` and make sure every problem is understood.
+4.  **Convert amounts yourself.** Use `parse_number()` with a suitable `na` argument, so that amounts written with Indian commas are read correctly.
+5.  **Keep code columns as text.** Employee numbers, PIN codes and account numbers should stay as text.
+6.  **Reconcile with the source.** Match the number of rows and the totals of amount columns with the source, or with the counts given by the auditee.
+7.  **Export the results.** Write exception lists with `write_csv()`, or with `write_xlsx()` to put each list on its own sheet in one file.
+
+::: callout-important
+## Remember
+
+A value that cannot be read becomes `NA` with only a short message. Such a payment silently drops out of every total. Always check `problems()`, the row count and the totals before starting the analysis.
+:::
 
 ## Summary of functions used
 

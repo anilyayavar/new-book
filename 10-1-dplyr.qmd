@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Data Transformation in `dplyr` {#sec-DPLYRR}
+# Transforming Data with dplyr {#sec-DPLYRR}
 
 Most of the work in any analysis is transforming data. Selecting the columns we need, keeping the rows that matter, creating new columns, sorting, and summarising by groups. The package `dplyr` [@R-dplyr], part of the core `tidyverse`, does all this with a small set of functions, which are easy to read even for someone who does not know R.
 
@@ -714,6 +714,23 @@ In one pipe, we joined the sanctioned amounts (joins are explained in @sec-joins
 ## Audit tip
 
 Write each analysis as one readable pipe, from the raw data to the exception list, as above. The pipe is then the documentation of the test. A reviewer can read it from top to bottom, and see exactly what was done.
+:::
+
+## A suggested workflow
+
+1.  **Keep only the columns you need.** Use `select()` to pick the useful columns from a wide file received from the auditee. Use `rename()` to give them clear names.
+2.  **Create the columns the test needs.** Use `mutate()` to add columns like the amount in lakh, or a flag made with `if_else()` or `case_when()`. Use `across()` when the same change applies to many amount columns.
+3.  **Keep or drop rows with care.** Use `filter()` to select rows and `filter_out()` to remove them, like cancelled vouchers. Check that no row with a missing value has quietly dropped out.
+4.  **Summarise by groups.** Use `summarise()` with `.by` to get totals by office, vendor or month. Use `n()` and `n_distinct()` for counts.
+5.  **Use window functions for running checks.** Sort with `arrange()`, then use `cumsum()`, `lag()` or ranks within each group with `.by`. This finds, for example, the running bill which crossed the sanctioned amount.
+6.  **Pick out the exceptions.** End the pipe with `filter()` or `slice_max()` to list the cases needing attention. Use `slice_sample()` to draw a sample for detailed checking.
+7.  **Reconcile the totals.** Compare the number of rows and the totals with the auditee's figures. If they differ by a few rupees, check the rounding rule first.
+8.  **Keep the pipe as your working paper.** Write each test as one readable pipe, from the raw data to the exception list. A reviewer can then follow every step.
+
+::: callout-important
+## Remember
+
+`filter()` silently drops the rows where the condition is `NA`. Records which quietly drop out of an analysis are often the very ones which need attention. Use `filter_out()` to remove rows, and check the row count and totals after each step.
 :::
 
 ## Summary of functions used
