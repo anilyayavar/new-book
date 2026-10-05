@@ -57,20 +57,45 @@ As an example, let us take the mean annual temperatures in degrees Fahrenheit in
 summary(nhtemp)
 ```
 
-The easiest way to see how unusual a value is, is a graphical summary like a **boxplot**. In base R, it is drawn with the `boxplot()` function. It shows the distribution of values as a box with whiskers, and draws extreme values as separate points. This makes them easy to spot. We can also draw boxplots using `ggplot2`. Examples of both are shown in @fig-an1.
+The easiest way to see how unusual a value is, is a graphical summary like a **boxplot**. In base R, it is drawn with the `boxplot()` function. It shows the distribution of values as a box with whiskers, and draws extreme values as separate points. This makes them easy to spot. We can also draw boxplots using `ggplot2`.
+
+For an audit example, let us take the stationery and printing bills of a district office for one year. Three vendors supply the office. Shree Ram Stationers sends small bills for paper and pens. Kaveri Office Supplies sends somewhat larger bills for toner and files. Modern Printers prints forms and registers, and its bills are the largest. One bill has been planted. It is a bill of Shree Ram Stationers for ₹ 38,000.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the stationery bills"
+set.seed(311)
+stationery <- tibble(
+  vendor = rep(c("Shree Ram Stationers", "Kaveri Office Supplies", "Modern Printers"),
+               times = c(40, 30, 20)),
+  amount = round(c(rnorm(40, 4500, 1200), rnorm(30, 9500, 2000), rnorm(20, 34000, 7000)), -1)
+)
+# Planted. A bill far above what this vendor usually charges
+stationery$amount[17] <- 38000
+```
+
+```{r}
+glimpse(stationery)
+```
+
+@fig-an1 shows both kinds of boxplot. The left panel is the base R boxplot of the `nhtemp` data, the mean annual temperatures of New Haven. The right panel draws the stationery bills, one box for each vendor.
 
 ::: {#fig-an1}
 
 ```{r fig.show='hold', fig.align='center', out.width="45%"}
 boxplot(nhtemp, main = "Box plot of nhtemp data")
-ggplot(iris, aes(Species, Petal.Length, color = Species )) +
+ggplot(stationery, aes(vendor, amount, colour = vendor)) +
   geom_boxplot(outlier.colour = "red", outlier.size = 2) +
+  scale_y_continuous(labels = scales::label_comma()) +
+  guides(colour = "none") +
   theme_bw() +
-  labs(title = "Petal Lengths in Iris Data")
+  labs(title = "Stationery bills by vendor", x = NULL, y = "Amount (₹)")
 ```
 
 Outliers through Boxplot
 :::
+
+The planted bill of ₹ 38,000 shows as a red point above the box of Shree Ram Stationers. Notice that the same amount would be quite ordinary for Modern Printers. If we had drawn one box for all the bills together, this bill would have hidden among the printing bills.
 
 The separate points in a boxplot are decided by a simple rule, often called the **IQR rule**. The box covers the middle 50% of the data, from the lower quartile (Q1) to the upper quartile (Q3). The difference Q3 - Q1 is called the *inter-quartile range* or IQR. Any value more than 1.5 × IQR below Q1, or above Q3, is drawn as a separate point.
 
@@ -79,6 +104,15 @@ We do not have to read these values from the plot. `boxplot.stats()` returns the
 ```{r}
 boxplot.stats(nhtemp)$out
 ```
+
+For the bills, we apply the same rule within each vendor.
+
+```{r}
+stationery |>
+  filter(amount %in% boxplot.stats(amount)$out, .by = vendor)
+```
+
+The planted bill is listed. So is one unusually small bill of Modern Printers. A value far below the rest is also an outlier. A small printing bill is less likely to hide a loss, but it may point to an order split into parts, so it is worth a glance too.
 
 ::: callout-tip
 ## Audit tip
@@ -130,7 +164,7 @@ Grubbs' test checks only *one* value at a time, the most extreme one. If there a
 
 ## Robust z-scores and peer groups {#sec-ano-robustz}
 
-The best-known way to measure how unusual a value is, is the **z-score**: how many standard deviations it lies from the mean. A value with a z-score beyond 3, or below -3, is commonly called an outlier. But the plain z-score has two weaknesses which matter a great deal in audit data.
+The best-known way to measure how unusual a value is, is the **z-score**. It tells how many standard deviations a value lies from the mean. A value with a z-score beyond 3, or below -3, is commonly called an outlier. But the plain z-score has two weaknesses which matter a great deal in audit data.
 
 **It is not robust.** The mean and the standard deviation are themselves pulled by extreme values. A few large outliers raise the mean and inflate the standard deviation, and so make *themselves* look less unusual. This is called *masking*. See this small example.
 
@@ -139,7 +173,7 @@ x <- c(10, 11, 12, 10, 11, 12, 11, 95, 98, 99)
 round((x - mean(x)) / sd(x), 2)
 ```
 
-The three obviously odd values, 95, 98 and 99, have z-scores below 1.5. They have hidden one another. The remedy is to use measures which outliers cannot pull: the **median** in place of the mean, and the **median absolute deviation** (MAD) in place of the standard deviation. The MAD is the median of the distances of the values from their median. R's `mad()` scales it so that, for normal data, it matches the standard deviation. The result is the **robust z-score**.
+The three obviously odd values, 95, 98 and 99, have z-scores below 1.5. They have hidden one another. The remedy is to use measures which outliers cannot pull. These are the **median** in place of the mean, and the **median absolute deviation** (MAD) in place of the standard deviation. The MAD is the median of the distances of the values from their median. R's `mad()` scales it so that, for normal data, it matches the standard deviation. The result is the **robust z-score**.
 
 ```{r}
 round((x - median(x)) / mad(x), 2)
@@ -147,7 +181,7 @@ round((x - median(x)) / mad(x), 2)
 
 Now the three odd values stand out at once. A common rule, suggested by Iglewicz and Hoaglin, is to flag robust z-scores beyond 3.5. For money amounts, which are skewed, compute the score on the logarithm of the amount, as we did in @sec-ano-ts.
 
-**It compares everything with everything.** The second weakness matters even more. A district hospital spends far more per patient than a primary health centre. Compared with all facilities together, every district hospital looks "unusual", and a primary health centre spending three times as much as other PHCs looks normal. The fair comparison is with the **peer group**: PHCs with PHCs, district hospitals with district hospitals.
+**It compares everything with everything.** The second weakness matters even more. A district hospital spends far more per patient than a primary health centre. Compared with all facilities together, every district hospital looks "unusual", and a primary health centre spending three times as much as other PHCs looks normal. The fair comparison is with the **peer group**. That means PHCs with PHCs, and district hospitals with district hospitals.
 
 Let us see both points on the medicine expenditure of 300 health facilities of a State.
 
@@ -209,7 +243,7 @@ Only the two planted facilities are flagged. PHC-037 spends ₹410 per patient, 
 ::: callout-tip
 ## Audit tip
 
-Robust z-scores within peer groups are the simplest anomaly method that an audit team can explain to anyone, and often the most useful. Choose peer groups that *should* behave alike: facilities of one type, schools of one level, police stations of one category, DDOs of one department, vendors of one commodity. Use a ratio that removes size, like cost per patient or expenditure per student. And make sure each group has enough members, at least 20 or 30, for the median and MAD to be reliable.
+Robust z-scores within peer groups are the simplest anomaly method that an audit team can explain to anyone, and often the most useful. Choose peer groups that *should* behave alike. Examples are facilities of one type, schools of one level, police stations of one category, DDOs of one department, vendors of one commodity. Use a ratio that removes size, like cost per patient or expenditure per student. And make sure each group has enough members, at least 20 or 30, for the median and MAD to be reliable.
 :::
 
 ## Unusual combinations, robust Mahalanobis distance {#sec-ano-mahal}
@@ -282,22 +316,63 @@ Grubbs' test has two limitations. It needs normally distributed data, and it loo
 
 The **Seasonal Hybrid ESD** (S-H-ESD) algorithm was developed at Twitter for exactly this purpose. It first removes the seasonal pattern, and then looks for unusual values in what remains. It is available in the `AnomalyDetection` package, which can be installed from GitHub using `remotes::install_github("twitter/AnomalyDetection")`.
 
-As an example, let us use the `JohnsonJohnson` data available in base R, which has quarterly earnings of the company. Since the data is quarterly, the seasonal pattern repeats every 4 records, so we use `period = 4`.
+Let us take the monthly receipts of stamp duty and registration fees of a sub-registrar office, from April 2018 to March 2025, in ₹ lakh. Receipts rise slowly over the years. They are higher in the winter months and highest in March, when many property deals are closed before the financial year ends. Two months have been planted. In August 2021 the receipts were far above normal. In November 2023 they were far below normal, as if part of the money collected was never brought to account.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the monthly receipts"
+set.seed(415)
+receipt_months <- seq(as.Date("2018-04-01"), as.Date("2025-03-01"), by = "month")
+# Seasonal pattern from April to March. Winter months and March are busier.
+receipt_season <- c(0.9, 0.95, 0.9, 0.85, 0.85, 0.9, 1.05, 1.1, 1.0, 1.05, 1.1, 1.35)
+fy_position <- ((month(receipt_months) + 8) %% 12) + 1   # April = 1, ..., March = 12
+
+receipts <- tibble(
+  month = receipt_months,
+  receipts_lakh = round(60 + 0.25 * seq_along(receipt_months) +
+                          40 * (receipt_season[fy_position] - 1) +
+                          rnorm(length(receipt_months), 0, 2.5), 1)
+)
+# Planted. A spike in August 2021 and a shortfall in November 2023
+spike <- receipts$month == as.Date("2021-08-01")
+dip   <- receipts$month == as.Date("2023-11-01")
+receipts$receipts_lakh[spike] <- round(receipts$receipts_lakh[spike] * 1.6, 1)
+receipts$receipts_lakh[dip]   <- round(receipts$receipts_lakh[dip] * 0.55, 1)
+```
+
+```{r}
+head(receipts)
+```
+
+`AnomalyDetectionVec()` takes the values as a plain vector. Since the data is monthly, the seasonal pattern repeats every 12 records, so we use `period = 12`.
 
 ```{r fig-an4, fig.show='hold', fig.align='center', fig.cap="Seasonal Hybrid ESD Algorithm", message=FALSE, warning=FALSE, out.height="28%"}
 #remotes::install_github("twitter/AnomalyDetection")
 library(AnomalyDetection)
-AnomalyDetectionVec(as.vector(JohnsonJohnson),
-                    period = 4, # Seasonality
-                    plot = TRUE, # set FALSE when plot not needed
-                    direction = 'both' # set 'pos' for higher values
-                                       # or 'neg' for lower values
-                    )
+shesd <- AnomalyDetectionVec(receipts$receipts_lakh,
+                             period = 12,  # Seasonality
+                             plot = TRUE,  # set FALSE when plot not needed
+                             direction = 'both' # set 'pos' for higher values
+                                                # or 'neg' for lower values
+                             )
+shesd$anoms
+shesd$plot
 ```
 
-In @fig-an4, the anomalies are marked with blue circles. They are also listed in the `$anoms` element of the output, with their positions and values.
+```{r}
+#| include: false
+shesd_months <- receipts$month[shesd$anoms$index]
+```
 
-Notice that all the flagged points are near the end of the series. Johnson & Johnson's earnings grew very fast, and the seasonal ups and downs grew wider with them. So the later quarters look unusual compared with the earlier ones, though they follow the same pattern. This is a common trap with growing financial series. We will see how to deal with it, by working on the log scale, in @sec-ano-ts.
+In @fig-an4, the anomalies are marked with blue circles. They are also listed in the `$anoms` element of the output, with their positions and values. Position `r shesd$anoms$index[1]` is `r format(shesd_months[1], "%B %Y")` and position `r shesd$anoms$index[2]` is `r format(shesd_months[2], "%B %Y")`. These are the two planted months. The March peaks are not flagged, because the algorithm has allowed for them as part of the season.
+
+The office would now be asked to explain both months. For the spike, we may check whether some documents of other months were entered in August 2021, or whether one very large deal was registered. For the shortfall, we may compare the receipts booked with the documents registered in November 2023, and with the challans deposited in the treasury.
+
+::: callout-warning
+## Caution
+
+S-H-ESD assumes that the seasonal ups and downs stay about the same size over the years. In many financial series they grow along with the level. When that happens, the later peaks look unusual compared with the earlier ones, though they follow the same pattern. This is a common trap with growing financial series. We will see how to deal with it, by working on the log scale, in @sec-ano-ts.
+:::
 
 ## k-Nearest Neighbour distance score {#sec-ano-knn}
 
@@ -307,27 +382,77 @@ The idea of kNN is that records which are close to each other are similar. For e
 
 Distance between records is usually measured as the straight-line *Euclidean distance*. For this to be fair, all columns must be on the same scale. Otherwise a column measured in lakhs will swamp a column measured in single digits. So we must always **scale** the data first.
 
-**Problem Statement-1:** Let us try to identify outliers in the flower measurements of the `virginica` species in the `iris` data. For an auditor, it may help to think of each flower as a vendor, and its four measurements as four indicators of the vendor's behaviour. We will use the `scale()` function of base R to normalise the data. Remember that `scale()` returns a matrix, so we may need to convert it into a data frame for `ggplot2`.
+Let us take the vendors of a Zila Parishad. For each of its 60 vendors, the accounts section has worked out four indicators for the financial year 2023-24.
 
-```{r an102}
-# Sample data
-df <- iris[101:150, 1:4]
-#  Scale the data
-df <- scale(df)
+-   `bills`, the number of bills paid.
+-   `avg_bill_lakh`, the average bill, in ₹ lakh.
+-   `round_pct`, the percentage of bills in round amounts, that is, exact multiples of ₹ 1,000.
+-   `days_to_pay`, the median number of days between receipt of a bill and its payment.
+
+The vendors are of three kinds. Suppliers of materials send many small bills. Service providers send fewer, larger bills. Works contractors send a few very large bills. Three vendors have been planted at the end of the data. V-058 is a supplier with unusually large bills, mostly in round amounts, paid within days. V-059 is a supplier which looks ordinary, except that it is paid much faster than other suppliers. V-060 is a service provider whose bills look like those of a works contractor. We will come back to V-060 in @sec-ano-gower.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the vendor indicators"
+set.seed(1804)
+n_cat  <- c(Supplies = 25, Services = 17, Works = 15)
+first  <- c("Shree Ganesh", "Om Sai", "Jai Ambe", "Maa Durga", "Balaji", "Ganga", "Laxmi",
+            "Shiv Shakti", "Krishna", "Narmada", "Sri Venkateswara", "Kaveri", "Annapurna",
+            "Bharat", "Gayatri", "Hanuman", "Mahalaxmi", "Saraswati", "Vishwakarma", "Umiya")
+suffix <- c(Supplies = "Traders", Services = "Services", Works = "Constructions")
+
+vendors <- tibble(category = rep(names(n_cat), n_cat)) |>
+  mutate(bills = round(case_when(category == "Supplies" ~ rnorm(n(), 48, 6),
+                                 category == "Services" ~ rnorm(n(), 24, 5),
+                                 TRUE                   ~ rnorm(n(), 8, 2))),
+         avg_bill_lakh = round(case_when(category == "Supplies" ~ rnorm(n(), 0.9, 0.12),
+                                         category == "Services" ~ rnorm(n(), 2.8, 0.5),
+                                         TRUE                   ~ rnorm(n(), 11, 1.6)), 2),
+         round_pct   = round(runif(n(), 5, 25)),
+         days_to_pay = round(rnorm(n(), 32, 6)))
+
+# Planted. V-058 far from everyone, V-059 a local oddity, V-060 a category mismatch
+planted_vendors <- tibble(category      = c("Supplies", "Supplies", "Services"),
+                          bills         = c(60, 44, 9),
+                          avg_bill_lakh = c(4.6, 1.05, 10.5),
+                          round_pct     = c(85, 16, 15),
+                          days_to_pay   = c(4, 13, 31))
+
+vendors <- bind_rows(vendors, planted_vendors) |>
+  mutate(vendor   = sprintf("V-%03d", row_number()),
+         name     = paste(sample(first, n(), replace = TRUE), suffix[category]),
+         category = factor(category),
+         .before  = 1)
 ```
 
-Let us visualise the data, first in two dimensions only. As the data is already scaled, we can also see all four dimensions together in a boxplot. Both are shown in @fig-an5. The points are numbered by their row numbers, so that we can refer to them later.
+```{r}
+glimpse(vendors)
+tail(vendors, 4)
+```
+
+The indicators are on very different scales. We use the `scale()` function of base R to normalise them. Remember that `scale()` returns a matrix, so we may need to convert it into a data frame for `ggplot2`. We also keep the vendor codes as row names, so that we can refer to vendors later.
+
+```{r an102}
+indicators <- c("bills", "avg_bill_lakh", "round_pct", "days_to_pay")
+vend_scaled <- vendors |>
+  select(all_of(indicators)) |>
+  scale()
+rownames(vend_scaled) <- vendors$vendor
+```
+
+Let us visualise the data, first in two dimensions only, the number of bills and the average bill. As the data is already scaled, we can also see all four dimensions together in a boxplot. Both are shown in @fig-an5. The points are labelled with the last two digits of the vendor code.
 
 ::: {#fig-an5}
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="45%"}
+vend_df <- vend_scaled |>
+  as.data.frame() |>
+  mutate(vendor = vendors$vendor, label = str_sub(vendor, -2))
 
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number()) %>%
-  ggplot(aes(Sepal.Length, Sepal.Width)) +
+vend_df |>
+  ggplot(aes(bills, avg_bill_lakh)) +
   geom_point(color = "seagreen") +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   theme_bw()
 
 # Helper Function
@@ -335,20 +460,20 @@ find_outlier <- function(x) {
   return(x < quantile(x, .25) - 1.5*IQR(x) | x > quantile(x, .75) + 1.5*IQR(x))
 }
 
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number()) %>%
-  pivot_longer(-row, names_to = "Dimension", values_to = "Values") %>%
-  group_by(Dimension) %>%
-  mutate(outlier = ifelse(find_outlier(Values), row, NA)) %>%
+vend_df |>
+  pivot_longer(all_of(indicators), names_to = "Dimension", values_to = "Values") |>
+  group_by(Dimension) |>
+  mutate(outlier = ifelse(find_outlier(Values), label, NA)) |>
   ggplot(aes(Dimension, Values)) +
   geom_boxplot(outlier.colour = "red") +
-  geom_text(aes(label=outlier), na.rm=TRUE, hjust=-.5) +
+  geom_text(aes(label = outlier), na.rm = TRUE, hjust = -.5) +
   theme_bw()
 ```
 
-Sepal Length Vs. Widths in Virginica
+Number of bills and average bill of vendors (left), all four scaled indicators (right)
 :::
+
+In the left panel, the three kinds of vendor form three groups, from many small bills to a few large ones. Vendor 58 sits apart from all three groups. In the right panel, it is the outlier on the round amounts and on the days to pay. Vendor 59 is also an outlier on the days to pay.
 
 Now, let us find the outliers in R. We will use the `get.knn()` function from the `FNN` package. We must choose the value of `k`, the number of neighbours, beforehand. Let us take `k = 5`.
 
@@ -356,40 +481,47 @@ Now, let us find the outliers in R. We will use the `get.knn()` function from th
 # Load the library
 library(FNN)
 # get kNN object, using k = 5, on first two columns only
-virginica_knn <- FNN::get.knn(df[, 1:2], 5)
+vendor_knn <- FNN::get.knn(vend_scaled[, 1:2], 5)
 ```
 
 The object created above has two matrices, each with `k` columns. `nn.index` holds the row numbers of the nearest neighbours of each record. `nn.dist` holds the distances to them. Let us view the top 6 rows of each.
 
 ```{r an7}
-head(virginica_knn$nn.index)
-head(virginica_knn$nn.dist)
+head(vendor_knn$nn.index)
+head(vendor_knn$nn.dist)
 ```
 
 Using `rowMeans()`, we can calculate the average distance of each record from its neighbours. This is the **kNN score**. The bigger the score, the more likely the record is an outlier. Let us store the score and show it as the size of the points. In @fig-an8, the points lying far away are bigger, because their chance of being outliers is higher.
 
 ```{r fig-an8, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="k-Nearest Neighbour Distance", out.height="28%"}
-score <- rowMeans(virginica_knn$nn.dist)
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = score) %>%
-  ggplot(aes(Sepal.Length, Sepal.Width)) +
-  geom_point(aes(size = score),color = "seagreen") +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+score <- rowMeans(vendor_knn$nn.dist)
+vend_df |>
+  mutate(score = score) |>
+  ggplot(aes(bills, avg_bill_lakh)) +
+  geom_point(aes(size = score), color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   theme_bw() +
   labs(title = "KNN method of outlier")
-
 ```
 
 Now, we can run the algorithm on all four columns of the data.
 
 ```{r an88}
-virginica_knn <- FNN::get.knn(df, 5)
-score <- rowMeans(virginica_knn$nn.dist)
-# Which point is farthest-Outlier
+vendor_knn <- FNN::get.knn(vend_scaled, 5)
+score <- rowMeans(vendor_knn$nn.dist)
+names(score) <- vendors$vendor
+# Which vendor is farthest from its neighbours
 which.max(score)
+# The five highest scores
+round(head(sort(score, decreasing = TRUE), 5), 2)
 ```
+
+```{r}
+#| include: false
+knn_top <- names(sort(score, decreasing = TRUE))
+```
+
+On all four indicators, `r knn_top[1]` is far ahead of every other vendor, with a score of `r round(max(score), 2)`. `r knn_top[2]` comes next. It is a supplier which is paid much faster than its peers, a difference that did not show in the scatter plot of bills and average bill.
 
 ::: callout-note
 ## How to choose `k`?
@@ -435,35 +567,31 @@ The **Local Outlier Factor** (LOF) solves this. Instead of distance, it looks at
 -   A score close to **1** means the record is as crowded as its neighbours. It is normal.
 -   A score clearly **above 1** means the record is in a much emptier area than its neighbours. It may be an anomaly.
 
-We will use the `lof()` function from the `dbscan` package. Its second argument is the number of neighbours to consider, like `k` in kNN. Let us apply it to the same `virginica` data, using all four columns.
+We will use the `lof()` function from the `dbscan` package. Its second argument is the number of neighbours to consider, like `k` in kNN. Let us apply it to the same vendor data, using all four indicators.
 
 ::: {#fig-an10}
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 library(dbscan)
-lof_score <- lof(df, 5)
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = lof_score) %>%
-  ggplot(aes(Sepal.Length, Sepal.Width)) +
-  geom_point(aes(size = score),color = "seagreen") +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+lof_score <- lof(vend_scaled, 5)
+vend_df |>
+  mutate(score = lof_score) |>
+  ggplot(aes(bills, avg_bill_lakh)) +
+  geom_point(aes(size = score), color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   scale_size_continuous(guide = "none") +
   theme_bw() +
   labs(title = "LOF method of outlier")
 
-df_prcomp <- prcomp(df, scale. = TRUE)
+vend_prcomp <- prcomp(vend_scaled, scale. = TRUE)
 
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = lof_score,
-         PC1 = df_prcomp$x[,1],
-         PC2 = df_prcomp$x[,2]) %>%
+vend_df |>
+  mutate(score = lof_score,
+         PC1 = vend_prcomp$x[,1],
+         PC2 = vend_prcomp$x[,2]) |>
   ggplot(aes(PC1, PC2)) +
-  geom_point(aes(size = score),color = "seagreen") +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  geom_point(aes(size = score), color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   scale_size_continuous(guide = "none") +
   theme_bw() +
   labs(title = "LOF method of outlier\nVisualised on principal components")
@@ -472,11 +600,11 @@ df %>%
 LOF
 :::
 
-In @fig-an10 (left), we have plotted the data in two dimensions only, though LOF was calculated on all four. So some big points appear *inside* the cloud of points. These are local anomalies, which are unusual in the other two dimensions.
+In @fig-an10 (left), we have plotted the data in two dimensions only, though LOF was calculated on all four. So vendor 59, which has the second highest LOF score, sits right *inside* the group of suppliers in this plot. It is a local anomaly. Its bills look like those of any supplier, but it is paid much faster than the suppliers around it.
 
 To see all four dimensions in one picture, we can use the first two *principal components* (@fig-an10, right). Principal components combine many columns into a few new columns which keep most of the information. We learnt about them in @sec-pca. For now, it is enough to know that they give a fair two-dimensional picture of four-dimensional data.
 
-Let us also compare the biggest anomaly according to each method.
+Let us also compare the biggest anomalies according to each method.
 
 ```{r an11}
 # Biggest Anomaly - kNN
@@ -484,9 +612,18 @@ which.max(score)
 
 # Biggest Anomaly - LOF
 which.max(lof_score)
+
+# Top five vendors by each method
+tibble(knn = names(sort(score, decreasing = TRUE))[1:5],
+       lof = vendors$vendor[order(lof_score, decreasing = TRUE)][1:5])
 ```
 
-The two methods do not agree on the top record. kNN picks record `r which.max(score)`, which is far from all others. LOF picks record `r which.max(lof_score)`, which is unusual compared to its own neighbourhood. Both are useful, and they answer slightly different questions.
+```{r}
+#| include: false
+lof_top <- vendors$vendor[order(lof_score, decreasing = TRUE)]
+```
+
+Both methods put `r lof_top[1]` first and `r lof_top[2]` second. Below the top two, the lists differ. This will often happen. kNN looks for records far from all others. LOF looks for records unlike their own neighbourhood. In our data the two planted vendors are both, so both methods find them. In other data the top records may differ, and each method may catch a case that the other misses. Both are useful, and they answer slightly different questions.
 
 Histograms of both `kNN` and `LOF` scores can also be drawn, as in @fig-an12. In both, most records have low scores, and a few stand apart on the right.
 
@@ -494,12 +631,12 @@ Histograms of both `kNN` and `LOF` scores can also be drawn, as in @fig-an12. In
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
 hist(score, breaks = 40,
-     main = "Histogram of KNN scores in IRIS-Virginica data")
+     main = "Histogram of KNN scores of vendors")
 hist(lof_score, breaks = 40,
-     main = "Histogram of LOF scores in IRIS-Virginica data")
+     main = "Histogram of LOF scores of vendors")
 ```
 
-Histogram - KNN(Left) and LOF (Right)
+Histograms of kNN scores (left) and LOF scores (right)
 :::
 
 ::: callout-tip
@@ -524,52 +661,47 @@ We will use the `isotree` package, which is available on CRAN. The main function
 An older package, `isofor`, is sometimes mentioned in tutorials, but it is available only on GitHub and is no longer maintained. `isotree` does the same job, is faster, and is regularly updated on CRAN. It can be installed with `install.packages("isotree")`.
 :::
 
-Let us work on the same problem statement as above. First, let us build a single tree.
+Let us work on the same vendor indicators as above. First, let us build a single tree.
 
 ```{r an13, message=FALSE, warning=FALSE}
 library(isotree)
 # Generate a single tree
-virginica_1 <- isolation.forest(df, ntrees = 1, sample_size = 50,
-                                ndim = 1, seed = 1, nthreads = 1)
+vendor_tree_1 <- isolation.forest(vend_scaled, ntrees = 1, sample_size = 50,
+                                  ndim = 1, seed = 1, nthreads = 1)
 
 # Generate isolation score
-iso_score_1 <- predict(virginica_1, df)
+iso_score_1 <- predict(vendor_tree_1, vend_scaled)
 
 # View first 10 scores
 iso_score_1[1:10]
 ```
 
-*Score interpretation*: The scores lie between 0 and 1. The closer a score is to 1, the more likely the record is an anomaly. Scores below 0.5 usually mean normal records.
+*Score interpretation.* The scores lie between 0 and 1. The closer a score is to 1, the more likely the record is an anomaly. Scores below 0.5 usually mean normal records.
 
 Let us visualise the scores on the principal component plot again (@fig-an24).
 
 ::: {#fig-an24}
 
 ```{r message=FALSE, warning=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
-
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = iso_score_1,
-         PC1 = df_prcomp$x[,1],
-         PC2 = df_prcomp$x[,2]) %>%
+vend_df |>
+  mutate(score = iso_score_1,
+         PC1 = vend_prcomp$x[,1],
+         PC2 = vend_prcomp$x[,2]) |>
   ggplot(aes(PC1, PC2)) +
-  geom_point(aes(size = score),color = "seagreen") +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  geom_point(aes(size = score), color = "seagreen") +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   scale_size_continuous(guide = "none") +
   theme_bw() +
   labs(title = "Isolation Tree based outlier\nVisualised on principal components")
 
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = iso_score_1,
-         PC1 = df_prcomp$x[,1],
-         PC2 = df_prcomp$x[,2],
-         is_outlier = factor(ifelse(ntile(iso_score_1, 10) >= 10, "O", "N"))) %>%
+vend_df |>
+  mutate(score = iso_score_1,
+         PC1 = vend_prcomp$x[,1],
+         PC2 = vend_prcomp$x[,2],
+         is_outlier = factor(ifelse(ntile(iso_score_1, 10) >= 10, "O", "N"))) |>
   ggplot(aes(PC1, PC2)) +
   geom_point(aes(size = score, color = is_outlier)) +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   scale_color_manual(values = c(O = "red", N = "black"), guide = "none") +
   scale_size_continuous(guide = "none") +
   theme_bw() +
@@ -586,23 +718,21 @@ Let us now build a forest of 100 trees (@fig-an14). The right panel compares the
 ::: {#fig-an14}
 
 ```{r warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', out.width="48%"}
-iso_100 <- isolation.forest(df, ntrees = 100, sample_size = 50,
+iso_100 <- isolation.forest(vend_scaled, ntrees = 100, sample_size = 50,
                             ndim = 1, seed = 1, nthreads = 1)
 
 # Generate scores
-iso_score_100 <- predict(iso_100, df)
+iso_score_100 <- predict(iso_100, vend_scaled)
 
 # View Results
-df %>%
-  as.data.frame() %>%
-  mutate(row = row_number(),
-         score = iso_score_100,
-         PC1 = df_prcomp$x[,1],
-         PC2 = df_prcomp$x[,2],
-         is_outlier = factor(ifelse(ntile(iso_score_100, 10) >= 10, "O", "N"))) %>%
+vend_df |>
+  mutate(score = iso_score_100,
+         PC1 = vend_prcomp$x[,1],
+         PC2 = vend_prcomp$x[,2],
+         is_outlier = factor(ifelse(ntile(iso_score_100, 10) >= 10, "O", "N"))) |>
   ggplot(aes(PC1, PC2)) +
   geom_point(aes(size = score, color = is_outlier)) +
-  ggrepel::geom_text_repel(aes(label = row), arrow = grid::arrow()) +
+  ggrepel::geom_text_repel(aes(label = label), arrow = grid::arrow(), max.overlaps = 20) +
   scale_color_manual(values = c(O = "red", N = "black"), guide = "none") +
   scale_size_continuous(guide = "none") +
   theme_bw() +
@@ -617,18 +747,35 @@ abline(a = 0, b = 1)
 100 Isolation Trees (Left) Comparison of 1 vs. 100 trees (Right)
 :::
 
-**Contour plots:** We can also show the anomaly scores of a whole area as a contour plot, like the height lines of a map. We build a fine grid of points covering the first two principal components, score every grid point, and draw lines joining equal scores. See @fig-an16. Records falling in the high-score regions are anomalies.
+Let us list the vendors with the highest forest scores.
+
+```{r}
+vendors |>
+  mutate(iso_score = round(iso_score_100, 2)) |>
+  arrange(desc(iso_score)) |>
+  select(vendor, name, category, all_of(indicators), iso_score) |>
+  head(5)
+```
+
+```{r}
+#| include: false
+iso_top <- vendors$vendor[order(iso_score_100, decreasing = TRUE)]
+```
+
+`r iso_top[1]` is at the top by a clear margin, with a score of `r round(max(iso_score_100), 2)`. V-059, the supplier paid unusually fast, is at position `r which(iso_top == "V-059")`. The scores after the top one are close together, so the forest separates the far-away vendor much more sharply than the local oddity. This is typical. Isolation forest is best at global anomalies.
+
+**Contour plots.** We can also show the anomaly scores of a whole area as a contour plot, like the height lines of a map. We build a fine grid of points covering the first two principal components, score every grid point, and draw lines joining equal scores. See @fig-an16. Records falling in the high-score regions are anomalies.
 
 ```{r fig-an16, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Contour Plot", out.width="90%"}
 # Create PRCOMP data
 df_grid <- data.frame(
-  PC1 = df_prcomp$x[,1],
-  PC2 = df_prcomp$x[,2]
+  PC1 = vend_prcomp$x[,1],
+  PC2 = vend_prcomp$x[,2]
 )
 
 # Create Sequences
-pc1_seq <- seq(min(df_prcomp$x[,1]), max(df_prcomp$x[,1]), length.out = 25)
-pc2_seq <- seq(min(df_prcomp$x[,2]), max(df_prcomp$x[,2]), length.out = 25)
+pc1_seq <- seq(min(vend_prcomp$x[,1]), max(vend_prcomp$x[,1]), length.out = 25)
+pc2_seq <- seq(min(vend_prcomp$x[,2]), max(vend_prcomp$x[,2]), length.out = 25)
 # Create Grid
 my_grid <- expand.grid(PC1 = pc1_seq, PC2 = pc2_seq)
 
@@ -645,36 +792,47 @@ contourplot(scores ~ PC1 + PC2, data = my_grid, region = TRUE)
 
 **Including categorical variables.** One benefit of the isolation forest is that it can use categorical columns directly. The only condition is that they should be of `factor` type.
 
-**Problem Statement-2:** Let us now find anomalies in the full `iris` data, including the `Species` column. We can check the column types before proceeding.
+Let us now find anomalies in the vendor data again, this time including the `category` column. We keep the four indicators unscaled, since an isolation forest does not need scaling. We can check the column types before proceeding.
 
 ```{r an15}
-sapply(iris, class)
+vendors_mixed <- vendors |> select(category, all_of(indicators))
+sapply(vendors_mixed, class)
 ```
 
-Our condition is met. So we can build the forest directly. Refer @fig-an18.
+Our condition is met, as `category` is already a factor. So we can build the forest directly. Refer @fig-an18.
 
 ```{r fig-an18, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Including categorical variable", out.width="98%"}
-# New isolation forest model, including Species
-iso_model_new <- isolation.forest(iris, ntrees = 100, ndim = 1,
+# New isolation forest model, including category
+iso_model_new <- isolation.forest(vendors_mixed, ntrees = 100, ndim = 1,
                                   seed = 1, nthreads = 1)
-new_scores <- predict(iso_model_new, iris)
+new_scores <- predict(iso_model_new, vendors_mixed)
 head(new_scores)
 
-# Full PRCOMP for Visual
-iris_pr <- prcomp(iris[, 1:4])
+# Principal components of the four indicators, for the picture
+vend_pr <- prcomp(vendors_mixed[, indicators], scale. = TRUE)
 
 data.frame(
-  PC1 = iris_pr$x[,1],
-  PC2 = iris_pr$x[,2]
-) %>%
+  PC1 = vend_pr$x[,1],
+  PC2 = vend_pr$x[,2]
+) |>
   mutate(score = new_scores,
-         Species = iris$Species) %>%
-  ggplot(aes(PC1, PC2, color = Species)) +
+         category = vendors$category,
+         label = str_sub(vendors$vendor, -2)) |>
+  ggplot(aes(PC1, PC2, color = category)) +
   geom_point(aes(size = score)) +
+  ggrepel::geom_text_repel(aes(label = ifelse(score > quantile(score, 0.9), label, "")),
+                           show.legend = FALSE) +
   guides(size = "none") +
   theme_bw() +
   labs(title = "Isolation Forest\nVisualised on Principal Components")
 ```
+
+```{r}
+#| include: false
+iso_cat_top <- vendors$vendor[order(new_scores, decreasing = TRUE)]
+```
+
+With the category included, V-060 moves up from position `r which(iso_top == "V-060")` to position `r which(iso_cat_top == "V-060")`. It is a service provider whose bills look like a works contractor's. The forest can now see that its numbers do not fit its category. In @fig-an18 the ten per cent of vendors with the highest scores are labelled.
 
 ::: callout-tip
 ## Audit tip
@@ -684,25 +842,44 @@ Isolation forest is a good default for large audit data. It is fast, needs no sc
 
 ## Including categorical variables in LOF {#sec-ano-gower}
 
-We can also include categorical variables in the Local Outlier Factor, using the **Gower distance**. Gower distance can measure the distance between records which have both numeric and categorical columns, even when the categories have no natural order. It is calculated with the function `daisy()` from the `cluster` package. Let us calculate LOF scores on the full `iris` data, including `Species`. The result is shown in @fig-an20.
+We can also include categorical variables in the Local Outlier Factor, using the **Gower distance**. Gower distance can measure the distance between records which have both numeric and categorical columns, even when the categories have no natural order. It is calculated with the function `daisy()` from the `cluster` package. Let us calculate LOF scores on the vendor data, including `category`. The result is shown in @fig-an20.
 
 ```{r fig-an20, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Including categorical variable", out.width="90%"}
 library(cluster)
-iris_dist <- daisy(iris, metric = "gower")
-iris_lof <- lof(iris_dist, minPts = 5)
+vendor_dist <- daisy(vendors_mixed, metric = "gower")
+vendor_lof <- lof(vendor_dist, minPts = 5)
 
 data.frame(
-  PC1 = iris_pr$x[,1],
-  PC2 = iris_pr$x[,2]
-) %>%
-  mutate(score = iris_lof,
-         Species = iris$Species) %>%
-  ggplot(aes(PC1, PC2, color = Species)) +
+  PC1 = vend_pr$x[,1],
+  PC2 = vend_pr$x[,2]
+) |>
+  mutate(score = vendor_lof,
+         category = vendors$category,
+         label = str_sub(vendors$vendor, -2)) |>
+  ggplot(aes(PC1, PC2, color = category)) +
   geom_point(aes(size = score)) +
+  ggrepel::geom_text_repel(aes(label = ifelse(score > quantile(score, 0.9), label, "")),
+                           show.legend = FALSE) +
   guides(size = "none") +
   theme_bw() +
   labs(title = "LOF Scores\nVisualised on Principal Components")
 ```
+
+```{r}
+vendors |>
+  mutate(lof_numeric = round(lof_score, 2),
+         lof_gower   = round(vendor_lof, 2)) |>
+  arrange(desc(lof_gower)) |>
+  select(vendor, category, bills, avg_bill_lakh, lof_numeric, lof_gower) |>
+  head(5)
+```
+
+```{r}
+#| include: false
+gower_top <- vendors$vendor[order(vendor_lof, decreasing = TRUE)]
+```
+
+On the four numbers alone, V-060 was at position `r which(lof_top == "V-060")` by LOF. With the category included through Gower distance, it rises to position `r which(gower_top == "V-060")`. Its nearest neighbours are works contractors, and it is the only one among them labelled as a service provider. The auditor would now ask why a service provider is raising bills of the size of works contracts. Was the work split from a works contract to avoid a tender? Was the firm registered under the wrong category?
 
 ### How does Gower distance work?
 
@@ -759,7 +936,7 @@ claims <- bind_rows(claims, planted) |>
 tail(claims, 4)
 ```
 
-**Step-1: LOF on numeric columns only.** First, let us do what we did earlier in this chapter. We use only the two numeric columns, distance and amount, scale them, and calculate LOF.
+**Step 1. LOF on numeric columns only.** First, let us do what we did earlier in this chapter. We use only the two numeric columns, distance and amount, scale them, and calculate LOF.
 
 ```{r}
 claims$lof_numeric <- claims |>
@@ -774,7 +951,7 @@ claims |>
 
 The inflated AC-3 claim, `TA-303`, is at the top, with a very high score. That is good. But the two Group C air claims are nowhere near the top. This is not surprising. Looking at distance and amount alone, these claims look exactly like the many genuine air claims of Group A officers.
 
-**Step-2: LOF with categorical columns, using Gower distance.** Now we include grade and mode of travel as well. `daisy()` needs categorical columns as factors, so we convert them first.
+**Step 2. LOF with categorical columns, using Gower distance.** Now we include grade and mode of travel as well. `daisy()` needs categorical columns as factors, so we convert them first.
 
 ```{r}
 gower_dist <- claims |>
@@ -813,29 +990,21 @@ In time series data, an anomaly is a value which does not follow the usual trend
 
 To detect such anomalies in R, we will use the package `timetk`. This package works on a `tibble` (data frame) with a date column, instead of a `ts` object. So we may need to prepare our data accordingly.
 
-**Problem Statement:** Let us find anomalies, if any, in the monthly sunspots data available in base R^[Monthly numbers of sunspots, as from the World Data Center, aka SIDC. This is the version of the data that will occasionally be updated when new counts become available.].
+Let us return to the monthly receipts of the sub-registrar office, which we used for the Seasonal Hybrid ESD algorithm in @sec-ano-shesd. Our `receipts` tibble already has a date column, `month`, so it is ready for `timetk`. We tell it that the season repeats every 12 months, with `.frequency = 12`.
 
 ```{r fig-an17, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold', fig.cap="Time Series Anomalies", out.width="90%"}
-start_date <- as.Date("1749-01-01")
-# one date per month, as many as there are values in the series
-date_sequence <- seq(start_date, by = "months", length.out = length(sunspot.month))
-
-sunspot_df <- sunspot.month %>%
-  as.data.frame() %>%
-  set_names("value") %>%
-  mutate(date = date_sequence)
-
 library(timetk)
-sunspot_df %>%
-  plot_anomaly_diagnostics(date, value,
+receipts |>
+  plot_anomaly_diagnostics(month, receipts_lakh, .frequency = 12,
                            .interactive = FALSE)
 
-sunspot_df %>%
-  tk_anomaly_diagnostics(date, value) %>%
-  filter(anomaly == 'Yes')
+receipts |>
+  tk_anomaly_diagnostics(month, receipts_lakh, .frequency = 12) |>
+  filter(anomaly == 'Yes') |>
+  select(month, observed, season, trend, remainder)
 ```
 
-We can see the anomalies highlighted in red in @fig-an17, and listed by the code above. We may also apply the Seasonal Hybrid ESD algorithm discussed in @sec-ano-shesd to the same data.
+We can see the anomalies highlighted in red in @fig-an17, and listed by the code above. They are the same two planted months, August 2021 and November 2023, that S-H-ESD found. When two different methods agree, the lead is stronger.
 
 ### How does this method work?
 
@@ -846,7 +1015,7 @@ We can see the anomalies highlighted in red in @fig-an17, and listed by the code
 
 So a value is called an anomaly only if it cannot be explained by the trend *and* the usual seasonal pattern. We learnt about these components of a time series in @sec-ts.
 
-### An audit example, monthly expenditure
+## Audit use case, an odd month of expenditure
 
 Every auditor in government knows the *March rush*. Offices spend much more in March than in other months, to use up the budget before the financial year ends. So a high expenditure in March is expected. What an auditor wants to find is a month which is unusual *even after allowing* for this pattern.
 
@@ -978,7 +1147,7 @@ cpts(cp)
 cps <- cpts(cp)
 ```
 
-`cpts()` gives the positions after which the mean changes: `r paste(cps, collapse = ", ")`. Let us read them with the dates. The changes after months `r cps[1]` and `r cps[2]` enclose a single month, `r format(cement$month[cps[2]], "%B %Y")`. That is the one-off spike, a *point* anomaly, which the method sees as a tiny segment of its own. The change after month `r cps[3]`, `r format(cement$month[cps[3]], "%B %Y")`, is the lasting shift. The average rate in each segment shows its size.
+`cpts()` gives the positions after which the mean changes. They are `r paste(cps, collapse = ", ")`. Let us read them with the dates. The changes after months `r cps[1]` and `r cps[2]` enclose a single month, `r format(cement$month[cps[2]], "%B %Y")`. That is the one-off spike, a *point* anomaly, which the method sees as a tiny segment of its own. The change after month `r cps[3]`, `r format(cement$month[cps[3]], "%B %Y")`, is the lasting shift. The average rate in each segment shows its size.
 
 ```{r}
 cement |>
@@ -1006,14 +1175,14 @@ From `r format(cement$month[cps[3] + 1], "%B %Y")`, the supplier has charged abo
 ::: callout-tip
 ## Audit tip
 
-Run change point detection on many series at once, say the rate of every major item from every supplier, with `map()` (@sec-purrr), and list the series with a lasting shift, the date and the size of the shift. Then compare the dates with known events: rate revisions, transfers of officers, new contracts. A shift with no explanation is a strong lead. `cpt.meanvar()` looks for changes in both the mean and the variability, which can reveal, for example, a period when rates suddenly stopped varying, as if copied.
+Run change point detection on many series at once, say the rate of every major item from every supplier, with `map()` (@sec-purrr), and list the series with a lasting shift, the date and the size of the shift. Then compare the dates with known events, such as rate revisions, transfers of officers and new contracts. A shift with no explanation is a strong lead. `cpt.meanvar()` looks for changes in both the mean and the variability, which can reveal, for example, a period when rates suddenly stopped varying, as if copied.
 :::
 
 ## Combining several methods {#sec-ano-combine}
 
 Each method in this chapter sees anomalies in its own way. A robust z-score sees one extreme measure. The Mahalanobis distance sees a broken relationship. An isolation forest sees records that are easy to separate from the rest, and LOF sees records unlike their own neighbours. A record flagged by several methods is a stronger lead than one flagged by a single method, and different methods catch different kinds of irregularity. So in practice we run several, and combine their verdicts into **one ranked list** for examination.
 
-The scores of different methods are on different scales: a z-score of 4, a Mahalanobis distance of 25, an isolation score of 0.6. They cannot be added directly. The simplest fair way is to convert each method's scores into **ranks**, or rather percentile ranks between 0 and 1, and average them. A record which every method places near the top gets a combined score near 1.
+The scores of different methods are on different scales. A z-score may be 4, a Mahalanobis distance 25 and an isolation score 0.6. They cannot be added directly. The simplest fair way is to convert each method's scores into **ranks**, or rather percentile ranks between 0 and 1, and average them. A record which every method places near the top gets a combined score near 1.
 
 Let us add a third measure to our PHC data, medicine expenditure, and plant two more cases of different kinds.
 
@@ -1090,7 +1259,7 @@ map(c(robust_z = "robust_z", mahalanobis = "mahal", isolation_forest = "iforest"
   mutate(phc = planted, .before = 1)
 ```
 
-Three methods placed PHC-077 near the top, but the robust z-score, which looks at one measure at a time, saw nothing unusual in it, exactly as we found in @sec-ano-mahal. Its low rank on that one method pulled the average down. This is the weakness of averaging: it *dilutes* an anomaly that only some methods can see, and different kinds of anomaly are, by their nature, seen by different methods.
+Three methods placed PHC-077 near the top, but the robust z-score, which looks at one measure at a time, saw nothing unusual in it, exactly as we found in @sec-ano-mahal. Its low rank on that one method pulled the average down. This is the weakness of averaging. It *dilutes* an anomaly that only some methods can see, and different kinds of anomaly are, by their nature, seen by different methods.
 
 A remedy that auditors find natural is a **vote**. Count, for each record, how many methods place it in their top 5%, and rank records first by the number of votes, then by the average.
 
@@ -1113,12 +1282,12 @@ vote_pos <- match(planted, voted$phc)
 n_two_plus <- sum(voted$votes >= 2)
 ```
 
-Now the three planted PHCs are at positions `r paste(sort(vote_pos), collapse = ", ")`. A record that most methods flag, for whatever reason each has, rises to the top, while a record that one method alone happens to place high stays lower. In all, `r n_two_plus` PHCs are flagged by two or more methods, a short and well-founded list for examination. Not every record on it is planted. The others with several votes are simply the smallest or largest PHCs in the data, and an examination would quickly clear them. That is normal: anomaly methods find the *unusual*, and only the records can say whether it is *wrong*.
+Now the three planted PHCs are at positions `r paste(sort(vote_pos), collapse = ", ")`. A record that most methods flag, for whatever reason each has, rises to the top, while a record that one method alone happens to place high stays lower. In all, `r n_two_plus` PHCs are flagged by two or more methods, a short and well-founded list for examination. Not every record on it is planted. The others with several votes are simply the smallest or largest PHCs in the data, and an examination would quickly clear them. That is normal. Anomaly methods find the *unusual*, and only the records can say whether it is *wrong*.
 
 ::: callout-tip
 ## Audit tip
 
-Keep the individual method scores alongside the combined score in your working papers. When a record is examined, they explain *why* it was selected: "medicine spending three times what its OPD explains" (robust z of the ratio), or "deliveries out of line with OPD" (Mahalanobis). An explained selection is much easier to defend than a single number.
+Keep the individual method scores alongside the combined score in your working papers. When a record is examined, they explain *why* it was selected. For example, "medicine spending three times what its OPD explains" (robust z of the ratio), or "deliveries out of line with OPD" (Mahalanobis). An explained selection is much easier to defend than a single number.
 :::
 
 ::: callout-note
@@ -1138,7 +1307,7 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 | A monthly, weekly or daily series | STL decomposition with `timetk`, on log scale for money |
 | A series that may have shifted to a new level | Change point detection with `changepoint` |
 | Several methods, one list to examine | Average of percentile ranks |
-| A table of numeric indicators for each vendor, employee etc. | Isolation forest first, then LOF to look for local anomalies |
+| A table of numeric indicators for each vendor, employee or beneficiary | Isolation forest first, then LOF to look for local anomalies |
 | Numeric and categorical columns together | LOF with Gower distance, or isolation forest with factors |
 | Known rules, like entitlements or limits | A direct rule-based check, before any of the above |
 
@@ -1173,7 +1342,11 @@ An anomaly is only *unusual*. It is not necessarily *wrong*. Many anomalies have
 | `qchisq()` | stats | Cut-off for squared Mahalanobis distances |
 | `AnomalyDetectionVec()` | AnomalyDetection | Seasonal Hybrid ESD on a single series |
 | `scale()` | base R | Puts all numeric columns on the same scale |
+| `geom_text_repel()` | ggrepel | Labels points on a plot without overlapping |
 | `get.knn()` | FNN | Finds the k nearest neighbours and their distances |
+| `rowMeans()`, `which.max()` | base R | Average distance to the neighbours, and the record with the highest score |
+| `ntile()` | dplyr | Splits records into equal groups by score, for example the top 10% |
+| `contourplot()` | lattice | Contour plot of anomaly scores over a grid |
 | `lof()` | dbscan | Local Outlier Factor scores |
 | `isolation.forest()`, `predict()` | isotree | Builds an isolation forest and gives anomaly scores |
 | `daisy(metric = "gower")` | cluster | Distance for mixed numeric and categorical data |
