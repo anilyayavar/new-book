@@ -9,7 +9,7 @@ An audit party examining an old age pension scheme asks the district office for 
 
 Auditors receive such data all the time. Pay bills carry PAN and bank accounts. Scholarship lists carry caste. Health schemes carry diagnoses. We need this data to do our work. We also have a duty to protect it while we hold it, and to let go of it when the work is done.
 
-In this chapter we learn practical ways to do this in R. We first sort the fields of a list by how much harm they can do. We then learn to mask numbers for display, to replace identifiers with hashes and tokens, and to see why a plain hash is not enough. We check a table for small groups of people who could be recognised before it goes into a report. Finally, we encrypt a file before it leaves our computer. Two audit use cases show the methods at work. In the first, two departments find the persons common to their lists without sending each other a single Aadhaar number. In the second, a district table is made safe for publication.
+In this chapter we learn practical ways to do this in R. We first sort the fields of a list by how much harm they can do. We then learn to mask numbers for display, to replace identifiers with hashes and tokens, and to see why a plain hash is not enough. We check a table for small groups of people who could be recognised before it goes into a report. Finally, we encrypt a file before it leaves our computer, first with a passphrase and then with a pair of keys. Three audit use cases show the methods at work. In the first, two departments find the persons common to their lists without sending each other a single Aadhaar number. In the second, a district table is made safe for publication. In the third, a department sends Aadhaar numbers that only the auditor can read.
 
 @sec-file-hash used a hash to prove that a file has not changed. Here we use the same tool for a different purpose, to hide a value while keeping it usable.
 
@@ -21,15 +21,16 @@ In this chapter we learn practical ways to do this in R. We first sort the field
 library(tidyverse)
 library(openssl)
 library(digest)
+library(encryptr)
 ```
 
 ::: {.callout-note collapse="true"}
 ## Packages for this chapter
 
-This chapter uses `digest`, `openssl` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+This chapter uses `digest`, `encryptr`, `openssl` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
 
 ```r
-install.packages(c("digest", "openssl", "tidyverse"))
+install.packages(c("digest", "encryptr", "openssl", "tidyverse"))
 ```
 :::
 
@@ -683,6 +684,202 @@ The encryption is only as strong as the care taken with the passphrase.
 The receiver may not use R. In that case, use an archive tool that supports AES-256 encryption, such as 7-Zip, and choose AES-256 in its settings. The older "ZIP password" method is weak and should not be used. The rules about the passphrase are the same.
 :::
 
+## Encrypting with a pair of keys {#sec-privacy-keys}
+
+The method of the last section has one weakness. The same passphrase locks the file and unlocks it. So the sender and the receiver must both know it, and it has to travel from one to the other. This is called **symmetric** encryption, because both sides hold the same secret.
+
+There is a second kind, called **public key** encryption. Here each person makes a **pair of keys** that belong together.
+
+-   The **public key** can only lock. It cannot unlock anything, not even what it locked itself. So it is safe to give to anyone, by email or on a website.
+-   The **private key** is the only key that unlocks what its public key locked. It stays with the auditor and is never sent to anyone. It is itself protected by a password, so a stolen copy of the file is of no use without the password.
+
+Think of a box of open padlocks. The audit office hands out open padlocks to every department. Anyone can snap one shut on a box. Only the audit office has the key that opens them. No secret ever has to travel.
+
+The `encryptr` package makes this easy for data frames. It is built on `openssl` and uses the RSA method of public key encryption.
+
+### Making the key pair
+
+`genkeys()` makes a key pair. It writes two files, the private key `id_rsa` and the public key `id_rsa.pub`, in the working folder, and asks us to choose a password for the private key.
+
+```{r}
+#| eval: false
+genkeys()
+```
+
+The password is typed in a box and is not shown. Like the passphrase of a file, it cannot be recovered if it is lost.
+
+A book is built without anyone at the keyboard to type a password. `encryptr` asks for the password through `askpass()` of `openssl`, and that function first looks for an R option called `askpass`. So, for this book only, we set that option to a function that supplies the password. In real work we leave the option alone and type the password when asked. We also write the keys to a temporary folder, and never to a project folder that others can see.
+
+```{r}
+key_dir <- file.path(tempdir(), "audit_keys")
+dir.create(key_dir, showWarnings = FALSE)
+private_key <- file.path(key_dir, "audit_key")
+public_key  <- file.path(key_dir, "audit_key.pub")
+unlink(c(private_key, public_key))
+
+# For the book only. In real work, type the password when R asks for it.
+options(askpass = function(prompt) "teak harbour violet 82 lantern")
+
+genkeys(private_key)
+```
+
+Both keys are plain text files. Their first lines show what they are.
+
+```{r}
+readLines(public_key, n = 1)
+readLines(private_key, n = 1)
+```
+
+The word ENCRYPTED tells us that the private key file is itself locked with the password.
+
+### Locking and unlocking a column
+
+`encrypt()` takes a data frame, the columns to lock and the path of the public key. Let us lock the Aadhaar numbers of the first three pensioners.
+
+```{r}
+three <- oap |>
+  select(ben_id, aadhaar) |>
+  head(3)
+
+three_locked <- three |>
+  encrypt(aadhaar, public_key_path = public_key)
+
+three_locked |>
+  mutate(aadhaar = str_trunc(aadhaar, 40))
+```
+
+Each Aadhaar number has become a long string of `r nchar(three_locked$aadhaar[1])` hexadecimal characters. We have shortened them with `str_trunc()` only to fit the page. The other columns are untouched.
+
+`decrypt()` does the reverse. It needs the private key, and so it asks for the password.
+
+```{r}
+three_locked |>
+  decrypt(aadhaar, private_key_path = private_key) |>
+  mutate(aadhaar = mask_aadhaar(aadhaar))
+```
+
+The numbers are back. We mask them before printing, as we would with real data.
+
+### Locking a whole file
+
+RSA can lock only short values, such as an identifier. For a whole file, `encrypt_file()` makes a fresh random key, locks the file with it by AES, and locks that random key with the public key. The result is saved in a file whose name ends in `.encryptr.bin`. `decrypt_file()` reverses both steps with the private key.
+
+Our chapter already has its own functions called `encrypt_file()` and `decrypt_file()`, from @sec-privacy-encrypt. So we write `encryptr::` before the names, which tells R to use the functions of the package.
+
+```{r}
+csv_file <- file.path(key_dir, "matched_pensioners.csv")
+write_csv(found, csv_file)
+
+encryptr::encrypt_file(csv_file, public_key_path = public_key)
+file.remove(csv_file)
+```
+
+Only the locked file is left. The receiver, who holds the private key, opens it.
+
+```{r}
+encryptr::decrypt_file(paste0(csv_file, ".encryptr.bin"),
+                       private_key_path = private_key)
+read_csv(csv_file, show_col_types = FALSE) |> nrow()
+```
+
+All `r nrow(found)` records have come back. Note the direction. The department that holds only the public key can lock files for the auditor, but cannot open them. Even the department cannot open a file once it has locked it.
+
+## Audit use case, a department sends Aadhaar numbers only the auditor can read {#sec-privacy-keyuse}
+
+In @sec-privacy-match the auditor matched the two lists on keyed hashes, and found `r nrow(matches)` of the seven planted persons. The seventh was lost because of two swapped digits in the Treasury list. To find such cases, the auditor must be able to see the actual numbers of a few persons. With a pair of keys, the department can send its whole list and still keep every Aadhaar number unreadable to all but the auditor.
+
+1.  The audit office makes a key pair. It sends the public key to the Social Welfare Department by ordinary email. The private key stays on the auditor's machine.
+2.  The department locks the Aadhaar column with the public key, and sends the list.
+3.  The auditor analyses and matches the list on the other columns.
+4.  The auditor unlocks the Aadhaar numbers of only those few rows that a finding needs.
+
+The department does step 2 with one call to `encrypt()`. It also leaves out the fields the audit has not asked for.
+
+```{r}
+oap_sent <- oap |>
+  select(ben_id, name, gender, dob, district, aadhaar, monthly_pension) |>
+  encrypt(aadhaar, public_key_path = public_key)
+
+oap_sent |>
+  mutate(aadhaar = str_trunc(aadhaar, 30)) |>
+  head(3)
+```
+
+Anyone who intercepts this file sees only long codes in place of the Aadhaar numbers. Without the private key and its password, they cannot be turned back. Unlike a plain hash, they cannot be broken by trying every possible number either, because RSA mixes fresh random bytes into every value it locks. We can see this by locking the same number twice.
+
+```{r}
+twice <- encrypt(tibble(aadhaar = rep(oap$aadhaar[1], 2)), aadhaar,
+                 public_key_path = public_key)
+twice$aadhaar[1] == twice$aadhaar[2]
+```
+
+The same number gives two different codes. This protects the numbers, but it also means that the locked column cannot be used for matching. So in step 3 the auditor matches on name and date of birth, which the Treasury list also has.
+
+```{r}
+candidates <- oap_sent |>
+  inner_join(svc |> select(ppo_no, name, dob, aadhaar_treasury = aadhaar),
+             by = c("name", "dob"))
+
+nrow(candidates)
+```
+
+```{r}
+#| include: false
+cand_planted <- sum(candidates$ben_id %in% common$ben_id)
+```
+
+The match on name and date of birth gives `r nrow(candidates)` persons. All `r cand_planted` are the persons we planted, including the one the hashes missed. These are the only rows whose Aadhaar numbers the auditor needs. Step 4 unlocks them, and compares each number with the Treasury's number after `normalise_id()`.
+
+```{r}
+checked <- candidates |>
+  decrypt(aadhaar, private_key_path = private_key) |>
+  mutate(same_aadhaar = normalise_id(aadhaar) == normalise_id(aadhaar_treasury))
+
+checked |>
+  transmute(ben_id, ppo_no,
+            welfare  = mask_aadhaar(aadhaar),
+            treasury = mask_aadhaar(normalise_id(aadhaar_treasury)),
+            same_aadhaar)
+```
+
+```{r}
+#| include: false
+n_same <- sum(checked$same_aadhaar)
+odd    <- checked |> filter(!same_aadhaar)
+```
+
+For `r n_same` persons the two numbers agree exactly. These are the persons the keyed hashes found. For `r odd$name` (`r odd$ben_id`) the last four digits differ, so the masked forms differ too. Placed side by side, the two full numbers differ only in two neighbouring digits that have changed places. That is a typing error, and not a different person. The auditor can now ask the Treasury to verify this person with the other `r n_same`. The Aadhaar numbers of the other `r nrow(oap_sent) - nrow(candidates)` pensioners were never unlocked.
+
+When the exercise is over, the auditor deletes the decrypted rows and keeps in the working papers only the record IDs, the masked numbers and the replies of the departments.
+
+```{r}
+#| results: hide
+file.remove(c(csv_file, paste0(csv_file, ".encryptr.bin")))
+rm(checked)
+options(askpass = NULL)
+```
+
+### Keyed hash or encryption
+
+Both the keyed hash of @sec-privacy-hmac and the key pair hide Aadhaar numbers. They differ in one important way.
+
+-   **A keyed hash cannot be reversed by anyone**, not even the person who holds the key. The key only lets its holder compute the same code again from a number. Use it when two parties must match their lists and nobody needs the numbers themselves.
+-   **Encryption can be reversed by the holder of the private key.** Use it when the auditor must later see the actual number of a few persons, for example to settle a near match, or to name the persons behind a confirmed finding.
+
+The two can be used together. A department may send a keyed hash for matching and an encrypted copy of the same number for later checking.
+
+::: callout-warning
+## Caution
+
+If the private key file is lost, or its password is forgotten, nothing locked with the public key can ever be opened again. Nobody can recover it, not the package and not the department. Keep a backup of the private key as your organisation's instructions say, with the password stored separately. Never put the private key on a shared drive, in a cloud folder or in an email. If a private key may have been seen by someone else, make a new pair and stop using the old public key.
+:::
+
+::: callout-tip
+## Audit tip
+
+Give each audit its own key pair. When the audit is over, delete the private key along with the data. Any copy of the locked file that remains anywhere then becomes useless to everyone.
+:::
+
 ## What never to do {#sec-privacy-never}
 
 Most leaks do not come from clever attacks. They come from ordinary habits. With audit data, never do any of the following.
@@ -709,7 +906,8 @@ Hashed, tokenised and generalised data is still personal data. Whoever holds the
 6.  **Mask for display.** Show only the last four digits of identifiers in working papers and memos.
 7.  **Check before publishing.** Generalise quasi-identifiers, check k-anonymity with `count()`, and suppress small cells, with secondary suppression where totals are shown.
 8.  **Encrypt before sending.** Encrypt any file that leaves the official machine, and send the passphrase by a different channel.
-9.  **Delete on time.** Remove all copies when the retention period ends.
+9.  **Receive with a key pair.** Give departments the audit's public key, ask them to encrypt identifier columns with it, and unlock only the rows a finding needs.
+10. **Delete on time.** Remove all copies when the retention period ends.
 
 ::: callout-important
 ## Remember
@@ -717,6 +915,7 @@ Hashed, tokenised and generalised data is still personal data. Whoever holds the
 -   Take and keep only the data the audit needs.
 -   A plain hash of a number from a small set can be reversed by trying every value. Use a keyed hash, and keep the key apart from the data.
 -   Masking is for display, hashing is for matching, tokens are for working, encryption is for travelling.
+-   A keyed hash cannot be reversed by anyone. Encryption can be reversed by whoever holds the key. A lost private key or password cannot be recovered.
 -   A table with no names can still identify people through small cells.
 -   Pseudonymised data is still personal data. The duty of care stays with the auditor.
 :::
@@ -739,6 +938,11 @@ Hashed, tokenised and generalised data is still personal data. Whoever holds the
 | `bcrypt_pbkdf()` | openssl | Turn a passphrase into an encryption key, slowly |
 | `aes_cbc_encrypt()`, `aes_cbc_decrypt()` | openssl | Encrypt and decrypt raw bytes with AES |
 | `askpass()` | openssl | Type a passphrase without showing it |
+| `genkeys()` | encryptr | Make a public key and a password protected private key |
+| `encrypt()`, `decrypt()` | encryptr | Lock columns of a data frame with the public key, and unlock them with the private key |
+| `encryptr::encrypt_file()`, `encryptr::decrypt_file()` | encryptr | Lock a whole file with the public key, and unlock it with the private key |
+| `options(askpass = )` | base R | Supply a password without typing it, only for a book or test run |
+| `str_trunc()` | stringr | Shorten long text for printing |
 | `readBin()`, `writeBin()` | base R | Read and write a file as raw bytes |
 | `inner_join()`, `semi_join()` | dplyr | Match hashed lists, and pick the matched records |
 | `count()`, `complete()` | dplyr, tidyr | Size of each group, including empty ones |
@@ -747,6 +951,6 @@ Hashed, tokenised and generalised data is still personal data. Whoever holds the
 | `case_when()` | dplyr | Label cells as "less than 5" or "not shown" |
 | `pivot_wider()` | tidyr | Lay out a count table for a report |
 | `system.time()`, `tryCatch()` | base R | Time a step, and catch an error such as a wrong passphrase |
-| `tempdir()`, `write_csv()`, `read_csv()` | base R, readr | Write a file to a temporary folder and read it back |
+| `tempdir()`, `file.path()`, `readLines()`, `write_csv()`, `read_csv()` | base R, readr | Write a file to a temporary folder and read it back |
 
 : Functions used in this chapter {#tbl-privfunctions}

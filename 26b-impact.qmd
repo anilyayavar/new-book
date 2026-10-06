@@ -1,0 +1,622 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Measuring the Impact of a Scheme {#sec-impact}
+
+In 2022-23 a State gave smart classrooms to about 300 of its 1,500 government high schools. Each school got a projector, a digital board and a library of lessons. Two years later the department reports a success. Pass rates in smart-classroom schools are far higher than in other schools. A performance audit must ask whether the scheme really caused this.
+
+This is one of the most common questions in performance audit. Did the scheme achieve its outcomes? The natural way to answer it is to compare the beneficiaries with everyone else. But this comparison is often misleading. Beneficiaries are rarely chosen at random. The schools that got smart classrooms may have been larger, urban and better run even before the scheme. They would have done better anyway. This is called **selection bias**, and it can make a weak scheme look strong.
+
+**Matching** makes the comparison fair. It pairs each beneficiary with a non-beneficiary that looked the same *before* the scheme. If the two still differ after the scheme, the scheme is the most likely reason.
+
+In this chapter we will first make the naive comparison and see why it misleads. We will then try regression adjustment, from @sec-mregression, as one remedy. Next we learn the idea of matching with three schools, and then apply it to all 1,500 with the `MatchIt` package. Our data has a true effect planted in it, so we can see how close each method comes. The first audit use case turns the result into a finding for the audit report. In the second, matching shows that a skill training scheme made no difference at all.
+
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `cobalt`, `marginaleffects`, `MatchIt`, `sandwich` and `tidyverse`. `marginaleffects` uses `sandwich` in the background to calculate cluster-robust standard errors. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("cobalt", "marginaleffects", "MatchIt", "sandwich", "tidyverse"))
+```
+:::
+
+## A little history
+
+The problem is old. Every comparison of people who chose a treatment with people who did not faces it. In 1983 Paul Rosenbaum and Donald Rubin showed that we need not match on every characteristic separately. It is enough to match on one number, the chance of getting the treatment given those characteristics. They called it the **propensity score**. Since then, matching on the propensity score has been used to evaluate job training, health insurance, school programmes and many other public schemes.
+
+## Prerequisites
+
+We use `MatchIt` to match, `cobalt` to check whether the matched groups are alike, and `marginaleffects` to estimate the effect.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(MatchIt)
+library(cobalt)
+library(marginaleffects)
+```
+
+## Our data, smart classrooms in 1,500 schools {#sec-impact-data}
+
+An imaginary State has 1,500 government high schools. For each school we know four things from 2021-22, the year *before* the scheme.
+
+- `urban` is 1 for a school in a town and 0 for a village school.
+- `enrolment` is the number of students in Class 10.
+- `vacancy_pct` is the percentage of sanctioned teacher posts lying vacant.
+- `pass_2122` is the Class 10 pass percentage in 2021-22.
+
+`smart` is 1 if the school got a smart classroom in 2022-23. `pass_2425` is the Class 10 pass percentage in 2024-25, the outcome the scheme was meant to improve.
+
+We have planted two things. First, schools were not chosen at random. Urban schools, larger schools, schools with better results and schools with fewer vacancies were more likely to be chosen. Second, the smart classroom really does help, but only a little. It raises the pass percentage by exactly **3 percentage points**. Our job is to find this 3 in the data.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the school data"
+set.seed(123)
+n <- 1500
+schools <- tibble(
+  school_id   = sprintf("SCH-%04d", 1:n),
+  urban       = rbinom(n, 1, 0.3),
+  enrolment   = round(rlnorm(n, log(60) + 0.3 * urban, 0.45)),
+  vacancy_pct = round(pmin(pmax(rnorm(n, 18 - 6 * urban, 10), 0), 50)),
+  pass_2122   = round(pmin(pmax(rnorm(n, 68 + 5 * urban - 0.2 * vacancy_pct, 10), 25), 99), 1)
+)
+
+# Planted. Selection. Urban, larger, better and better-staffed schools were more likely to be chosen
+chance <- with(schools, plogis(-2.15 + 1.0 * urban + 1.2 * log(enrolment / 60) +
+                                 0.11 * (pass_2122 - 68) - 0.05 * (vacancy_pct - 15)))
+schools$smart <- rbinom(n, 1, chance)
+
+# Planted. The true effect of a smart classroom is +3 percentage points
+true_effect <- 3
+schools <- schools |>
+  mutate(pass_2425 = round(pmin(pmax(
+    20 + 0.75 * pass_2122 + 2 * urban - 0.12 * vacancy_pct + log(enrolment / 60) +
+      true_effect * smart + rnorm(n, 0, 5), 20), 100), 1))
+```
+
+```{r}
+schools
+```
+
+```{r}
+#| include: false
+n_smart <- sum(schools$smart)
+```
+
+`r n_smart` of the `r format(nrow(schools), big.mark = ",")` schools got a smart classroom.
+
+## The naive comparison {#sec-impact-naive}
+
+The department compares the pass percentage of smart-classroom schools with that of other schools. Let us do the same.
+
+```{r}
+schools |>
+  summarise(schools = n(), mean_pass_2425 = round(mean(pass_2425), 1), .by = smart)
+```
+
+The difference looks large. Is it more than chance? The t-test from @sec-tests-t answers this.
+
+```{r}
+naive_test <- t.test(pass_2425 ~ smart, data = schools)
+naive_test
+```
+
+```{r}
+#| include: false
+naive_diff <- unname(naive_test$estimate[2] - naive_test$estimate[1])
+```
+
+Smart-classroom schools passed `r round(naive_diff, 1)` percentage points more students, and the p-value is tiny. The difference is certainly not chance. This is the department's claim, that pass rates in smart-classroom schools are `r round(naive_diff)` points higher. Yet we know the true effect is only 3 points. Where do the other `r round(naive_diff - 3, 1)` points come from?
+
+The t-test only tells us that the two groups differ. It does not tell us *why*. Let us compare the two groups *before* the scheme, in 2021-22.
+
+```{r}
+schools |>
+  summarise(schools        = n(),
+            urban_share    = round(mean(urban), 2),
+            mean_enrolment = round(mean(enrolment)),
+            mean_vacancy   = round(mean(vacancy_pct), 1),
+            mean_pass_2122 = round(mean(pass_2122), 1),
+            .by = smart)
+```
+
+```{r}
+#| include: false
+before <- schools |> summarise(p = mean(pass_2122), u = mean(urban), .by = smart)
+gap_before <- before$p[before$smart == 1] - before$p[before$smart == 0]
+```
+
+The chosen schools were already ahead. Their pass percentage in 2021-22 was `r round(gap_before, 1)` points higher, before any smart classroom was installed. They were also more often urban, larger, and had fewer vacant posts. @fig-impact-before shows the same picture. Most of the "effect" of the scheme was there before the scheme began.
+
+```{r}
+#| label: fig-impact-before
+#| fig-cap: "Pass percentage in 2021-22, before the scheme. The schools that were later chosen were already ahead."
+#| fig-align: center
+#| out-width: "80%"
+schools |>
+  mutate(group = if_else(smart == 1, "Chosen for smart classroom", "Not chosen")) |>
+  ggplot(aes(pass_2122, fill = group)) +
+  geom_density(alpha = 0.5) +
+  labs(x = "Class 10 pass percentage, 2021-22", y = "Density", fill = NULL) +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+::: callout-warning
+## Caution
+
+A difference between beneficiaries and non-beneficiaries is a fact. It is not, by itself, the effect of the scheme. Before accepting any such claim, always ask how the beneficiaries were chosen, and compare the two groups on what was known before the scheme.
+:::
+
+## Adjusting with regression {#sec-impact-regression}
+
+One remedy is the multiple regression of @sec-mregression. We put the scheme and the earlier characteristics in one model. The coefficient of `smart` is then the difference between schools that are alike on the other variables.
+
+```{r}
+reg_model <- lm(pass_2425 ~ smart + urban + enrolment + vacancy_pct + pass_2122, data = schools)
+round(coef(summary(reg_model)), 3)
+```
+
+```{r}
+#| include: false
+reg_est <- coef(reg_model)["smart"]
+reg_ci <- confint(reg_model)["smart", ]
+```
+
+The estimate falls from `r round(naive_diff, 1)` to `r round(reg_est, 1)` points, close to the true 3. Regression works well here. It works because we built the data with straight-line relationships, and the model has the right shape.
+
+Real data is rarely so kind. Regression has two weaknesses for impact evaluation. First, it assumes a shape for the relationship, and a wrong shape gives a wrong answer. Second, it happily compares a large urban school with a tiny village school, filling the gap with the straight line. It never warns us that some chosen schools have no real counterpart among the others. Matching avoids both problems, and lets us *see* whether the comparison is fair. It is also easier to explain to a department. "We compared each smart-classroom school with a similar school without one" is a sentence anyone can follow. This is the reason we treat matching as the main method, and regression as a check.
+
+## The idea of matching {#sec-impact-idea}
+
+Let us start with just three schools.
+
+```{r}
+three <- tibble(
+  school    = c("GHS Amarpur", "GHS Bhimpur", "GHS Chandganj"),
+  smart     = c(1, 0, 0),
+  urban     = c(1, 1, 0),
+  enrolment = c(95, 90, 30),
+  pass_2122 = c(80, 79, 55),
+  pass_2425 = c(85, 82, 58)
+)
+three
+```
+
+Amarpur got a smart classroom. Its pass percentage rose to 85. To measure the effect, we need to know what Amarpur would have scored *without* the smart classroom. We cannot see that. So we look for a school that was like Amarpur before the scheme, but did not get one.
+
+Chandganj is a small village school with a pass percentage of 55. Comparing Amarpur with it would give an "effect" of 27 points, most of which is just the gap between a strong urban school and a weak village school. Bhimpur is urban, of similar size, and passed 79% in 2021-22, almost the same as Amarpur. Bhimpur is Amarpur's **match**. The difference between them in 2024-25, 85 minus 82, or 3 points, is a fair estimate of the effect.
+
+Matching does exactly this for every beneficiary. With four characteristics and 1,500 schools, finding a close match is harder. Here the **propensity score** helps. It is *the chance of getting the scheme, given what we knew before the scheme*. Two schools with the same score were equally likely to be chosen. One was chosen and one was not, almost as if by a toss of a coin. So comparing them is fair, at least on what we measured. We estimate the score with a logistic regression of `smart` on the earlier characteristics, just like the risk scores of @sec-logistic.
+
+The steps are always the same.
+
+1. **Check balance before matching.** How different are the two groups on the earlier characteristics?
+2. **Match.** Pair each beneficiary with the non-beneficiary closest to it on the propensity score.
+3. **Check balance after matching.** The matched groups should now look alike. If not, change the matching.
+4. **Estimate the effect** on the matched data.
+
+## Matching in R {#sec-impact-match}
+
+### Step 1. Balance before matching
+
+`bal.tab()` from `cobalt` compares the two groups on each characteristic. We give it a formula with the scheme on the left and the earlier characteristics on the right.
+
+```{r}
+bal.tab(smart ~ urban + enrolment + vacancy_pct + pass_2122, data = schools,
+        s.d.denom = "treated", binary = "std", thresholds = c(m = 0.1))
+```
+
+The column `Diff.Un` is the *standardised mean difference*. It is the difference between the two group means, divided by the standard deviation of the beneficiaries. That is what `s.d.denom = "treated"` asks for, and it is also what `matchit()` uses later. This puts all characteristics on one scale, whether they are percentages, counts or yes or no. A common rule of thumb is that a difference below 0.1 is small enough to ignore. Here every characteristic fails the rule, and `pass_2122` most of all, at more than one standard deviation. The two groups are not comparable.
+
+### Step 2. Matching with `matchit()`
+
+`matchit()` estimates the propensity score and finds the matches in one step.
+
+```{r}
+match_out <- matchit(smart ~ urban + enrolment + vacancy_pct + pass_2122, data = schools,
+                     method = "nearest", distance = "glm", caliper = 0.2)
+match_out
+```
+
+The arguments are these.
+
+- The formula lists the scheme and the characteristics known before the scheme. Never put anything measured after the scheme here.
+- `method = "nearest"` is nearest-neighbour matching. Each smart-classroom school is paired with the one other school whose propensity score is closest. Each school is used at most once.
+- `distance = "glm"` estimates the propensity score with a logistic regression.
+- `caliper = 0.2` refuses a partner that is too far away. If no school without a smart classroom has a score within 0.2 standard deviations (of the logit of the score), the smart-classroom school is left unmatched. We come back to these schools below.
+
+### Step 3. Balance after matching
+
+Now we give `bal.tab()` the matching result, and ask it to show the balance both before and after.
+
+```{r}
+bal.tab(match_out, un = TRUE, binary = "std", thresholds = c(m = 0.1))
+```
+
+```{r}
+#| include: false
+bt <- bal.tab(match_out, un = TRUE, binary = "std")$Balance
+max_after <- max(abs(bt$Diff.Adj[-1]))
+```
+
+The first row, `distance`, is the propensity score itself, which `MatchIt` calls the distance. The column `Diff.Adj` shows the differences after matching. All of them are now below 0.1, the largest being `r round(max_after, 3)`. On what we measured, the matched groups look alike. The table also shows the sample sizes. We come back to the unmatched schools in a moment.
+
+A *love plot* shows the same thing in one picture, in @fig-impact-love. Each characteristic has two dots, one before and one after matching. The dashed line is the limit of 0.1.
+
+```{r}
+#| label: fig-impact-love
+#| fig-cap: "Standardised differences between the two groups, before and after matching."
+#| fig-align: center
+#| out-width: "85%"
+love.plot(match_out, binary = "std", abs = TRUE, thresholds = c(m = 0.1),
+          var.order = "unadjusted", colors = c("grey50", "steelblue"))
+```
+
+Let us also look at the matched groups in plain units, which is easier to explain than standardised differences. `match_data()` returns only the matched schools, with two new columns. `weights` is 1 for every matched school here. `subclass` numbers the pairs, so each pair shares one number.
+
+```{r}
+matched <- match_data(match_out)
+
+matched |>
+  summarise(schools        = n(),
+            urban_share    = round(mean(urban), 2),
+            mean_enrolment = round(mean(enrolment)),
+            mean_vacancy   = round(mean(vacancy_pct), 1),
+            mean_pass_2122 = round(mean(pass_2122), 1),
+            .by = smart)
+```
+
+Now the outcome, in 2024-25, for the same matched schools.
+
+```{r}
+matched |>
+  summarise(schools = n(), mean_pass_2425 = round(mean(pass_2425), 1), .by = smart)
+```
+
+Before the scheme, the matched groups had almost the same pass percentage. After the scheme, the smart-classroom schools are ahead by a few points. This gap is our first rough estimate of the effect.
+
+### Schools with no comparable partner {#sec-impact-support}
+
+```{r}
+#| include: false
+unmatched <- schools |>
+  filter(smart == 1, !school_id %in% matched$school_id)
+n_unmatched <- nrow(unmatched)
+n_matched_t <- sum(matched$smart)
+```
+
+`r n_unmatched` smart-classroom schools found no partner within the caliper. Who are they? Let us compare them with the smart-classroom schools that were matched.
+
+```{r}
+schools |>
+  filter(smart == 1) |>
+  mutate(status = if_else(school_id %in% matched$school_id, "Matched", "No partner")) |>
+  summarise(schools        = n(),
+            urban_share    = round(mean(urban), 2),
+            mean_enrolment = round(mean(enrolment)),
+            mean_pass_2122 = round(mean(pass_2122), 1),
+            .by = status)
+```
+
+They are the strongest schools of the State, mostly large urban schools with very good results. Almost every school like them got a smart classroom. So there is no similar school *without* one to compare them with. This is called a lack of **common support**. @fig-impact-support shows it. Above the line are the propensity scores of schools without a smart classroom (`0`), and below it those of the smart-classroom schools (`1`). The left panel is before matching. At the high end of the scale there are many smart-classroom schools, and hardly any others. The right panel is after matching. The two halves now mirror each other closely.
+
+```{r}
+#| label: fig-impact-support
+#| fig-cap: "Propensity scores of the two groups, before and after matching. Above the line, schools without a smart classroom. Below it, smart-classroom schools."
+#| fig-align: center
+#| out-width: "90%"
+#| message: false
+bal.plot(match_out, var.name = "distance", which = "both",
+         type = "histogram", mirror = TRUE)
+```
+
+Dropping these schools is honest. Any estimate for them would rest on guesswork, the straight line of a regression, not on real comparable schools. But we must report it. Our estimate applies to the `r n_matched_t` matched smart-classroom schools, not to all `r n_smart`.
+
+::: callout-tip
+## Audit tip
+
+The unmatched beneficiaries are a finding in themselves. If almost every strong urban school got the scheme, and almost no weak village school did, the scheme may have gone where it was least needed. Compare the list of beneficiaries with the selection criteria in the scheme guidelines.
+:::
+
+### Step 4. Estimating the effect {#sec-impact-effect}
+
+The simplest estimate uses the pairs directly. In each pair, we subtract the control school's pass percentage from the smart-classroom school's. The average of these differences is the effect, and a one-sample t-test, as in @sec-tests-t, gives its confidence interval.
+
+```{r}
+pair_diff <- matched |>
+  arrange(subclass, smart) |>
+  summarise(difference = pass_2425[smart == 1] - pass_2425[smart == 0], .by = subclass)
+
+pair_test <- t.test(pair_diff$difference)
+pair_test
+```
+
+```{r}
+#| include: false
+pair_est <- unname(pair_test$estimate)
+pair_ci <- pair_test$conf.int
+```
+
+The average difference within pairs is `r round(pair_est, 2)` points, with a 95% confidence interval from `r round(pair_ci[1], 2)` to `r round(pair_ci[2], 2)`.
+
+The matches are close, but not perfect. The vignettes of `MatchIt` recommend one more step to remove what remains of the differences. We fit a regression on the matched data, with the scheme and the characteristics. Then `avg_comparisons()` from `marginaleffects` asks the model a plain question. For each smart-classroom school, how much higher is its predicted pass percentage with the scheme than without? It averages the answers.
+
+```{r}
+effect_model <- lm(pass_2425 ~ smart * (urban + enrolment + vacancy_pct + pass_2122),
+                   data = matched, weights = weights)
+
+smart_effect <- avg_comparisons(effect_model, variables = "smart",
+                                vcov = ~subclass,
+                                newdata = subset(matched, smart == 1))
+smart_effect
+```
+
+Three arguments matter.
+
+- `variables = "smart"` names the scheme whose effect we want.
+- `vcov = ~subclass` calculates *cluster-robust* standard errors by pair. The two schools of a pair were chosen together, so they are not independent observations. This makes the confidence interval honest.
+- `newdata = subset(matched, smart == 1)` averages over the smart-classroom schools only. So the answer is the effect of the scheme on the schools that got it. This is what an audit of the scheme wants to know.
+
+The `*` in the formula lets the effect differ between kinds of schools, for example between urban and village schools. `avg_comparisons()` then averages it over the smart-classroom schools, so we need not read the many coefficients ourselves.
+
+```{r}
+#| include: false
+m_est <- smart_effect$estimate
+m_lo <- smart_effect$conf.low
+m_hi <- smart_effect$conf.high
+```
+
+### How close did we come?
+
+Let us put all the estimates side by side with the truth.
+
+```{r}
+tibble(method   = c("Naive comparison", "Regression adjustment",
+                    "Matching, pair differences", "Matching with regression"),
+       estimate = round(c(naive_diff, reg_est, pair_est, m_est), 2),
+       lower_95 = round(c(naive_test$conf.int[2] * -1, reg_ci[1], pair_ci[1], m_lo), 2),
+       upper_95 = round(c(naive_test$conf.int[1] * -1, reg_ci[2], pair_ci[2], m_hi), 2))
+```
+
+The naive comparison says `r round(naive_diff, 1)` points, more than four times the truth. Matching gives `r round(m_est, 2)` points, with a 95% confidence interval from `r round(m_lo, 2)` to `r round(m_hi, 2)`. The true value of 3 lies inside it. The estimate is not exactly 3, and it should not be. The schools vary from year to year for many reasons, and any estimate from data carries this noise. That is why we report a range, not a single number. (The t-test puts the group without smart classrooms first, so we turned its interval around to show smart minus others.)
+
+::: callout-warning
+## Caution
+
+Matching makes the groups alike only on what we measured. Suppose the chosen schools also had more dynamic headmasters, who pushed for the smart classroom and would have improved results anyway. No column records this, so matching cannot balance it, and the estimate will still be too high. Always ask the department how beneficiaries were chosen, and whether anything that is not in the data played a part.
+
+Matching also needs data from *before* the scheme. Characteristics measured afterwards may themselves have been changed by the scheme. Matching on them would hide part of the effect. If the department kept no records from before the scheme, say so, and be careful with any conclusion.
+:::
+
+## Audit use case, what did the smart classrooms achieve? {#sec-impact-schools}
+
+We now have all we need for the audit finding. The department claimed a large effect. The evidence shows a much smaller one. A good finding states both, explains the difference in plain words, and gives the effect as a range.
+
+### Is a small effect worth its cost?
+
+Suppose each smart classroom cost ₹7.5 lakh. How many more students passed because of the scheme? We multiply the estimated effect, and its two limits, by the Class 10 students of the matched smart-classroom schools.
+
+```{r}
+cost_per_school <- 7.5e5
+students <- sum(matched$enrolment[matched$smart == 1])
+
+tibble(estimate      = c("Lower limit", "Central", "Upper limit"),
+       effect_points = round(c(m_lo, m_est, m_hi), 2),
+       extra_passes  = round(students * c(m_lo, m_est, m_hi) / 100),
+       cost_per_pass_rs = round(n_matched_t * cost_per_school /
+                               (students * c(m_lo, m_est, m_hi) / 100)))
+```
+
+```{r}
+#| include: false
+extra <- students * c(m_lo, m_est, m_hi) / 100
+cost_total <- n_matched_t * cost_per_school
+cost_all <- n_smart * cost_per_school
+fmt_inr <- function(x) format(round(x), big.mark = ",", scientific = FALSE)
+```
+
+The `r n_matched_t` matched schools had `r fmt_inr(students)` students in Class 10. The scheme helped about `r round(extra[2])` more of them pass in 2024-25. The range is from `r round(extra[1])` to `r round(extra[3])`. These schools cost ₹`r round(cost_total / 1e7, 1)` crore. That is roughly ₹`r round(cost_total / extra[2] / 1e5, 2)` lakh for each extra student who passed, in the first year.
+
+Is that good value? Statistics cannot answer this alone. The classrooms will serve later batches too, which lowers the cost per pass. On the other hand, the same money might have filled vacant teacher posts, which also raise results. This is a value-for-money question for the audit to put to the department, with the numbers above as its basis.
+
+### Phrasing the finding
+
+A finding based on this analysis might read as follows.
+
+> The Department reported that Class 10 pass rates in schools with smart classrooms were `r round(naive_diff)` percentage points higher than in other schools. Audit observed that schools were not chosen at random. Schools selected for smart classrooms already had pass rates `r round(gap_before, 1)` points higher in 2021-22, before the scheme. When each smart-classroom school was compared with a similar school without one, the scheme was found to have raised pass rates by about `r round(m_est, 1)` percentage points (95% confidence interval `r round(m_lo, 1)` to `r round(m_hi, 1)` points). Most of the difference reported by the Department therefore existed before the scheme began. A further `r n_unmatched` beneficiary schools, mostly large urban schools with high pass rates, had no comparable school without a smart classroom, and their results could not be evaluated.
+
+Notice what the finding does. It does not say the scheme failed. The scheme had a real, positive effect. It says the Department's claim was about `r round(naive_diff / m_est, 1)` times the effect, and why. It gives a range, not a single number. And it is open about the schools that could not be evaluated.
+
+::: callout-tip
+## Audit tip
+
+Keep the matching code, the balance table and the love plot in the working papers. When the department disputes the finding, the balance table is the strongest answer. It shows, characteristic by characteristic, that the comparison was between like and like.
+:::
+
+### What the auditor does next
+
+1. **Check the selection.** Obtain the selection orders and criteria for smart classrooms. Find out whether anything not in our data, like a headmaster's request or a local representative's recommendation, played a part.
+2. **Check the robustness.** Run the matching again with a different caliper, or with two controls for each school (`ratio = 2`), and with regression adjustment. If all give a similar range, the finding is solid.
+3. **Verify use.** A small effect may also mean the classrooms are not used. Visit a sample of schools, and check the usage logs, power supply and teacher training.
+4. **Raise the value-for-money question** with the department, using the cost per extra pass.
+
+## Audit use case, a skill training scheme that made no difference {#sec-impact-skills}
+
+Matching does not only shrink effects. It can also show that a scheme made no difference at all. Let us see this with a skill training scheme.
+
+An imaginary State runs a free three-month skill training course for unemployed youth. In 2023-24, 4,000 young people registered with the State's employment portal, and some of them joined the course. A year later, a tracer survey recorded whether each of them was employed. The department reports that trained youth were far more likely to find work.
+
+We have planted two things again. Better-educated youth were much more likely to join the course, and they are also more likely to find work anyway. And the course itself has **no effect at all** on employment.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the skill training data"
+set.seed(9)
+n <- 4000
+youth <- tibble(
+  youth_id      = sprintf("YT-%05d", 1:n),
+  age           = sample(18:30, n, TRUE),
+  female        = rbinom(n, 1, 0.45),
+  rural         = rbinom(n, 1, 0.6),
+  schooling     = sample(c(8, 10, 12, 15), n, TRUE, prob = c(0.2, 0.35, 0.3, 0.15)),
+  worked_before = rbinom(n, 1, 0.35)
+)
+
+# Planted. Better-educated and urban youth were more likely to join the course
+youth$trained <- rbinom(n, 1, plogis(with(youth, -1.6 + 0.35 * (schooling - 10) - 0.4 * rural +
+                                              0.2 * worked_before - 0.03 * (age - 24))))
+
+# Planted. Employment depends on schooling and experience, NOT on the course
+youth$employed <- rbinom(n, 1, plogis(with(youth, -0.9 + 0.3 * (schooling - 10) - 0.5 * female -
+                                               0.3 * rural + 0.8 * worked_before +
+                                               0.03 * (age - 24))))
+```
+
+```{r}
+youth
+```
+
+`schooling` is the years of schooling, where 15 means a graduate. `worked_before` is 1 for youth who had worked before registering. All these were recorded at registration, before the course.
+
+### The naive comparison
+
+Employment is a yes or no outcome, so we compare two rates with `prop.test()`, from @sec-tests-prop.
+
+```{r}
+youth |>
+  summarise(youth = n(), n_employed = sum(employed),
+            employment_rate = round(mean(employed), 3), .by = trained)
+
+naive_youth <- prop.test(x = c(sum(youth$employed[youth$trained == 1]),
+                               sum(youth$employed[youth$trained == 0])),
+                         n = c(sum(youth$trained == 1), sum(youth$trained == 0)))
+```
+
+```{r}
+#| include: false
+nv <- naive_youth$estimate
+n_trained <- sum(youth$trained)
+```
+
+`r round(100 * nv[1], 1)`% of trained youth found work, against `r round(100 * nv[2], 1)`% of the others, a difference of `r round(100 * (nv[1] - nv[2]), 1)` percentage points. The p-value is `r if (naive_youth$p.value < 0.0001) "less than 0.0001" else round(naive_youth$p.value, 4)`. On its face, the course works.
+
+### Matching
+
+We follow the same four steps. First the balance before matching.
+
+```{r}
+bal.tab(trained ~ age + female + rural + schooling + worked_before, data = youth,
+        s.d.denom = "treated", binary = "std", thresholds = c(m = 0.1))
+```
+
+Schooling is badly out of balance, and rural youth are fewer among the trained. Now we match and check the balance again.
+
+```{r}
+match_youth <- matchit(trained ~ age + female + rural + schooling + worked_before,
+                       data = youth, method = "nearest", distance = "glm", caliper = 0.2)
+bal.tab(match_youth, binary = "std", thresholds = c(m = 0.1))
+```
+
+```{r}
+#| include: false
+matched_youth <- match_data(match_youth)
+n_unm_youth <- n_trained - sum(matched_youth$trained)
+```
+
+Every characteristic is now balanced, and `r if (n_unm_youth == 0) "every trained youth found a partner" else paste(n_unm_youth, "trained youth found no partner")`. Since the outcome is yes or no, we use a logistic regression, as in @sec-logistic, in place of `lm()`. `avg_comparisons()` then reports the effect as a difference in the chance of employment.
+
+```{r}
+youth_model <- glm(employed ~ trained * (age + female + rural + schooling + worked_before),
+                   data = matched_youth, weights = weights, family = binomial)
+
+training_effect <- avg_comparisons(youth_model, variables = "trained",
+                                   vcov = ~subclass,
+                                   newdata = subset(matched_youth, trained == 1))
+training_effect
+```
+
+```{r}
+#| include: false
+y_est <- 100 * training_effect$estimate
+y_lo <- 100 * training_effect$conf.low
+y_hi <- 100 * training_effect$conf.high
+cost_trainee <- 32000
+```
+
+The estimated effect is `r round(y_est, 1)` percentage points, with a 95% confidence interval from `r round(y_lo, 1)` to `r round(y_hi, 1)`. The interval includes zero. The `r round(100 * (nv[1] - nv[2]), 1)` points of the naive comparison came from *who* joined the course, not from the course itself. Trained youth found work more often because they were better educated to begin with.
+
+### Reading a zero honestly
+
+"No evidence of an effect" is not quite the same as "proof of no effect". The interval tells us how large an effect could still be hiding. Here the course might at most raise employment by about `r round(y_hi, 1)` points, and it might even lower it slightly. It certainly does not raise it by anything like the `r round(100 * (nv[1] - nv[2]))` points the naive figures suggest. If the course costs ₹`r fmt_inr(cost_trainee)` a trainee, the State spent about ₹`r round(n_trained * cost_trainee / 1e7, 2)` crore on `r fmt_inr(n_trained)` trainees, for no measurable gain in employment.
+
+A finding might read as follows.
+
+> The Department reported that `r round(100 * nv[1])`% of youth trained under the scheme were employed, against `r round(100 * nv[2])`% of untrained youth. Audit observed that trained youth were better educated than untrained youth even before training. When each trained youth was compared with an untrained youth of the same age, sex, area, schooling and work experience, no difference in employment was found (estimated effect `r round(y_est, 1)` percentage points, 95% confidence interval `r round(y_lo, 1)` to `r round(y_hi, 1)` points).
+
+### What the auditor does next
+
+1. **Look inside the course.** A course with no effect may be poorly taught, in trades with no local demand, or not completed. Check attendance, the trades offered, and assessment and certification records.
+2. **Check the placement claims.** If training partners are paid for placements, verify a sample of reported placements with employers and with provident fund records.
+3. **Report the range.** Do not write that the course "failed completely". Write that it showed no measurable effect, and give the interval.
+
+::: callout-note
+## Other designs auditors may meet
+
+Matching is one of several ways to measure impact. Two others appear often in evaluation reports that auditors read.
+
+- **Difference in differences.** When we have the outcome both before and after the scheme, for both beneficiaries and others, we can compare how much each group *changed*. The change in the comparison group stands in for what would have happened without the scheme. It also removes differences that stay fixed over time, even unmeasured ones, like a good headmaster who was there throughout.
+- **Randomised pilots.** When a department tries a scheme first in randomly chosen villages or schools, the two groups are alike on everything, measured or not. A simple comparison of means is then fair. This is the strongest evidence of all, and auditors may recommend it before a scheme is scaled up.
+
+Both need planning before the scheme starts. An audit can ask whether the department built such an evaluation into the scheme at all.
+:::
+
+## A suggested workflow
+
+1. **Write down the claim.** What outcome did the scheme promise, and what does the department say it achieved?
+2. **Find out how beneficiaries were chosen.** Read the guidelines and selection orders. This tells you what to match on, and what may be missing.
+3. **Collect data from before the scheme** for beneficiaries and others, along with the outcome after it.
+4. **Make the naive comparison**, and compare the groups before the scheme. A large gap before the scheme is a warning of selection bias.
+5. **Check balance** with `bal.tab()`.
+6. **Match** with `matchit()`, using only characteristics measured before the scheme.
+7. **Check balance again**, with `bal.tab()` and `love.plot()`. If any difference stays above 0.1, change the matching, for example with a tighter caliper.
+8. **Look at the unmatched beneficiaries.** Report how many there are and who they are.
+9. **Estimate the effect** with `lm()` or `glm()` and `avg_comparisons()`, with cluster-robust standard errors by pair. Check it against the simple pair differences and against regression.
+10. **Report the effect as a range**, with the claim beside it, and raise the question of value for money.
+
+::: callout-important
+## Remember
+
+- A gap between beneficiaries and others is not the effect of a scheme. Beneficiaries are usually different to begin with.
+- Matching compares each beneficiary with a similar non-beneficiary, on what was known before the scheme.
+- The propensity score is the chance of getting the scheme, given what we knew before. Matching on it balances many characteristics at once.
+- Always check balance before and after matching. Matching that does not balance the groups has not done its job.
+- Matching cannot fix differences that were never measured.
+- Report the effect with its range, and say for which beneficiaries it holds.
+:::
+
+## Where next
+
+Matching estimates the effect of a scheme. The size of that effect then feeds the value-for-money questions of performance audit, alongside the efficiency comparisons of @sec-dea. For the tests used on the naive comparisons, see @sec-tests. For regression as a check, see @sec-mregression, whose section on Simpson's paradox shows another way a hidden variable can mislead. To present the finding in a reproducible report, see @sec-reports.
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `t.test()` | stats | Compares two means, and gives the confidence interval of a mean difference |
+| `prop.test()` | stats | Compares two rates |
+| `lm()`, `glm()` | stats | Fits the regression used for adjustment and for the effect on matched data |
+| `bal.tab()` | cobalt | Standardised differences between the groups, before and after matching |
+| `love.plot()` | cobalt | Plots the balance of each characteristic before and after matching |
+| `bal.plot()` | cobalt | Plots the distribution of a characteristic or the propensity score in both groups |
+| `matchit()` | MatchIt | Estimates the propensity score and matches beneficiaries with non-beneficiaries |
+| `match_data()` | MatchIt | Returns the matched data, with weights and pair numbers |
+| `avg_comparisons()` | marginaleffects | Average effect of the scheme from a fitted model, with robust standard errors |
+| `tibble()`, `mutate()`, `filter()`, `summarise()` | tidyverse | Build the data and the tables of results |
+
+: Functions used in this chapter {#tbl-impactfunctions}
