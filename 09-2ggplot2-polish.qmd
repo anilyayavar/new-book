@@ -138,6 +138,16 @@ budget_vs_exp <- spend |>
 over <- budget_vs_exp |> filter(amt_exp > amt_be)
 ```
 
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `colorspace`, `patchwork`, `RColorBrewer`, `scales` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("RColorBrewer", "colorspace", "patchwork", "scales", "tidyverse"))
+```
+:::
+
 ## Modifying scales
 
 Scales control how data values become what we see. They turn amounts into positions on an axis, categories into colours, and values into sizes. Through scales, we can change the axes, the colours, the sizes and the shapes of a chart.
@@ -219,7 +229,7 @@ So far, the scales dealt with numbers. There are scale functions for other kinds
 -   `scale_x_discrete()`
 -   `scale_x_binned()`
 
-Let us use a date scale on the monthly total of the scheme (@fig-scale4). We also show the amounts in crore, with a function from the package `scales`. We will learn more about it shortly.
+Let us use a date scale on the monthly total of the scheme (@fig-scale4). We also show the amounts in ₹ crore, with a function from the package `scales`. We will learn more about it shortly.
 
 ```{r fig-scale4, warning=FALSE, message=FALSE, fig.align='center', fig.show='hold',  fig.cap="Date scale and amounts in crore"}
 ggplot(monthly_total, aes(month_start, exp_crore)) +
@@ -239,7 +249,7 @@ In @fig-scale4 we have changed six things, all with scale functions.
 -   The labels, to show the month and two digits of the year.
 -   The range of the data shown, with `limits`.
 -   The title of the `y` axis.
--   The labels of the `y` axis, to show amounts in crore.
+-   The labels of the `y` axis, to show amounts in ₹ crore.
 
 The package `scales` gives many functions to format the labels of an axis. In @fig-scale3 each point is a district. The `x` axis shows the total expenditure of the year, with commas, through `label_comma()`. The `y` axis shows the share of March in that expenditure, as a percentage, through `label_percent()`.
 
@@ -303,7 +313,7 @@ A secondary axis can mislead. Readers may compare two lines or bars that are not
 
 A secondary axis is added with the function `sec_axis()`, given to the argument `sec.axis` of a scale. Its first argument, `transform`, takes a formula in the `~` style, where `.` stands for the values of the main axis. It also takes `name` and the other usual arguments, like `labels`.
 
-In @fig-scale6 the bars show the total expenditure of each month, in crore. The secondary axis on the right shows the same amount as a percentage of the total budget of the scheme. Here we use `stat = "summary"` with `fun = sum`, so that `geom_bar()` adds up the rows of each month.
+In @fig-scale6 the bars show the total expenditure of each month, in ₹ crore. The secondary axis on the right shows the same amount as a percentage of the total budget of the scheme. Here we use `stat = "summary"` with `fun = sum`, so that `geom_bar()` adds up the rows of each month.
 
 ```{r fig-scale6, fig.show='hold', fig.align='center', fig.cap="Adding secondary axis"}
 total_be_crore <- sum(budget$amt_be) / 1e7
@@ -325,7 +335,7 @@ The total budget of the scheme is ₹`r round(total_be_crore, 2)` crore. So the 
 
 ### Customising colour (or fill) mappings
 
-*Readers may read* @sec-COLORR *where colours are discussed in detail.* We know that a continuous variable mapped to colour gives a gradient of colours, and a discrete variable gives separate colours.
+How to choose good colours is discussed in @sec-ggplot2-colours, below. We know that a continuous variable mapped to colour gives a gradient of colours, and a discrete variable gives separate colours.
 
 For continuous variables, ggplot2 uses the function `scale_fill_continuous()`, which in turn uses `scale_fill_gradient()`. The default colours of `scale_fill_gradient()` are given in its arguments, shown below for its `colour` version. Every `fill` scale function has a matching `colour` scale function, for the `colour` aesthetic.
 
@@ -347,7 +357,7 @@ So we may change the colours at the two ends of the gradient. There are two more
 -   `scale_fill_gradient2()` makes a three-colour gradient, with a chosen `midpoint`.
 -   `scale_fill_gradientn()` makes a gradient of any number of colours.
 
-`scale_fill_gradient2()` is very useful in audit, because we often have a natural middle value. Let us redraw the heat-map of @fig-rgg9. This time, each box shows the share of the month in the district's expenditure for the year. In an even year, each month would carry one-twelfth. So we set the `midpoint` to `1/12`. Months above it turn red, and months below it turn green.
+`scale_fill_gradient2()` is very useful in audit, because we often have a natural middle value. Let us redraw the heat-map of @fig-rgg9. This time, each box shows the share of the month in the district's expenditure for the year. In an even year, each month would carry one-twelfth. So we set the `midpoint` to `1/12`. Months above it turn red, and months below it turn blue.
 
 ```{r fig-rgg53, fig.show='hold', fig.align='center', fig.cap="Customising fill scale with a midpoint"}
 spend |>
@@ -355,7 +365,7 @@ spend |>
   mutate(share = exp / sum(exp), .by = district) |>
   ggplot(aes(month, district)) +
   geom_tile(aes(fill = share)) +
-  scale_fill_gradient2(low = "seagreen",
+  scale_fill_gradient2(low = "steelblue",
                        high = "firebrick",
                        midpoint = 1 / 12,
                        labels = scales::label_percent())
@@ -365,7 +375,7 @@ In @fig-rgg53 March of Fatehpur and Rampur is now dark red, while the other mont
 
 If the variable mapped to `fill` or `colour` is discrete, ggplot2 uses `scale_fill_discrete()`. By default, this takes its colours from `scale_fill_hue()`.
 
-For discrete colours, it is usually better to use the `brewer` palettes described in @sec-COLORR. If we want to choose the colours ourselves, we use `scale_fill_manual()`. It takes the colours from a named vector, whose names are the categories in the data. See the example in @fig-rgg54.
+For discrete colours, it is usually better to use the `brewer` palettes described in @sec-ggplot2-colours. If we want to choose the colours ourselves, we use `scale_fill_manual()`. It takes the colours from a named vector, whose names are the categories in the data. See the example in @fig-rgg54.
 
 ::: {#fig-rgg54}
 
@@ -408,6 +418,55 @@ Identity colour scale
 :::
 
 In the first chart, ggplot2 treats the colour names as ordinary categories and picks its own colours. In the second, `scale_fill_identity()` uses the colours as they are, and draws no legend.
+
+### Choosing colours for audit charts {#sec-ggplot2-colours}
+
+An audit report is read by busy people. A Secretary, a member of the Public Accounts Committee or a journalist may look at a chart for a few seconds only. In that time the colours do much of the talking. Red is read as a warning, a loss or a shortfall. A chart that colours the districts with *savings* in red sends the wrong message before anyone reads a number.
+
+Colour also has to work for every reader. About 8% of men and 0.5% of women have some form of colour blindness. The most common form is difficulty in telling red from green, the very pair most often used for "bad" and "good". Audit reports are also often printed in black and white. So good colours differ in lightness as well as in hue.
+
+**Three kinds of palette.** A *palette* is a set of colours chosen to work together. Which kind to use depends on the data.
+
+-   *Sequential* palettes go from light to dark, for ordered values like expenditure by district.
+-   *Diverging* palettes move away from a neutral middle towards two extremes, for values above and below a meaningful middle, like savings and excesses against a budget.
+-   *Qualitative* palettes give equal weight to every colour, for categories with no order, like schemes or departments.
+
+**Brewer palettes.** The cartographer Cynthia Brewer designed sets of colours that work well together, many of them safe for colour-blind readers. The package `RColorBrewer` makes them available in R. `display.brewer.all(colorblindFriendly = TRUE)` shows only the safe ones (@fig-brewer-cb). In ggplot2 they are used with `scale_fill_brewer()` or `scale_colour_brewer()`, and in base R charts with `brewer.pal()`.
+
+```{r fig-brewer-cb, fig.align='center', fig.height=7, fig.cap="Brewer palettes that are safe for colour-blind readers. Sequential palettes first, then qualitative, then diverging."}
+library(RColorBrewer)
+display.brewer.all(colorblindFriendly = TRUE)
+```
+
+**HCL palettes.** The package `colorspace` builds palettes on the HCL model (hue, chroma and luminance), which matches the way people see colour. Its ggplot2 scales are named `scale_<aesthetic>_<datatype>_<palette type>()`. For example, `scale_fill_continuous_diverging()` gives a diverging palette for a continuous variable.
+
+Let us use it on the budget table of our scheme. Utilisation has a natural middle, 100% of the budget. Districts below it are shaded blue, and districts above it red. The further a district is from 100%, the stronger its colour.
+
+```{r fig-colour-util, fig.align='center', fig.cap="Budget utilisation with a diverging palette around 100 per cent"}
+library(colorspace)
+budget_vs_exp |>
+  mutate(util = amt_exp / amt_be * 100,
+         district = fct_reorder(district, util)) |>
+  ggplot(aes(util, district, fill = util)) +
+  geom_col() +
+  geom_vline(xintercept = 100, linetype = "dashed") +
+  scale_fill_continuous_diverging(palette = "Blue-Red 3", mid = 100) +
+  labs(x = "Expenditure as per cent of budget", y = NULL, fill = "Per cent")
+```
+
+We have used the `"Blue-Red 3"` palette, a strong version of blue against red, not `"Red-Green"`. Blue and red stay distinct for colour-blind readers, and the change in strength still shows when the chart is printed in black and white. In @fig-colour-util, the `r budget_vs_exp |> filter(amt_exp > amt_be) |> nrow()` districts that spent more than their budget are red. Districts that spent far less than their budget, like `r budget_vs_exp |> slice_min(amt_exp / amt_be, n = 1) |> pull(district)`, are deep blue. Both deserve a question in audit, one about excess spending and the other about funds left unspent.
+
+**Colours by name and by code.** R knows more than 600 colours by name, listed by `colors()`, such as `"firebrick"` or `"steelblue"`. A colour can also be given by its hex code, a `#` followed by six hexadecimal digits for the amounts of red, green and blue. For example, `"#B22222"` is the same as `"firebrick"`. Hex codes are useful when a report must follow a fixed house style, since the exact shade can be repeated in every chart.
+
+::: callout-tip
+## Audit tip
+A few rules serve well in audit charts.
+
+-   Use colour to carry *one* message. Show the exceptions in red and everything else in grey, rather than giving every category its own bright colour.
+-   Keep red for shortfalls, losses and exceptions. Pair it with grey or blue, not green.
+-   Choose a sequential palette for ordered values, a diverging one around a meaningful middle, and a qualitative one only for unordered categories.
+-   Check the chart in black and white before it goes into the report.
+:::
 
 ### Other scale aesthetics
 
@@ -531,7 +590,7 @@ Label adjustments in donut charts with radial coordinates
 Pie and donut charts are popular, but people compare angles and areas poorly. With more than three or four slices, a sorted bar chart is almost always easier to read. Use a pie chart only to show a few shares of one whole.
 :::
 
-`coord_radial()` can do much more. One last example draws a bar chart in a circle (@fig-rgg61). Each bar is a district, and its height is the expenditure of the year in crore. The bars are coloured by division.
+`coord_radial()` can do much more. One last example draws a bar chart in a circle (@fig-rgg61). Each bar is a district, and its height is the expenditure of the year in ₹ crore. The bars are coloured by division.
 
 ```{r fig-rgg61, warning=FALSE, message=FALSE, fig.show='hold', fig.align='center', fig.cap="Bar plot in circle"}
 spend |>
@@ -796,7 +855,7 @@ One line gives a consistent house style, without changing a dozen theme elements
 
 A district officer may pass a bill of up to ₹2 lakh. A larger purchase needs the sanction of a higher authority, and often a tender. An officer who wants to avoid this may split one large purchase into several bills, each just below ₹2 lakh. This is called *splitting of bills* or *splitting of sanctions*. In @fig-rgg21 we saw a hint of it. Let us now examine it properly.
 
-First, let us look closely at the bills between ₹1.5 lakh and ₹2.5 lakh. Bins of ₹5,000 end exactly at the limit, through `boundary`. Amounts are shown in lakh.
+First, let us look closely at the bills between ₹1.5 lakh and ₹2.5 lakh. Bins of ₹5,000 end exactly at the limit, through `boundary`. Amounts are shown in ₹ lakh.
 
 ```{r fig-split1, fig.align='center', fig.cap="Bills between 1.5 and 2.5 lakh, with the limit of 2 lakh"}
 near_limit <- bills |>
@@ -861,7 +920,7 @@ What should the auditor do next?
 
 ## Audit use case, a chart for the audit report {#sec-ggplot2-audit}
 
-Let us put several features together, in the kind of chart that appears in audit reports. For each of the 12 districts, we have the budget estimate and the expenditure of the year. We want to show the *utilisation*, that is, the expenditure as a percentage of the budget. We want the districts sorted, the amounts in lakh, and the districts that spent more than their budget highlighted. The table `budget_vs_exp`, made for @fig-rgg52 and rebuilt at the start of this chapter, has what we need.
+Let us put several features together, in the kind of chart that appears in audit reports. For each of the 12 districts, we have the budget estimate and the expenditure of the year. We want to show the *utilisation*, that is, the expenditure as a percentage of the budget. We want the districts sorted, the amounts in ₹ lakh, and the districts that spent more than their budget highlighted. The table `budget_vs_exp`, made for @fig-rgg52 and rebuilt at the start of this chapter, has what we need.
 
 ```{r}
 #| label: fig-utilisation
@@ -898,7 +957,7 @@ Each choice in this chart serves the reader.
 -   The districts are sorted by utilisation with `fct_reorder()`, so the order itself tells the story.
 -   Only the districts that exceeded their budget are in colour. Everything else is grey, so the eye goes straight to them.
 -   The dashed line at 100% gives a reference. The reader does not have to judge the lengths of the bars.
--   The labels show the expenditure in lakh, the unit used in Indian government reports, with `scales::label_number(scale = 1e-5, suffix = " lakh")`.
+-   The labels show the expenditure in ₹ lakh, the unit used in Indian government reports, with `scales::label_number(scale = 1e-5, suffix = " lakh")`.
 -   The title says what is shown, and the caption explains the marks.
 
 @fig-utilisation shows that `r over$district[1]` spent `r round(over$util[1] * 100)`% of its budget, an excess of ₹`r lakh(over$excess[1])` lakh. `r over$district[2]` spent `r round(over$util[2] * 100)`%, an excess of ₹`r lakh(over$excess[2])` lakh. The next steps for the auditor are to check whether the excess was covered by a re-appropriation or a supplementary grant, and whether it was regularised. Notice also that these are the same two districts flagged earlier. In @sec-geoms, Lalganj paid large bills within a day. In @sec-ggplot2-split, Devgarh split its bills. A chart that brings several findings together is strong evidence for the report.
@@ -1036,6 +1095,9 @@ Our charts group the data by districts, categories and months. In R, such groups
 | `expansion()`, `sec_axis()` | ggplot2 | Space at the ends of an axis, and a secondary axis |
 | `scale_fill_gradient()`, `scale_fill_gradient2()`, `scale_fill_gradientn()` | ggplot2 | Colour gradients for continuous variables |
 | `scale_fill_manual()`, `scale_fill_identity()`, `scale_shape_identity()` | ggplot2 | Colours or shapes chosen by us, or taken from the data |
+| `display.brewer.all()`, `brewer.pal()`, `scale_fill_brewer()` | RColorBrewer, ggplot2 | Show and use the Brewer palettes |
+| `scale_fill_continuous_diverging()` and other HCL scales | colorspace | Palettes based on hue, chroma and luminance |
+| `colors()` | grDevices | Names of R's built-in colours |
 | `label_percent()`, `label_comma()`, `label_number()`, `label_currency()` | scales | Format axis and data labels |
 | `coord_cartesian()`, `coord_flip()`, `coord_polar()`, `coord_radial()` | ggplot2 | Coordinate systems, zooming, and pie or donut charts |
 | `facet_wrap()`, `facet_grid()` | ggplot2 | Small multiples, one panel per group |

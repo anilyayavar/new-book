@@ -1,0 +1,752 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Protecting Personal Data {#sec-privacy}
+
+An audit party examining an old age pension scheme asks the district office for its list of beneficiaries. The file arrives on a pen drive. It has the name, date of birth, Aadhaar number, mobile number, bank account, caste category and disability status of every pensioner in the district. Within a week, copies of it sit on two laptops, in an email account and in a folder shared with the whole team. Nobody meant any harm. But if any one of those copies leaks, thousands of old people can be cheated, harassed or embarrassed, and the audit office will be the source of the leak.
+
+Auditors receive such data all the time. Pay bills carry PAN and bank accounts. Scholarship lists carry caste. Health schemes carry diagnoses. We need this data to do our work. We also have a duty to protect it while we hold it, and to let go of it when the work is done.
+
+In this chapter we learn practical ways to do this in R. We first sort the fields of a list by how much harm they can do. We then learn to mask numbers for display, to replace identifiers with hashes and tokens, and to see why a plain hash is not enough. We check a table for small groups of people who could be recognised before it goes into a report. Finally, we encrypt a file before it leaves our computer. Two audit use cases show the methods at work. In the first, two departments find the persons common to their lists without sending each other a single Aadhaar number. In the second, a district table is made safe for publication.
+
+@sec-file-hash used a hash to prove that a file has not changed. Here we use the same tool for a different purpose, to hide a value while keeping it usable.
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(openssl)
+library(digest)
+```
+
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `digest`, `openssl` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("digest", "openssl", "tidyverse"))
+```
+:::
+
+## Why it matters {#sec-privacy-why}
+
+Three reasons make the protection of personal data a part of the auditor's job.
+
+-   **Duty of care.** The people in our data did not choose to give it to us. They gave it to a government office to get a pension, a scholarship or a ration card. The audit office receives it only because the law allows audit to see the records. That trust passes to us with the data.
+-   **The law.** India has a law on this subject, the Digital Personal Data Protection Act, 2023. It covers personal data in digital form, that is, data about a person who can be identified from it. It places duties on whoever decides why and how such data is processed. In broad terms, data must be used only for a lawful purpose, kept safe with reasonable security safeguards, and not kept once the purpose is served unless another law requires it. A breach must be reported, and the penalties for failing to protect data can be heavy. The Act and the rules made under it are being brought into force in stages. The Aadhaar law separately restricts the display and publication of Aadhaar numbers. How these laws apply to audit work is a matter for the instructions of your own organisation. The duty of care does not depend on that answer.
+-   **Data minimisation.** The safest data is data we never took. Ask only for the fields the audit needs. Drop the rest as soon as the data arrives. Delete the working copies when the retention period ends.
+
+::: callout-tip
+## Audit tip
+
+When writing the requisition for data, list the fields the audit needs and the reason for each. If the test is whether pensioners are alive and below an income limit, we may need the Aadhaar number for matching but not the caste or the mobile number. A short requisition protects the people in the data and also reduces the work of the auditee.
+:::
+
+## Our data, an old age pension list {#sec-privacy-data}
+
+The Social Welfare Department of an imaginary state pays an old age pension of ₹1,000 a month, and ₹1,500 to a person with a disability. Under the scheme rules of our example, a person who already draws a government service pension is not eligible. We have two lists.
+
+-   `oap`, the old age pension list of five districts. For each beneficiary it has an ID, name, gender, date of birth, Aadhaar number, mobile number, bank account, IFSC, PIN code, district, social category, disability status and monthly pension.
+-   `svc`, the list of service pensioners kept by the Treasury. It has the pension payment order (PPO) number, name, date of birth, Aadhaar number, PAN and monthly pension.
+
+The code below creates both lists and plants the cases we will find.
+
+-   Seven persons are on both lists. In the Treasury list their Aadhaar numbers are written with spaces or hyphens, and one has two digits swapped by a typing error.
+-   Hillpur is a small hill district with few beneficiaries, most of them from the Scheduled Tribes. A few beneficiaries are more than 90 years old.
+-   All mobile numbers come from one series, so that we can show how a plain hash is broken.
+
+::: callout-note
+Everything in this chapter is simulated. The names are made up. The Aadhaar numbers are random 12 digit strings and the PAN are random strings in the PAN pattern. Mobile numbers, bank accounts, IFSC and PIN codes are invented too. Because the data is simulated, we print it in full in this section so that the reader can see what we are protecting. With real data, we would not print identifiers on screen or in a report at all.
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the pension lists"
+set.seed(2026)
+
+districts <- tibble(
+  district = c("Sonpur", "Rajgarh", "Nandgaon", "Bhimnagar", "Hillpur"),
+  size     = c(170, 150, 130, 110, 40),
+  pin_base = c(841100, 842200, 843300, 844400, 845500)
+)
+
+female <- c("Kamla", "Savitri", "Shanti", "Geeta", "Lakshmi", "Parvati", "Sita",
+            "Radha", "Sushila", "Kaushalya", "Pushpa", "Bimla", "Sarla", "Usha")
+male   <- c("Ramesh", "Suresh", "Mohan", "Shyam", "Hari", "Gopal", "Raghunath",
+            "Bhola", "Kishan", "Jagdish", "Mahesh", "Prakash", "Dinesh", "Ramlal")
+surname <- c("Devi", "Kumar", "Singh", "Yadav", "Prasad", "Mahto", "Oraon",
+             "Munda", "Paswan", "Sharma", "Gupta", "Verma", "Mandal", "Sahu")
+
+random_digits <- function(n, width) {
+  map_chr(seq_len(n), \(i) paste(sample(0:9, width, replace = TRUE), collapse = ""))
+}
+random_pan <- function(n) {
+  paste0(map_chr(seq_len(n), \(i) paste(sample(LETTERS, 3, TRUE), collapse = "")),
+         "P", sample(LETTERS, n, TRUE), random_digits(n, 4), sample(LETTERS, n, TRUE))
+}
+
+n <- sum(districts$size)
+oap <- districts |>
+  uncount(size) |>
+  mutate(
+    ben_id   = sprintf("OAP%05d", row_number()),
+    gender   = sample(c("F", "M"), n, replace = TRUE, prob = c(0.55, 0.45)),
+    name     = paste(if_else(gender == "F", sample(female, n, TRUE), sample(male, n, TRUE)),
+                     sample(surname, n, TRUE)),
+    age      = pmin(60 + floor(rexp(n, 1 / 9)), 99),
+    dob      = as.Date("2025-03-31") - round((age + runif(n, 0.01, 0.99)) * 365.25),
+    aadhaar  = paste0(sample(2:9, n, TRUE), random_digits(n, 11)),
+    mobile   = paste0("70000", sprintf("%05d", sample(0:99999, n))),
+    bank_account = paste0(sample(1:9, n, TRUE), random_digits(n, 10)),
+    ifsc     = paste0("XBNK0", sprintf("%06d", sample(1:400, n, TRUE))),
+    pin_code = as.character(pin_base + sample(1:6, n, TRUE)),
+    category = if_else(
+      district == "Hillpur",
+      sample(c("SC", "ST", "OBC", "General"), n, TRUE, prob = c(0.06, 0.8, 0.08, 0.06)),
+      sample(c("SC", "ST", "OBC", "General"), n, TRUE, prob = c(0.2, 0.05, 0.45, 0.3))),
+    disability = sample(c("Yes", "No"), n, TRUE, prob = c(0.08, 0.92)),
+    monthly_pension = if_else(disability == "Yes", 1500, 1000)
+  ) |>
+  select(ben_id, name, gender, dob, aadhaar, mobile, bank_account, ifsc,
+         pin_code, district, category, disability, monthly_pension)
+
+# Treasury list of service pensioners
+m <- 250
+svc <- tibble(
+  ppo_no  = sprintf("PPO/%d/%04d", sample(1995:2024, m, TRUE), sample(1:9999, m)),
+  name    = paste(sample(c(female, male), m, TRUE), sample(surname, m, TRUE)),
+  dob     = as.Date("1940-01-01") + sample(0:9000, m, TRUE),
+  aadhaar = paste0(sample(2:9, m, TRUE), random_digits(m, 11)),
+  pan     = random_pan(m),
+  monthly_pension = round(runif(m, 15000, 60000), -2)
+)
+
+# Planted. Seven old age pensioners who also draw a service pension
+common <- oap |> slice(c(12, 95, 160, 233, 301, 402, 515))
+svc[c(20, 55, 90, 130, 170, 200, 240), c("name", "dob", "aadhaar")] <-
+  common[, c("name", "dob", "aadhaar")]
+
+# The Treasury writes Aadhaar numbers in groups of four, with spaces
+svc <- svc |>
+  mutate(aadhaar = paste(str_sub(aadhaar, 1, 4), str_sub(aadhaar, 5, 8),
+                         str_sub(aadhaar, 9, 12)))
+# Planted. One number with hyphens, and one with two digits swapped
+svc$aadhaar[55]  <- str_replace_all(svc$aadhaar[55], " ", "-")
+a <- svc$aadhaar[200]
+svc$aadhaar[200] <- paste0(str_sub(a, 1, 10), str_sub(a, 12, 12),
+                           str_sub(a, 11, 11), str_sub(a, 13, 14))
+```
+
+The old age pension list looks like this.
+
+```{r}
+glimpse(oap)
+```
+
+And the Treasury list looks like this.
+
+```{r}
+head(svc)
+```
+
+There are `r nrow(oap)` beneficiaries in the old age pension list and `r nrow(svc)` in the Treasury list.
+
+## Sorting the fields {#sec-privacy-fields}
+
+Not every column carries the same risk. Before deciding how to protect a list, we sort its columns into three kinds.
+
+-   **Direct identifiers** point to one person by themselves. Aadhaar number, PAN, mobile number, bank account and, in practice, the full name are of this kind.
+-   **Quasi-identifiers** do not identify anyone alone. Combined, they often do. Date of birth, gender and PIN code are the classic three. A person may be the only woman born on a given date in a given PIN code.
+-   **Sensitive attributes** are the facts that harm or embarrass a person if they become known. Caste category, disability, health condition, religion and income are of this kind.
+
+@tbl-privfields sorts the columns of our two lists.
+
+| Column | Kind | Why |
+|-------------------|------------------|----------------------------------|
+| `aadhaar`, `pan`, `mobile`, `bank_account` | Direct identifier | Each points to exactly one person |
+| `name` | Direct identifier | Together with the district, usually enough to find the person |
+| `ben_id`, `ppo_no` | Direct identifier, within the department | The department can look up the person from it |
+| `dob`, `gender`, `pin_code` | Quasi-identifier | Together they single out most people |
+| `district`, `ifsc` | Quasi-identifier, weaker | Narrow the search to a place or a bank branch |
+| `category`, `disability` | Sensitive attribute | Disclosure can lead to discrimination |
+| `monthly_pension` | Sensitive attribute, mild | Reveals disability, since it is higher for disabled persons |
+
+: Columns of the pension lists, by kind {#tbl-privfields}
+
+It helps to write this sorting into the code. Then every later step can use it, and a reviewer can see what was decided.
+
+```{r}
+direct_ids <- c("name", "aadhaar", "pan", "mobile", "bank_account")
+quasi_ids  <- c("dob", "gender", "pin_code", "district", "ifsc")
+sensitive  <- c("category", "disability", "monthly_pension")
+```
+
+Data minimisation now takes one line. Suppose a test needs only the district, gender, date of birth, category, disability and pension. We keep those, with the beneficiary ID to trace records back, and drop everything else.
+
+```{r}
+oap_min <- oap |>
+  select(ben_id, district, gender, dob, category, disability, monthly_pension)
+
+ncol(oap)
+ncol(oap_min)
+```
+
+The working copy now has `r ncol(oap_min)` columns instead of `r ncol(oap)`. Aadhaar, mobile and bank account are no longer in it. If this copy leaks, far less harm is done.
+
+## Masking numbers for display {#sec-privacy-mask}
+
+Often we must show which record we mean, in a working paper or an audit memo, without showing the whole number. **Masking** replaces most of the characters with `X` and keeps a few, usually the last four. The masked Aadhaar issued by UIDAI follows the same idea and shows only the last four digits.
+
+The `stringr` functions we learnt in @sec-strng do this. `str_sub(x, -4)` takes the last four characters of a string.
+
+```{r}
+x <- "987654321098"
+str_sub(x, -4)
+paste0("XXXX-XXXX-", str_sub(x, -4))
+```
+
+Let us write small functions for the identifiers in our data. Bank account numbers have different lengths, so we make as many `X` as needed with `str_dup()`. For PAN, `str_replace()` replaces the first five letters, and the regular expression `^[A-Z]{5}` matches exactly those (@sec-regex).
+
+```{r}
+mask_aadhaar <- function(x) paste0("XXXX-XXXX-", str_sub(x, -4))
+mask_mobile  <- function(x) paste0("XXXXXX", str_sub(x, -4))
+mask_account <- function(x) paste0(str_dup("X", str_length(x) - 4), str_sub(x, -4))
+mask_pan     <- function(x) str_replace(x, "^[A-Z]{5}", "XXXXX")
+
+oap |>
+  transmute(ben_id, name,
+            aadhaar      = mask_aadhaar(aadhaar),
+            mobile       = mask_mobile(mobile),
+            bank_account = mask_account(bank_account)) |>
+  head(4)
+
+mask_pan(head(svc$pan, 3))
+```
+
+This is the form in which identifiers should appear in a working paper, an audit memo or a draft paragraph sent to the department.
+
+Masking is meant for human eyes. It is not a way to hide a list from a determined person, and it destroys information. Many people share the same last four digits. Let us count how often that happens in our small list.
+
+```{r}
+oap |>
+  count(last4 = str_sub(aadhaar, -4)) |>
+  filter(n > 1) |>
+  nrow()
+```
+
+Even among `r nrow(oap)` persons, `r oap |> count(last4 = str_sub(aadhaar, -4)) |> filter(n > 1) |> nrow()` endings of four digits are shared by two or more people. So masked numbers cannot be used to match two lists. For matching, we need hashing.
+
+::: callout-warning
+## Caution
+
+A masked number is still part of a record. "XXXX-XXXX-1234, Kamla Devi, Hillpur" may be enough to find the person. Mask the identifier, and also ask whether the name and place need to appear at all.
+:::
+
+## Hashing for pseudonymisation {#sec-privacy-hash}
+
+A **hash** turns any text into a fixed length code. The same input always gives the same code, and the code gives no visible clue about the input. @sec-file-hash used the MD5 hash of a whole file. For identifiers we use a stronger hash called SHA-256. Replacing an identifier by such a code is called **pseudonymisation**. The records stay linked to each other, but the identifier itself is hidden.
+
+The `digest` package hashes one value at a time.
+
+```{r}
+digest("987654321098", algo = "sha256", serialize = FALSE)
+```
+
+::: callout-warning
+## Caution
+
+Always write `serialize = FALSE` when hashing a value with `digest()`. Without it, `digest()` first converts the value into R's own internal format and hashes that. The result is a valid hash, but it will not agree with the hash of the same number made by any other tool, or by another department.
+:::
+
+For a whole column, the `sha256()` function of `openssl` is more convenient, because it hashes every element of a vector at once. It gives the same result as `digest()` above.
+
+```{r}
+as.character(sha256("987654321098"))
+```
+
+Two small numbers that differ in one digit get codes that have nothing in common.
+
+```{r}
+as.character(sha256(c("987654321098", "987654321099")))
+```
+
+### Normalise before hashing
+
+To a hash function, `"9876 5432 1098"` and `"987654321098"` are two different texts, and their hashes differ completely. So before hashing we must write every identifier in one standard form. For Aadhaar, we keep only the digits with `str_remove_all()` and the pattern `\\D`, which means any character that is not a digit.
+
+```{r}
+normalise_id <- function(x) str_remove_all(x, "\\D")
+
+normalise_id(c("9876 5432 1098", "9876-5432-1098", "987654321098"))
+```
+
+All three are now the same text, and will get the same hash. For PAN, we would also convert to upper case with `str_to_upper()`.
+
+### Why a plain hash is not enough {#sec-privacy-attack}
+
+A hash cannot be run backwards. But it does not need to be. If an outsider knows what *kind* of value was hashed, the outsider can hash every possible value and look up the answers. This is called a **dictionary attack**. It works whenever the number of possible values is small enough for a computer to try them all.
+
+Let us see it happen. Suppose the department shares a list in which the mobile numbers have been replaced by their plain SHA-256 hashes. It looks safe.
+
+```{r}
+shared <- oap |>
+  transmute(ben_id, mobile_hash = as.character(sha256(mobile)))
+
+head(shared, 3)
+```
+
+Now suppose someone who receives this list knows, or guesses, that the numbers come from the series 70000 00000 to 70000 99999. That is only one lakh numbers. The receiver hashes all of them and keeps a table of number and hash.
+
+```{r}
+attack_time <- system.time({
+  all_numbers <- paste0("70000", sprintf("%05d", 0:99999))
+  dictionary  <- tibble(mobile      = all_numbers,
+                        mobile_hash = as.character(sha256(all_numbers)))
+})
+
+recovered <- shared |>
+  inner_join(dictionary, by = "mobile_hash")
+
+nrow(recovered)
+```
+
+Every one of the `r nrow(shared)` mobile numbers has been recovered. On this computer, building the dictionary took about `r round(attack_time[["elapsed"]], 1)` seconds.
+
+Real identifiers come from larger sets. There are 10^10^ possible ten digit numbers, and about 10^12^ possible Aadhaar numbers. But that is not much protection either. At the speed we just saw, R alone would try all 10^10^ numbers in about `r round(attack_time[["elapsed"]] * 1e5 / 3600)` hours. Specialised hardware is very much faster. So **a plain hash of a phone number, Aadhaar number, PAN or bank account must be treated as if it were the number itself.**
+
+### The fix, a keyed hash {#sec-privacy-hmac}
+
+The attack worked because anyone can compute SHA-256. The fix is to mix a **secret key** into the hash, so that only a holder of the key can compute it. This is called a keyed hash, or HMAC (hash-based message authentication code). In `openssl`, we just add the argument `key` to `sha256()`.
+
+A good key is long and random. `rand_bytes()` gives random bytes, and `paste()` turns them into a text of hexadecimal characters.
+
+```{r}
+secret_key <- paste(rand_bytes(32), collapse = "")
+nchar(secret_key)
+```
+
+The key is printed here only to show its length. In real work, the key is never printed, never stored next to the data, and never written in the script itself. We return to this below.
+
+Now we hash the mobile numbers with the key, and try the same attack.
+
+```{r}
+shared_keyed <- oap |>
+  transmute(ben_id, mobile_hash = as.character(sha256(mobile, key = secret_key)))
+
+shared_keyed |>
+  inner_join(dictionary, by = "mobile_hash") |>
+  nrow()
+```
+
+Nothing is recovered. The outsider can still hash every number in the series, but without the key those hashes never agree with ours. Only someone who has the key can repeat the attack. **So the protection lies entirely in keeping the key secret and apart from the data.**
+
+`digest` has a function for the same purpose, `hmac()`. It takes the key first, and gives the same code as `openssl`.
+
+```{r}
+hmac(secret_key, "7000012345", algo = "sha256") ==
+  as.character(sha256("7000012345", key = secret_key))
+```
+
+### Salt and key, in simple words {#sec-privacy-salt}
+
+Two words come up whenever hashing is discussed.
+
+-   A **salt** is a random value made separately for each record and stored *next to* the hash. Two persons with the same number get different hashes, because their salts differ. Salts are used for stored passwords.
+-   A **key**, sometimes called a **pepper**, is one secret value used for every record and kept *away from* the data.
+
+For audit work, the key is usually what we want. A salt has two drawbacks for us. First, because it is stored with the data, anyone who gets the data also gets the salt, and can still try every possible number for any one record. Second, because the same number gets a different hash in each record, two lists hashed with salts can no longer be matched. A small example shows this.
+
+```{r}
+salted_hash <- function(x) {
+  salt <- map_chr(seq_along(x), \(i) paste(rand_bytes(8), collapse = ""))
+  tibble(salt = salt, hash = as.character(sha256(paste0(salt, x))))
+}
+
+salted_hash(c("987654321098", "987654321098"))
+```
+
+The same Aadhaar number has two different hashes. The keyed hash, by contrast, gives the same code for the same number every time, so long as the key is the same. That is exactly what matching needs.
+
+## Audit use case, matching two lists without sharing Aadhaar {#sec-privacy-match}
+
+The audit wants to know which old age pensioners also draw a service pension, since such persons are not eligible under our scheme rules. The usual way would be to collect both lists, with Aadhaar numbers, on the auditor's laptop. A safer way keeps every Aadhaar number inside the department that already holds it.
+
+1.  The audit office makes one secret key and gives it, in a sealed form or by a secure channel, to one officer in each department.
+2.  Each department normalises its Aadhaar numbers and hashes them with the key.
+3.  Each department sends only its own record ID and the hash. No names, no numbers.
+4.  The auditor joins the two hashed lists. A match means the same Aadhaar number.
+5.  The auditor sends back only the matched record IDs, and asks each department for the full records of those persons alone.
+
+We write one function for step 2, so that both departments do exactly the same thing.
+
+```{r}
+keyed_hash <- function(x, key) {
+  as.character(sha256(normalise_id(x), key = key))
+}
+```
+
+Each department now prepares its file. Note that the Treasury's numbers have spaces and hyphens in them. `normalise_id()` takes care of that.
+
+```{r}
+from_welfare <- oap |>
+  transmute(ben_id, aadhaar_hash = keyed_hash(aadhaar, secret_key))
+
+from_treasury <- svc |>
+  transmute(ppo_no, aadhaar_hash = keyed_hash(aadhaar, secret_key))
+
+head(from_treasury, 3)
+```
+
+These two files are all that the auditor receives. They can travel by email without revealing any Aadhaar number. The auditor now matches them with `inner_join()`.
+
+```{r}
+matches <- from_welfare |>
+  inner_join(from_treasury, by = "aadhaar_hash") |>
+  select(ben_id, ppo_no)
+
+matches
+```
+
+The hashes have found `r nrow(matches)` persons who are on both lists. The auditor sends these record IDs back. The Social Welfare Department confirms the details of these old age pensioners.
+
+```{r}
+found <- oap |>
+  semi_join(matches, by = "ben_id")
+
+found |>
+  transmute(ben_id, name, aadhaar = mask_aadhaar(aadhaar), district, monthly_pension)
+```
+
+If these persons were indeed ineligible, the old age pension paid to them comes to ₹`r format(sum(found$monthly_pension) * 12, big.mark = ",")` a year.
+
+We planted seven common persons, and the hashes found `r nrow(matches)`. The missing one has two digits swapped in the Treasury list. A hash matches only identical values. One wrong digit gives a completely different hash, and the match is lost. If the departments suspect typing errors, they can also hash a second identifier, such as the name and date of birth written in a standard form, and the auditor can match on either. Fuzzy matching of names, as in @sec-linkage, cannot be done on hashes. It needs the actual names, inside a secure environment.
+
+Finally, let us confirm that the hashes reveal nothing to someone without the key. An outsider who knows one Aadhaar number in the list can compute its plain hash, or a keyed hash with some other key. Neither appears in the file.
+
+```{r}
+known <- oap$aadhaar[12]
+
+as.character(sha256(known)) %in% from_welfare$aadhaar_hash
+keyed_hash(known, "some other key") %in% from_welfare$aadhaar_hash
+keyed_hash(known, secret_key) %in% from_welfare$aadhaar_hash
+```
+
+Only the right key finds the person. When the exercise is over, the key is destroyed. The hashes then cannot be linked to anything, by anyone.
+
+::: callout-tip
+## Audit tip
+
+Use a fresh key for each matching exercise. Hashes made with different keys cannot be joined with each other. So a list hashed for one audit cannot later be quietly linked with a list hashed for another.
+:::
+
+What the auditor does next is the usual audit work. Ask the Treasury and the Social Welfare Department to verify the `r nrow(matches)` persons from their records, and examine why the eligibility check at sanction did not catch them. Keep in the working papers the masked identifiers, the record IDs and the replies of the departments, not the hashed lists.
+
+## Tokens {#sec-privacy-tokens}
+
+A hash is calculated from the identifier. A **token** is not. It is a random code given to each person, and the only link between the token and the person is a **lookup table**. Without the table, the token reveals nothing at all, even to someone who tries every possible number.
+
+Tokens suit data that stays with the audit team for a long analysis. We replace the identifiers by tokens in the working copy, and keep the lookup table separately, under lock.
+
+```{r}
+lookup <- oap |>
+  distinct(ben_id, aadhaar) |>
+  mutate(token = map_chr(ben_id, \(i) toupper(paste(rand_bytes(5), collapse = ""))))
+
+n_distinct(lookup$token) == nrow(lookup)
+```
+
+Each token is ten random characters, and every token is different. The working copy keeps only the token, with no direct identifiers.
+
+```{r}
+oap_work <- oap |>
+  left_join(lookup |> select(ben_id, token), by = "ben_id") |>
+  select(token, district, gender, dob, category, disability, monthly_pension)
+
+head(oap_work, 3)
+```
+
+When a case needs to be traced back to the person, the officer who holds `lookup` finds the record. Nobody else needs it. Tokens made with `rand_bytes()` are truly random. Do not make tokens with `sample()` after `set.seed()`, because anyone who knows the seed and the order of the records can make the same tokens again.
+
+::: callout-note
+A hash is the right tool when two parties must match their lists without meeting, because both can compute the same code from the same number. A token is the right tool inside one team, because it cannot be computed by anyone, and can be undone only with the lookup table.
+:::
+
+## Generalisation and k-anonymity {#sec-privacy-kanon}
+
+Removing names and numbers is not enough. Quasi-identifiers can single out a person by themselves. Let us count how many people in our list share each combination of gender, date of birth and PIN code.
+
+```{r}
+oap |>
+  count(gender, dob, pin_code) |>
+  count(n, name = "groups")
+```
+
+Of the `r nrow(count(oap, gender, dob, pin_code))` combinations, `r sum(count(oap, gender, dob, pin_code)$n == 1)` belong to exactly one person. So anyone who knows a neighbour's date of birth and PIN code can find her in the list, and read her caste and disability status. Removing the Aadhaar number did not help her at all.
+
+A list is called **k-anonymous** if every combination of quasi-identifiers is shared by at least k persons. Then no record can be narrowed down to fewer than k people. A common choice is k = 5.
+
+We reach k-anonymity by **generalisation**, that is, by making the quasi-identifiers coarser. Instead of the date of birth, we give the age band. Instead of the PIN code, we give the district.
+
+```{r}
+oap_gen <- oap |>
+  mutate(
+    age = floor(as.numeric(as.Date("2025-03-31") - dob) / 365.25),
+    age_band = cut(age, breaks = c(60, 70, 80, 90, Inf), right = FALSE,
+                   labels = c("60-69", "70-79", "80-89", "90+"))
+  ) |>
+  select(district, gender, age_band, category, disability)
+```
+
+Now we check whether any combination has fewer than k persons. `count()` gives the size of each group, and `filter()` keeps the small ones.
+
+```{r}
+k <- 5
+
+small_groups <- oap_gen |>
+  count(district, gender, age_band) |>
+  filter(n < k)
+
+small_groups
+```
+
+There are still `r nrow(small_groups)` small groups, holding `r sum(small_groups$n)` persons. Most are the oldest pensioners, and the people of Hillpur. A woman aged over 90 in Hillpur is easy to recognise in her village. We generalise further, and join the two oldest bands into one band of 80 and above.
+
+```{r}
+oap_gen <- oap_gen |>
+  mutate(age_band = fct_collapse(age_band, "80+" = c("80-89", "90+")))
+
+small_groups <- oap_gen |>
+  count(district, gender, age_band) |>
+  filter(n < k)
+
+small_groups
+```
+
+Now `r nrow(small_groups)` small groups remain, with `r sum(small_groups$n)` persons, all in Hillpur. We have two choices. We may make the data coarser still, for example by dropping gender for Hillpur, or we may leave out these few records from the shared copy and say so. Which is better depends on what the receiver of the data needs.
+
+::: callout-warning
+## Caution
+
+k-anonymity protects against being *found* in the data. It does not stop a sensitive fact from leaking if everyone in a group has it. If all five women aged 80 and above in some district are from the same category, then knowing that a woman of that age lives there tells us her category. Look also at the sensitive columns within each small group before sharing.
+:::
+
+## Audit use case, publishing a district table safely {#sec-privacy-table}
+
+The draft audit report is to include a table of old age pensioners by district and social category. The table has no names. Can it still harm anyone? It can, through small numbers. If a cell says that one person in Hillpur is from the General category, everyone in Hillpur may know who that is, and the next table may then reveal her disability or pension.
+
+The usual rule is **small-cell suppression**. Any count below a threshold, often 5, is shown as "less than 5" instead of the number. Let us make the table first.
+
+```{r}
+tab <- oap |>
+  count(district, category) |>
+  complete(district, category, fill = list(n = 0))
+
+tab |>
+  pivot_wider(names_from = category, values_from = n)
+```
+
+In all, `r sum(tab$n < 5)` cells are below 5, and `r sum(tab$n < 5 & tab$district == "Hillpur")` of them are in Hillpur. One cell is zero. A zero is also below 5, so we hide it too. First we mark the cells to hide.
+
+```{r}
+threshold <- 5
+
+tab_safe <- tab |>
+  mutate(suppress = n < threshold)
+```
+
+There is one more trap. If the table shows a row total, a single hidden cell can be worked out by subtraction. So, in every row with exactly one hidden cell, we hide the next smallest cell too. This is called **secondary suppression**.
+
+```{r}
+tab_safe <- tab_safe |>
+  mutate(
+    hidden_in_row = sum(suppress),
+    order_in_row  = rank(n, ties.method = "first"),
+    suppress      = suppress | (hidden_in_row == 1 & order_in_row == 2),
+    .by = district
+  )
+
+tab_safe |>
+  mutate(shown = case_when(n < threshold ~ "less than 5",
+                           suppress      ~ "not shown",
+                           .default      = as.character(n))) |>
+  select(district, category, shown) |>
+  pivot_wider(names_from = category, values_from = shown) |>
+  left_join(count(oap, district, name = "Total"), by = "district")
+```
+
+```{r}
+#| include: false
+n_hidden    <- sum(tab_safe$suppress)
+```
+
+The table now hides `r n_hidden` cells. The SC cell of Nandgaon, with `r tab$n[tab$district == "Nandgaon" & tab$category == "SC"]` persons, is hidden only to protect the ST cell beside it. We show it as "not shown" and not as "less than 5", so that the table never says anything untrue. A footnote in the report should explain both labels.
+
+Column totals need the same check. A simpler way out, often good enough in an audit report, is to merge small categories into "Others", or small districts with a neighbour, before making the table.
+
+What the auditor does next is to read the safe table once more as an outsider would. Could anyone in the district guess who is behind any number? If yes, coarsen it further. Then put the code and the threshold used in the working papers, so that the reviewer can see how the table was made safe.
+
+::: callout-tip
+## Audit tip
+
+Apply the same check to charts. A bar for a group of one or two persons in a chart discloses as much as a cell in a table.
+:::
+
+## Encrypting files before sharing {#sec-privacy-encrypt}
+
+Sometimes the full data must travel, by email or on a pen drive. Then the file should be **encrypted**. An encrypted file looks like random bytes. Only someone with the right key can turn it back into the original.
+
+We will use AES, the standard method used by governments and banks around the world, through the `openssl` package. AES needs a key of exactly 32 random bytes, which no person can remember. So we let the person remember a **passphrase**, and turn the passphrase into a key with `bcrypt_pbkdf()`. This function is deliberately slow. That costs us a fraction of a second, but makes it very slow for an outsider to try millions of guesses at the passphrase. It also takes a **salt**, a few random bytes, so that the same passphrase gives a different key for every file. The salt is not secret, and we store it at the start of the encrypted file.
+
+Two small functions do the work. `readBin()` and `writeBin()` read and write a file as raw bytes.
+
+```{r}
+encrypt_file <- function(infile, outfile, passphrase) {
+  salt   <- rand_bytes(16)
+  key    <- bcrypt_pbkdf(passphrase, salt, rounds = 64L, size = 32L)
+  plain  <- readBin(infile, "raw", file.size(infile))
+  locked <- aes_cbc_encrypt(plain, key = key)
+  writeBin(c(salt, attr(locked, "iv"), locked), outfile)
+}
+
+decrypt_file <- function(infile, outfile, passphrase) {
+  bytes  <- readBin(infile, "raw", file.size(infile))
+  salt   <- bytes[1:16]
+  iv     <- bytes[17:32]
+  key    <- bcrypt_pbkdf(passphrase, salt, rounds = 64L, size = 32L)
+  plain  <- aes_cbc_decrypt(bytes[-(1:32)], key = key, iv = iv)
+  writeBin(plain, outfile)
+}
+```
+
+The `iv` is another set of random bytes that AES needs. Like the salt, it is not secret, so we store it in the file too.
+
+Let us save the list of matched persons to a CSV file in a temporary folder, and encrypt it. We also record its hash, as in @sec-file-hash, using `digest()` with `file = TRUE`.
+
+```{r}
+csv_file <- file.path(tempdir(), "matched_pensioners.csv")
+enc_file <- file.path(tempdir(), "matched_pensioners.csv.enc")
+
+write_csv(found, csv_file)
+hash_sent <- digest(csv_file, algo = "sha256", file = TRUE)
+
+passphrase <- "copper monsoon ladder 47 orchid"
+encrypt_file(csv_file, enc_file, passphrase)
+
+readBin(enc_file, "raw", 24)
+```
+
+The encrypted file is meaningless bytes. It is now this file, not the CSV, that goes on the pen drive or in the email. The receiver decrypts it with the same passphrase, and checks the hash.
+
+```{r}
+out_file <- file.path(tempdir(), "received.csv")
+decrypt_file(enc_file, out_file, passphrase)
+
+digest(out_file, algo = "sha256", file = TRUE) == hash_sent
+read_csv(out_file, show_col_types = FALSE) |> nrow()
+```
+
+The hash agrees, so the file received is exactly the file sent. With a wrong passphrase, the decryption fails.
+
+```{r}
+result <- tryCatch(
+  decrypt_file(enc_file, out_file, "copper monsoon ladder 48 orchid"),
+  error = function(e) "Decryption failed"
+)
+result
+```
+
+Very rarely, a wrong passphrase gives no error and produces a file of garbage instead. The hash check above catches that case too, which is one more reason to record the hash before sending.
+
+Once the work is done, we delete the plain copies.
+
+```{r}
+#| results: hide
+file.remove(c(csv_file, enc_file, out_file))
+```
+
+### Keys and passphrases
+
+The encryption is only as strong as the care taken with the passphrase.
+
+-   **Make it long.** Four or five unrelated words with a number are easier to remember and much harder to guess than a short word with symbols.
+-   **Never write it in the script.** We wrote it in the code above only to show how it works. In real work, type it when needed. `askpass()` from `openssl` opens a box in which the passphrase is typed without being shown, as in `passphrase <- askpass("Passphrase for the file")`.
+-   **Send it by a different channel.** If the file goes by email, give the passphrase by a phone call or a text message, never in the same email or a second email. Anyone who can read the mailbox would otherwise have both.
+-   **Keep the secret keys of hashing the same way.** The key used for matching in @sec-privacy-match must never travel with the hashed lists.
+-   **Do not lose it.** There is no way to recover an encrypted file without its passphrase. Keep it as your organisation's instructions say.
+
+::: callout-note
+The receiver may not use R. In that case, use an archive tool that supports AES-256 encryption, such as 7-Zip, and choose AES-256 in its settings. The older "ZIP password" method is weak and should not be used. The rules about the passphrase are the same.
+:::
+
+## What never to do {#sec-privacy-never}
+
+Most leaks do not come from clever attacks. They come from ordinary habits. With audit data, never do any of the following.
+
+-   **Upload it to online tools.** This includes websites that convert PDFs or merge spreadsheets, online chart makers and AI chatbots. Once uploaded, the data is on someone else's computer, under someone else's terms, and cannot be called back. If you need help with code, describe the columns or share a few made-up rows, never the real data.
+-   **Send it from a personal email account**, or through a personal messaging app. Use the official email, and encrypt the file.
+-   **Leave copies about.** This means copies on a personal laptop or phone, a shared computer, a pen drive left in a drawer, or the Downloads folder. Keep one working copy in the audit project folder, on an official machine.
+-   **Keep it after the retention period.** When the period laid down by your organisation ends, delete the data and its copies, including the encrypted ones and the backups.
+-   **Print identifiers when a masked form will do.** A working paper rarely needs the full Aadhaar number.
+
+::: callout-warning
+## Caution
+
+Hashed, tokenised and generalised data is still personal data. Whoever holds the key or the lookup table can link it back to the person, and the law covers data about anyone who can be identified. These methods reduce the risk, and the harm if a leak happens. They do not remove the duty of care. Pseudonymised data must still be kept securely, used only for the audit, and deleted on time.
+:::
+
+## A suggested workflow
+
+1.  **Ask for less.** List in the requisition only the fields the audit needs, with the reason for each.
+2.  **Sort the fields.** Mark each column as a direct identifier, a quasi-identifier or a sensitive attribute, and write this in the code.
+3.  **Minimise on arrival.** Record the file hash as in @sec-file-hash, then make a working copy without the fields the analysis does not need.
+4.  **Pseudonymise.** Replace identifiers with tokens for work inside the team, or with keyed hashes when two parties must match lists. Never use a plain hash.
+5.  **Keep secrets apart.** Store the key, the lookup table and the passphrases away from the data, and destroy matching keys after use.
+6.  **Mask for display.** Show only the last four digits of identifiers in working papers and memos.
+7.  **Check before publishing.** Generalise quasi-identifiers, check k-anonymity with `count()`, and suppress small cells, with secondary suppression where totals are shown.
+8.  **Encrypt before sending.** Encrypt any file that leaves the official machine, and send the passphrase by a different channel.
+9.  **Delete on time.** Remove all copies when the retention period ends.
+
+::: callout-important
+## Remember
+
+-   Take and keep only the data the audit needs.
+-   A plain hash of a number from a small set can be reversed by trying every value. Use a keyed hash, and keep the key apart from the data.
+-   Masking is for display, hashing is for matching, tokens are for working, encryption is for travelling.
+-   A table with no names can still identify people through small cells.
+-   Pseudonymised data is still personal data. The duty of care stays with the auditor.
+:::
+
+## Where next
+
+@sec-read covers reading and writing the files that we encrypt here, and @sec-regex-validate shows how to check that Aadhaar, PAN and IFSC values are in the right format before hashing them. @sec-dup and @sec-linkage find the same person in two lists when the identifiers do not agree exactly, which hashes cannot do. @sec-reports builds the tables of an audit report, where the checks of @sec-privacy-table belong.
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `str_sub()`, `str_dup()`, `str_length()` | stringr | Take the last characters, and build masks of the right length |
+| `str_replace()`, `str_remove_all()` | stringr | Mask a PAN, and keep only the digits of an identifier |
+| `digest(serialize = FALSE)` | digest | SHA-256 hash of one value |
+| `digest(file = TRUE)` | digest | SHA-256 hash of a file, to check that it arrived unchanged |
+| `hmac()` | digest | Keyed hash of a value |
+| `sha256()`, `sha256(key = )` | openssl | Plain or keyed SHA-256 hash of every element of a vector |
+| `rand_bytes()` | openssl | Random bytes, for keys, salts and tokens |
+| `bcrypt_pbkdf()` | openssl | Turn a passphrase into an encryption key, slowly |
+| `aes_cbc_encrypt()`, `aes_cbc_decrypt()` | openssl | Encrypt and decrypt raw bytes with AES |
+| `askpass()` | openssl | Type a passphrase without showing it |
+| `readBin()`, `writeBin()` | base R | Read and write a file as raw bytes |
+| `inner_join()`, `semi_join()` | dplyr | Match hashed lists, and pick the matched records |
+| `count()`, `complete()` | dplyr, tidyr | Size of each group, including empty ones |
+| `cut()`, `fct_collapse()` | base R, forcats | Make age bands, and merge bands |
+| `rank()` | base R | Order cells within a row, for secondary suppression |
+| `case_when()` | dplyr | Label cells as "less than 5" or "not shown" |
+| `pivot_wider()` | tidyr | Lay out a count table for a report |
+| `system.time()`, `tryCatch()` | base R | Time a step, and catch an error such as a wrong passphrase |
+| `tempdir()`, `write_csv()`, `read_csv()` | base R, readr | Write a file to a temporary folder and read it back |
+
+: Functions used in this chapter {#tbl-privfunctions}

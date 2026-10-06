@@ -5,7 +5,7 @@ source("_common.R")
 
 # Nigrini's Tests for Unusual Amounts {#sec-nigrini}
 
-In @sec-benford we met **Mark Nigrini**, the accounting professor who turned Benford's Law into a practical tool for fraud detection. Benford analysis is only one part of his work. Nigrini also put together a full set of simple tests, which forensic auditors now use all over the world. Each test looks at the *amounts* in a data set from a different angle. Each one is good at catching a different kind of problem.
+In @sec-benford we met **Mark Nigrini**, the accounting professor who turned Benford's Law into a practical tool for fraud detection. Benford analysis is only one part of his work. Nigrini also put together a full set of simple tests, which forensic auditors now use all over the world. Each test looks at the *amounts* in a dataset from a different angle. Each one is good at catching a different kind of problem.
 
 The good thing about these tests is that none of them needs advanced statistics. They mostly count, sort and compare. Yet together they can point an auditor to a handful of suspicious records out of lakhs.
 
@@ -19,7 +19,7 @@ Some of these tests are already covered in this book. The rest are covered in th
 | Largest subsets test | Vendors, employees or offices with the biggest totals | This chapter |
 | Relative Size Factor (RSF) test | One amount far larger than the rest of its group | This chapter |
 | Number duplication test | Exact amounts which repeat too often | This chapter |
-| Round number test | Too many amounts like ₹ 10,000 or ₹ 25,000 | This chapter |
+| Round number test | Too many amounts like ₹10,000 or ₹25,000 | This chapter |
 | Last-two digits test | Unusual endings like 00 or 50, a sign of made-up amounts | This chapter |
 
 : Nigrini's forensic analytics tests in this book {#tbl-nigrini}
@@ -39,7 +39,7 @@ library(tidyverse)
 
 Let us imagine a government department with five district offices in Uttar Pradesh. Each office makes small payments for day-to-day needs, like stationery, printing, catering, taxis, repairs and security. Such payments are often called *contingent expenditure*. Our data has all such bills paid during the financial year 2024-25.
 
-One rule is important for this data. **The head of a district office can sanction a bill only up to ₹ 50,000.** A bill above this limit needs sanction from a higher authority. Such limits exist in almost every organisation. They are known as *delegation of financial powers*.
+One rule is important for this data. **The head of a district office can sanction a bill only up to ₹50,000.** A bill above this limit needs sanction from a higher authority. Such limits exist in almost every organisation. They are known as *delegation of financial powers*.
 
 As in the other chapters of this part, we have planted a few problems in the data. We will find them one by one, using a different test each time. The code to create the data is folded below.
 
@@ -108,7 +108,7 @@ Let us have a quick look.
 glimpse(bills)
 ```
 
-We have `r nrow(bills)` bills from `r n_distinct(bills$vendor)` vendors. The columns are simple. `voucher_no` is the contingent voucher number. `bill_date` is the date of the bill. `office` is the district office which paid it. `vendor` is the party paid, and `amount` is the amount paid in rupees.
+We have `r nrow(bills)` bills from `r n_distinct(bills$vendor)` vendors. The columns are simple. `voucher_no` is the contingent voucher number. `bill_date` is the date of the bill. `office` is the district office which paid it. `vendor` is the vendor who was paid, and `amount` is the amount paid in rupees.
 
 ## Largest subsets test {#sec-nigrini-subsets}
 
@@ -141,11 +141,11 @@ $$
 RSF = \frac{Largest\:Record\:in\:a\:Subset}{Second\:Largest\:Record\:in\:a\:Subset}
 $$ {#eq-rsf}
 
-Let us understand the idea with a simple example. Suppose a vendor usually sends bills of ₹ 10,000 to ₹ 20,000. One day a bill of ₹ 1,80,000 is paid to the same vendor. Compared with the whole data, ₹ 1,80,000 may not look large at all, because other vendors are paid much more. So a simple sort on amount will not show it. But compared with *this vendor's own* bills, it is nine times the next largest. RSF catches exactly this.
+Let us understand the idea with a simple example. Suppose a vendor usually sends bills of ₹10,000 to ₹20,000. One day a bill of ₹1,80,000 is paid to the same vendor. Compared with the whole data, ₹1,80,000 may not look large at all, because other vendors are paid much more. So a simple sort on amount will not show it. But compared with *this vendor's own* bills, it is nine times the next largest. RSF catches exactly this.
 
 A large RSF usually means one of these.
 
--   **A keying error.** For example, ₹ 21,450 entered as ₹ 2,14,500, because of an extra zero or a missed decimal point.
+-   **A keying error.** For example, ₹21,450 entered as ₹2,14,500, because of an extra zero or a missed decimal point.
 -   **An inflated bill.** The vendor, possibly with someone inside, has claimed far more than the actual supply.
 -   **A genuine but unusual purchase.** For example, the annual purchase of furniture in one go. This must be confirmed from documents.
 
@@ -197,9 +197,9 @@ bills |>
             .by = vendor)
 ```
 
-The bill of ₹ 2,14,500 of *Kaveri Suppliers* is many times its usual bill. Its digits "2145" also look like a typical bill of this vendor with an extra zero, which points towards a keying error. The bill of ₹ 3,92,800 of *Shree Ganesh Transport* is also several times its usual bill.
+The bill of ₹2,14,500 of *Kaveri Suppliers* is many times its usual bill. Its digits "2145" also look like a typical bill of this vendor with an extra zero, which points towards a keying error. The bill of ₹3,92,800 of *Shree Ganesh Transport* is also several times its usual bill.
 
-Notice one more thing. Both these bills are far above ₹ 50,000, the limit of the office head. So the auditor should also check whether sanction of the higher authority was taken for them.
+Notice one more thing. Both these bills are far above ₹50,000, the limit of the office head. So the auditor should also check whether sanction of the higher authority was taken for them.
 
 ::: callout-note
 ## Choosing the cut-offs
@@ -211,7 +211,7 @@ The minimum of five bills and the RSF cut-off of 2.5 are not fixed rules. Sort t
 
 The classic RSF compares the largest amount (often written as L1) with the second largest (L2). It is simple and works well when a subset has *one* odd amount. But it has a blind spot. Suppose a vendor has managed to get *two* inflated bills paid. Then the largest and second largest are both inflated, and their ratio is close to 1. Both bills hide behind each other.
 
-Let us see this with a small example. *Sunrise Electricals* usually sends bills of about ₹ 15,000. But two bills of about ₹ 1.6 lakh each have also been paid.
+Let us see this with a small example. *Sunrise Electricals* usually sends bills of about ₹15,000. But two bills of about ₹1.6 lakh each have also been paid.
 
 ```{r}
 sunrise <- c(14200, 16850, 12900, 15400, 13750, 168500, 154200)
@@ -264,7 +264,7 @@ Run more than one variation. A subset flagged by L1/median but *not* by L1/L2 is
 
 ## Number duplication test {#sec-nigrini-numdup}
 
-In real life, amounts of bills vary a lot. A stationery bill may be ₹ 5,523 one day and ₹ 6,218 the next. So if we count how many times each *exact* amount appears in the data, most amounts should appear only once, or perhaps twice by coincidence.
+In real life, amounts of bills vary a lot. A stationery bill may be ₹5,523 one day and ₹6,218 the next. So if we count how many times each *exact* amount appears in the data, most amounts should appear only once, or perhaps twice by coincidence.
 
 The number duplication test counts each exact amount and looks at the ones which repeat the most. `count()` with `sort = TRUE` does exactly this.
 
@@ -274,7 +274,7 @@ bills |>
   head(8)
 ```
 
-The amount of ₹ 49,500 has been paid seven times. No other amount appears more than three times. Let us see who received these payments.
+The amount of ₹49,500 has been paid seven times. No other amount appears more than three times. Let us see who received these payments.
 
 ```{r}
 bills |>
@@ -291,9 +291,9 @@ How is this different from the duplicate tests of @sec-dup? There we looked for 
 
 ### Amounts just below a limit
 
-The amount of ₹ 49,500 is suspicious for one more reason. It is just below ₹ 50,000, the limit up to which the office head can sanction a bill. If bills are deliberately kept below this limit, the purchase escapes the scrutiny of the higher authority. A large purchase may also be *split* into several smaller bills for the same reason. This is commonly called **splitting of bills** or *threshold avoidance*.
+The amount of ₹49,500 is suspicious for one more reason. It is just below ₹50,000, the limit up to which the office head can sanction a bill. If bills are deliberately kept below this limit, the purchase escapes the scrutiny of the higher authority. A large purchase may also be *split* into several smaller bills for the same reason. This is commonly called **splitting of bills** or *threshold avoidance*.
 
-So let us count, for each vendor, how many bills fall in a narrow band just below the limit, say between ₹ 45,000 and ₹ 50,000.
+So let us count, for each vendor, how many bills fall in a narrow band just below the limit, say between ₹45,000 and ₹50,000.
 
 ```{r}
 bills |>
@@ -305,9 +305,9 @@ bills |>
   arrange(desc(near_limit))
 ```
 
-*Om Sai Caterers* has the most bills in this band. Let us read this along with what we already know. A caterer's typical bill is not near ₹ 50,000. Yet this vendor's bills crowd just below the limit, seven of them for the very same amount, all from one office. This is a strong lead.
+*Om Sai Caterers* has the most bills in this band. Let us read this along with what we already know. A caterer's typical bill is not near ₹50,000. Yet this vendor's bills crowd just below the limit, seven of them for the very same amount, all from one office. This is a strong lead.
 
-*Shree Ganesh Transport* also has several bills in the band. But this vendor's usual bill is itself around ₹ 50,000, as we saw in the RSF section. So for this vendor, bills near ₹ 50,000 are expected. This is a good example of why the output of every test must be read with business sense.
+*Shree Ganesh Transport* also has several bills in the band. But this vendor's usual bill is itself around ₹50,000, as we saw in the RSF section. So for this vendor, bills near ₹50,000 are expected. This is a good example of why the output of every test must be read with business sense.
 
 ::: callout-tip
 ## Audit tip
@@ -317,9 +317,9 @@ Also look at the *dates* of bills near the limit. Several bills of the same vend
 
 ## Round number test {#sec-nigrini-round}
 
-When a person makes up an amount, they tend to choose a round figure. ₹ 15,000 or ₹ 20,000 comes to mind more easily than ₹ 15,437. Real bills, on the other hand, are made of quantities multiplied by rates, plus taxes. So they rarely come out as exact thousands.
+When a person makes up an amount, they tend to choose a round figure. ₹15,000 or ₹20,000 comes to mind more easily than ₹15,437. Real bills, on the other hand, are made of quantities multiplied by rates, plus taxes. So they rarely come out as exact thousands.
 
-In R, the operator `%%` gives the remainder of a division. If `amount %% 1000` is zero, the amount is an exact multiple of ₹ 1,000. Let us find the share of such round amounts for each vendor.
+In R, the operator `%%` gives the remainder of a division. If `amount %% 1000` is zero, the amount is an exact multiple of ₹1,000. Let us find the share of such round amounts for each vendor.
 
 ```{r}
 bills |>
@@ -344,11 +344,11 @@ Some payments are genuinely round. Fixed monthly charges, advances, honorarium a
 
 ## Last-two digits test {#sec-nigrini-last2}
 
-The round number test looks at amounts ending in 000. The last-two digits test looks at the endings more broadly. Take the last two digits of every amount. For example, ₹ 15,437 ends in 37, and ₹ 49,500 ends in 00. In genuine data, every ending from 00 to 99 should be about equally common. So each ending should appear in about 1% of the amounts.
+The round number test looks at amounts ending in 000. The last-two digits test looks at the endings more broadly. Take the last two digits of every amount. For example, ₹15,437 ends in 37, and ₹49,500 ends in 00. In genuine data, every ending from 00 to 99 should be about equally common. So each ending should appear in about 1% of the amounts.
 
 Made-up amounts break this pattern. They end in 00 or 50 too often, because people like such numbers.
 
-We can get the last two digits with `amount %% 100`. We consider amounts of ₹ 100 or more only, because smaller amounts do not have two meaningful last digits.
+We can get the last two digits with `amount %% 100`. We consider amounts of ₹100 or more only, because smaller amounts do not have two meaningful last digits.
 
 ```{r}
 last_two <- bills |>
@@ -395,7 +395,7 @@ bills |>
   head(5)
 ```
 
-The same names appear again. *Verma & Sons* with its round amounts and *Om Sai Caterers* with its ₹ 49,500 bills together explain most of the spike.
+The same names appear again. *Verma & Sons* with its round amounts and *Om Sai Caterers* with its ₹49,500 bills together explain most of the spike.
 
 ::: callout-note
 ## About `tabulate()`
@@ -434,7 +434,7 @@ vendor_flags |>
 
 `max(table(amount))` gives the number of times the most repeated amount of a vendor appears. Adding logical columns counts the `TRUE` values, so `total_flags` is the number of tests in which a vendor was flagged.
 
-This short table is what an auditor carries forward. Each vendor in it has a clear reason for being there. But the flags must still be *read*, not just counted. *Shree Ganesh Transport* has two flags. Yet we already know that bills near ₹ 50,000 are normal for this vendor. Its real issue is the single inflated bill. On the other hand, *Om Sai Caterers* also has two flags, and both point to the same story of bills kept just below the limit. The next step is to call for the original bills, sanctions and payment records of these vendors.
+This short table is what an auditor carries forward. Each vendor in it has a clear reason for being there. But the flags must still be *read*, not just counted. *Shree Ganesh Transport* has two flags. Yet we already know that bills near ₹50,000 are normal for this vendor. Its real issue is the single inflated bill. On the other hand, *Om Sai Caterers* also has two flags, and both point to the same story of bills kept just below the limit. The next step is to call for the original bills, sanctions and payment records of these vendors.
 
 ## A suggested workflow
 

@@ -20,18 +20,18 @@ Anomalies often point to problems like these.
 -   **Non-compliance.** Payments that break rules, limits or entitlements.
 -   **Inefficiency.** Processes that take unusually long or cost unusually more.
 
-Detecting and investigating anomalies is therefore a core skill for an auditor. In this chapter, we will learn several methods to detect them, from simple boxplots to machine learning methods. @tbl-anomethods gives a road map.
+Detecting and investigating anomalies is therefore a core skill for an auditor. In this chapter, we will learn several methods to detect them, from simple box plots to machine learning methods. @tbl-anomethods gives a road map.
 
 | Method | Works on | Good at finding | Section |
 |-------------------|------------------|----------------------|------------|
-| Boxplot (IQR rule) | One numeric column | Values far from the middle of the data | @sec-ano-inspect |
+| Box plot (IQR rule) | One numeric column | Values far from the middle of the data | @sec-ano-inspect |
 | Grubbs' test | One numeric column, normally distributed | Whether the single most extreme value is an outlier | @sec-ano-grubbs |
 | Robust z-score, within peer groups | One numeric column, or a ratio | Values extreme for their own peer group, without masking | @sec-ano-robustz |
 | Robust Mahalanobis distance | A few related numeric columns | Combinations that break the usual relationship | @sec-ano-mahal |
 | Seasonal Hybrid ESD | One time series | Anomalies after allowing for seasonality | @sec-ano-shesd |
 | k-Nearest Neighbour distance | Many numeric columns | Records far away from all others (global anomalies) | @sec-ano-knn |
 | Local Outlier Factor (LOF) | Many numeric columns | Records unlike their own neighbours (local anomalies) | @sec-ano-lof |
-| Isolation Forest | Many columns, numeric and categorical | Records which are easy to separate from the rest | @sec-ano-iforest |
+| Isolation forest | Many columns, numeric and categorical | Records which are easy to separate from the rest | @sec-ano-iforest |
 | LOF with Gower distance | Many columns, numeric and categorical | Rare combinations of categories and values | @sec-ano-gower |
 | STL decomposition (`timetk`) | One time series | Odd periods after allowing for trend and season | @sec-ano-ts |
 | Change point detection (`changepoint`) | One time series | The date of a lasting shift in level | @sec-ano-changepoint |
@@ -39,13 +39,24 @@ Detecting and investigating anomalies is therefore a core skill for an auditor. 
 
 : Anomaly detection methods covered in this chapter {#tbl-anomethods}
 
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `AnomalyDetection`, `changepoint`, `cluster`, `dbscan`, `FNN`, `ggrepel`, `isotree`, `outliers`, `remotes`, `scales`, `tidyverse` and `timetk`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("FNN", "changepoint", "cluster", "dbscan", "ggrepel", "isotree", "outliers", "remotes", "scales", "tidyverse", "timetk"))
+remotes::install_github("twitter/AnomalyDetection")
+```
+:::
+
 ## Definition and types of anomalies
 
 Anomalies are patterns or data points that deviate significantly from the expected or normal behaviour within a dataset. They are also known as *outliers*, *novelties* or *deviations*. There are three types of anomalies.
 
--   **Point anomalies.** A single record which is unusual when compared with the rest of the data. For example, a stationery bill of ₹ 2,00,000 in an office where such bills are usually below ₹ 10,000.
--   **Contextual anomalies.** A record which is unusual only in a particular context. For example, an electricity bill of ₹ 3 lakh may be normal for an office in May, when air conditioners run all day, but unusual for the same office in December. The amount is not odd by itself. The *month* makes it odd.
--   **Collective anomalies.** A group of records which is unusual when seen together, though each record may look normal by itself. For example, twenty cash withdrawals of ₹ 49,000 each from one account within a week. No single withdrawal is unusual. Together, they suggest that someone is avoiding a reporting limit of ₹ 50,000.
+-   **Point anomalies.** A single record which is unusual when compared with the rest of the data. For example, a stationery bill of ₹2,00,000 in an office where such bills are usually below ₹10,000.
+-   **Contextual anomalies.** A record which is unusual only in a particular context. For example, an electricity bill of ₹3 lakh may be normal for an office in May, when air conditioners run all day, but unusual for the same office in December. The amount is not odd by itself. The *month* makes it odd.
+-   **Collective anomalies.** A group of records which is unusual when seen together, though each record may look normal by itself. For example, twenty cash withdrawals of ₹49,000 each from one account within a week. No single withdrawal is unusual. Together, they suggest that someone is avoiding a reporting limit of ₹50,000.
 
 ## Anomaly detection by inspection {#sec-ano-inspect}
 
@@ -57,9 +68,9 @@ As an example, let us take the mean annual temperatures in degrees Fahrenheit in
 summary(nhtemp)
 ```
 
-The easiest way to see how unusual a value is, is a graphical summary like a **boxplot**. In base R, it is drawn with the `boxplot()` function. It shows the distribution of values as a box with whiskers, and draws extreme values as separate points. This makes them easy to spot. We can also draw boxplots using `ggplot2`.
+The easiest way to see how unusual a value is, is a graphical summary like a **box plot**. In base R, it is drawn with the `boxplot()` function. It shows the distribution of values as a box with whiskers, and draws extreme values as separate points. This makes them easy to spot. We can also draw box plots using `ggplot2`.
 
-For an audit example, let us take the stationery and printing bills of a district office for one year. Three vendors supply the office. Shree Ram Stationers sends small bills for paper and pens. Kaveri Office Supplies sends somewhat larger bills for toner and files. Modern Printers prints forms and registers, and its bills are the largest. One bill has been planted. It is a bill of Shree Ram Stationers for ₹ 38,000.
+For an audit example, let us take the stationery and printing bills of a district office for one year. Three vendors supply the office. Shree Ram Stationers sends small bills for paper and pens. Kaveri Office Supplies sends somewhat larger bills for toner and files. Modern Printers prints forms and registers, and its bills are the largest. One bill has been planted. It is a bill of Shree Ram Stationers for ₹38,000.
 
 ```{r}
 #| code-fold: true
@@ -78,7 +89,7 @@ stationery$amount[17] <- 38000
 glimpse(stationery)
 ```
 
-@fig-an1 shows both kinds of boxplot. The left panel is the base R boxplot of the `nhtemp` data, the mean annual temperatures of New Haven. The right panel draws the stationery bills, one box for each vendor.
+@fig-an1 shows both kinds of box plot. The left panel is the base R box plot of the `nhtemp` data, the mean annual temperatures of New Haven. The right panel draws the stationery bills, one box for each vendor.
 
 ::: {#fig-an1}
 
@@ -92,12 +103,12 @@ ggplot(stationery, aes(vendor, amount, colour = vendor)) +
   labs(title = "Stationery bills by vendor", x = NULL, y = "Amount (₹)")
 ```
 
-Outliers through Boxplot
+Outliers through box plot
 :::
 
-The planted bill of ₹ 38,000 shows as a red point above the box of Shree Ram Stationers. Notice that the same amount would be quite ordinary for Modern Printers. If we had drawn one box for all the bills together, this bill would have hidden among the printing bills.
+The planted bill of ₹38,000 shows as a red point above the box of Shree Ram Stationers. Notice that the same amount would be quite ordinary for Modern Printers. If we had drawn one box for all the bills together, this bill would have hidden among the printing bills.
 
-The separate points in a boxplot are decided by a simple rule, often called the **IQR rule**. The box covers the middle 50% of the data, from the lower quartile (Q1) to the upper quartile (Q3). The difference Q3 - Q1 is called the *inter-quartile range* or IQR. Any value more than 1.5 × IQR below Q1, or above Q3, is drawn as a separate point.
+The separate points in a box plot are decided by a simple rule, often called the **IQR rule**. The box covers the middle 50% of the data, from the lower quartile (Q1) to the upper quartile (Q3). The difference Q3 - Q1 is called the *inter-quartile range* or IQR. Any value more than 1.5 × IQR below Q1, or above Q3, is drawn as a separate point.
 
 We do not have to read these values from the plot. `boxplot.stats()` returns them in its `out` element.
 
@@ -117,7 +128,7 @@ The planted bill is listed. So is one unusually small bill of Modern Printers. A
 ::: callout-tip
 ## Audit tip
 
-The boxplot is the quickest first check on any amount column. Draw it *by group* rather than for the whole data. For example, draw a boxplot of bill amounts for each vendor or each head of account. A bill which is normal for the whole office may be very unusual for its own vendor. We saw this idea in the RSF test in @sec-nigrini.
+The box plot is the quickest first check on any amount column. Draw it *by group* rather than for the whole data. For example, draw a box plot of bill amounts for each vendor or each head of account. A bill which is normal for the whole office may be very unusual for its own vendor. We saw this idea in the RSF test in @sec-nigrini.
 :::
 
 It is important to note that a **point anomaly** need not always be an extreme value. A point anomaly can also arise as an unusual *combination* of values across several columns. We will see such an example in @sec-ano-gower.
@@ -154,7 +165,7 @@ library(outliers)
 grubbs.test(nhtemp)
 ```
 
-How do we read this? The *null hypothesis* of the test is that there is **no** outlier. The output shows the alternative hypothesis, that the highest value, 54.6, is an outlier. The p-value is about `0.15`, which is more than the usual cut-off of `0.05`. So we do not have enough evidence to reject the null hypothesis. In simple words, we **cannot conclude** that 54.6 is an outlier, though it looked separate in the boxplot.
+How do we read this? The *null hypothesis* of the test is that there is **no** outlier. The output shows the alternative hypothesis, that the highest value, 54.6, is an outlier. The p-value is about `0.15`, which is more than the usual cut-off of `0.05`. So we do not have enough evidence to reject the null hypothesis. In simple words, we **cannot conclude** that 54.6 is an outlier, though it looked separate in the box plot.
 
 ::: callout-warning
 ## Caution
@@ -386,7 +397,7 @@ Let us take the vendors of a Zila Parishad. For each of its 60 vendors, the acco
 
 -   `bills`, the number of bills paid.
 -   `avg_bill_lakh`, the average bill, in ₹ lakh.
--   `round_pct`, the percentage of bills in round amounts, that is, exact multiples of ₹ 1,000.
+-   `round_pct`, the percentage of bills in round amounts, that is, exact multiples of ₹1,000.
 -   `days_to_pay`, the median number of days between receipt of a bill and its payment.
 
 The vendors are of three kinds. Suppliers of materials send many small bills. Service providers send fewer, larger bills. Works contractors send a few very large bills. Three vendors have been planted at the end of the data. V-058 is a supplier with unusually large bills, mostly in round amounts, paid within days. V-059 is a supplier which looks ordinary, except that it is paid much faster than other suppliers. V-060 is a service provider whose bills look like those of a works contractor. We will come back to V-060 in @sec-ano-gower.
@@ -440,7 +451,7 @@ vend_scaled <- vendors |>
 rownames(vend_scaled) <- vendors$vendor
 ```
 
-Let us visualise the data, first in two dimensions only, the number of bills and the average bill. As the data is already scaled, we can also see all four dimensions together in a boxplot. Both are shown in @fig-an5. The points are labelled with the last two digits of the vendor code.
+Let us visualise the data, first in two dimensions only, the number of bills and the average bill. As the data is already scaled, we can also see all four dimensions together in a box plot. Both are shown in @fig-an5. The points are labelled with the last two digits of the vendor code.
 
 ::: {#fig-an5}
 
@@ -647,7 +658,7 @@ kNN and LOF give *scores*, not a yes or no answer. Sort the records by score and
 
 ## Isolation Forest {#sec-ano-iforest}
 
-Isolation Forest takes a completely different approach. It does not measure distance or density. Instead, it asks a simple question. *How easy is it to separate this record from all the others?*
+Isolation forest takes a completely different approach. It does not measure distance or density. Instead, it asks a simple question. *How easy is it to separate this record from all the others?*
 
 Imagine we pick a column at random, and a random cut-point within its range. This splits the data into two parts. We repeat this on each part, again and again, until every record sits alone. Such a series of random splits is called an **isolation tree**. A normal record, sitting in a crowd, needs many splits before it is alone. An anomaly, sitting far from the crowd, gets separated in very few splits. So the **number of splits** (the path length in the tree) tells us how unusual a record is.
 
@@ -1011,7 +1022,7 @@ We can see the anomalies highlighted in red in @fig-an17, and listed by the code
 `tk_anomaly_diagnostics()` works in two steps.
 
 1.  It first splits the series into three parts, using a method called STL decomposition. The **trend** is the long-term rise or fall. The **season** is the pattern which repeats every year, or every week. The **remainder** is whatever is left after removing the trend and season.
-2.  It then looks for unusually large values in the remainder only. The usual rule of the boxplot is used, so a value far outside the middle 50% of the remainders is called an anomaly.
+2.  It then looks for unusually large values in the remainder only. The usual rule of the box plot is used, so a value far outside the middle 50% of the remainders is called an anomaly.
 
 So a value is called an anomaly only if it cannot be explained by the trend *and* the usual seasonal pattern. We learnt about these components of a time series in @sec-ts.
 
@@ -1047,7 +1058,7 @@ expenditure$amount[odd] <- expenditure$amount[odd] * 2.3
 head(expenditure)
 ```
 
-**Attempt 1. A simple boxplot rule.** Let us first try what we learnt at the start of this chapter, using `boxplot.stats()`.
+**Attempt 1. A simple box plot rule.** Let us first try what we learnt at the start of this chapter, using `boxplot.stats()`.
 
 ```{r}
 outliers <- boxplot.stats(expenditure$amount)$out
@@ -1300,7 +1311,7 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 
 | Your data | Suggested method |
 |----------------------------------|-------------------------------|
-| One amount column, quick check | Boxplot, drawn group-wise |
+| One amount column, quick check | Box plot, drawn group-wise |
 | Entities that fall into natural peer groups | Robust z-score of a size-free ratio, within each group |
 | A few related measures for each entity | Robust Mahalanobis distance |
 | One column, roughly bell-shaped, one suspect value | Grubbs' test |
@@ -1317,7 +1328,7 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 
 1.  **Understand the data.** Know what each column means, and what "normal" looks like for the business.
 2.  **Apply the known rules first.** Limits, entitlements and rates can be checked directly, without any algorithm.
-3.  **Look at the data.** Draw boxplots and histograms, group-wise. Many anomalies are visible at this stage itself.
+3.  **Look at the data.** Draw box plots and histograms, group-wise. Many anomalies are visible at this stage itself.
 4.  **Prepare the data for the algorithm.** Scale numeric columns for kNN and LOF. Use the log for money amounts. Convert categorical columns to factors.
 5.  **Compare like with like.** Use peer groups and size-free ratios, so that big entities are not flagged merely for being big.
 6.  **Run more than one method, and combine them by rank.** A record flagged by several methods is a stronger lead.
@@ -1335,7 +1346,7 @@ An anomaly is only *unusual*. It is not necessarily *wrong*. Many anomalies have
 | Function | Package | What it does |
 |-----------------------|----------------|--------------------------------|
 | `summary()`, `boxplot()` | base R | Quick view of spread and extreme values |
-| `boxplot.stats()$out` | grDevices | Lists the values beyond the boxplot whiskers |
+| `boxplot.stats()$out` | grDevices | Lists the values beyond the box plot whiskers |
 | `grubbs.test()` | outliers | Tests whether the most extreme value is an outlier |
 | `median()`, `mad()` | stats | Robust centre and spread, for robust z-scores |
 | `cov.rob(method = "mcd")`, `mahalanobis()` | MASS, stats | Robust centre and covariance, and Mahalanobis distances |

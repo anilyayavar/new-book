@@ -10,7 +10,17 @@ Suppose we audit the works contracts of a Public Works Division. Sixty contracto
 
 Many audit questions are like this. Which beneficiaries of a scheme share one bank account? Which firms always bid together? Does money go round in a circle between a few companies? Is a vendor linked to the clerk who passes its bills? These are questions about *connections*. Network analysis is built to answer them. With R, we can build such networks from ordinary audit data, draw them, find the key players, and find the hidden groups.
 
-In this chapter we learn the ideas of graph theory and the tools to work with networks in R. We start with small examples to learn the words, like vertex, edge, directed and bipartite. We then learn to create graphs, add details to them, and draw them. Finally we build a network of linked contractors of an imaginary Division. We find its key firms and its hidden groups, and we check the Division's tenders for bids from linked firms. In @sec-netaudit, we apply the same tools to more audit problems.
+In this chapter we learn the ideas of graph theory and the tools to work with networks in R. We start with small examples to learn the words, like vertex, edge, directed and bipartite. We then learn to create graphs, add details to them, and draw them. Finally we build a network of linked contractor firms of an imaginary Division. We find its key firms and its hidden groups, and we check the Division's tenders for bids from linked firms. In @sec-netaudit, we apply the same tools to more audit problems.
+
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `ggraph`, `igraph`, `igraphdata`, `tidyverse` and `visNetwork`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("ggraph", "igraph", "igraphdata", "tidyverse", "visNetwork"))
+```
+:::
 
 ## An introduction to graph theory
 
@@ -244,7 +254,7 @@ gr3 <- graph_from_data_frame(df, directed = FALSE, vertices = df_v)
 gr3
 ```
 
-The number of vertices is now 6, though there are still 4 edges. The vertex attribute `label` has also been added, shown as `label (v/c)`. In audit, isolated vertices matter. A contractor who shares nothing with anyone is still a contractor, and must stay in the count.
+The number of vertices is now 6, though there are still 4 edges. The vertex attribute `label` has also been added, shown as `label (v/c)`. In audit, isolated vertices matter. A firm that shares nothing with anyone is still a registered firm, and must stay in the count.
 
 Readers may try adding more columns to the edge data frame, like an amount or a date, and see how they become edge attributes.
 
@@ -456,7 +466,7 @@ Two random layouts of the same graph
 
 Many layouts involve randomness, so the same layout may place the vertices differently every time. By setting a random number seed with `set.seed()`, we can fix the layout and reproduce it.
 
-To learn the plotting options, let us use a small and famous network, the *Zachary karate club*. It is used in almost every book on networks, so it is worth knowing. Wayne W. Zachary studied a karate club of 34 members from 1970 to 1972. He recorded which pairs of members met outside the club. During the study, the administrator ("John A") and the instructor ("Mr Hi") fell out, and the club split into two. Each member joined one side or the other. Later in this chapter we will use the same tools on audit data, a network of contractors.
+To learn the plotting options, let us use a small and famous network, the *Zachary karate club*. It is used in almost every book on networks, so it is worth knowing. Wayne W. Zachary studied a karate club of 34 members from 1970 to 1972. He recorded which pairs of members met outside the club. During the study, the administrator ("John A") and the instructor ("Mr Hi") fell out, and the club split into two. Each member joined one side or the other. Later in this chapter we will use the same tools on audit data, a network of contractor firms.
 
 This graph is available in the package `igraphdata`, from which we can load it.
 
@@ -596,9 +606,9 @@ E(karate)$width <- E(karate)$weight
 plot(karate, layout = l_s, edge.label.cex = 0.7)
 ```
 
-## Our audit data, linked contractors {#sec-graph-contractors}
+## Our audit data, linked contractor firms {#sec-graph-contractors}
 
-The karate club taught us how to draw a network. For the rest of the chapter, let us work on audit data. We audit the works contracts of an imaginary Public Works Division for the financial year 2024-25. The Division has 60 registered contractors, `C01` to `C60`. From the registration papers, we have listed every pair of contractors who share some detail, a partner, an office address, a mobile number, an email ID or a bank account. Each such pair is one row of a table `links`. Its column `weight` is the number of details the two firms share.
+The karate club taught us how to draw a network. For the rest of the chapter, let us work on audit data. We audit the works contracts of an imaginary Public Works Division for the financial year 2024-25. The Division has 60 registered contractor firms, `C01` to `C60`. From the registration papers, we have listed every pair of firms that share some detail, a partner, an office address, a mobile number, an email ID or a bank account. Each such pair is one row of a table `links`. Its column `weight` is the number of details the two firms share.
 
 Most firms share nothing with anyone. A few pairs share one detail for a genuine reason, like two family firms or two firms in the same market building. But we have planted two hidden groups.
 
@@ -683,7 +693,7 @@ Static plots are fine for small graphs and for printed reports. But while *explo
 - `nodes` must have a column `id`. Optional columns control the look, like `label` (text shown), `group` (for colouring), `title` (tooltip shown on hover), `value` (size), `shape` and `color`.
 - `edges` must have the columns `from` and `to`. Optional columns include `value` or `width` (thickness), `label`, `title`, `arrows` and `color`.
 
-Let us draw the contractor network interactively. We colour the firms by their class of registration, and size them by their number of links. The tooltip of a firm shows its name, and the tooltip of an edge shows what the two firms share. Try hovering over a firm, clicking one to highlight its neighbours, choosing a firm from the drop-down list, and dragging a firm around.
+Let us draw the network of firms interactively. We colour the firms by their class of registration, and size them by their number of links. The tooltip of a firm shows its name, and the tooltip of an edge shows what the two firms share. Try hovering over a firm, clicking one to highlight its neighbours, choosing a firm from the drop-down list, and dragging a firm around.
 
 ```{r}
 #| label: fig-vis1
@@ -785,7 +795,7 @@ neighbors(cg_new, "C61")
 
 ## Describing a network
 
-Once we have a network, we want to describe it. How big and how dense is it? Which vertices are the most important? Are there groups within it? Let us answer these questions for the contractors.
+Once we have a network, we want to describe it. How big and how dense is it? Which vertices are the most important? Are there groups within it? Let us answer these questions for the firms.
 
 ### Measures for the whole network
 
@@ -845,7 +855,7 @@ Which firms are the most important? There are several ways to measure this, call
 - **Closeness** measures how close a vertex is to all others. A vertex with high closeness can reach everyone quickly.
 - **Eigenvector centrality** and **PageRank** give high scores to vertices connected to other important vertices. Being connected to the boss matters more than being connected to many juniors.
 
-Let us calculate these for the contractors and look at the top firms.
+Let us calculate these for the firms and look at the top firms.
 
 ```{r}
 centrality <- tibble(

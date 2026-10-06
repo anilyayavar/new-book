@@ -16,7 +16,7 @@ The book follows the course of an audit, in nine parts:
 2. **Getting Data Ready**. Reading files, including PDFs and messy Excel. Cleaning, joining and reshaping. Dates, and data too large for Excel.
 3. **Working with Text Fields**. Cleaning text, regular expressions, and validating PAN, GSTIN and Aadhaar.
 4. **Exploring and Sampling**. Charts, descriptive statistics, audit sampling and statistical tests.
-5. **Forensic Tests**. Rule-based validation, Benford's law, Nigrini's tests, duplicates, fuzzy matching, record linkage, gaps and process mining.
+5. **Forensic Tests**. Rule-based validation, Benford's Law, Nigrini's tests, duplicates, fuzzy matching, record linkage, gaps and process mining.
 6. **Modelling and Risk Scoring**. Regression, logistic regression, decision trees, random forests and DEA.
 7. **Finding Hidden Patterns**. PCA, clustering, association rules, time series and anomaly detection.
 8. **Beyond Tables**. Text analytics, networks and maps.

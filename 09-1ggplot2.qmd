@@ -17,6 +17,16 @@ In @sec-baseplot we drew charts with base R. In this chapter we learn **ggplot2*
 
 On the way, the charts will point us to the planted cases. At the end, an audit use case puts a number on one of them. In @sec-ggplot2-polish we then learn to make these charts fit for an audit report, with scales, coordinate systems, facets, labels, themes and saving.
 
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `ggrepel` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("ggrepel", "tidyverse"))
+```
+:::
+
 ## Core concepts of **grammar of graphics**
 
 **ggplot2**[^00-ggplot2-1] [@R-ggplot2] was developed by Hadley Wickham. It is based on the ideas of Leland Wilkinson in his book *The Grammar of Graphics* (2005).[^00-ggplot2-2] The **grammar of graphics** is a framework that describes a chart as a set of layers. Each layer does one job, and the layers together make the chart. Even the letters `gg` in ggplot2 stand for **g**rammar of **g**raphics.
@@ -206,7 +216,7 @@ In @fig-rgg3 each bill is now a point. The new layer, `geom_point()`, was added 
 
 We could also show the amounts as a box plot, by using another geometry, `geom_boxplot()`. See @fig-rgg4.
 
-```{r fig-rgg4, fig.height=3, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Bill amounts plotted as a boxplot"}
+```{r fig-rgg4, fig.height=3, fig.align='center', fig.show='hold', out.width="100%", fig.cap="Bill amounts plotted as a box plot"}
 ggplot(data = bills, mapping = aes(y = amount)) +
   geom_boxplot()
 ```
@@ -297,7 +307,7 @@ ggplot(bills, aes(amount, days_to_pay, colour = as.factor(quarter))) +
 
 The third use of colour is to show the value of a variable directly. Let us see the expenditure of each district in each month. A good chart for this is a *heat-map*, sometimes called a *highlight table*. We first summarise the monthly statement by district and month. The functions `summarise()` and `.by` are explained in @sec-DPLYRR.
 
-To draw the boxes of the heat-map we use another geometry, `geom_tile()`. We map the month to `x` and the district to `y`. To colour each box by the expenditure, we use the `fill` aesthetic instead of `colour`. We will see the difference between the two shortly. We divide the expenditure by `1e5` to show it in lakh.
+To draw the boxes of the heat-map we use another geometry, `geom_tile()`. We map the month to `x` and the district to `y`. To colour each box by the expenditure, we use the `fill` aesthetic instead of `colour`. We will see the difference between the two shortly. We divide the expenditure by `1e5` to show it in ₹ lakh.
 
 ```{r fig-rgg9, fig.align='center', fig.show='hold', fig.cap="Using colour to show monthly expenditure of each district"}
 spend |>
@@ -314,7 +324,7 @@ In @fig-rgg9 almost every box is a similar dark blue. Two boxes stand out in lig
 Heavy spending in the last month of the financial year is a classic audit concern. Funds that would otherwise lapse may be spent in a hurry, sometimes on things not needed, or booked without the work being done. A heat-map of districts against months shows such a rush at a glance. For the districts that stand out, examine the March bills for the date of supply, the date of work and the stock entries.
 :::
 
-So far, we have seen that to map colour to a variable, we pass it inside `aes()`. To use a fixed colour, we pass it outside `aes()`, directly in the geom. ggplot2 knows most colour names, and @sec-COLORR discusses colours in detail. But what if we pass a fixed colour inside `aes()`? Let us check.
+So far, we have seen that to map colour to a variable, we pass it inside `aes()`. To use a fixed colour, we pass it outside `aes()`, directly in the geom. ggplot2 knows most colour names, and @sec-ggplot2-colours discusses how to choose them. But what if we pass a fixed colour inside `aes()`? Let us check.
 
 ```{r fig-rgg10, fig.align='center', fig.show='hold', fig.cap="Mapping static colour inside aes"}
 ggplot(bills, aes(amount, days_to_pay)) +
@@ -588,7 +598,7 @@ ggplot(district_avg, aes(x = mean_amount, y = district)) +
   geom_col()
 ```
 
-Once we understand the `position` and `stat` arguments of `geom_bar()`, it is easy to draw stacked, dodged and 100 percent stacked bars with `geom_col()`. Readers may try these on summarised data. Remember that `geom_col()` uses `stat = "identity"`, so it does not summarise anything itself.
+Once we understand the `position` and `stat` arguments of `geom_bar()`, it is easy to draw stacked, dodged and 100 per cent stacked bars with `geom_col()`. Readers may try these on summarised data. Remember that `geom_col()` uses `stat = "identity"`, so it does not summarise anything itself.
 
 ### Adding labels to charts using `geom_text()` or `geom_label()`
 
@@ -646,7 +656,7 @@ ggplot(bills, aes(category)) +
   )
 ```
 
-To label the chart in @fig-rgg19, we must give `geom_text()` the same stat and summary function as the bar. Here we show the average amount in lakh, so we divide the computed `y` by `1e5`. See @fig-rgg33.
+To label the chart in @fig-rgg19, we must give `geom_text()` the same stat and summary function as the bar. Here we show the average amount in ₹ lakh, so we divide the computed `y` by `1e5`. See @fig-rgg33.
 
 ```{r fig-rgg33, fig.show='hold', fig.align='center', fig.cap="Bivariate bar chart labelled with mean amount in lakh"}
 ggplot(bills, aes(category, amount)) +
@@ -661,7 +671,7 @@ ggplot(bills, aes(category, amount)) +
 
 One more example labels each box of a box plot with its upper whisker, that is, the largest amount that is not treated as an outlier. Here `stage()` tells ggplot2 to use `amount` for the box, and the computed `xmax` for the position of the label.
 
-```{r fig-rgg34, fig.show='hold', fig.align='center', fig.cap="Upper whisker labelled in boxplot, in lakh"}
+```{r fig-rgg34, fig.show='hold', fig.align='center', fig.cap="Upper whisker labelled in box plot, in ₹ lakh"}
 # Labelling the upper whisker of a boxplot,
 # inspired by June Choe
 ggplot(bills, aes(amount, category)) +
@@ -764,7 +774,7 @@ bills |>
 
 Most geoms in ggplot2 have intuitive names. So we may correctly guess that line charts are drawn with `geom_line()`. But `geom_line()` is different from the geoms we have seen so far. It draws one line through *many* rows of data, so it must know which rows belong to the same line. It is therefore called a *collective* geom.
 
-To understand this, let us take the monthly expenditure of two districts, Amarpur and Fatehpur, in lakh. `month_no` numbers the months of the financial year, from 1 for April to 12 for March. Let us plot the expenditure against the month.
+To understand this, let us take the monthly expenditure of two districts, Amarpur and Fatehpur, in ₹ lakh. `month_no` numbers the months of the financial year, from 1 for April to 12 for March. Let us plot the expenditure against the month.
 
 ```{r fig-rgg42, fig.show='hold', fig.align='center', fig.cap="A simple line chart, without groups"}
 two_dist <- spend |>
@@ -836,7 +846,7 @@ Path vs line geoms
 
 ### Smoothing through `geom_smooth()`
 
-`geom_smooth()` adds a trend line over a scatter plot or a line chart. For example, let us draw the total monthly expenditure of the whole scheme, in crore. We add `geom_smooth()` to see the smoothed trend over the year. See @fig-rgg48.
+`geom_smooth()` adds a trend line over a scatter plot or a line chart. For example, let us draw the total monthly expenditure of the whole scheme, in ₹ crore. We add `geom_smooth()` to see the smoothed trend over the year. See @fig-rgg48.
 
 ```{r fig-rgg48, fig.show='hold', fig.align='center', fig.cap="Line chart with smoothed trend"}
 monthly_total <- spend |>
