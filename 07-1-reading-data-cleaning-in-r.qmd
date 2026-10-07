@@ -265,6 +265,76 @@ For any file received from an office, an auditor may follow these steps.
 Never clean the original file by hand. Clean it in code, so that the code itself is the record of every change. Problems found while cleaning are often findings in themselves, about the quality of the auditee's records.
 :::
 
+## Try it yourself {#sec-clean-exercises}
+
+These exercises use the bills and the April statement of payments from this chapter. Try each one before opening the solution. Some solutions use the dplyr verb `summarise()`, which @sec-DPLYRR explains in full.
+
+1.  **The same amount twice.** A bill may be paid twice under a new bill number. Use `get_dupes()` on `bills` to find the bills with the same amount, whatever their bill number.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bills |>
+      get_dupes(amount)
+    ```
+    Only the two payments of ₹3,12,000 to Kaveri Infra share an amount. Here they also share the bill number. With a different bill number, this check would still have caught them.
+    :::
+
+2.  **Bills outside the year.** A statement for the year 2024-25 has bill dates stored as Excel serial numbers, `45390`, `45612`, `45747`, `45748` and `45760`. Convert them to dates, and find any that fall after 31 March 2025.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bill_dates <- excel_numeric_to_date(c(45390, 45612, 45747, 45748, 45760))
+    bill_dates
+    bill_dates[bill_dates > as.Date("2025-03-31")]
+    ```
+    Of these, `r sum(bill_dates > as.Date("2025-03-31"))` bills are dated after the year ended. They may have been booked in the wrong year, and the auditor should see the vouchers.
+    :::
+
+3.  **Day first or month first.** An office writes the dates `03/04/2024` and `13/04/2024`. Read them once with `orders = "dmy"` and once with `orders = "mdy"`. Which reading can be right?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    office_dates <- c("03/04/2024", "13/04/2024")
+    parse_date_time(office_dates, orders = "dmy")
+    parse_date_time(office_dates, orders = "mdy")
+    ```
+    Read month first, the second date fails, since there is no 13th month. So this office writes the day first, and the first date is 3 April 2024, not 4 March.
+    :::
+
+4.  **Placeholders while reading.** Read `messy_file` again, but this time give `"-"` and `"N/A"` in the argument `na` of `read_csv()`. Clean the structure as in Step 2, and count the missing values in the amount column.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    raw_na <- read_csv(messy_file, skip = 3, na = c("", "NA", "-", "N/A"),
+                       col_types = cols(.default = col_character())) |>
+      clean_names() |>
+      remove_empty(c("rows", "cols")) |>
+      filter_out(s_no == "Total")
+
+    sum(is.na(raw_na$amount_rs))
+    ```
+    The `r sum(is.na(raw_na$amount_rs))` placeholders are now true `NA` values from the start. This agrees with the count of missing amounts found in Step 4.
+    :::
+
+5.  **One firm, one total.** Count the different vendor names in `step2`, before cleaning, and in `payments`, after cleaning. Then total the amount paid to each vendor.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    n_distinct(step2$name_of_vendor)
+    n_distinct(payments$vendor)
+
+    vendor_totals <- payments |>
+      summarise(payments = n(), amount = sum(amount, na.rm = TRUE), .by = vendor)
+    vendor_totals
+    ```
+    Cleaning has brought `r n_distinct(step2$name_of_vendor)` names down to `r n_distinct(payments$vendor)` firms. Sharma Traders now shows its true total of ₹`r round(vendor_totals$amount[vendor_totals$vendor == "SHARMA TRADERS"] / 1e5, 2)` lakh in one row. Without cleaning, its payments would have been split across two names. Kaveri Infra and Om Sai Suppliers show 0 only because their one amount is missing. `sum()` with `na.rm = TRUE` gives 0 when every value is missing, so do not read this as a payment of nothing.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

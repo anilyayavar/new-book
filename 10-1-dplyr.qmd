@@ -907,6 +907,81 @@ Write each analysis as one readable pipe, from the raw data to the exception lis
 
 Real audit data rarely comes in one table. The vendor names may be in a vendor master, and the sanctions in a separate register, as in the last use case. @sec-joins shows how to bring such tables together.
 
+## Try it yourself {#sec-dplyr-exercises}
+
+These exercises use the payment register `vouchers` of this chapter. Write each answer as one pipe, and try it before you open the solution.
+
+1.  **Large payments by cheque.** List the vouchers of more than ₹1 lakh that were paid by cheque, with the office, the vendor and the amount.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_cheque <- vouchers |>
+      filter(mode == "Cheque", amt_gross > 100000) |>
+      select(voucher_no, office, vendor_name, amt_gross)
+    ex_cheque
+    ```
+    In all, `r nrow(ex_cheque)` vouchers of more than ₹1 lakh were paid by cheque. Where the rules ask for large payments to be made electronically, each of these needs a reason.
+    :::
+
+2.  **The supply bills, in order.** Keep the vouchers under the head Supplies, and sort them by office, then by vendor, then by the date of the bill.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_supplies <- vouchers |>
+      filter(object_head == "Supplies") |>
+      arrange(office, vendor_name, bill_date) |>
+      select(office, vendor_name, bill_date, amt_gross)
+    ex_supplies |> filter(office == "Nashik")
+    ```
+    Sorted this way, the bills of one vendor at one office sit together, in date order. At Nashik, the bills of Sai Krupa Enterprises in January 2025 stand out at once, a few days apart and each just below ₹1 lakh.
+    :::
+
+3.  **Time taken to pay.** Add a column with the number of days from the date of the bill to the date of the voucher. Which vouchers took more than 25 days?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_delay <- vouchers |>
+      mutate(days_to_pay = as.numeric(voucher_date - bill_date)) |>
+      filter(days_to_pay > 25) |>
+      select(voucher_no, office, vendor_name, bill_date, voucher_date, days_to_pay)
+    ex_delay
+    ```
+    `r nrow(ex_delay)` vouchers took more than 25 days, the longest `r max(ex_delay$days_to_pay)` days. Delays in payment may lead to claims of interest by vendors, and a pattern of delays at one office is worth asking about.
+    :::
+
+4.  **Who was paid the most?** For each vendor, find the number of vouchers, the number of offices that paid it, and the total paid in ₹ lakh. Sort the vendors by the total, largest first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_vendors <- vouchers |>
+      summarise(vouchers   = n(),
+                offices    = n_distinct(office),
+                total_lakh = round(sum(amt_gross) / 1e5, 2),
+                .by = vendor_name) |>
+      arrange(desc(total_lakh))
+    ex_vendors
+    ```
+    `r ex_vendors$vendor_name[1]` received the most, ₹`r ex_vendors$total_lakh[1]` lakh in `r ex_vendors$vouchers[1]` vouchers from `r ex_vendors$offices[1]` offices. A list like this shows where the money went, and which vendors deserve a closer look.
+    :::
+
+5.  **Bills above the Executive Engineer's power.** Bills above ₹10 lakh need the sanction of the Superintending Engineer. For each office, count such bills and find their total in ₹ lakh, with the office having the most such bills first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_se <- vouchers |>
+      filter(amt_gross > 1000000) |>
+      summarise(bills = n(), total_lakh = round(sum(amt_gross) / 1e5, 2), .by = office) |>
+      arrange(desc(bills))
+    ex_se
+    ```
+    `r ex_se$office[1]` has the most such bills, `r ex_se$bills[1]`, worth ₹`r ex_se$total_lakh[1]` lakh. In all, `r sum(ex_se$bills)` bills needed the Superintending Engineer's sanction. The auditor would check that this sanction is on file for each of them.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

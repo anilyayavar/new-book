@@ -924,6 +924,91 @@ Hashed, tokenised and generalised data is still personal data. Whoever holds the
 
 @sec-read covers reading and writing the files that we encrypt here, and @sec-regex-validate shows how to check that Aadhaar, PAN and IFSC values are in the right format before hashing them. @sec-dup and @sec-linkage find the same person in two lists when the identifiers do not agree exactly, which hashes cannot do. @sec-reports builds the tables of an audit report, where the checks of @sec-privacy-table belong.
 
+## Try it yourself {#sec-privacy-exercises}
+
+These exercises use the pension lists and the functions made in this chapter. None of them prints a full identifier or writes a key to disk. Try each one before opening the solution. Some solutions use dplyr verbs such as `count()`, `filter()` and `inner_join()`, which @sec-DPLYRR and @sec-joins explain in full.
+
+1.  **A masked list for a working paper.** List the beneficiaries of Hillpur who have a disability. Show the beneficiary ID, the masked Aadhaar number, the masked bank account and the monthly pension, and leave out the name.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    hillpur_disabled <- oap |>
+      filter(district == "Hillpur", disability == "Yes") |>
+      transmute(ben_id,
+                aadhaar      = mask_aadhaar(aadhaar),
+                bank_account = mask_account(bank_account),
+                monthly_pension)
+    hillpur_disabled
+    ```
+    Only `r nrow(hillpur_disabled)` persons in Hillpur have a disability. In so small a group, even a masked list may point to the person, so it belongs in the working papers and not in the report.
+    :::
+
+2.  **Forgetting to normalise.** Hash the Treasury's Aadhaar numbers with `secret_key`, but skip `normalise_id()`. Join the result with `from_welfare`. How many persons match now?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    treasury_raw <- svc |>
+      transmute(ppo_no, aadhaar_hash = as.character(sha256(aadhaar, key = secret_key)))
+
+    from_welfare |>
+      inner_join(treasury_raw, by = "aadhaar_hash") |>
+      nrow()
+    ```
+    Not one person matches, against `r nrow(matches)` with normalised numbers. Every Treasury number has spaces or hyphens, so its hash differs from the hash of the same digits without them. If two departments hash their lists, both must agree on the standard form first.
+    :::
+
+3.  **Drop gender instead.** The chapter suggested making the data coarser by dropping gender. Using `oap_gen`, with the bands already joined into 80 and above, count the persons in each combination of district and age band. Are any groups still smaller than `k`?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    oap_gen |>
+      count(district, age_band) |>
+      filter(n < k)
+    ```
+    One group is still too small. Hillpur has only `r oap_gen |> count(district, age_band) |> filter(n < k) |> pull(n) |> sum()` pensioners aged 80 and above. Dropping gender is not enough here, so these few records must be coarsened further, or left out of the shared copy with a note saying so.
+    :::
+
+4.  **Small cells in a disability table.** The report is also to show the number of pensioners with and without a disability in each district. Make this table with `count()` and `complete()`, and find the cells below the threshold of 5.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    tab_dis <- oap |>
+      count(district, disability) |>
+      complete(district, disability, fill = list(n = 0))
+
+    tab_dis |>
+      pivot_wider(names_from = disability, values_from = n)
+
+    tab_dis |>
+      filter(n < threshold)
+    ```
+    Only one cell is below 5, the `r tab_dis$n[tab_dis$district == "Hillpur" & tab_dis$disability == "Yes"]` persons of Hillpur with a disability. If the table shows the district total, the other Hillpur cell must be hidden too, or the hidden number can be found by subtraction. This is the secondary suppression of @sec-privacy-table.
+    :::
+
+5.  **A fresh key for the next audit.** Make a new key with `rand_bytes()`, without printing it. Hash the Treasury list with the new key and join it with `from_welfare`, which was hashed with the old key. Then hash the welfare list with the new key too, and join again.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    new_key <- paste(rand_bytes(32), collapse = "")
+
+    treasury_new <- svc |>
+      transmute(ppo_no, aadhaar_hash = keyed_hash(aadhaar, new_key))
+    welfare_new <- oap |>
+      transmute(ben_id, aadhaar_hash = keyed_hash(aadhaar, new_key))
+
+    nrow(inner_join(from_welfare, treasury_new, by = "aadhaar_hash"))
+    nrow(inner_join(welfare_new, treasury_new, by = "aadhaar_hash"))
+
+    rm(new_key)
+    ```
+    Lists hashed with different keys find nobody in common. With the same new key on both sides, the same `r nrow(inner_join(welfare_new, treasury_new, by = "aadhaar_hash"))` persons are found again. This is why a fresh key for each exercise stops old hashed lists from being linked with new ones. The last line removes the key from memory once the work is done.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

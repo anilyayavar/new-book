@@ -354,6 +354,85 @@ When data arrives in pieces, like one sheet for each district or one file for ea
 Always keep a column showing which file each row came from. Reconcile the rows and totals of each file before the analysis. When splitting, keep each piece together with its name, as `split()` and `iwalk()` do, so that no office gets another office's data.
 :::
 
+## Try it yourself {#sec-merge-exercises}
+
+These exercises use the tables we combined in this chapter, the pension data `pension_data` and the block returns `block_data`. Any file an exercise writes goes into the temporary folder given by `tempdir()`. Try each one before you open the solution. Some solutions use dplyr verbs such as `count()`, `filter()` and `mutate()`, which @sec-DPLYRR explains in full.
+
+1.  **Totals by scheme.** Find the number of beneficiaries paid and the amount paid in ₹ crore under each scheme, for all four districts together.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_scheme <- pension_data |>
+      summarise(beneficiaries = sum(beneficiaries),
+                amount_crore  = round(sum(amount_paid) / 1e7, 2), .by = scheme)
+    ex_scheme
+    ```
+    Old age pension cost ₹`r ex_scheme$amount_crore[ex_scheme$scheme == "Old age"]` crore and widow pension ₹`r ex_scheme$amount_crore[ex_scheme$scheme == "Widow"]` crore. These totals can be compared with the expenditure booked under each scheme in the accounts.
+    :::
+
+2.  **Months reported by fewer districts.** Without looking at each district, find the months that fewer than four districts have reported.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_months <- pension_data |>
+      distinct(district, month) |>
+      count(month, name = "districts") |>
+      filter(districts < 4)
+    ex_months
+    ```
+    Only `r month.name[match(ex_months$month, month.abb)]` has fewer than four districts, `r ex_months$districts` of them. This finds the same gap as in the chapter, Chandpur's January, but from the side of the months. With many districts, such a count shows the gaps at a glance.
+    :::
+
+3.  **Check the rate of pension.** Old age pension is ₹1,200 a month and widow pension ₹1,000. Divide the amount paid by the beneficiaries in each row. Are there rows where the result is not the rate of the scheme?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rate <- pension_data |>
+      mutate(rate_paid = amount_paid / beneficiaries,
+             rate_due  = if_else(scheme == "Old age", 1200, 1000)) |>
+      filter(rate_paid != rate_due)
+    ex_rate
+    ```
+    The result has `r nrow(ex_rate)` rows. In every row the amount agrees with the number of beneficiaries at the scheme's rate. A clean result is still worth recording in the working papers, since it shows the test was done.
+    :::
+
+4.  **Recompute the wages.** In `block_data`, every column except `amount` is still text. Convert `workers`, `days` and `wage_rate` to numbers, recompute the wages of each muster roll, and list any roll where the amount differs.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_wages <- block_data |>
+      mutate(across(c(workers, days, wage_rate), parse_number),
+             wages_due = workers * days * wage_rate) |>
+      filter(wages_due != amount)
+    nrow(ex_wages)
+    ```
+    The count is `r nrow(ex_wages)`. No muster roll differs, so the amounts in the returns are arithmetically correct, including Rampur's after its names were cleaned. The shortfall of Madhopur found in the chapter is a missing roll, not a wrong amount.
+    :::
+
+5.  **Exceptions for each block.** List the muster rolls with more than 20 workers, and write one csv file for each block into a new folder inside `tempdir()`. Check which files were written.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_folder <- file.path(tempdir(), "large_rolls")
+    dir.create(ex_folder, showWarnings = FALSE)
+
+    ex_large <- block_data |>
+      filter(parse_number(workers) > 20)
+
+    ex_large |>
+      split(ex_large$block) |>
+      iwalk(\(df, block) write_csv(df, file.path(ex_folder, paste0(block, "_large_rolls.csv"))))
+
+    list.files(ex_folder)
+    ```
+    There are `r nrow(ex_large)` such rolls, in `r n_distinct(ex_large$block)` blocks, and one file has been written for each of these blocks. Each block can now be asked to show the attendance of these large gangs on the muster rolls.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -734,6 +734,69 @@ Pivot data longer for analysis, and wider only at the end, for presentation. Bef
 A missing month and a month with zero expenditure are different findings. Before summing data over time, check with `complete()` that no period is silently absent. Do not fill a gap with zero unless the records show that nothing was spent.
 :::
 
+## Try it yourself {#sec-tidyr-exercises}
+
+These exercises use the tables of this chapter. Try each one before opening the solution.
+
+1.  **The largest spender of 2024-25.** Pivot `dept_exp` longer, this time choosing the year columns with `starts_with("20")`. Then find the department with the highest expenditure in 2024-25.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_dept_long <- dept_exp |>
+      pivot_longer(cols = starts_with("20"), names_to = "year", values_to = "exp_crore")
+
+    ex_dept_long |>
+      filter(year == "2024-25") |>
+      arrange(desc(exp_crore))
+    ```
+    `r ex_dept_long |> filter(year == "2024-25") |> slice_max(exp_crore) |> pull(department)` spent the most in 2024-25, ₹`r ex_dept_long |> filter(year == "2024-25") |> slice_max(exp_crore) |> pull(exp_crore)` crore. `starts_with("20")` picked the same three columns as before, without naming each one.
+    :::
+
+2.  **Grants left unspent.** Using `be_tidy`, work out the percentage of the budget spent by each department in each year. Which department and year spent less than 90% of the budget?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_util <- be_tidy |>
+      mutate(spent_pct = round(100 * exp / budget, 1))
+
+    ex_util |> filter(spent_pct < 90)
+    ```
+    `r paste(ex_util$department[ex_util$spent_pct < 90], "in", ex_util$year[ex_util$spent_pct < 90])` spent only `r ex_util$spent_pct[ex_util$spent_pct < 90]`% of its budget. Large savings, like excess expenditure, are reported in the audit of appropriation accounts. The auditor would ask why the funds were not surrendered in time.
+    :::
+
+3.  **Supplies from each supplier.** In `stock_register`, turn the "-do-" entries into `NA`, fill them from the row above, and then total the quantity supplied by each supplier.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_stock <- stock_register |>
+      mutate(item     = na_if(item, "-do-"),
+             supplier = na_if(supplier, "-do-")) |>
+      fill(item, supplier) |>
+      summarise(entries = n(), qty = sum(qty), .by = supplier)
+    ex_stock
+    ```
+    `r ex_stock$supplier[1]` has `r ex_stock$entries[1]` entries and `r ex_stock$supplier[2]` has `r ex_stock$entries[2]`. Without `fill()`, the "-do-" rows would have formed a supplier of their own, and the totals of both real suppliers would have been understated.
+    :::
+
+4.  **A half-yearly statement.** From `monthly`, make a statement with one row for each district and two columns, `H1` for April to September and `H2` for October to March. Then find the districts whose second half was more than 25% higher than the first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_half <- monthly |>
+      mutate(half = if_else(as.integer(month) <= 6, "H1", "H2")) |>
+      pivot_wider(id_cols = district, names_from = half, values_from = exp_lakh,
+                  values_fn = sum)
+    ex_half
+
+    ex_half |> filter(H2 > 1.25 * H1)
+    ```
+    `r paste(ex_half$district[which(ex_half$H2 > 1.25 * ex_half$H1)], collapse = " and ")` spent more than a quarter more in the second half, which matches the March rush found above. Chandpur's `H1` is `NA` because three of its months were not reported. So it drops out of the comparison instead of being judged on a short half year.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

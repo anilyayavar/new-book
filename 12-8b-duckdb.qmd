@@ -590,6 +590,81 @@ dbDisconnect(con)
 - data.table is the fastest choice when the data fits in memory; DuckDB when it does not.
 :::
 
+## Try it yourself {#sec-duckdb-exercises}
+
+These exercises use the voucher data of this chapter. We disconnected from DuckDB above, so the first exercise connects again, to the Parquet file we saved in the temporary folder. The later exercises use that connection. Try each one before opening the solution.
+
+1.  **Connect again and check the control total.** Open a new DuckDB connection named `ex_con`, create a view over the Parquet file, and point `tbl()` at it. Does its row count agree with the `n_rows` we counted from the CSV files?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| message: false
+    ex_con <- dbConnect(duckdb())
+    dbExecute(ex_con, paste0("CREATE VIEW vouchers AS SELECT * FROM read_parquet('", parquet_file, "')"))
+    ex_vouchers <- tbl(ex_con, "vouchers")
+
+    ex_rows <- ex_vouchers |> count() |> pull(n)
+    c(parquet = ex_rows, csv = n_rows)
+    ex_rows == n_rows
+    ```
+    Both have `r format(ex_rows, big.mark = ",")` rows, about `r round(ex_rows / 1e5, 1)` lakh. Checking a converted file against the original is part of the audit trail. It shows that no row was lost when the CSV files were turned into Parquet.
+    :::
+
+2.  **Very large payments.** For each type of bill, count the payments above ₹10 lakh and their total value in crore.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_large <- ex_vouchers |>
+      filter(amount > 1e6) |>
+      summarise(payments = n(), crore = round(sum(amount, na.rm = TRUE) / 1e7, 2), .by = bill_type) |>
+      arrange(desc(payments)) |>
+      collect()
+    ex_large
+    ```
+    There are `r format(sum(ex_large$payments), big.mark = ",")` payments above ₹10 lakh in all. DuckDB went through every row, but only `r nrow(ex_large)` rows came into R. Large payments are a natural sample for detailed checks of sanctions and vouchers.
+    :::
+
+3.  **Contingent bills in March, by department.** Send `ddo_master` to the new connection with `copy_to()`. Join it to the vouchers, keep the contingent bills paid in March 2025, and total them by department. Check with `anti_join()` that no voucher was lost for want of a DDO code in the master.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_ddo <- copy_to(ex_con, ddo_master, name = "ddo_master", overwrite = TRUE)
+
+    ex_vouchers |> anti_join(ex_ddo, by = "ddo_code") |> count() |> pull(n)
+
+    ex_march <- ex_vouchers |>
+      filter(bill_type == "Contingent", year(voucher_date) == 2025, month(voucher_date) == 3) |>
+      left_join(ex_ddo, by = "ddo_code") |>
+      summarise(payments = n(), crore = round(sum(amount, na.rm = TRUE) / 1e7, 2), .by = department) |>
+      arrange(desc(crore)) |>
+      collect()
+    ex_march
+    ```
+    The anti join returns zero, so every voucher found its DDO and the departmental totals are complete. `r ex_march$department[1]` paid the most on contingent bills in March, ₹`r ex_march$crore[1]` crore. Contingent bills in the last month deserve a look for purchases made only to use up the grant.
+    :::
+
+4.  **Quarters of the financial year, in the database.** Without bringing the rows into R, work out the quarter of the financial year for each voucher, where April to June is quarter 1. Total the payments by quarter. Then disconnect.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_qtr <- ex_vouchers |>
+      mutate(fy_qtr = if_else(month(voucher_date) >= 4,
+                              (month(voucher_date) - 4) %/% 3 + 1,
+                              4)) |>
+      summarise(payments = n(), crore = round(sum(amount, na.rm = TRUE) / 1e7, 1), .by = fy_qtr) |>
+      arrange(fy_qtr) |>
+      collect()
+    ex_qtr
+
+    dbDisconnect(ex_con)
+    ```
+    We built the quarter from `month()`, `if_else()` and `%/%`, all of which dbplyr translates into SQL, so the work stayed in DuckDB. January to March is quarter 4. It has the most payments, about `r round(ex_qtr$payments[ex_qtr$fy_qtr == 4] / 1e5, 1)` lakh, because of the March rush.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -415,6 +415,78 @@ Devgarh spent 35% more than its budget in 2024-25, the highlighted cell E9 (the 
 - Formatting and formulas are evidence. A highlighted cell or a typed-over total is a question to ask.
 :::
 
+## Try it yourself {#sec-pdfxl-exercises}
+
+These exercises use the tables we built in this chapter, the bank statement `statement`, the register of sanctions `sanctions` and the tidy budget statement `tidy_statement`. Try each one before you open the solution. Some solutions use dplyr verbs such as `arrange()`, `filter()` and `mutate()`, which @sec-DPLYRR explains in full.
+
+1.  **A lower power of sanction.** Suppose the Director's power were only ₹3 lakh. Which sanctions would exceed it? List them, largest first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_above_3l <- sanctions |>
+      filter(amount > 300000) |>
+      arrange(desc(amount)) |>
+      select(order_no, date, firm, amount)
+    ex_above_3l
+    ```
+    With the lower limit, `r nrow(ex_above_3l)` sanctions are beyond the Director's power, against only one at ₹5 lakh. The register built from the PDFs is tested like any other table.
+    :::
+
+2.  **Cash drawn from the account.** How many times was cash withdrawn through an ATM during the quarter, and how much in all?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_atm <- statement |>
+      filter(str_detect(narration, "ATM")) |>
+      summarise(withdrawals = n(), total = sum(debit))
+    ex_atm
+    ```
+    Cash was withdrawn `r ex_atm$withdrawals` times, for ₹`r indian_format(round(ex_atm$total))` in all. A health society should make most payments by cheque or transfer. The auditor would ask what the cash was used for, and check it with the cash book.
+    :::
+
+3.  **Is the closing balance enough?** Compare the last printed balance with the opening balance plus all the credits, less all the debits. Does this simpler check find the altered line?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_closing <- statement |>
+      summarise(printed  = last(balance),
+                expected = round(500000 + sum(credit, na.rm = TRUE) - sum(debit, na.rm = TRUE), 2))
+    ex_closing
+    ```
+    The two agree, with a difference of ₹`r round(ex_closing$printed - ex_closing$expected, 2)`. The altered line changed only one balance, and the next line was correct again. So a check of the closing balance alone misses it. Only re-performing the balance line by line finds it.
+    :::
+
+4.  **Sanctions to each firm.** Find the number of sanctions and the total amount sanctioned to each firm, largest total first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_firms <- sanctions |>
+      summarise(orders = n(), total = sum(amount), .by = firm) |>
+      arrange(desc(total))
+    ex_firms
+    ```
+    `r ex_firms$firm[1]` received the largest total, ₹`r round(ex_firms$total[1] / 1e5, 2)` lakh in `r ex_firms$orders[1]` orders. Several orders to one firm in a year are worth a look, to see whether one purchase was split to stay within the Director's power.
+    :::
+
+5.  **Utilisation in the earlier year.** From `tidy_statement`, work out the utilisation of the budget of each district in 2023-24. Which district used the smallest share of its budget?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_util <- tidy_statement |>
+      filter(year == "2023-24") |>
+      pivot_wider(names_from = measure, values_from = value) |>
+      mutate(utilisation_pct = round(100 * Expenditure / Budget, 1)) |>
+      arrange(utilisation_pct)
+    ex_util
+    ```
+    `r ex_util$district[1]` used the smallest share, `r ex_util$utilisation_pct[1]`% of its budget. Low utilisation may mean that funds were surrendered late, or that works were held up. The highlighted cell C7 was Belapur's expenditure for this year, and Belapur used `r ex_util$utilisation_pct[ex_util$district == "Belapur"]`%.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

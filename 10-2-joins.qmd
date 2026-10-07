@@ -539,6 +539,81 @@ Before reporting, the auditor would check the revision orders and the supply ord
 A join can quietly add rows, and an inner join can quietly drop them. A key which is not unique, or missing keys matching each other, can inflate the totals without any error. Always count the rows and add up the amounts before and after a join, and let `relationship` check the join for you.
 :::
 
+## Try it yourself {#sec-joins-exercises}
+
+These exercises use the tables of this chapter. Try each one before opening the solution.
+
+1.  **Vendor names for one district.** Bring the vendor names into the Belapur payment file alone, with a left join on `vendor_code`. Which voucher has no vendor name?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pay_belapur |>
+      left_join(vendors, by = "vendor_code") |>
+      filter(is.na(vendor_name))
+    ```
+    Voucher `r pay_belapur$voucher_no[!pay_belapur$vendor_code %in% vendors$vendor_code]` paid vendor `r pay_belapur$vendor_code[!pay_belapur$vendor_code %in% vendors$vendor_code]`, which is not in the master. The left join kept it, with `NA` for the name, so nothing was lost from the Belapur total.
+    :::
+
+2.  **Count the rows after a join.** Join `payments` to `vendors` with a left join, and then with an inner join. For each, compare the number of rows and the total amount with those of `payments`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_left  <- payments |> left_join(vendors, by = "vendor_code")
+    ex_inner <- payments |> inner_join(vendors, by = "vendor_code")
+
+    tibble(table = c("payments", "left join", "inner join"),
+           rows  = c(nrow(payments), nrow(ex_left), nrow(ex_inner)),
+           total = c(sum(payments$amount), sum(ex_left$amount), sum(ex_inner$amount)))
+    ```
+    The left join keeps all `r nrow(ex_left)` rows and the full total. The inner join has only `r nrow(ex_inner)` rows, and its total is short by ₹`r (sum(payments$amount) - sum(ex_inner$amount)) / 1e5` lakh, the payment to V109. This simple table, made after every join, catches rows that were dropped or added.
+    :::
+
+3.  **Vendors without a bank account.** Use `anti_join()` with `vendor_banks` to answer two questions. Which approved vendors have no bank account on record? Which payments went to a vendor with no bank account on record?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    vendors |> anti_join(vendor_banks, by = "vendor_code")
+    payments |> anti_join(vendor_banks, by = "vendor_code")
+    ```
+    Vendor `r anti_join(vendors, vendor_banks, by = "vendor_code")$vendor_code` (`r anti_join(vendors, vendor_banks, by = "vendor_code")$vendor_name`) has no account, but it was not paid either. The payment that matters is voucher `r anti_join(payments, vendor_banks, by = "vendor_code")$voucher_no`. It went to a vendor who is in neither the master nor the bank list. The auditor would ask into which account the money was actually credited.
+    :::
+
+4.  **Clean the bank master, then join safely.** Keep only the last account listed for each vendor in `vendor_banks`. Then join `payments` to the cleaned table with `relationship = "many-to-one"`, and check that the number of rows has not changed.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    banks_clean <- vendor_banks |> slice_tail(n = 1, by = vendor_code)
+
+    pay_banks_clean <- payments |>
+      left_join(banks_clean, by = "vendor_code", relationship = "many-to-one")
+
+    c(rows_before = nrow(payments), rows_after = nrow(pay_banks_clean))
+    ```
+    With one account for each vendor, the join runs without error and the rows stay at `r nrow(pay_banks_clean)`. Here we assumed that the last account listed is the current one. In a real audit, the bank mandate forms would settle which account is valid.
+    :::
+
+5.  **A different date of revision.** Suppose the cement rate was revised with effect from 20 October 2024, not 1 October. Make a copy of `rate_revisions` with this date, and run the rate-in-force check again. Which bills now show an excess, and how much in all?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    rates_alt <- rate_revisions |>
+      mutate(effective_from = if_else(item == "Cement" & effective_from == as.Date("2024-10-01"),
+                                      as.Date("2024-10-20"), effective_from))
+
+    excess_alt <- bills |>
+      left_join(rates_alt, by = join_by(item, closest(bill_date >= effective_from))) |>
+      mutate(excess = (rate_charged - rate) * qty) |>
+      filter(excess > 0)
+    excess_alt
+    ```
+    The excess is now found only in `r paste(excess_alt$bill_no, collapse = " and ")`, ₹`r format(sum(excess_alt$excess), big.mark = ",")` in all. Bill B-03, dated 15 October, falls before the new date, so the old rate was correct for it. The date in the revision order decides the finding, so the auditor must take it from the order itself.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

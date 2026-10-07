@@ -549,6 +549,68 @@ For any file received from the auditee, an auditor may follow these steps.
 A value that cannot be read becomes `NA` with only a short message. Such a payment silently drops out of every total. Always check `problems()`, the row count and the totals against the covering letter before starting the analysis.
 :::
 
+## Try it yourself {#sec-read-exercises}
+
+These exercises use the files created at the start of this chapter, in the temporary folder `folder`. Try each one before opening the solution. Some solutions use dplyr verbs such as `filter()` and `summarise()`, which @sec-DPLYRR explains in full.
+
+1.  **Cheque payments only.** Read the Amarpur voucher file with `read_csv()`, keeping only the columns `voucher_no`, `mode` and `amount`. How many vouchers were paid by cheque, and for what total?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    cheques <- read_csv(amarpur_file, col_select = c(voucher_no, mode, amount),
+                        show_col_types = FALSE) |>
+      filter(mode == "Cheque")
+    nrow(cheques)
+    sum(cheques$amount)
+    ```
+    There are `r nrow(cheques)` cheque payments, for ₹`r round(sum(cheques$amount) / 1e5, 2)` lakh. Cheque payments deserve a look, since most payments are now made electronically.
+    :::
+
+2.  **Large works.** Read both sheets of the works register, and find the works with an estimate of ₹20 lakh or more in each.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    read_excel(xl_file, sheet = "Amarpur North") |>
+      filter(estimate_lakh >= 20)
+    read_excel(xl_file, sheet = "Amarpur South") |>
+      filter(estimate_lakh >= 20)
+    ```
+    One work in each sub-division is estimated at ₹20 lakh or more. These would be the first works to select for a check of the sanction and the tender.
+    :::
+
+3.  **Reconcile the Amarpur file.** Read the covering letter of the Amarpur treasury from `letter_file`. Take the number of vouchers from it, and compare it with the number of rows in `vouchers`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    amarpur_letter <- readLines(letter_file)
+    amarpur_letter[4]
+    parse_number(amarpur_letter[4]) == nrow(vouchers)
+    ```
+    The count in the letter agrees with the file. But the letter gives no total amount. So the auditor should ask the treasury for the total, before the file can be fully reconciled.
+    :::
+
+4.  **Export a DDO summary and check it.** For the Amarpur vouchers of ₹1 lakh or more, make a summary with the number of vouchers and their total for each DDO. Write it to `folder` as a csv file, read it back, and check that the DDO codes and the total survived the round trip.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ddo_summary <- vouchers |>
+      filter(amount >= 1e5) |>
+      summarise(vouchers = n(), amount = sum(amount), .by = ddo_code)
+
+    summary_file <- file.path(folder, "ddo_summary.csv")
+    write_csv(ddo_summary, summary_file)
+
+    ddo_back <- read_csv(summary_file, col_types = cols(ddo_code = col_character()))
+    ddo_back
+    sum(ddo_back$amount) == sum(ddo_summary$amount)
+    ```
+    The `r sum(ddo_summary$vouchers)` vouchers of ₹1 lakh or more come to ₹`r round(sum(ddo_summary$amount) / 1e5, 2)` lakh, and the file read back gives the same total. Reading `ddo_code` as text keeps its leading zero, so the codes still match the DDO master.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

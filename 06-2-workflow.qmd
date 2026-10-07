@@ -221,6 +221,89 @@ A simple folder structure for an audit project could be `data/original` (the fil
 Files deleted from R do not go to the Recycle Bin. Keep the original data in a separate folder and work only on copies. A recorded hash proves that the data analysed is exactly the data received.
 :::
 
+## Try it yourself {#sec-file-exercises}
+
+These exercises build a small audit folder inside the temporary folder given by `tempdir()`, so nothing is left in your project. Each exercise uses the folder made in the one before it. Try each one before opening the solution.
+
+1.  **Set up the audit folders.** Inside `tempdir()`, make a folder `pension_audit` with the four sub-folders of the suggested workflow, `data/original`, `data/working`, `scripts` and `outputs`. Check that all four exist.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    audit_dir <- file.path(tempdir(), "pension_audit")
+    dir.create(file.path(audit_dir, "data/original"), recursive = TRUE, showWarnings = FALSE)
+    dir.create(file.path(audit_dir, "data/working"), recursive = TRUE, showWarnings = FALSE)
+    dir.create(file.path(audit_dir, "scripts"), showWarnings = FALSE)
+    dir.create(file.path(audit_dir, "outputs"), showWarnings = FALSE)
+
+    dir.exists(file.path(audit_dir, c("data/original", "data/working", "scripts", "outputs")))
+    ```
+    `recursive = TRUE` makes the folder `data` and the folder inside it in one step. `dir.exists()` takes several paths at once, and all four answers are `TRUE`.
+    :::
+
+2.  **Receive the district files.** The Sonpur office sends three files, `sonpur_apr2024.csv`, `sonpur_may2024.csv` and `covering_note.txt`. Write them into `data/original` with `writeLines()`, using a few lines of made-up vouchers. Then list only the csv files.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    original <- file.path(audit_dir, "data/original")
+    writeLines(c("voucher,amount", "PV-01,1250", "PV-02,45600"),
+               file.path(original, "sonpur_apr2024.csv"))
+    writeLines(c("voucher,amount", "PV-03,9800"),
+               file.path(original, "sonpur_may2024.csv"))
+    writeLines("Two files of vouchers are enclosed.",
+               file.path(original, "covering_note.txt"))
+
+    list.files(original, pattern = "\\.csv$")
+    ```
+    The pattern `\\.csv$` keeps only the names ending in `.csv`, so the covering note is left out. With many districts and months, the same line picks out every data file in the folder.
+    :::
+
+3.  **Make a register of received files.** For every file in `data/original`, record the file name, its size in bytes and its MD5 hash in one data frame. `basename()` gives the file name without the folder, and `file.size()` gives the size.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    received_files <- list.files(original, full.names = TRUE)
+    register <- data.frame(file  = basename(received_files),
+                           bytes = file.size(received_files),
+                           md5   = unname(tools::md5sum(received_files)))
+    register
+    ```
+    This is the register the audit tip asks for. Add the date of receipt and the name of the officer who gave the files, and it can go into the working papers.
+    :::
+
+4.  **Save the register.** Save `register` in the `outputs` folder with `saveRDS()`, read it back under the name `register_back`, and check that nothing was lost.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    register_file <- file.path(audit_dir, "outputs", "register.rds")
+    saveRDS(register, register_file)
+    register_back <- readRDS(register_file)
+    identical(register, register_back)
+    ```
+    `identical()` returns `TRUE`, so the saved register is exactly the register we made.
+    :::
+
+5.  **Has anything changed?** Suppose someone changes the May amount from 9800 to 98000. Calculate the hashes again and find, from `register_back`, which file has changed. Then remove the whole `pension_audit` folder, checking before and after that it exists.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    writeLines(c("voucher,amount", "PV-03,98000"),
+               file.path(original, "sonpur_may2024.csv"))
+
+    hash_now <- unname(tools::md5sum(received_files))
+    register_back$file[register_back$md5 != hash_now]
+
+    dir.exists(audit_dir)
+    unlink(audit_dir, recursive = TRUE)
+    dir.exists(audit_dir)
+    ```
+    Only `r register_back$file[register_back$md5 != hash_now]` has a new hash. The other two files are exactly as received. We deleted the folder only because it was a practice copy in `tempdir()`. Never delete a folder of original data in this way.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

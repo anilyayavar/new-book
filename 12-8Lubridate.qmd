@@ -938,6 +938,71 @@ Dates and times are easy to misread. A wrong date order or a wrong time zone shi
 
 Dates are also the backbone of two later chapters. When the question is about how a measure *moves over time*, its trend, its seasons and what to expect next month, see the chapter on time series analysis (@sec-ts). When the question is whether a particular month is *unusual*, or when a series *shifted* to a new level, see the time series methods of the anomaly detection chapter (@sec-ano-ts and @sec-ano-changepoint).
 
+## Try it yourself {#sec-lubri-exercises}
+
+These exercises use the bill register and the approval log of this chapter. Try each one before opening the solution.
+
+1.  **Ageing against the 45-day limit.** Age the unpaid bills as on 31 March 2025 again, but with three groups. These are "Up to 45 days", "46-180 days" and "Over 180 days". How many bills, and how much money, are in each group?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_age <- bill_register |>
+      filter(is.na(paid)) |>
+      mutate(days_pending = as.numeric(as_on - received),
+             age_group = cut(days_pending, breaks = c(-Inf, 45, 180, Inf),
+                             labels = c("Up to 45 days", "46-180 days", "Over 180 days"))) |>
+      summarise(bills = n(), amount_lakh = round(sum(amount) / 1e5, 2), .by = age_group) |>
+      arrange(age_group)
+    ex_age
+    ```
+    In all, `r sum(ex_age$bills[ex_age$age_group != "Up to 45 days"])` unpaid bills are older than 45 days. If any of them are from micro or small enterprises, the delay is beyond the time allowed by law, and interest may become payable.
+    :::
+
+2.  **Bills paid late, by financial year.** Among the paid bills, count those paid more than 45 days after receipt, and their amount, for each financial year of payment. Use the `fin_year()` function of the chapter.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_late <- bill_register |>
+      filter(!is.na(paid)) |>
+      mutate(days_to_pay = as.numeric(paid - received)) |>
+      filter(days_to_pay > 45) |>
+      mutate(fy = fin_year(paid)) |>
+      summarise(bills = n(), amount_lakh = round(sum(amount) / 1e5, 2), .by = fy) |>
+      arrange(fy)
+    ex_late
+    ```
+    In all, `r sum(ex_late$bills)` bills were paid more than 45 days after they were received. The year-wise split shows whether the delays are growing or falling.
+    :::
+
+3.  **Weekend approvals of one user.** From `approval_log`, take the approvals of user USR07 made on a Saturday or a Sunday. How many are there, and what is the largest single amount?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_weekend <- approval_log |>
+      filter(user == "USR07", wday(time, week_start = 1) >= 6)
+
+    c(approvals = nrow(ex_weekend), largest = max(ex_weekend$amount))
+    ```
+    USR07 approved `r nrow(ex_weekend)` payments at weekends, the largest of ₹`r round(max(ex_weekend$amount) / 1e5, 2)` lakh. With `week_start = 1`, Monday is day 1, so Saturday and Sunday are days 6 and 7. The office was closed on these days, so each approval needs an explanation.
+    :::
+
+4.  **The time zone trap.** Suppose an analyst read the approval times in UTC by mistake. Count the approvals outside office hours, using the chapter's rule, once with the times in Indian time and once with `with_tz(time, "UTC")`. How different are the two counts?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    off_rule <- function(t) hour(t) < 9 | hour(t) >= 19 | wday(t) %in% c(1, 7)
+
+    ex_tz <- c(indian_time = sum(off_rule(approval_log$time)),
+               read_as_utc = sum(off_rule(with_tz(approval_log$time, "UTC"))))
+    ex_tz
+    ```
+    In Indian time, `r ex_tz["indian_time"]` approvals fall outside office hours. Read in UTC, the count becomes `r format(ex_tz["read_as_utc"], big.mark = ",")`. Every time moves five and a half hours earlier. Ordinary morning approvals then look like work before dawn, while USR07's approvals at 11 pm look like approvals at 5:30 pm, inside office hours. The finding would be wrong both ways, without any error message.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

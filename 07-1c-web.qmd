@@ -657,6 +657,77 @@ Some websites build their pages with JavaScript after they load. `read_html()` t
 
 The checks in this chapter rest on joins, covered in @sec-joins, and on dates, covered in @sec-lubridate. For cleaning names and matching them when they are spelt differently, see @sec-strng, @sec-strsim and @sec-linkage. For data that arrives as PDF or awkward Excel files, see @sec-pdfxl. @sec-reports shows how to keep the saved pages, the evidence log and the analysis together as working papers.
 
+## Try it yourself {#sec-web-exercises}
+
+These exercises use the pages of the mock portal in `Data/web`, and the tables we built from them in this chapter, `tenders`, `awards`, `tender_register` and `payments`. No real website is needed. Try each one before you open the solution. Some solutions use dplyr verbs such as `anti_join()`, `arrange()` and `filter()`, which @sec-DPLYRR and @sec-joins explain in full.
+
+1.  **A shorter norm.** Suppose the rules allowed only 14 days for urgent works. Which tenders would fall short even of this?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_short_14 <- tenders |>
+      mutate(days_open = as.numeric(as_date(closing) - as_date(published))) |>
+      filter(days_open < 14) |>
+      select(tender_id, org, days_open)
+    ex_short_14
+    ```
+    Even with the shorter norm, `r nrow(ex_short_14)` tenders fall short, both of the PWD, Amarpur Division. `r ex_short_14$tender_id[1]` was open for `r ex_short_14$days_open[1]` days and `r ex_short_14$tender_id[2]` for `r ex_short_14$days_open[2]` days. Windows this short need a recorded reason, such as a real emergency.
+    :::
+
+2.  **Tenders of each department.** From `tenders`, count the tenders of each organisation on the portal, and find their total value in ₹ lakh.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_by_org <- tenders |>
+      summarise(tenders = n(), value_lakh = round(sum(value) / 1e5, 2), .by = org) |>
+      arrange(desc(tenders))
+    ex_by_org
+    ```
+    The portal lists tenders of `r nrow(ex_by_org)` organisations. `r ex_by_org$org[1]` has the most, `r ex_by_org$tenders[1]`. A count like this, compared with the department's own figures, is a quick test that the scrape covered what we expected.
+    :::
+
+3.  **The other direction.** In the chapter we looked for tenders in the register that the portal does not show. Now look the other way. Does the portal show any tender of the PWD, Amarpur Division that is missing from the division's register?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_not_in_register <- tenders |>
+      filter(org == "PWD, Amarpur Division") |>
+      anti_join(tender_register, by = "tender_id")
+    ex_not_in_register
+    ```
+    The result has `r nrow(ex_not_in_register)` rows. Every tender of the division on the portal is in its register. A tender published but left out of the register would have been a finding too, so the check is worth making both ways.
+    :::
+
+4.  **Competition for the awarded works.** From `awards`, find the awards that received fewer than three bids, with the firm and the value.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_few_bids <- awards |>
+      filter(bids < 3) |>
+      select(tender_id, bids, awarded_to, portal_value)
+    ex_few_bids
+    ```
+    `r ex_few_bids$tender_id` received only `r ex_few_bids$bids` bids, and was awarded to `r ex_few_bids$awarded_to` for ₹`r inr(ex_few_bids$portal_value)`. Few bids suggest weak competition. The auditor would see how long the tender was open, and how widely it was advertised.
+    :::
+
+5.  **Payments after debarment ended.** Using the cleaned names, list any payment made to a firm after its debarment had ended. These are not findings, but the auditor should note them.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_after <- payments |>
+      inner_join(debarred, by = "name_key") |>
+      filter(payment_date > to) |>
+      select(voucher_no, payment_date, payee, amount, to)
+    ex_after
+    ```
+    `r ex_after$payee` was paid ₹`r inr(ex_after$amount)` on `r format(ex_after$payment_date, "%d %B %Y")`, after its debarment ended on `r format(ex_after$to, "%d %B %Y")`. The payment is in order, but a firm once debarred deserves care in later contracts.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
