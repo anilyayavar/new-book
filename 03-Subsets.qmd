@@ -510,6 +510,59 @@ To prepare an exception report from a payment register, an auditor may follow th
 A condition on a missing value gives `NA`, not `FALSE`. Base R then returns a row full of `NA`s, and the real record is hidden. Always count the missing values in the tested column, and report them separately from the exceptions.
 :::
 
+## Try it yourself {#sec-subset-exercises}
+
+These exercises use the payment register `payments`, the approved list `approved` and the list `my_list` from this chapter. Try each one in your console before you open the solution.
+
+1.  **A lower limit.** Suppose the Executive Engineer's power were only ₹1 lakh. List the payments above ₹1 lakh, with the voucher number, the firm and the amount.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_above_1l <- payments[which(payments$amount > 100000), c("voucher_no", "vendor", "amount")]
+    ex_above_1l
+    ```
+    There are `r nrow(ex_above_1l)` such payments. Voucher PV/24/005, of exactly ₹5 lakh, is now in the list, because it is above the lower limit. `which()` again keeps out the payment with no amount.
+    :::
+
+2.  **One contractor.** Pick out all the payments to Kaveri Infra, and find their total.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_kaveri <- payments[payments$vendor == "Kaveri Infra", c("voucher_no", "date", "amount")]
+    ex_kaveri
+    sum(ex_kaveri$amount)
+    ```
+    Kaveri Infra received `r nrow(ex_kaveri)` payments, for a total of ₹`r lakh(sum(ex_kaveri$amount))` lakh. All of them are under the head Works. Such a large share for one firm is worth a look at how the works were awarded.
+    :::
+
+3.  **From a list.** From `my_list`, take out the matrix of quarterly expenditure. Which divisions spent more than ₹50 lakh in the fourth quarter?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_q <- my_list[["quarterly"]]
+    ex_q[, "Q4"]
+    ex_q[ex_q[, "Q4"] > 50, "Q4"]
+    ```
+    `[[` gives the matrix itself, which we then subset by rows and columns. Amarpur and Devipur spent more than ₹50 lakh in the fourth quarter, far more than in any earlier quarter. A rush of expenditure at the end of the year is a common audit concern.
+    :::
+
+4.  **Combine the conditions.** List the payments made from July to September 2024 that were above ₹1 lakh and went to firms on the approved list.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rows <- which(payments$date >= as.Date("2024-07-01") &
+                     payments$date <= as.Date("2024-09-30") &
+                     payments$amount > 100000 &
+                     payments$vendor %in% approved)
+    payments[ex_rows, c("voucher_no", "date", "vendor", "amount")]
+    ```
+    `&` joins the conditions, so a row is kept only when all of them are `TRUE`. There are `r length(ex_rows)` such payments. Dates can be compared like numbers once they are stored as dates.
+    :::
+
 ## Summary of functions used
 
 | Function or operator | Package | What it does |

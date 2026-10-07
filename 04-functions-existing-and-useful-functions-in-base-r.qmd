@@ -820,6 +820,61 @@ When a file of vouchers or payments arrives from the auditee, an auditor may fol
 - Record the seed of every sample.
 :::
 
+## Try it yourself {#sec-basefuns-exercises}
+
+These exercises use the voucher register `register` from the audit use case. Try each one in your console before you open the solution.
+
+1.  **A wider window below the limit.** We looked at bills between ₹49,000 and ₹50,000. How many bills fall between ₹45,000 and ₹50,000?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_near <- register$amount > 45000 & register$amount <= 50000
+    sum(ex_near)
+    ```
+    There are `r sum(ex_near)` such bills. Of these, `r nrow(near_limit)` sit in the last ₹1,000 alone, from ₹49,001 to ₹50,000. If bills were spread evenly, only about one in five would fall there. Such a pile just under the limit is what splitting of bills would produce.
+    :::
+
+2.  **Bills above the limit, office by office.** Which office has the most bills above ₹50,000? Count the bills with a missing office too.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_big <- table(register$office[register$amount > 50000], useNA = "ifany")
+    ex_big
+    ```
+    ```{r}
+    #| include: false
+    ex_top <- names(ex_big)[which(ex_big == max(ex_big))]
+    ```
+    `r paste(ex_top, collapse = " and ")` has the most bills above ₹50,000, at `r max(ex_big)`. Each needs the sanction of a higher authority, so the office with the most of them is a good place to start.
+    :::
+
+3.  **The five largest bills.** List the five largest bills, with the voucher number, the vendor and the amount.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_top5 <- order(register$amount, decreasing = TRUE)[1:5]
+    register[ex_top5, c("voucher_no", "vendor", "amount")]
+    ```
+    `order()` gives the row positions from the largest amount down, and `[1:5]` keeps the first five. The largest bill is for ₹`r inr(max(register$amount))`.
+    :::
+
+4.  **A sample of the large bills.** Draw a reproducible random sample of 5 of the bills above ₹50,000, to check their sanctions. Use the seed 2025.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_big_rows <- which(register$amount > 50000)
+    length(ex_big_rows)
+    set.seed(2025)
+    ex_sample <- sample(ex_big_rows, 5)
+    register[ex_sample, c("voucher_no", "office", "amount")]
+    ```
+    We sample the row positions, not the amounts, so that we can show the full rows. With the seed recorded, a reviewer running the same code gets the same 5 bills out of the `r length(ex_big_rows)`.
+    :::
+
 ## Summary of functions used
 
 | Purpose | Functions |

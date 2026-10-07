@@ -232,6 +232,64 @@ When the same few lines of code keep coming back in your audit work, follow thes
 A function is only as good as its testing. Check it on values whose answer you know, and make it stop on wrong input with `stopifnot()`. A function that quietly returns a wrong answer is worse than one that gives an error.
 :::
 
+## Try it yourself {#sec-func-exercises}
+
+These exercises use the functions `gst_amount()` and `in_lakh()` from the audit use case. Try each one in your console before you open the solution.
+
+1.  **GST at another rate.** Work out the GST at 5% on two bills of ₹1,200 and ₹3,400.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    gst_amount(c(1200, 3400), rate = 5)
+    ```
+    We only change the `rate` argument. Without it, the default of 18% would be used silently.
+    :::
+
+2.  **Amounts in crore.** Write a function `in_crore()`, like `in_lakh()`, that gives an amount in crore. Test it on ₹3,14,15,926 and ₹2,50,00,000.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    in_crore <- function(x, digits = 2) {
+      round(x / 1e7, digits)
+    }
+    in_crore(c(31415926, 25000000))
+    ```
+    One crore is 100 lakh, that is 1e7. The known answers, 3.14 and 2.5 crore, confirm that the function works.
+    :::
+
+3.  **TDS on a contractor's bill.** Tax is deducted at source from payments to contractors, at 2% for a firm. Write a function `tds_amount()` with the rate 2 as default. Make it stop if any amount is negative.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| error: true
+    tds_amount <- function(amount, rate = 2) {
+      stopifnot(is.numeric(amount), all(amount >= 0))
+      round(amount * rate / 100, 2)
+    }
+    tds_amount(c(250000, 87500))
+    tds_amount(c(250000, -12500))
+    ```
+    The second call stops with an error, because a negative bill is not a valid input. A negative amount in a register needs to be examined, not taxed.
+    :::
+
+4.  **A summary of bills.** Write a function `bill_summary()` that takes a vector of bill amounts and returns a list with the number of bills, the number of missing amounts, and the total in lakh. Use `in_lakh()` inside it. Test it on ₹45,000, ₹1,25,000, a missing amount and ₹9,800.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bill_summary <- function(x) {
+      list(bills      = length(x),
+           missing    = sum(is.na(x)),
+           total_lakh = in_lakh(sum(x, na.rm = TRUE)))
+    }
+    bill_summary(c(45000, 125000, NA, 9800))
+    ```
+    The total of ₹1.80 lakh leaves out the missing bill. Because the function also reports the count of missing amounts, the reader of the total knows that one bill was not valued.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

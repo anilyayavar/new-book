@@ -569,6 +569,70 @@ Note that the same function ran on every office alike. Had there been forty offi
 Test the function on one item before mapping it over all. Ask for the output type you expect, so that an odd result stops the code instead of passing silently. One tested function is safer than many copies of edited code.
 :::
 
+## Try it yourself {#sec-fp-exercises}
+
+These exercises use the objects of this chapter, the voucher register `vouchers`, the matrix `qexp`, the list `office_bills` and the list `office_list`. Try each before opening the solution.
+
+1.  **The heaviest quarter.** With `apply()`, find the largest quarterly expenditure of each office in `qexp`. Then find which quarter it was.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    apply(qexp, 1, max)
+    apply(qexp, 1, \(x) colnames(qexp)[which.max(x)])
+    ```
+    ```{r}
+    #| include: false
+    peak_q <- apply(qexp, 1, \(x) colnames(qexp)[which.max(x)])
+    ```
+    Nagpur spent the most in `r peak_q[["Nagpur"]]`, which holds its March rush. `r if (sum(peak_q == "Q4") > 1) paste0(paste(setdiff(names(peak_q)[peak_q == "Q4"], "Nagpur"), collapse = " and "), " also peaked in Q4.") else "No other office peaked in Q4."` A peak in the last quarter is a hint, not proof. The use case of this chapter looks at it more closely.
+    :::
+
+2.  **Vouchers above ₹1 lakh.** Count the vouchers of more than ₹1 lakh in each office. Use `split()` and `vapply()`, and say that each result is a single integer.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    split(vouchers$amount, vouchers$office) |>
+      vapply(\(a) sum(a > 100000), FUN.VALUE = integer(1))
+    ```
+    `sum()` of a logical vector counts the `TRUE` values, and gives an integer. So `integer(1)` is the right template. If the function ever returned something else, `vapply()` would stop with an error instead of giving a wrong table.
+    :::
+
+3.  **A lower limit for Nashik.** Suppose the limit of a single bill at Nashik is cut to ₹99,000. Copy `office_limits` to a new name, change the limit of Nashik, and find the bills of each office above its limit with `map2()`. Then count them with `map2_int()`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    new_limits <- office_limits
+    new_limits["Nashik"] <- 99000
+    map2(office_bills, new_limits, \(x, lim) x[x > lim])
+    map2_int(office_bills, new_limits, \(x, lim) sum(x > lim))
+    ```
+    ```{r}
+    #| include: false
+    nashik_over <- office_bills$Nashik[office_bills$Nashik > 99000]
+    ```
+    Nashik now has `r length(nashik_over)` bills above its limit, of `r paste0("₹", format(nashik_over, big.mark = ","), collapse = " and ")`. A limit moved by only ₹1,000 changes the result. So always take the limit from the delegation order in force on the date of the bill. We worked on a copy, so `office_limits` is unchanged.
+    :::
+
+4.  **Large payments in March.** For each office in `office_list`, count the vouchers of more than ₹4 lakh paid in March 2025. Write the check as an anonymous function and use `map_int()`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    office_list |>
+      map_int(\(d) sum(d$amount > 400000 &
+                       format(d$voucher_date, "%Y-%m") == "2025-03"))
+    ```
+    ```{r}
+    #| include: false
+    big_march <- map_int(office_list, \(d) sum(d$amount > 400000 &
+                                               format(d$voucher_date, "%Y-%m") == "2025-03"))
+    ```
+    Only Nagpur has such vouchers, `r big_march[["Nagpur"]]` of them. The other three offices have none. This confirms the use case. The March rush at Nagpur is a rush of large bills, so these vouchers are the first to call for.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

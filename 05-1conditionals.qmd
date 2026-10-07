@@ -267,6 +267,98 @@ Before writing a loop over the rows of a table, check whether a vectorised funct
 `if` checks a single `TRUE` or `FALSE`, not a whole column. For a column of amounts, use a vectorised function. A clear loop is still better than clever code you cannot check.
 :::
 
+## Try it yourself {#sec-control-exercises}
+
+These exercises use the function `sanctioning_authority()` and the small vectors of this chapter. Try each before opening the solution.
+
+1.  **Test the first limit.** Check `sanctioning_authority()` with ₹50,000 and ₹50,001. Who sanctions each?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    sanctioning_authority(50000)
+    sanctioning_authority(50001)
+    ```
+    ₹50,000 goes to the `r sanctioning_authority(50000)`, and one rupee more goes to the `r sanctioning_authority(50001)`. This is the test with amounts on a limit that the Audit tip asks for. Compare the answers with the delegation order.
+    :::
+
+2.  **Name the voucher type.** Write a function `voucher_type()` with `switch()`. It should give "Payment voucher" for the code `PV`, "Transfer voucher" for `TV`, "Journal voucher" for `JV`, and "Check the code" for anything else. Test it with `JV` and `XV`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    voucher_type <- function(code) {
+      switch(code,
+             PV = "Payment voucher",
+             TV = "Transfer voucher",
+             JV = "Journal voucher",
+             "Check the code")
+    }
+    voucher_type("JV")
+    voucher_type("XV")
+    ```
+    The last, unnamed value is the default. A code that is not in the list gets "Check the code", so a wrong code in the auditee's data does not pass unnoticed.
+    :::
+
+3.  **A missing amount.** A bill has no amount recorded, so `bill <- NA`. Write an `if` statement that says "Amount missing" for such a bill, "Check the higher sanction" above ₹50,000, and "Within powers" otherwise.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bill <- NA
+    if (is.na(bill)) {
+      "Amount missing"
+    } else if (bill > 50000) {
+      "Check the higher sanction"
+    } else {
+      "Within powers"
+    }
+    ```
+    The test for `NA` must come first. Otherwise `if (NA > 50000)` stops with an error, as we saw in this chapter. A missing amount is itself a point for audit, so it should not be quietly put under "Within powers".
+    :::
+
+4.  **Skip the cancelled vouchers.** Five vouchers have these amounts and status. Loop over them, skip the cancelled ones, and store the sanctioning authority of each paid voucher. Leave the cancelled ones empty.
+
+    ```r
+    v_no     <- c("V-201", "V-202", "V-203", "V-204", "V-205")
+    v_amount <- c(48000, 650000, 3200000, 75000, 51000)
+    v_status <- c("Paid", "Paid", "Cancelled", "Paid", "Paid")
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    v_no     <- c("V-201", "V-202", "V-203", "V-204", "V-205")
+    v_amount <- c(48000, 650000, 3200000, 75000, 51000)
+    v_status <- c("Paid", "Paid", "Cancelled", "Paid", "Paid")
+
+    v_authority <- character(length(v_no))   # empty, filled in below
+    for (i in seq_along(v_no)) {
+      if (v_status[i] == "Cancelled") next
+      v_authority[i] <- sanctioning_authority(v_amount[i])
+    }
+    data.frame(v_no, v_amount, v_status, v_authority)
+    ```
+    The cancelled voucher `r v_no[v_status == "Cancelled"]` is skipped, so its authority stays empty. Of the paid vouchers, `r sum(v_authority == "Deputy Secretary")` needed the Deputy Secretary. The auditor would check that each file carries the sanction of that authority.
+    :::
+
+5.  **Doubling at a lower rate.** A bank offered 6.5% compound interest on ₹10 lakh of idle scheme funds. With a `while` loop, find how many years the deposit takes to double.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    deposit <- 1000000
+    n_years <- 0
+    while (deposit < 2000000) {
+      deposit <- deposit * 1.065
+      n_years <- n_years + 1
+    }
+    n_years
+    round(deposit / 1e5, 2)   # the balance in lakh at that time
+    ```
+    It takes `r n_years` years, against `r years` years at 7%. By then the deposit is ₹`r round(deposit / 1e5, 2)` lakh. The same loop, with the actual rate and period, checks the maturity value that the bank has claimed.
+    :::
+
 ## Summary of functions used
 
 | Statement or function | Package | What it does |

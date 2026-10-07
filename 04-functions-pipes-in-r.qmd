@@ -250,6 +250,78 @@ A pipe passes the result on its left as the first argument of the function on it
 
 Pipes are used in almost every later chapter. In @sec-DPLYRR we join them with the verbs of `dplyr`, which select, filter, sort and summarise data in one readable chain.
 
+## Try it yourself {#sec-pipes-exercises}
+
+These exercises use the payment register `payments` of this chapter. Write each answer as a chain of pipes, and try it before opening the solution.
+
+1.  **The five largest payments.** Change the chain of this chapter to show the five largest payments, in ₹ lakh, instead of three.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    payments$amount |>
+      sort(decreasing = TRUE) |>
+      head(5) |>
+      (\(x) round(x / 1e5, 2))()
+    ```
+    Only `head(3)` changes to `head(5)`. The largest payment is ₹`r round(max(payments$amount) / 1e5, 2)` lakh.
+    :::
+
+2.  **Bills above ₹1 lakh in each office.** Count the vouchers of more than ₹1 lakh in each office. Which office has the most?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    payments |>
+      subset(amount > 100000) |>
+      _$office |>
+      table() |>
+      sort(decreasing = TRUE)
+    ```
+    ```{r}
+    #| include: false
+    big_bills <- sort(table(subset(payments, amount > 100000)$office), decreasing = TRUE)
+    ```
+    `r names(big_bills)[1]` has the most, with `r big_bills[[1]]` such vouchers. The chain is the same as in the audit use case. Only the condition changes, and `sort()` puts the largest count first.
+    :::
+
+3.  **Total paid to each vendor.** Total the payments of each vendor with `aggregate()` and the native pipe. Then write the same chain with `%>%`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    payments |>
+      aggregate(amount ~ vendor, data = _, FUN = sum)
+
+    payments %>%
+      aggregate(amount ~ vendor, data = ., FUN = sum)
+    ```
+    ```{r}
+    #| include: false
+    vendor_tot <- aggregate(amount ~ vendor, data = payments, FUN = sum)
+    top_vendor <- vendor_tot[which.max(vendor_tot$amount), ]
+    ```
+    Both give the same table. The native pipe needs `_` in the named argument `data`. The magrittr pipe uses `.`. The largest total, ₹`r round(top_vendor$amount / 1e5, 2)` lakh, went to `r top_vendor$vendor`.
+    :::
+
+4.  **A wider band below the limit.** The audit use case looked at bills between ₹95,000 and ₹1 lakh. Widen the band to ₹90,000 and count the vouchers of each office again. Does any other office now appear?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    payments |>
+      subset(amount >= 90000 & amount < 100000) |>
+      _$office |>
+      table()
+    ```
+    ```{r}
+    #| include: false
+    wide_band <- table(subset(payments, amount >= 90000 & amount < 100000)$office)
+    new_offices <- setdiff(names(wide_band), "Nashik")
+    ```
+    `r if (length(new_offices) == 0) "No other office appears. Nashik is still the only office with bills in the band." else paste0("Now ", paste(new_offices, collapse = " and "), if (length(new_offices) == 1) " also appears" else " also appear", ", with ", paste(wide_band[new_offices], collapse = " and "), if (sum(wide_band[new_offices]) == 1) " voucher." else " vouchers.", " One or two bills near a limit are common. What marked Nashik was many bills of one vendor in a short time.")` A wider band catches more cases, but each extra case needs time to check. Choose the band with the delegation order in mind.
+    :::
+
 ## Summary of functions used
 
 | Operator or function | Package | What it does |

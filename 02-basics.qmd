@@ -1023,6 +1023,59 @@ When a file of payments or bills is first loaded into R, an auditor may follow t
 - Keep identifiers as text, compare decimals after rounding, and store dates as dates.
 :::
 
+## Try it yourself {#sec-basics-exercises}
+
+These exercises use the bill register `bills` and the cleaned `amount` from the audit use case. Try each one in your console before you open the solution.
+
+1.  **Round sums of ₹5,000.** We found the bills that are exact multiples of ₹1,000. Now find the bills that are exact multiples of ₹5,000.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bills$bill_no[which(amount %% 5000 == 0)]
+    ```
+    Only the change in the divisor is needed. `which()` leaves out the two bills with no amount, whose remainder is `NA`.
+    :::
+
+2.  **Clean another set of amounts.** A second office sends the amounts `"2,40,000"`, `"15000"`, `"Nil"` and `"8,750"`. Convert them to numbers, and count how many could not be read.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_text <- c("2,40,000", "15000", "Nil", "8,750")
+    ex_amount <- as.numeric(gsub(",", "", ex_text))
+    ex_amount
+    sum(is.na(ex_amount))
+    ```
+    The commas are removed first, so only `"Nil"` fails and becomes `NA`. The warning tells us that a value was lost. We ask the office what "Nil" means before we total the amounts.
+    :::
+
+3.  **A stricter time limit.** Suppose the rules require payment within 10 days, not 30. Which bills were paid late?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bills$bill_no[days_to_pay > 10]
+    ```
+    ```{r}
+    #| include: false
+    ex_late10 <- bills$bill_no[days_to_pay > 10]
+    ```
+    Now `r length(ex_late10)` of the `r nrow(bills)` bills are late, namely `r paste(ex_late10, collapse = ", ")`. The comparison works directly on `days_to_pay`, because it is a duration in days.
+    :::
+
+4.  **Value of the late payments.** Using the 30 day limit, what is the total value of the bills that were paid late? Give the answer in lakh.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_late_value <- sum(amount[days_to_pay > 30], na.rm = TRUE)
+    ex_late_value
+    ex_late_value / 1e5
+    ```
+    The late bills are worth ₹`r ex_late_value / 1e5` lakh. Both late bills have a known amount here, so `na.rm = TRUE` drops nothing. On a larger register, we would first check with `is.na()` that no late bill has a missing amount.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
