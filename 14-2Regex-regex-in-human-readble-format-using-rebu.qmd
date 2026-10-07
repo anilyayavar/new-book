@@ -587,6 +587,75 @@ Use regex to find dates written in the wrong *format*, and a date parser like `d
 A pattern checks only the shape of a value, not whether it is true. A date like 31/02/2024 passes `DMY`, and a GSTIN in the right format may have a wrong check character. Use `dmy()` for dates and `gstin_valid()` for GSTINs, and confirm doubtful cases from the records.
 :::
 
+## Try it yourself {#sec-rebus-exercises}
+
+These exercises use the `rebus` patterns and the small tables of this chapter, with a few made-up values. Try each one before opening the solution.
+
+1.  **Two spellings of a payee.** The payees `"Sharma Electricals"`, `"Sarma Electricals"`, `"Sharmaji Dhaba"` and `"Verma Electricals"` appear in a cash book. Build a pattern that finds the whole word *Sharma* or *Sarma*, print it, and test it.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    payees2   <- c("Sharma Electricals", "Sarma Electricals", "Sharmaji Dhaba", "Verma Electricals")
+    sharma_rx <- whole_word(or("Sharma", "Sarma"))
+    sharma_rx
+    str_view(payees2, sharma_rx, match = NA)
+    ```
+    `or()` keeps the two spellings together, and `whole_word()` stops the match inside *Sharmaji*. Both spellings of Sharma Electricals are found, so their payments should be added up as one payee.
+    :::
+
+2.  **Vehicle numbers, written readably.** An ordinary vehicle number has two letters for the State, one or two digits for the district, up to three letters for the series and four digits. Write this rule with `rebus`, print the pattern, and test it on the made-up numbers below, before and after converting them to upper case.
+
+    ```{r}
+    vehicles <- tibble::tibble(
+      vehicle = c("DL3CAB1234", "UP32BX0457", "MH12AB123", "KA05MN12345", "dl1c0001", "HR26DQ5551")
+    )
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    vehicle_rx <- exactly(ascii_upper(2) %R% ascii_digit(1, 2) %R%
+                          ascii_upper(0, 3) %R% ascii_digit(4))
+    vehicle_rx
+
+    vehicles |>
+      mutate(shape_ok = str_detect(vehicle, vehicle_rx),
+             upper_ok = str_detect(str_to_upper(vehicle), vehicle_rx))
+    ```
+    The printed pattern is the same as the vehicle pattern of @tbl-regexformats. `dl1c0001` passes only after conversion to upper case. `MH12AB123` and `KA05MN12345` fail either way, because the last part must have exactly four digits.
+    :::
+
+3.  **Tidy the PANs before checking.** As advised in @sec-regex-validate, convert the PANs of `vendor_master` to upper case and remove any spaces before checking them. Which vendors still fail the PAN or the IFSC check?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    still_fail <- vendor_master |>
+      mutate(pan_std = str_to_upper(str_remove_all(pan, " ")),
+             pan_ok  = str_detect(pan_std, pan_rx),
+             ifsc_ok = str_detect(ifsc, ifsc_rx)) |>
+      filter(!pan_ok | !ifsc_ok) |>
+      select(vendor, pan_std, ifsc, pan_ok, ifsc_ok)
+    still_fail
+    ```
+    Kaveri Suppliers now passes. The `r nrow(still_fail)` vendors that still fail are Narmada Builders, Om Sai Caterers and Yamuna Cleaning Services. These are the real errors to take up with the office.
+    :::
+
+4.  **Dates with the right shape, and real dates.** For each date in `voucher_dates`, record whether it has the `DMY` shape and whether `dmy()` can read it as a real date. Keep only the dates where the two checks disagree.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    date_check <- tibble::tibble(date_text = voucher_dates,
+                                 shape_ok  = str_detect(voucher_dates, exactly(DMY)),
+                                 real_date = !is.na(dmy(voucher_dates, quiet = TRUE))) |>
+      filter(shape_ok != real_date)
+    date_check
+    ```
+    `31/02/2024` and `29/02/2023` have the right shape but are not real dates. `4/7/2024` is a real date, but it is written without leading zeros. The first two need a closer look at the vouchers. The third only needs the register to be typed in one format.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

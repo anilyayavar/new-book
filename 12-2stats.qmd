@@ -203,6 +203,68 @@ ppois(2, qgamma(0.95, 3))
 For a count, *at most one* and *one or more* are different questions. Check which tail you need before using a `p` function. A wrong tail gives a wrong level of assurance in the sampling conclusion.
 :::
 
+## Try it yourself {#sec-prob-exercises}
+
+These exercises use the toll plaza and the sampling questions of this chapter. Try each one in your console before you open the solution.
+
+1.  **An unusually good day.** For the same toll plaza (mean ₹50 thousand, standard deviation ₹10 thousand), what is the probability of a day with receipts above ₹70 thousand?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_p_high <- pnorm(70, mean = 50, sd = 10, lower.tail = FALSE)
+    ex_p_high
+    ```
+    The chance is about `r round(100 * ex_p_high, 2)`%, a little over two days in a hundred. Such a day is not alarming in itself. But a plaza that reports many such days, or one that reports them only on some shifts, would be worth a question.
+    :::
+
+2.  **A warning level.** The plaza manager wants a warning whenever a day's receipts are among the lowest 5% expected. Below what amount should the warning be raised?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_warn <- qnorm(0.05, mean = 50, sd = 10)
+    ex_warn
+    ```
+    The warning level is about ₹`r round(ex_warn, 1)` thousand. If the receipts really follow this distribution, a day below it comes about once in twenty days. Many more warnings than that suggest leakage, or a change in traffic that the plaza should explain.
+    :::
+
+3.  **At most one deviation.** An auditor tests 60 vouchers and decides to accept the control if there is at most one deviation. If the true rate of deviation were 5%, what is the chance that the control would still be accepted?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_accept <- pbinom(1, size = 60, prob = 0.05)
+    ex_accept
+    ```
+    The chance is about `r round(100 * ex_accept)`%. Allowing one deviation raises the risk of accepting a failing control from `r round(100 * dbinom(0, 60, 0.05), 1)`% (no deviation allowed) to `r round(100 * ex_accept)`%. To keep the same assurance while allowing one deviation, the auditor needs a larger sample.
+    :::
+
+4.  **The upper limit after one error.** An auditor tests 100 items and finds one deviation. Using the reliability factor, what is the highest deviation rate consistent with this result at 95% confidence? Is it within a tolerable rate of 5%?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_factor <- qgamma(0.95, 1 + 1)     # one error found
+    ex_factor
+    ex_factor / 100                      # upper limit of the deviation rate
+    ```
+    The reliability factor for one error is `r round(ex_factor, 2)`. Divided by the 100 items, it gives an upper limit of `r round(ex_factor, 2)`%. This is just below the tolerable rate of 5%, so the auditor can rely on the control, but with little room to spare. One more deviation would have changed the conclusion.
+    :::
+
+5.  **Check by simulation.** Use `rbinom()` to simulate 10,000 samples of 60 vouchers, each with a true deviation rate of 5%. In what share of them is no deviation found? Compare it with `dbinom(0, 60, 0.05)`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(2025)
+    ex_devs <- rbinom(10000, size = 60, prob = 0.05)   # deviations in each sample
+    mean(ex_devs == 0)                                 # share with none
+    dbinom(0, size = 60, prob = 0.05)                  # exact answer
+    ```
+    In the simulation, `r round(100 * mean(ex_devs == 0), 1)`% of the samples had no deviation, close to the exact `r round(100 * dbinom(0, 60, 0.05), 1)`%. The seed makes the simulation repeatable. A different seed gives a slightly different share, but always close to the exact answer. This is a simple way to check any probability we are unsure of.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

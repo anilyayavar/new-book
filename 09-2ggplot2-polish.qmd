@@ -1087,6 +1087,93 @@ A chart in an audit report should make one point clearly. Use colour for emphasi
 
 Our charts group the data by districts, categories and months. In R, such groups are best kept as *factors*. In @sec-factors we learn to create factors, set the order of their levels and sort the bars of a chart, a task we met here with `fct_reorder()`.
 
+## Try it yourself {#sec-ggplot2-polish-exercises}
+
+These exercises use the tables of this chapter, such as `bills`, `district_avg`, `near_limit` and `march_share`. Try each one before opening its solution.
+
+1.  **Average bill in lakh.** Redraw the bar chart of the average bill of each district (@fig-scale5). Sort the bars with `fct_reorder()`, and show the amounts on the axis in ₹ lakh.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Average bill of each district, sorted, in lakh"
+    #| fig-height: 4
+    district_avg |>
+      mutate(district = fct_reorder(district, mean_amount)) |>
+      ggplot(aes(mean_amount, district)) +
+      geom_col() +
+      scale_x_continuous(name = "Average bill",
+                         labels = scales::label_number(scale = 1e-5, accuracy = 0.1,
+                                                       suffix = " lakh"),
+                         expand = expansion(mult = c(0, 0.1))) +
+      labs(y = NULL)
+
+    top_avg <- district_avg |> slice_max(mean_amount, n = 1)
+    ```
+    `r top_avg$district` has the largest average bill, ₹`r lakh(top_avg$mean_amount)` lakh. The argument `scale = 1e-5` turns rupees into lakh before printing. Sorting puts the district that needs a question at the top of the chart.
+    :::
+
+2.  **Which category piles up below the limit?** Take `near_limit`, the bills between ₹1.5 lakh and ₹2.5 lakh. Draw its histogram again, with bins of ₹5,000 that end at the limit, but with one panel for each category. Give each panel its own `y` axis.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Bills near the limit, one panel for each category"
+    #| fig-height: 4
+    ggplot(near_limit, aes(amount)) +
+      geom_histogram(binwidth = 5000, boundary = 200000,
+                     fill = "grey60", colour = "white") +
+      geom_vline(xintercept = 200000, linetype = "dashed", colour = "firebrick") +
+      facet_wrap(~ category, scales = "free_y") +
+      scale_x_continuous(labels = scales::label_number(scale = 1e-5, accuracy = 0.1,
+                                                       suffix = " lakh")) +
+      labs(x = "Bill amount", y = "Number of bills")
+
+    just_below |> count(category)
+    jb_sup <- sum(just_below$category == "Supplies")
+    ```
+    In the panel of Supplies, the two bars just left of the line tower over the rest. The other panels show no such pile. Of the `r nrow(just_below)` bills between ₹1.9 lakh and ₹2 lakh, `r jb_sup` are supplies bills. The facets tell the auditor which files to call for first.
+    :::
+
+3.  **A March chart for the report.** From `march_share`, draw a sorted bar chart of the share of March in each district's expenditure. Colour in red only the districts whose share is more than twice the even share of one-twelfth, and the rest in grey. Show the axis as percentages, and give the chart a title and a caption. Keep the chart in an object called `march_plot`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Share of March in the expenditure of each district"
+    #| fig-height: 4
+    march_plot <- march_share |>
+      mutate(high = share > 2 / 12,
+             district = fct_reorder(district, share)) |>
+      ggplot(aes(share, district, fill = high)) +
+      geom_col() +
+      geom_vline(xintercept = 1 / 12, linetype = "dashed") +
+      scale_x_continuous(labels = scales::label_percent(),
+                         expand = expansion(mult = c(0, 0.1))) +
+      scale_fill_manual(values = c(`FALSE` = "grey60", `TRUE` = "firebrick"),
+                        guide = "none") +
+      labs(title = "Two districts spent a large part of their year in March",
+           x = "Share of March in the year's expenditure", y = NULL,
+           caption = "The dashed line marks the even share of one-twelfth.")
+    march_plot
+
+    high_march <- march_share |> filter(share > 2 / 12)
+    ```
+    Only `r high_march$district[1]` and `r high_march$district[2]` cross twice the even share, so only their bars are red. The title states the point, and the dashed line gives the reader the reference. Check that the title still holds if the data changes. Here it is typed by hand.
+    :::
+
+4.  **Save the chart.** Save `march_plot` as a PNG file, 7 inches wide and 4 inches high, in the temporary folder of your session. Check that the file exists.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    out_file <- file.path(tempdir(), "march_share.png")
+    ggsave(out_file, march_plot, width = 7, height = 4, dpi = 300)
+    file.exists(out_file)
+    ```
+    `tempdir()` gives a temporary folder that R deletes when the session ends, which suits a practice run. For the report, give a path in the audit folder instead. Saving every chart at the same width and height keeps the charts of a report alike.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -463,6 +463,106 @@ A sample gives a conclusion about the population only if it was selected randoml
 -   @sec-tests shows how to test whether a difference seen in the data, or in a sample, is more than chance.
 -   @sec-kmeans-strata shows how clusters found in the data can serve as strata for sampling.
 
+## Try it yourself {#sec-sampling-exercises}
+
+These exercises use the `payments` population of this chapter. Each one sets a seed before any random draw, so that the result can be repeated. Try each one in your console before you open the solution.
+
+1.  **A sample from one district.** The audit party will visit only Indore. Select a simple random sample of 10 Indore vouchers, without replacement, with the seed 2024.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(2024)
+    ex_indore <- payments |>
+      filter(district == "Indore") |>
+      slice_sample(n = 10)
+    ex_indore |> select(voucher_no, voucher_date, head, amount)
+    ```
+    We filter first and then sample, so that every Indore voucher has the same chance. Anyone who runs this code with the seed 2024 gets these same 10 vouchers. A different seed gives a different sample, which is just as valid. What matters is that the seed is recorded in the working papers before the vouchers are examined.
+    :::
+
+2.  **A larger systematic sample.** Draw a systematic sample of 48 vouchers, with the seed 99 for the random start. What are the interval and the start, and how many vouchers fall in each month?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(99)
+    ex_n <- 48
+    ex_s <- floor(nrow(payments) / ex_n)          # sampling interval
+    ex_s1 <- sample(1:ex_s, 1)                    # random start
+    ex_sys <- payments |>
+      slice(seq(ex_s1, by = ex_s, length.out = ex_n))
+    c(interval = ex_s, start = ex_s1)
+    ex_sys |> count(month = month(voucher_date, label = TRUE))
+    ```
+    The interval is `r ex_s` and the random start is `r ex_s1`. Every month has between `r min(table(month(ex_sys$voucher_date)))` and `r max(table(month(ex_sys$voucher_date)))` vouchers in the sample, because the selection runs evenly through the vouchers in date order. A different seed gives a different start, and so a different sample, but the spread over the year stays just as even.
+    :::
+
+3.  **Sample sizes for a stricter test.** The tolerable rate of deviation is 3%. Work out the sample size at 90%, 95% and 99% confidence, first expecting no deviation and then expecting one.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_sizes <- expand_grid(confidence = c(0.90, 0.95, 0.99), expected = 0:1) |>
+      mutate(sample_size = ceiling(qgamma(confidence, expected + 1) / 0.03))
+    ex_sizes |>
+      pivot_wider(names_from = expected, values_from = sample_size,
+                  names_prefix = "expected_")
+    ```
+    At 95% confidence and no expected deviation, we need `r ex_sizes$sample_size[ex_sizes$confidence == 0.95 & ex_sizes$expected == 0]` items. Expecting one deviation raises this to `r ex_sizes$sample_size[ex_sizes$confidence == 0.95 & ex_sizes$expected == 1]`. A tighter tolerable rate, a higher confidence and more expected deviations all need a larger sample.
+    :::
+
+4.  **Heavier coverage of large vouchers.** Repeat the stratified sample with 2% of the Low stratum, 5% of the Mid stratum and 50% of the High stratum, using the seed 123. How many vouchers are selected, and what share of the total value do they cover?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_props <- c(Low = 0.02, Mid = 0.05, High = 0.50)
+    set.seed(123)
+    ex_strat <- payments |>
+      group_split(stratum) |>
+      map2(ex_props, \(d, p) slice_sample(d, prop = p)) |>
+      list_rbind()
+    ex_strat |> count(stratum)
+    nrow(ex_strat)
+    round(100 * sum(ex_strat$amount) / sum(payments$amount), 1)
+    ```
+    The sample now has `r nrow(ex_strat)` vouchers, against `r nrow(strat_sample)` in the chapter. It covers `r round(100 * sum(ex_strat$amount) / sum(payments$amount))`% of the value, against `r round(100 * strat_cover)`% before. Most of the extra coverage comes from the High stratum, where a few vouchers carry much of the money. With another seed the vouchers selected would differ, and so would the coverage, a little.
+    :::
+
+5.  **Monetary unit sampling with a larger tolerable misstatement.** Take the tolerable misstatement as 3% of the book value instead of 2%. Work out the sample size and interval, select the sample with the seed 2025, and evaluate it as in @sec-mus. Is the upper misstatement limit within the tolerable misstatement?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_tolerable <- 0.03 * book_value
+    ex_n_mus <- ceiling(book_value * rf / ex_tolerable)
+    ex_interval <- book_value / ex_n_mus
+
+    set.seed(2025)
+    ex_start <- runif(1, 0, ex_interval)
+    ex_rows <- findInterval(ex_start + ex_interval * (0:(ex_n_mus - 1)),
+                            c(0, cumsum(payments$amount)), left.open = TRUE)
+    ex_mus <- payments |>
+      slice(unique(ex_rows)) |>
+      mutate(top_value = amount >= ex_interval)
+
+    ex_errors <- ex_mus |>
+      filter(audited != amount) |>
+      mutate(misstatement = amount - audited, tainting = misstatement / amount)
+    ex_ord <- ex_errors |> filter(!top_value) |> arrange(desc(tainting))
+    ex_factors <- qgamma(0.95, 0:nrow(ex_ord) + 1)
+    ex_top <- sum(ex_errors$misstatement[ex_errors$top_value])
+    ex_upper <- ex_interval * (ex_factors[1] + sum(ex_ord$tainting * diff(ex_factors))) + ex_top
+
+    tibble(measure = c("Sample size", "Vouchers selected", "Errors found",
+                       "Upper limit (crore)", "Tolerable (crore)"),
+           value   = c(ex_n_mus, nrow(ex_mus), nrow(ex_errors),
+                       crore(ex_upper), crore(ex_tolerable)))
+    ```
+    A larger tolerable misstatement needs a smaller sample, here `r ex_n_mus` selected rupees instead of `r n_mus`. We found `r nrow(ex_errors)` misstatements. The upper limit of ₹`r crore(ex_upper)` crore is `r if (ex_upper > ex_tolerable) "above" else "below"` the tolerable ₹`r crore(ex_tolerable)` crore, so `r if (ex_upper > ex_tolerable) "the conclusion is the same as in the chapter. The payments cannot be accepted as free from material misstatement." else "with this higher tolerance the payments could be accepted."` A different seed gives a different random start, a different sample and slightly different numbers. That is why the seed must be recorded. In this simulation we also know the truth. The actual misstatement of ₹`r crore(true_mis)` crore is `r if (true_mis > ex_tolerable) "above even this higher tolerance, so the conclusion is the right one" else "within this higher tolerance"`.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

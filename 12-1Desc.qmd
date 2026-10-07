@@ -434,6 +434,85 @@ Always reconcile the total of the data received with the accounts, *before* any 
 Descriptive statistics describe the data, not the truth. A clean summary does not prove that the data is complete or correct. That needs reconciliation with independent sources. But an unclean summary is nearly always a sign that something needs explanation.
 :::
 
+## Try it yourself {#sec-desc-exercises}
+
+These exercises use the payment ledger `ledger` and the office data `tehsils` of this chapter. Try each one in your console before you open the solution.
+
+1.  **Large cash payments.** In the chapter we counted the cash payments above ₹10,000. Change the limit to ₹50,000. How many cash vouchers are above it, and what are they worth?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_cash_50k <- ledger |>
+      filter(mode == "Cash", amount > 50000)
+    nrow(ex_cash_50k)
+    round(sum(ex_cash_50k$amount) / 1e5, 1)
+    ```
+    There are `r nrow(ex_cash_50k)` cash vouchers above ₹50,000, worth ₹`r round(sum(ex_cash_50k$amount) / 1e5, 1)` lakh in all. These are the first cash payments to examine, since amounts this large should normally be paid electronically.
+    :::
+
+2.  **A typical payment under each head.** For each head of expenditure, find the number of vouchers, the median amount and the mean amount. Which head has the largest median payment?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_by_head <- ledger |>
+      summarise(vouchers = n(),
+                median_amount = median(amount),
+                mean_amount = round(mean(amount)),
+                .by = head) |>
+      arrange(desc(median_amount))
+    ex_by_head
+    ```
+    `r ex_by_head$head[1]` has the largest median payment, ₹`r format(round(ex_by_head$median_amount[1]), big.mark = ",")`. But the four medians are close, so no head stands out for the size of a typical payment. Under every head the mean is well above the median. The amounts are skewed within each head, not only in the ledger as a whole.
+    :::
+
+3.  **The repeated voucher numbers.** Step 3 counted the repeated voucher numbers. List every voucher that shares its number with another, so that the office can be asked about each pair.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_repeated <- ledger |>
+      filter(voucher_no %in% voucher_no[duplicated(voucher_no)]) |>
+      arrange(voucher_no) |>
+      select(voucher_no, date, vendor_id, head, amount)
+    ex_repeated
+    ```
+    `duplicated()` marks only the second and later copies of a number. So we first collect those numbers, and then keep every row that has one of them. That gives `r nrow(ex_repeated)` vouchers sharing `r n_distinct(ex_repeated$voucher_no)` numbers. The dates, vendors and amounts differ within each pair, so these are not the same payment entered twice. The numbering itself is wrong, and the office must explain it.
+    :::
+
+4.  **One office can move a correlation.** Work out the correlation between staff and salary for all 36 tehsils, and again without Tehsil 23. How much does one office change it?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_r_all <- cor(tehsils$staff, tehsils$salary_lakh)
+    ex_rest <- tehsils |> filter(office != "Tehsil 23")
+    ex_r_rest <- cor(ex_rest$staff, ex_rest$salary_lakh)
+    round(c(all = ex_r_all, without_23 = ex_r_rest), 3)
+    ```
+    The correlation rises from `r format(round(ex_r_all, 3), nsmall = 3)` to `r format(round(ex_r_rest, 3), nsmall = 3)` when Tehsil 23 is left out. Both numbers look "high", so the correlation alone would never have pointed to the office. The scatter plot and the salary per staff member did.
+    :::
+
+5.  **A problem profile for each head.** Repeat the counts of Step 3, but for each head of expenditure separately. Add the total amount in lakh. Is any kind of problem concentrated under one head?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_profile <- ledger |>
+      summarise(records           = n(),
+                amount_lakh       = round(sum(amount) / 1e5, 1),
+                negative     = sum(amount < 0),
+                zero         = sum(amount == 0),
+                no_vendor    = sum(is.na(vendor_id)),
+                outside_year = sum(date < fy_start | date > fy_end),
+                .by = head) |>
+      arrange(head)
+    ex_profile
+    ```
+    The problems are spread over all four heads. No head has more than `r max(ex_profile$negative)` negative amounts, `r max(ex_profile$zero)` zero amounts or `r max(ex_profile$no_vendor)` missing vendors. So the weakness lies in the office's general controls over data entry, not in the work of one section. A count by head, or by any other group, is a quick way to see whether a problem is general or local.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

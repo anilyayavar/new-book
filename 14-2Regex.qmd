@@ -857,6 +857,81 @@ A failed check proves that the number is wrong. A passed check does *not* prove 
 A regex checks the *shape* of a value, and a check digit catches most *typing errors*. Neither proves that the value is genuine or belongs to the right person. Values which fail are certainly wrong. Values which pass still need verification against the original documents or the official databases.
 :::
 
+## Try it yourself {#sec-regex-exercises}
+
+These exercises use the patterns and functions written in this chapter, with a few made-up values. Try each one before opening the solution.
+
+1.  **PIN codes in a beneficiary list.** Some PIN codes in a beneficiary list are `"110001"`, `"560 001"`, `"011001"`, `"32400"`, `"3240O1"` and `"1100011"`. Remove the spaces, and check each one with the PIN code pattern of @tbl-regexformats.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pin_test <- tibble(pin = c("110001", "560 001", "011001", "32400", "3240O1", "1100011")) |>
+      mutate(std   = str_remove_all(pin, "\\s"),
+             valid = str_detect(std, "^[1-9][0-9]{5}$"))
+    pin_test
+    ```
+    Only `110001` and `560 001` pass. `011001` starts with zero, `32400` is too short, `1100011` is too long, and `3240O1` has the letter `O` in place of a zero.
+    :::
+
+2.  **Vehicle numbers in a fuel register.** A department's fuel register shows the vehicle number and the litres drawn. Standardise the vehicle numbers, check them against the ordinary and the BH series patterns, and find the litres drawn against invalid numbers.
+
+    ```{r}
+    fuel_log <- tibble(
+      vehicle = c("DL3CAB1234", "up 32 bx 0457", "MH-12-AB-123", "22BH4567CD",
+                  "KA05MN12345", "HR26DQ5551", "DL1C0001"),
+      litres  = c(40, 35, 60, 45, 50, 30, 25)
+    )
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    vehicle_pattern <- "^[A-Z]{2}[0-9]{1,2}[A-Z]{0,3}[0-9]{4}$|^[0-9]{2}BH[0-9]{4}[A-Z]{1,2}$"
+
+    fuel_checked <- fuel_log |>
+      mutate(std   = str_to_upper(str_remove_all(vehicle, "[\\s-]")),
+             valid = str_detect(std, vehicle_pattern))
+    fuel_checked
+
+    fuel_checked |> filter(!valid) |> summarise(n = n(), litres = sum(litres))
+    ```
+    `MH12AB123` has only three digits at the end and `KA05MN12345` has five, so no such vehicle can exist. `r sum(fuel_checked$litres[!fuel_checked$valid])` litres were drawn against these two numbers. The auditor should see the log books of these vehicles, and ask the office which vehicles really received the fuel.
+    :::
+
+3.  **A GSTIN with its State code changed.** Make a valid GSTIN for the PAN `AAMFV7788L` in Uttar Pradesh (State code `09`) with `make_gstin()`. Then change only its State code to `07`, as someone might do to show a Delhi registration. Does `gstin_valid()` accept the changed GSTIN?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    up_gstin    <- make_gstin("09", "AAMFV7788L")
+    delhi_gstin <- str_replace(up_gstin, "^09", "07")
+    c(up_gstin, delhi_gstin)
+    gstin_valid(c(up_gstin, delhi_gstin))
+    ```
+    The changed GSTIN fails, because the State code is part of the check character calculation. A forged registration would need a new check character as well. So a wrong check character is a strong reason to verify the GSTIN on the GST portal.
+    :::
+
+4.  **Amounts from payment narrations.** Extract the amount that follows `Rs` or `Rs.` in each narration below, using a look-behind. Then find the total, and the narration with no amount.
+
+    ```{r}
+    pay_narr <- c("Paid Rs 45000 to Bharat Stationers, bill 112",
+                  "Paid Rs.120000 to Laxmi Electricals, bill 87",
+                  "Advance of Rs 25000 to Om Sai Infra",
+                  "Paid to National Printers, amount as per bill")
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pay_amt <- as.numeric(str_extract(pay_narr, "(?<=Rs\\.? ?)\\d+"))
+    pay_amt
+    sum(pay_amt, na.rm = TRUE)
+    pay_narr[is.na(pay_amt)]
+    ```
+    The look-behind checks for `Rs`, an optional dot and an optional space, but keeps only the digits. The bill numbers are not picked up, since no `Rs` comes before them. The total is ₹`r sum(pay_amt, na.rm = TRUE) / 1e5` lakh. The payment to National Printers has no amount in its narration, so it must be checked against the bill.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

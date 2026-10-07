@@ -656,6 +656,101 @@ The chart shows that the three largest vendors received `r round(top3_share)`% o
 `factor()` turns any value not in `levels` into `NA` silently. Such records can drop out of totals without anyone noticing. Use `fct()` when the list of allowed values is known, and always read the warnings R gives.
 :::
 
+## Try it yourself {#sec-fct-exercises}
+
+These exercises use the objects of this chapter, such as the grades `grades2_ordered`, the list `districts` and the health mission's `bills`. Try each one before opening its solution.
+
+1.  **Works graded Very good or better.** The quality control wing wants to praise the contractors of the best works. Using `grades2_ordered`, find how many of the 100 works were graded *Very good* or better.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    sum(grades2_ordered >= "Very good")
+    table(grades2_ordered)
+    ```
+    `r sum(grades2_ordered >= "Very good")` works were graded *Very good* or *Excellent*. The comparison works only because `grades2_ordered` is an ordered factor. The table confirms the count.
+    :::
+
+2.  **Delay bands, with Not paid at the end.** Count the bills of the health mission in each delay band, with proportions. Move *Not paid* to the end first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    delay_end <- fct_relevel(bills$delay, "Not paid", after = Inf)
+    delay_tab <- fct_count(delay_end, prop = TRUE)
+    delay_tab
+    ```
+    `r delay_tab$n[delay_tab$f == "Over 90 days"]` bills took more than 90 days to pay, and `r delay_tab$n[delay_tab$f == "Not paid"]` are not paid yet. Together they are `r round(100 * sum(delay_tab$p[delay_tab$f %in% c("Over 90 days", "Not paid")]))`% of all bills. The auditor would ask for the reasons for these delays, and whether any interest or penalty became payable.
+    :::
+
+3.  **District names in a return.** A monthly return gives these district names. Find the entries that are not in the mission's list `districts`.
+
+    ```r
+    c("Haripur", "Sitapur", "Hari pur", "Rampur", "Kanpur", "sitapur")
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    return_districts <- tibble(
+      entry    = 1:6,
+      district = c("Haripur", "Sitapur", "Hari pur", "Rampur", "Kanpur", "sitapur")
+    )
+
+    return_districts |>
+      mutate(district_f = factor(district, levels = districts)) |>
+      filter(is.na(district_f))
+    ```
+    Three entries are not in the list. *Hari pur* and *sitapur* are typing errors for districts that exist. *Kanpur* is not a district of the mission at all, so the auditor would ask why it appears in the return.
+    :::
+
+4.  **Late payment by district.** Among the bills that have been paid, find the share of bills that took more than 90 days, for each district. Draw the shares as bars, sorted with `fct_reorder()`, so that the worst district is at the top.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Share of paid bills that took more than 90 days, by district"
+    #| fig-height: 4
+    late_share <- bills |>
+      filter(delay != "Not paid") |>
+      summarise(late_pct = 100 * mean(delay == "Over 90 days"), .by = district) |>
+      mutate(district = fct_reorder(district, late_pct))
+
+    ggplot(late_share, aes(late_pct, district)) +
+      geom_col() +
+      labs(x = "Bills paid after 90 days (per cent)", y = NULL)
+
+    worst <- late_share |> slice_max(late_pct, n = 1)
+    ```
+    `r worst$district` has the highest share, `r round(worst$late_pct, 1)`% of its paid bills. Each district has only a few late bills, so small differences between districts may be chance. The sorted chart still tells the auditor where to begin.
+    :::
+
+5.  **Top five districts and the rest.** Draw the total of the bills of each district, in ₹ lakh. Keep the five districts with the most money, and put the rest together as *All other districts*. Sort the bars, keep *All other districts* at the end, and put the biggest district at the top.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Total of bills of the top five districts, and all others together"
+    #| fig-height: 3.5
+    top_districts <- bills |>
+      mutate(district = fct_lump_n(district, n = 5, w = amount,
+                                   other_level = "All other districts"),
+             district = fct_infreq(district, w = amount) |>
+               fct_relevel("All other districts", after = Inf) |>
+               fct_rev()) |>
+      summarise(amount_lakh = sum(amount) / 1e5, .by = district)
+
+    ggplot(top_districts, aes(amount_lakh, district)) +
+      geom_col(fill = "steelblue") +
+      labs(x = "Total of bills (Rs lakh)", y = NULL)
+
+    top5 <- top_districts |>
+      filter(district != "All other districts") |>
+      arrange(desc(amount_lakh))
+    ```
+    The five districts together account for ₹`r round(sum(top5$amount_lakh) / 100, 2)` crore, out of ₹`r round(sum(top_districts$amount_lakh) / 100, 2)` crore in all. `r top5$district[1]` leads, with ₹`r round(top5$amount_lakh[1] / 100, 2)` crore. The same four steps as in @sec-fct-vendors work here. We lump by money, sort by money, move the lumped level to the end, and reverse the order for horizontal bars.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

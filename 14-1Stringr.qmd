@@ -784,6 +784,81 @@ Before joining two tables, compare the length and format of the key columns with
 Cleaning changes the data. Every replacement rule can merge two things that are really different, like two genuinely different firms with similar names. Keep the original values, apply cleaning rules you can explain, and verify the matches that matter before reporting them.
 :::
 
+## Try it yourself {#sec-strng-exercises}
+
+These exercises use the strings and tables already created in this chapter. Try each one before opening the solution.
+
+1.  **Show only the last four characters of a PAN.** Earlier we masked each PAN in `text_2` completely. Mask it again, but this time keep the last four characters visible, so that a reader can still tell two PANs apart. Use a function as the `replacement`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    str_replace_all(text_2, regex(pan),
+                    replacement = \(p) str_c("XXXXXX", str_sub(p, 7, 10))) |>
+      str_view()
+    ```
+    The function receives each matched PAN and returns six `X` characters followed by its last four characters. The rest of the text is left as it was.
+    :::
+
+2.  **Two more spellings of a vendor.** A second payment file writes Kaveri Infra Projects as `"Kaveri Infra Projects Limited"` and `"M/s. KAVERI INFRA PROJECTS LTD"`. Use `clean_name()` to check whether both become the same as the name of vendor `V08`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    new_names <- c("Kaveri Infra Projects Limited", "M/s. KAVERI INFRA PROJECTS LTD")
+    clean_name(new_names)
+    clean_name(new_names) == clean_name(vendors$name[vendors$vendor_id == "V08"])
+    ```
+    Both spellings clean to the same name as `V08`. So payments made under either spelling can be joined to the same vendor.
+    :::
+
+3.  **A missing voucher number.** The payment vouchers of an office for one week are `PV-10`, `PV-9`, `PV-12`, `PV-8` and `PV-13`. Sort them in the right order, and find the number missing from the series.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pv <- c("PV-10", "PV-9", "PV-12", "PV-8", "PV-13")
+    str_sort(pv)                   # as text, PV-10 comes before PV-8
+    str_sort(pv, numeric = TRUE)   # in the order of the numbers
+
+    pv_no <- as.numeric(str_remove(pv, "PV-"))
+    setdiff(min(pv_no):max(pv_no), pv_no)
+    ```
+    Only the numeric sort puts the vouchers in their real order. Voucher number `r setdiff(min(pv_no):max(pv_no), pv_no)` is missing. The auditor should ask whether it was cancelled, and see the cancelled voucher.
+    :::
+
+4.  **A sentence for the draft paragraph.** From `statement_parsed`, find the number and total amount of NEFT and RTGS payments to each party. Write one sentence per party with `str_glue()`, with the amount in lakh in the Indian style.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    statement_parsed |>
+      filter(is_eft) |>
+      summarise(n_txn = n(), total = sum(amount), .by = party) |>
+      mutate(line = str_glue("{party} received {n_txn} payment(s) worth ",
+                             "Rs {format_inr(total / 1e5, digits = 2)} lakh.")) |>
+      pull(line)
+    ```
+    `str_glue()` joins its pieces and fills in the values row by row. Sharma Traders shows two payments, which is the double payment of the same invoice that we found above.
+    :::
+
+5.  **An employee who is not on the payroll.** An attendance file has the codes `"123"`, `"456"`, `"1789"`, `"12001"` and `"45"`. Check the lengths of the codes, pad them to five characters, and find any code that is not in `payroll`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    attendance <- tibble(emp_code = c("123", "456", "1789", "12001", "45"),
+                         days     = c(26, 25, 26, 24, 26))
+
+    attendance |> count(code_length = str_length(emp_code))
+
+    attendance |>
+      mutate(emp_code = str_pad(emp_code, width = 5, pad = "0")) |>
+      anti_join(payroll, by = "emp_code")
+    ```
+    The codes have different lengths, a sign that leading zeros were lost. After padding, every code finds its employee except `00045`. Attendance marked for a code with no pay record needs an explanation from the office.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

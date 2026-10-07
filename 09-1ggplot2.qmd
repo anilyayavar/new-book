@@ -1010,6 +1010,90 @@ A chart should make one point clearly. Map a variable inside `aes()` only when i
 
 Our charts so far find the patterns, but they are not yet ready for a report. In @sec-ggplot2-polish we learn to control the axes and colours, split a chart into facets, add titles and notes, set a theme and save the chart. We also examine the bills split just below the limit, and draw a chart for the audit report.
 
+## Try it yourself {#sec-ggplot2-exercises}
+
+These exercises use the tables `bills`, `spend` and `budget_vs_exp` from this chapter. Try each one before opening its solution.
+
+1.  **Rampur against Amarpur.** Draw a line chart of the monthly expenditure of Amarpur and Rampur, in ₹ lakh, with one colour for each district. This is the chart in @fig-rgg44, with Rampur in place of Fatehpur.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Monthly expenditure of Amarpur and Rampur"
+    #| fig-height: 3.5
+    amar_ram <- spend |>
+      filter(district %in% c("Amarpur", "Rampur")) |>
+      summarise(exp_lakh = sum(exp) / 1e5, .by = c(district, month)) |>
+      mutate(month_no = as.integer(month))
+
+    ggplot(amar_ram, aes(month_no, exp_lakh, colour = district)) +
+      geom_line()
+
+    ram <- amar_ram |> filter(district == "Rampur")
+    ```
+    Rampur spent ₹`r round(ram$exp_lakh[ram$month == "Mar"], 1)` lakh in March, against a median of ₹`r round(median(ram$exp_lakh[ram$month != "Mar"]), 1)` lakh in its other months. Its line runs along that of Amarpur for most of the year. It climbs in February and shoots up in March, much as Fatehpur's did.
+    :::
+
+2.  **Bins that end at the limit.** Draw a histogram of the bills between ₹1 lakh and ₹3 lakh, with bins of ₹10,000 that end exactly at the limit of ₹2 lakh. Mark the limit with a dashed line. Compare the bin just below the limit with the bin just above it.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Bills between 1 and 3 lakh, with bins ending at the limit"
+    #| fig-height: 3.5
+    bills |>
+      filter(amount >= 100000, amount <= 300000) |>
+      ggplot(aes(amount)) +
+      geom_histogram(binwidth = 10000, boundary = 200000) +
+      geom_vline(xintercept = 200000, linetype = "dashed", colour = "firebrick")
+
+    # Bins include their right end, so a bill of exactly 2 lakh falls below the line
+    n_below <- sum(bills$amount > 190000 & bills$amount <= 200000)
+    n_above <- sum(bills$amount > 200000 & bills$amount <= 210000)
+    ```
+    With `boundary = 200000`, one bin ends at the limit. The bin from ₹1.9 lakh to ₹2 lakh holds `r n_below` bills, while the bin from ₹2 lakh to ₹2.1 lakh holds `r n_above`. The pile that the default bins blurred in @fig-rgg21 is now plain.
+    :::
+
+3.  **Who supplies Devgarh?** Draw a bar chart of the number of supplies bills of Devgarh, one bar for each vendor, with the vendors on the `y` axis. Which vendor gets the most bills?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Supplies bills of Devgarh, by vendor"
+    #| fig-height: 3
+    dev_sup <- bills |>
+      filter(district == "Devgarh", category == "Supplies")
+
+    ggplot(dev_sup, aes(y = vendor)) +
+      geom_bar()
+
+    dev_count <- dev_sup |> count(vendor, sort = TRUE)
+    dev_count
+    ```
+    `r dev_count$vendor[1]` has `r dev_count$n[1]` bills, against at most `r dev_count$n[2]` for any other vendor. It does not appear in the supplies of any other district. A vendor that appears in one district only, with many bills, is worth a closer look. @sec-ggplot2-split shows that its bills sit just below the limit.
+    :::
+
+4.  **Utilisation of the budget.** From `budget_vs_exp`, work out the utilisation of each district, that is, its expenditure as a share of its budget. Draw it as bars with `geom_col()`, mark 100% with a dashed line, and label each bar with its percentage. Which districts spent more than their budget?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Expenditure as a percentage of the budget of each district"
+    #| fig-height: 4
+    util_tbl <- budget_vs_exp |>
+      mutate(util_pct = round(amt_exp / amt_be * 100))
+
+    ggplot(util_tbl, aes(util_pct, district)) +
+      geom_col() +
+      geom_vline(xintercept = 100, linetype = "dashed", colour = "firebrick") +
+      geom_text(aes(label = util_pct), hjust = -0.2, size = 3)
+
+    over_budget <- util_tbl |> filter(util_pct > 100)
+    over_budget
+    ```
+    `r over_budget$district[1]` spent `r over_budget$util_pct[1]`% of its budget, and `r over_budget$district[2]` spent `r over_budget$util_pct[2]`%. Their bars cross the dashed line. The bars are in alphabetical order here. In @sec-ggplot2-polish we learn to sort them and to colour only the districts that exceeded their budget.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

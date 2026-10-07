@@ -528,6 +528,87 @@ By default, `hist()` counts a value that falls exactly on a break in the bin to 
 A chart is the quickest way to see what the numbers hide. Look at the data before trusting any summary. But a spike or an outlier on a chart is only a lead. Confirm it from the original records before reporting.
 :::
 
+## Try it yourself {#sec-baseplot-exercises}
+
+These exercises use the bill register `bills` from this chapter. Try each one before opening its solution.
+
+1.  **A second limit at ₹50,000.** Suppose a junior officer may pass bills of up to ₹50,000. Draw a histogram of the bills between ₹25,000 and ₹75,000, in bins of ₹2,500, and mark the limit in red. Is there a spike just below it?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Bills between Rs 25,000 and Rs 75,000, with a limit of Rs 50,000"
+    #| fig-height: 3.5
+    mid_range <- bills$amount[bills$amount >= 25000 & bills$amount <= 75000]
+    hist(mid_range,
+         breaks = seq(25000, 75000, by = 2500),
+         col = "grey80", border = "white",
+         xlab = "Amount of bill (Rs)", main = NULL)
+    abline(v = 50000, col = "red", lwd = 2)
+
+    # Bills in the bin just below the limit, and in the bin just above it
+    below_50k <- sum(bills$amount > 47500 & bills$amount <= 50000)
+    above_50k <- sum(bills$amount > 50000 & bills$amount <= 52500)
+    c(below = below_50k, above = above_50k)
+    ```
+    The bin just below ₹50,000 has `r below_50k` bills and the bin just above it has `r above_50k`. The bars fall smoothly, with no spike at the line. A chart that shows nothing unusual is also useful evidence. It tells us that splitting, if any, is not aimed at this limit.
+    :::
+
+2.  **Number of bills in each month.** The chapter drew the monthly *amounts*. Draw a bar chart of the *number* of bills in each month instead. Does March stand out here too?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Number of bills in each month"
+    #| fig-height: 3.5
+    month_count <- table(bills$month)
+    barplot(month_count, las = 2,
+            ylab = "Number of bills", main = NULL)
+    ```
+    March has `r month_count[["Mar"]]` bills, against a median of `r median(month_count[-12])` for the other months. So the March rush is a rush in the number of bills, not just in their size. The auditor would check whether the goods and services billed in March were really received in March.
+    :::
+
+3.  **Repair bills by office.** Draw box plots of the amounts of *repair* bills only, one box for each office, on a log scale. Which office has the highest median repair bill?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Repair bills of each office, on a log scale"
+    #| fig-height: 3.5
+    repair_bills <- bills[bills$head == "Repairs", ]
+    boxplot(amount ~ office, data = repair_bills, log = "y",
+            col = "lightgray", xlab = "Office", ylab = "Amount (Rs, log scale)")
+
+    repair_median <- tapply(repair_bills$amount, repair_bills$office, median)
+    round(sort(repair_median, decreasing = TRUE))
+    ```
+    `r names(which.max(repair_median))` has the highest median repair bill, ₹`r format(round(max(repair_median)), big.mark = ",")`. The next office has ₹`r format(round(sort(repair_median, decreasing = TRUE)[2]), big.mark = ",")`. Once we look at one head only, the gap is much wider than in the box plot of all bills. The split repair bills pull up the median of that office.
+    :::
+
+4.  **Kesarganj against the rest.** Use `par(mfrow = c(1, 2))` to draw two histograms side by side. The first shows the repair bills of Kesarganj between ₹50,000 and ₹1.5 lakh. The second shows the repair bills of the other four offices in the same range. Use bins of ₹5,000, mark the limit of ₹1 lakh, and restore the old settings at the end.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-cap: "Repair bills near the limit, Kesarganj and the other offices"
+    #| fig-height: 3.5
+    in_range <- repair_bills$amount >= 50000 & repair_bills$amount <= 150000
+    kes <- repair_bills$amount[in_range & repair_bills$office == "Kesarganj"]
+    rest <- repair_bills$amount[in_range & repair_bills$office != "Kesarganj"]
+    bins <- seq(50000, 150000, by = 5000)
+
+    old_par <- par(mfrow = c(1, 2))
+    hist(kes, breaks = bins, col = "firebrick", border = "white",
+         main = "Kesarganj", xlab = "Amount (Rs)")
+    abline(v = 100000, lwd = 2)
+    hist(rest, breaks = bins, col = "grey70", border = "white",
+         main = "Other offices", xlab = "Amount (Rs)")
+    abline(v = 100000, lwd = 2)
+    par(old_par)
+    ```
+    The chart of Kesarganj has one very tall bar just left of the line. The bars of the other offices fall away, with no such spike. Kesarganj has `r length(kes)` repair bills in this range, and `r sum(kes > 95000 & kes <= 100000)` of them lie between ₹95,000 and ₹1 lakh. Two charts side by side make the comparison plain for the reader of the report.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
