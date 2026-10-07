@@ -482,6 +482,98 @@ The results of Apriori depend heavily on the limits we set.
 Association rules are excellent at showing *what goes with what*. In audit, the most valuable rules are often the ones that *should not* exist. A lens billed apart from a cataract package. Four firms always bidding together. Finding them needs the algorithm. Understanding them needs the auditor.
 :::
 
+## Try it yourself {#sec-apriori-exercises}
+
+These exercises use the objects of this chapter, the `claims` data, the transactions `trans` and `tender_trans`, the rules `claim_rules`, and the `bids` data with its `cartel`. Try each before opening the solution.
+
+1.  **A higher confidence limit.** Run `apriori()` on the claims again with the same support, but a minimum confidence of 0.5. How many rules are left? Do the two unbundling rules survive?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    strict_rules <- apriori(trans,
+                            parameter = list(supp = 0.002, conf = 0.5, minlen = 2),
+                            control = list(verbose = FALSE))
+    length(strict_rules)
+    inspect(sort(strict_rules, by = "lift"))
+    ```
+    ```{r}
+    #| include: false
+    strict_df <- DATAFRAME(strict_rules)
+    both_kept <- all(c("{A05}", "{A06}") %in% as.character(strict_df$LHS))
+    ```
+    The rules fall from `r length(claim_rules)` to `r length(strict_rules)`. `r if (both_kept) "Both unbundling rules, {A05} => {S01} and {A06} => {O01}, are still there, because their confidence is 1." else "Not both unbundling rules survive."` A higher limit gives a shorter list to read. The strongest patterns stay.
+    :::
+
+2.  **What goes with a blood transfusion?** Find all rules in `claim_rules` whose right side is the blood transfusion add-on `A02`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    blood_rules <- subset(claim_rules, rhs %in% "A02")
+    inspect(sort(blood_rules, by = "lift"))
+    ```
+    There are `r length(blood_rules)` rules, and both have a knee replacement (`R01`) on the left. So in normal billing, a transfusion goes with a knee replacement. An auditor can now look for transfusions billed with treatments that rarely need one.
+    :::
+
+3.  **Turning a rule around.** Work out the confidence of `{A01} => {C01}` by counting, as we did in the chapter for `{C01} => {A01}`. Compare the two.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    conf_C01_A01 <- n_both / n_C01
+    conf_A01_C01 <- n_both / n_A01
+    round(c(C01_to_A01 = conf_C01_A01, A01_to_C01 = conf_A01_C01), 3)
+    ```
+    The support is the same both ways, since it counts the same `r n_both` claims. But `r round(100 * conf_C01_A01)`% of angioplasty claims have an ICU stay, while only `r round(100 * conf_A01_C01)`% of ICU claims have an angioplasty. Most ICU stays come with other treatments. So always read a rule in the direction it is written.
+    :::
+
+4.  **ICU stays after fever or gastroenteritis.** The chapter said that an ICU stay billed after a simple fever (`M01`) or gastroenteritis (`M02`) would stand out. For each hospital, find the share of such claims that also bill an ICU stay. Which hospitals stand out?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    simple_cases <- claims |>
+      filter(str_detect(packages, "^M01|^M02"))
+
+    icu_simple <- simple_cases |>
+      summarise(claims   = n(),
+                with_icu = sum(str_detect(packages, "A01")),
+                .by = hospital_id) |>
+      mutate(share = round(with_icu / claims, 2)) |>
+      arrange(desc(share))
+
+    head(icu_simple, 5)
+    ```
+    ```{r}
+    #| include: false
+    overall_share <- mean(str_detect(simple_cases$packages, "A01"))
+    ```
+    Across all hospitals, only `r round(100 * overall_share, 1)`% of these claims bill an ICU stay. But `r icu_simple$hospital_id[1]` bills one in `r round(100 * icu_simple$share[1])`% of them, and `r icu_simple$hospital_id[2]` in `r round(100 * icu_simple$share[2])`%. These are Pragati Nursing Home and Navjeevan Hospital, the two ICU hospitals that k-means flagged in @sec-kmeans-odd. Their fever and gastroenteritis claims with an ICU stay are the case records to call for first.
+    :::
+
+5.  **Any other group of bidders?** Run `apriori()` on `tender_trans` with lower limits, a support of 0.02 and a confidence of 0.3. Keep only the rules that include at least one firm outside the cartel. Is there another suspicious group?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    loose_rules <- apriori(tender_trans,
+                           parameter = list(supp = 0.02, conf = 0.3, minlen = 2),
+                           control = list(verbose = FALSE))
+    length(loose_rules)
+
+    loose_df <- DATAFRAME(loose_rules) |>
+      as_tibble() |>
+      mutate(across(where(is.numeric), \(x) round(x, 2)))
+
+    cartel_pattern <- paste(cartel, collapse = "|")
+    outside <- loose_df |>
+      filter(!str_detect(LHS, cartel_pattern) | !str_detect(RHS, cartel_pattern))
+    outside
+    ```
+    Of `r nrow(loose_df)` rules, only `r if (nrow(outside) == 1) "one involves" else paste(nrow(outside), "involve")` a firm outside the cartel. It is `r as.character(outside$LHS[1])` => `r as.character(outside$RHS[1])`, seen in `r outside$count[1]` tenders, with a lift of `r outside$lift[1]` and a confidence of `r outside$confidence[1]`. Compare that with the cartel rules, which have a confidence close to 1 and a lift of about `r round(max(quality(firm_rules)$lift))`. This pair is a weak link. It is worth a look only if other signs, such as rotation of wins, appear too.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -1112,7 +1112,7 @@ Use the log scale whenever the ups and downs of a series grow along with its lev
 ::: callout-note
 ## The March rush is itself an audit issue
 
-The seasonal method treats the March rush as *normal*, because it happens every year. But for an auditor, the rush itself may be a finding. Ministry of Finance guidelines on expenditure management require that expenditure in March should not exceed 15% of the budget for the year. We can check this directly, by finding the share of March in each financial year's expenditure.
+The seasonal method treats the March rush as *normal*, because it happens every year. But for an auditor, the rush itself may be a finding. The General Financial Rules, 2017 (Rule 62) treat a rush of expenditure at the end of the year as a breach of financial propriety, and government instructions ask departments to keep expenditure in March within 15% of the budget for the year. We can check this directly, by finding the share of March in each financial year's expenditure.
 
 ```{r}
 expenditure |>
@@ -1340,6 +1340,82 @@ With so many methods, which one should an auditor use? @tbl-anochoose gives a si
 
 An anomaly is only *unusual*. It is not necessarily *wrong*. Many anomalies have perfectly good explanations, like a one-time bulk purchase or a new scheme. Anomaly detection tells the auditor *where to look*. Only the examination of records can tell *what happened*.
 :::
+
+## Try it yourself {#sec-ano-exercises}
+
+These exercises use the data of this chapter, the stationery bills, the health facilities, the TA claims, the vendor indicators and the PHC scores. Try each one before you open the solution.
+
+1.  **One box for the whole office.** Apply `boxplot.stats()` to all the stationery bills together, without grouping by vendor. Is the planted bill of ₹38,000 flagged?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    office_out <- boxplot.stats(stationery$amount)$out
+    office_out
+    38000 %in% office_out
+    ```
+    Over the whole office, `r length(office_out)` bills are flagged, and the planted bill is among them. But so are `r length(office_out) - 1` other bills, all of them ordinary printing bills of Modern Printers. The planted bill is lost in this crowd, and nothing marks it as the odd one. This is why the box plot should be drawn vendor by vendor.
+    :::
+
+2.  **A looser cut-off for peer groups.** The chapter flagged facilities with a robust z-score beyond 3.5 within their own type. Lower the cut-off to 3, using the column `rz_peer` of `facilities`. How many facilities are flagged now?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    flag_3 <- facilities |>
+      filter(abs(rz_peer) > 3) |>
+      select(facility, type, cost_per_patient, rz_peer) |>
+      mutate(rz_peer = round(rz_peer, 1))
+    flag_3
+    ```
+    With a cut-off of 3, `r nrow(flag_3)` facilities are flagged, against `r sum(abs(facilities$rz_peer) > 3.5)` at 3.5. A lower cut-off gives a longer list to examine. Choose the cut-off to suit the time available for the examination of records, and record it in the working papers.
+    :::
+
+3.  **The rule-based check first.** The audit tip on TA claims says a direct check of entitlements is better when the rules are known. Use the list `entitled` to find every claim in `claims` whose mode of travel is not allowed for the grade of the employee.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    not_entitled <- claims |>
+      filter(!map2_lgl(mode, grade, \(m, g) m %in% entitled[[g]])) |>
+      select(claim_id, grade, mode, distance_km, amount)
+    not_entitled
+    ```
+    The rule finds `r nrow(not_entitled)` claims, `r paste(not_entitled$claim_id, collapse = " and ")`, the two Group C air journeys. It does not find TA-303, whose mode is allowed but whose amount is inflated. So the rule and the anomaly method catch different problems, and we use both.
+    :::
+
+4.  **Does the choice of k matter?** Calculate the kNN score of the vendors on all four scaled indicators with `k = 10` instead of 5. Do the same vendors come out on top?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    vendor_knn10 <- FNN::get.knn(vend_scaled, 10)
+    score_10 <- rowMeans(vendor_knn10$nn.dist)
+    names(score_10) <- vendors$vendor
+    round(head(sort(score_10, decreasing = TRUE), 5), 2)
+    ```
+    ```{r}
+    #| include: false
+    top_10 <- names(sort(score_10, decreasing = TRUE))
+    ```
+    With `k = 10`, `r top_10[1]` is first and `r top_10[2]` is second, against `r knn_top[1]` and `r knn_top[2]` with `k = 5`. When the top records stay the same for two values of `k`, we can be more confident that they are real leads.
+    :::
+
+5.  **A wider vote.** In the vote on the PHC data, a method gave its vote to records in its top 5%. Widen this to the top 10%, using the percentile ranks in `combined`. Where do the three planted PHCs now stand, and how many PHCs get two or more votes?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    voted_10 <- combined |>
+      mutate(votes = (pr_robust_z >= 0.9) + (pr_mahal >= 0.9) +
+                     (pr_iforest >= 0.9) + (pr_lof >= 0.9)) |>
+      arrange(desc(votes), desc(combined))
+
+    match(planted, voted_10$phc)
+    sum(voted_10$votes >= 2)
+    ```
+    The planted PHCs are now at positions `r paste(sort(match(planted, voted_10$phc)), collapse = ", ")`, against `r paste(sort(vote_pos), collapse = ", ")` with the top 5%. And `r sum(voted_10$votes >= 2)` PHCs now get two or more votes, against `r n_two_plus` before. The wider net gives a much longer list to clear, and it does not bring the planted cases any closer to the top. Here the narrower net of 5% is the better choice. On other data, try two or three widths and compare, as we did here.
+    :::
 
 ## Summary of functions used
 

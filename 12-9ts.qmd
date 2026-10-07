@@ -808,6 +808,57 @@ A forecast is the auditor's *expectation*, not the truth. A gap between the actu
 
 This chapter looked at the pattern of a series as a whole. The anomaly detection chapter picks out single months which are unusual after allowing for trend and season (@sec-ano-ts). It also finds the point at which a series shifted to a new level and stayed there (@sec-ano-changepoint), as the stamp duty receipts did in September 2023.
 
+## Try it yourself {#sec-ts-exercises}
+
+These exercises use the series of this chapter, `spend`, `ctax` and `stamp`, and the objects built from them. Try each one before you open the solution.
+
+1.  **The March share of one year.** Take out the financial year 2020-21 of `spend` with `window()`. What percentage of that year's expenditure was spent in March 2021?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    fy_2021 <- window(spend, start = c(2020, 4), end = c(2021, 3))
+    march_share_2021 <- round(100 * fy_2021[12] / sum(fy_2021), 1)
+    march_share_2021
+    ```
+    March 2021 alone carried `r march_share_2021`% of the year's expenditure. The last value of the window is March, because the financial year runs from April to March. Against a norm of 15% for March, this is a clear point for the audit report.
+    :::
+
+2.  **The busiest quarter for commercial tax.** Decompose `ctax` with `decompose()`, using a multiplicative model, and print the seasonal index of each quarter. Which quarter collects the most tax, compared with its trend?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ctax_idx <- round(decompose(ctax, type = "multiplicative")$figure, 3) |>
+      setNames(c("Apr-Jun", "Jul-Sep", "Oct-Dec", "Jan-Mar"))
+    ctax_idx
+    ```
+    The series starts in the April to June quarter, so the indices are in that order. The `r names(which.max(ctax_idx))` quarter is the highest, at about `r round(100 * (max(ctax_idx) - 1))`% above the trend. A quarterly return checked against this index will show whether a circle's collections follow the State pattern.
+    :::
+
+3.  **The weakest month.** The table `spend_rem` lists the STL remainders of `spend`, largest first. Which month was furthest *below* what its trend and season would suggest?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    weak_month <- spend_rem |> arrange(remainder) |> head(3)
+    weak_month
+    ```
+    `r format(weak_month$month[1], "%B %Y")` has the most negative remainder, `r weak_month$remainder[1]`. On the log scale, this means the department spent about `r round(100 * (1 - exp(weak_month$remainder[1])))`% less than expected that month. September is a quiet month, and a single dip with no other sign is a weak lead. It is worth a question to the department. The March 2021 spike, about `r round(100 * (exp(top_rem$remainder) - 1))`% above normal, remains the stronger lead.
+    :::
+
+4.  **A second opinion on the stamp duty.** Forecast 2023-24 from the cleaned training data `train_clean` with `auto.arima(train_clean, lambda = 0)` instead of `ets()`, with a 95% interval. Use `compare_with_actual()` to list the months below the lower limit. Does ARIMA tell the same story?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    fc3  <- forecast(auto.arima(train_clean, lambda = 0), h = 12, level = 95)
+    cmp3 <- compare_with_actual(fc3, actual_stamp)
+    cmp3 |> filter(below) |> select(month, actual, forecast, lower)
+    ```
+    ARIMA puts `r sum(cmp3$below)` months below the lower limit, from `r format(min(cmp3$month[cmp3$below]), "%B %Y")` onwards. The shortfall against the ARIMA forecast in these months is about ₹`r round(-sum(cmp3$gap[cmp3$below]))` lakh. When two different methods point to the same months, the lead is much stronger.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

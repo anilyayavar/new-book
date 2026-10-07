@@ -390,6 +390,99 @@ This table compares the two clusterings. Each row is a cluster from the original
 Clustering always produces clusters, even from data which has no natural groups. So a cluster is not a finding by itself. It becomes useful only when it makes sense, and when its members, on examination, really share something.
 :::
 
+## Try it yourself {#sec-kmeans-exercises}
+
+These exercises use the objects of this chapter, the `indicators` table (which now holds `cluster` and `dist_own`), the scaled indicators `X_scaled` and the k-means result `km`. Try each before opening the solution.
+
+1.  **Clusters on ICU billing.** Repeat the two-indicator k-means of @fig-km2d with `pct_icu` and `avg_claim` in place of claims per bed and length of stay. Use 3 clusters and `set.seed(123)`. Which cluster has the highest ICU share, and does it hold the two ICU hospitals of @sec-kmeans-odd?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    two_icu <- X_scaled[, c("pct_icu", "avg_claim")]
+
+    set.seed(123)
+    km_icu <- kmeans(two_icu, centers = 3, nstart = 25)
+
+    icu_profile <- indicators |>
+      mutate(icu_cluster = km_icu$cluster) |>
+      summarise(hospitals = n(),
+                public    = sum(type == "Public"),
+                pct_icu   = mean(pct_icu),
+                avg_claim = mean(avg_claim),
+                .by = icu_cluster)
+    icu_profile
+
+    icu_top <- icu_profile$icu_cluster[which.max(icu_profile$pct_icu)]
+    indicators$hospital_name[km_icu$cluster == icu_top & indicators$hospital_name %in% icu_two]
+    ```
+    The cluster with the highest ICU share has `r icu_profile$hospitals[icu_profile$icu_cluster == icu_top]` hospitals, with an average ICU share of `r round(icu_profile$pct_icu[icu_profile$icu_cluster == icu_top], 1)`%. `r if (all(icu_two %in% indicators$hospital_name[km_icu$cluster == icu_top])) "Both ICU hospitals are in it." else "It does not hold both ICU hospitals."` But they are not alone. They share the cluster with `r icu_profile$hospitals[icu_profile$icu_cluster == icu_top] - 2` other private hospitals. k-means does not give two hospitals a cluster of their own. To find them, the distance from the centroid is still needed.
+    :::
+
+2.  **Four clusters instead of three.** Run k-means on all indicators with `centers = 4` and `set.seed(123)`. Compare the result with `km` using `table()`. Which cluster was split?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(123)
+    km4 <- kmeans(X_scaled, centers = 4, nstart = 25)
+
+    table(three = km$cluster, four = km4$cluster)
+
+    indicators |>
+      mutate(cluster4 = factor(km4$cluster)) |>
+      summarise(hospitals = n(),
+                public    = sum(type == "Public"),
+                pct_icu   = mean(pct_icu),
+                pct_female = mean(pct_female),
+                .by = cluster4) |>
+      knitr::kable(digits = 1)
+    ```
+    ```{r}
+    #| include: false
+    tab4 <- table(km$cluster, km4$cluster)
+    split_row <- rownames(tab4)[rowSums(tab4 > 0) > 1]
+    ```
+    The public cluster and the small unusual cluster stay exactly as they were. Only cluster `r split_row`, the regular private hospitals, is split in two. The profile shows that the two halves differ mainly in their share of ICU stays. Both are large groups. So a fourth cluster adds some detail for peer comparison, but no new lead.
+    :::
+
+3.  **The odd one out in every cluster.** Find the hospital farthest from its own centroid in each of the three clusters.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    odd_each <- indicators |>
+      slice_max(dist_own, n = 1, by = cluster) |>
+      select(cluster, hospital_name, type, dist_own)
+    odd_each
+    ```
+    ```{r}
+    #| include: false
+    odd_pub <- odd_each$hospital_name[odd_each$type == "Public"]
+    ```
+    The list includes a public hospital, `r odd_pub`. The top of the overall list in @sec-kmeans-odd had only private hospitals, because the public cluster is tight and its members stay close to the centre. Looking within each cluster makes sure that every peer group gets its own odd one out.
+    :::
+
+4.  **A larger sample, with the odd ones added.** Draw the audit sample again with `set.seed(2025)`, but take 30% of each of the two large clusters instead of 20%. Then add the three hospitals in `top3`, if they are not already in it. How many hospitals are in the final sample?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(2025)
+
+    sample_30 <- bind_rows(
+      indicators |> filter(cluster == small),
+      indicators |> filter(cluster != small) |> slice_sample(prop = 0.3, by = cluster),
+      indicators |> filter(hospital_id %in% top3)
+    ) |>
+      distinct(hospital_id, .keep_all = TRUE)
+
+    sample_30 |>
+      count(cluster, type)
+    ```
+    The final sample has `r nrow(sample_30)` hospitals. `distinct()` removes any hospital that was picked twice, once at random and once as an odd one. Every high-risk hospital is in, every cluster is covered, and the hospitals that stood out among their peers are not left to chance.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

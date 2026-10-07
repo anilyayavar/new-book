@@ -329,6 +329,67 @@ This "what rule is really applied" analysis works for any decision taken against
 - A tree fitted to an office's decisions shows the rule it actually applies.
 :::
 
+## Try it yourself {#sec-trees-exercises}
+
+These exercises use the works contracts `works`, the training and test sets `train` and `test`, the first tree `tree1` and the scholarship `applications` of this chapter. Try each one before you open the solution.
+
+1.  **A lower limit for nominations.** Suppose contracts on nomination above ₹50 lakh, not ₹1 crore, needed a higher approval. Flag the contracts again with this limit, and see what share of the large nominations was irregular.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rules <- works |>
+      mutate(risk_rule = case_when(
+        window_days < 21 & bidders <= 2                ~ "Short window, few bidders",
+        tender_mode == "Nomination" & value_lakh >= 50 ~ "Nomination of 50 lakh or more",
+        .default = "Other")) |>
+      summarise(contracts = n(), irregular_pct = round(100 * mean(irregular), 1), .by = risk_rule)
+    ex_rules
+    ```
+    With the lower limit, `r ex_rules$contracts[ex_rules$risk_rule == "Nomination of 50 lakh or more"]` contracts are flagged as large nominations, but only `r ex_rules$irregular_pct[ex_rules$risk_rule == "Nomination of 50 lakh or more"]`% of them were irregular. Nominations between ₹50 lakh and ₹1 crore were mostly clean, so they dilute the flag. The ₹1 crore limit, close to the tree's own line, picks out the risky group far better.
+    :::
+
+2.  **Eligible but rejected.** The chapter looked at approvals outside the rule. Now look the other way. Count, district by district, the applicants who met the stated rule (income up to ₹2.5 lakh and marks of 60% or more) but were rejected.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rejected <- applications |>
+      filter(decision == "Rejected", income_lakh <= 2.5, marks_pct >= 60) |>
+      count(district, name = "eligible_but_rejected")
+    ex_rejected
+    ```
+    Only `r sum(ex_rejected$eligible_but_rejected)` eligible applicants were rejected, spread over a few districts. These are the scattered odd decisions, not a pattern. Keshavpur does not appear, because its error lies the other way, in approving too many. Even so, each such case is a deserving student denied a scholarship, and the file is worth a look.
+    :::
+
+3.  **A shallower tree.** Grow the tree of @sec-trees-grow again, but allow it only two levels of questions with `rpart.control(maxdepth = 2)`. Write out its rules, and compare its test AUC with that of `tree1`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(1)
+    ex_tree2 <- rpart(irregular ~ department + tender_mode + value_lakh + window_days + bidders,
+                      data = train, method = "anova",
+                      control = rpart.control(maxdepth = 2))
+    rpart.rules(ex_tree2, roundint = FALSE)
+    ex_auc2 <- auc(predict(ex_tree2, test), test$irregular == 1)
+    round(c(two_levels = ex_auc2, first_tree = auc_tree), 3)
+    ```
+    With only two levels, the tree finds the short window and few bidders rule, but has no room left for large nominations. Its test AUC falls to `r round(ex_auc2, 3)`, against `r round(auc_tree, 3)` for `tree1`. A tree that is too small misses real patterns, just as one that is too large learns false ones.
+    :::
+
+4.  **Keshavpur's own rule.** Fit a class tree to the applications of Keshavpur alone, using income and marks. What income limit does the district actually apply?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_kesh <- applications |> filter(district == "Keshavpur")
+    ex_kesh_tree <- rpart(decision ~ income_lakh + marks_pct, data = ex_kesh, method = "class")
+    rpart.rules(ex_kesh_tree, roundint = FALSE)
+    ```
+    Within Keshavpur the tree splits on an income of ₹4 lakh, not ₹2.5 lakh, along with marks of 60%. Applicants below ₹4 lakh with good marks were almost all approved. This confirms the finding of the chapter, and gives the exact limit to put to the district in the audit.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

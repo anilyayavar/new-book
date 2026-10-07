@@ -858,6 +858,77 @@ A regression model shows association, not cause. A large residual means only tha
 
 Linear regression predicts a number. When the audit question has a yes or no answer, like whether a claim is irregular, we use logistic regression, in @sec-logistic. When many indicators are related to each other, @sec-pca shows how to combine them before modelling.
 
+## Try it yourself {#sec-mreg-exercises}
+
+These exercises use the block office data `bdo`, the road works data `roads` and the sub-divisional office data of this chapter, with the models already fitted. Try each one before you open the solution.
+
+1.  **Drop the floor area.** In Example 2, floor area repeated the information in staff. Fit the model again with only `staff` and `beneficiaries`. Compare its adjusted R-squared with that of `lin_reg2`, and check the VIFs.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_two <- lm(office_exp ~ staff + beneficiaries, data = bdo)
+    coef(ex_two)
+    c(adj_r_sq_two   = summary(ex_two)$adj.r.squared,
+      adj_r_sq_three = summary(lin_reg2)$adj.r.squared)
+    car::vif(ex_two)
+    ```
+    The adjusted R-squared is `r r2(summary(ex_two)$adj.r.squared, 3)` without floor area and `r r2(summary(lin_reg2)$adj.r.squared, 3)` with it. So dropping it costs nothing. Both VIFs are now close to 1. The slopes read cleanly. One more employee goes with ₹`r r2(coef(ex_two)["staff"], 3)` lakh more expenses, and 1,000 more beneficiaries with ₹`r r2(coef(ex_two)["beneficiaries"], 3)` lakh more, keeping the other constant.
+    :::
+
+2.  **The hills as the baseline.** Make a copy of `bdo` in which `Hilly` is the first level of `terrain`, using `relevel()`. Fit office expenses on staff and terrain, with an intercept. How do you read the terrain coefficients now?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_bdo_h <- bdo |> mutate(terrain = relevel(terrain, ref = "Hilly"))
+    ex_hilly <- lm(office_exp ~ staff + terrain, data = ex_bdo_h)
+    coef(ex_hilly)
+    # Same predictions as the parallel slopes model?
+    all.equal(unname(fitted(ex_hilly)), unname(fitted(par_slop)))
+    ```
+    Each terrain coefficient is now the difference from an office in the hills with the same staff. An office in the plains spends ₹`r r2(-coef(ex_hilly)["terrainPlain"])` lakh less, and one in a tribal area ₹`r r2(-coef(ex_hilly)["terrainTribal"])` lakh less. The fitted values are the same as those of `par_slop`. Changing the baseline changes how we read the coefficients, not the model.
+    :::
+
+3.  **Budget estimate of a tribal block office.** A block office in a tribal area has 30 staff and serves 40 thousand beneficiaries. It asks for ₹33 lakh for office expenses. Use `bdo_final` to find the 95% prediction interval. Is the request within it?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_new <- data.frame(staff = 30, beneficiaries = 40,
+                         terrain = factor("Tribal", levels = levels(bdo$terrain)))
+    ex_pi <- predict(bdo_final, ex_new, interval = "prediction")
+    ex_pi
+    ```
+    An office like this would most likely spend between ₹`r r2(ex_pi[2], 1)` lakh and ₹`r r2(ex_pi[3], 1)` lakh. The request of ₹33 lakh is `r if (33 > ex_pi[3]) "above" else "within"` that range, so the office should justify the difference. Its staff and beneficiaries lie within the range of the tribal offices in our data, so the model is not extrapolating here.
+    :::
+
+4.  **Road works far from their expected cost.** Use `augment()` on the final road model `ex3`, with `data = roads` so that the work numbers are kept. Which works have a standardised residual beyond 2 on either side?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_roads <- augment(ex3, data = roads) |>
+      filter(abs(.std.resid) > 2) |>
+      select(work_id, fin_year, width_m, hilly_pct, cost_lakh, .fitted, .std.resid)
+    ex_roads
+    ```
+    Of the `r nrow(roads)` works, `r nrow(ex_roads)` lie beyond 2. Of these, `r sum(ex_roads$.std.resid > 2)` cost more than expected and `r sum(ex_roads$.std.resid < -2)` cost less. We planted no irregularity in this data, and about 1 work in 20 lies beyond 2 by chance alone. So these works are only candidates for a look at their estimates and measurement books. The model ranks them for attention. It does not show that anything is wrong.
+    :::
+
+5.  **Lower the bar for ghost employees.** In the sub-divisional office data, the planted office `SDO-17` had a standardised residual below 3. Lower the bar to 1.5 in the table `flagged`. Does `SDO-17` appear now, and at what cost?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_flag15 <- flagged |>
+      filter(.std.resid > 1.5) |>
+      mutate(planted = office_id %in% ghost)
+    ex_flag15
+    ```
+    With the lower bar, `r nrow(ex_flag15)` offices are flagged, and `SDO-17` is among them. Only `r sum(ex_flag15$planted)` of them are planted cases. The other, `r paste(ex_flag15$office_id[!ex_flag15$planted], collapse = ", ")`, is an office we did not plant. A lower bar catches more irregular offices only by sending the audit party to more innocent ones. The right bar depends on how many offices the party can examine, and on other tests, like matching the pay roll with bank accounts.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

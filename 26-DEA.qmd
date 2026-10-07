@@ -567,6 +567,65 @@ DEA measures *relative* efficiency. A unit with a score of 100% is only as good 
 
 DEA ranks units on a few chosen inputs and outputs. When units have many measures, @sec-pca shows how to reduce them to a few. To group similar units before comparing them, see @sec-kmeans. DEA tells us how efficiently units work. Whether a scheme made a difference to its outcomes is a different question, taken up in @sec-impact.
 
+## Try it yourself {#sec-dea-exercises}
+
+These exercises use the school, CHC and depot data of this chapter, and the models built from them. Try each one before you open the solution.
+
+1.  **The schools, output oriented.** Run the school model again with `orientation = "oo"`, keeping constant returns to scale. Turn each score $\phi$ into an efficiency, $1/\phi$, and put it beside the input oriented score of `model`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_model_oo <- model_basic(school_dea, orientation = "oo", rts = "crs")
+    data.frame(input_oriented  = efficiencies(model),
+               output_oriented = 1 / efficiencies(ex_model_oo)) |>
+      round(3)
+    ```
+    The two columns are the same. Under constant returns to scale, the input oriented score and the reciprocal of the output oriented score are always equal. Kherwa, at `r round(1 / efficiencies(ex_model_oo)["GSSS Kherwa"], 3)`, could either use fewer inputs or get more results. Under variable returns to scale, the two orientations can give different scores.
+    :::
+
+2.  **Targets for another weak CHC.** Compare the actual outputs of `CHC-07` with its targets from `chc_model`, as the chapter did for `CHC-18`. How many more deliveries could it have conducted?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| warning: false
+    ex_chc07 <- rbind(actual = chc[chc$chc == "CHC-07", c("opd", "ipd", "deliveries")],
+                      target = round(targets(chc_model)$target_output["CHC-07", ], 1))
+    ex_chc07
+    ```
+    `CHC-07` conducted `r ex_chc07["actual", "deliveries"]` deliveries, against a target of `r ex_chc07["target", "deliveries"]`. It could have conducted about `r round(ex_chc07["target", "deliveries"] - ex_chc07["actual", "deliveries"])` more with its staff and beds. Before reporting this, remember that `CHC-12` is on the frontier, and its inflated figures may have raised the targets of others.
+    :::
+
+3.  **A simple ratio first.** Before DEA, an auditor might simply rank the depots by diesel used per lakh km, and by staff per lakh km. Show the top three depots on each ratio. Do the ratios find the three planted depots?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_ratios <- depots |>
+      mutate(fuel_per_km  = round(fuel_kl / km_lakh, 1),
+             staff_per_km = round(staff / km_lakh, 2))
+    ex_ratios |> arrange(desc(fuel_per_km)) |> head(3)
+    ex_ratios |> arrange(desc(staff_per_km)) |> head(3)
+    ```
+    Yes. `Depot-22` and `Depot-05` top the diesel ratio, and `Depot-02` tops the staff ratio. With one output and constant returns to scale, simple ratios work well. DEA adds what ratios cannot give, a single score over all inputs and outputs, targets for each input, and peers. With several outputs, ratios would no longer agree with one another.
+    :::
+
+4.  **The actual rates.** The undertaking's accounts show that diesel cost ₹94 a litre and an employee cost ₹7.2 lakh a year. Value the clear gaps again, the staff of `Depot-02` and the diesel of `Depot-05` and `Depot-22`, and give the total in crore.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_staff_lakh  <- depot_excess$excess_staff[depot_excess$depot == "Depot-02"] * 7.2
+    ex_diesel_lakh <- sum(depot_excess$excess_fuel_kl[depot_excess$depot %in%
+                                                        c("Depot-05", "Depot-22")]) * 1000 * 94 / 1e5
+    ex_staff_lakh <- unname(ex_staff_lakh)
+    round(c(staff_lakh = ex_staff_lakh, diesel_lakh = ex_diesel_lakh,
+            total_crore = (ex_staff_lakh + ex_diesel_lakh) / 100), 1)
+    ```
+    At the actual rates, the clear gaps come to about ₹`r round((ex_staff_lakh + ex_diesel_lakh) / 100, 1)` crore a year, against ₹`r round(clear_gap / 100, 1)` crore at the assumed rates. The excess quantities do not change. Only the rates do. This is why the working papers should keep the quantities and the rates separately.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -672,6 +672,65 @@ A regression model shows association, not cause. A large residual means only tha
 
 @sec-mregression adds more predictors to the model, including categories like terrain and interactions. It finds both planted block offices, and it looks for ghost employees in the salary bills of sub-divisional offices.
 
+## Try it yourself {#sec-reg-exercises}
+
+These exercises use the block office data `bdo` and the model `lin_reg1` of this chapter. Try each one before you open the solution.
+
+1.  **Floor area as the driver.** Fit a model of office expenses on floor area (`area_sqm`) instead of staff. Is floor area a better single driver than staff? Compare the R-squared and the residual standard error of the two models.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_area <- lm(office_exp ~ area_sqm, data = bdo)
+    coef(ex_area)
+    c(r_sq_area  = summary(ex_area)$r.squared,
+      r_sq_staff = summary(lin_reg1)$r.squared,
+      rse_area   = sigma(ex_area),
+      rse_staff  = sigma(lin_reg1))
+    ```
+    Every 100 square metres of floor area go with about ₹`r r2(100 * coef(ex_area)["area_sqm"])` lakh more office expenses a year. But floor area explains only `r round(summary(ex_area)$r.squared * 100)`% of the variation, against `r round(summary(lin_reg1)$r.squared * 100)`% for staff. Its typical miss is ₹`r r2(sigma(ex_area))` lakh, against ₹`r r2(sigma(lin_reg1))` lakh. So staff is the better single driver. That makes business sense too, because people spend money and buildings mostly do not.
+    :::
+
+2.  **A budget estimate to check.** A new block office with 25 staff asks for ₹32 lakh for office expenses in its first year. Use `lin_reg1` to find the 95% prediction interval for an office of that size. Is the request within it?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_pi25 <- predict(lin_reg1, data.frame(staff = 25), interval = "prediction")
+    ex_pi25
+    ```
+    An office with 25 staff would most likely spend between ₹`r r2(ex_pi25[2], 1)` lakh and ₹`r r2(ex_pi25[3], 1)` lakh. The request of ₹32 lakh is `r if (32 > ex_pi25[3]) "above" else "within"` this range. That does not make the estimate wrong. It means the office should be asked what it expects to spend that other offices of its size do not.
+    :::
+
+3.  **Is the model unfair to the hills?** Find the average residual of `lin_reg1` for each terrain. Which terrain does the model expect too little from?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_terrain <- augment(lin_reg1, data = bdo) |>
+      summarise(offices = n(), mean_resid = mean(.resid), .by = terrain)
+    ex_terrain
+    ```
+    Offices in the hills spend on average ₹`r r2(ex_terrain$mean_resid[ex_terrain$terrain == "Hilly"])` lakh more than the model expects. Offices in the plains spend ₹`r r2(-ex_terrain$mean_resid[ex_terrain$terrain == "Plain"])` lakh less. The model does not know about terrain, so it pushes offices in the hills up the list of leads. That is why they crowded the top of the list in this chapter. A whole group with residuals on one side is a sign of a missing driver, not of a group of wrongdoers.
+    :::
+
+4.  **Compare like with like.** Fit the model of office expenses on staff using only the offices in the plains. Which offices have a standardised residual above 2 now? Do both planted offices appear?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_plain <- bdo |> filter(terrain == "Plain")
+    ex_plain_mod <- lm(office_exp ~ staff, data = ex_plain)
+    ex_plain_aug <- augment(ex_plain_mod, data = ex_plain) |>
+      arrange(desc(.std.resid)) |>
+      mutate(rank = row_number())
+    ex_plain_aug |>
+      filter(.std.resid > 2 | office_id %in% planted) |>
+      select(office_id, staff, office_exp, .fitted, .std.resid, rank)
+    ```
+    Among the `r nrow(ex_plain)` offices in the plains, `r paste(ex_plain_aug$office_id[ex_plain_aug$.std.resid > 2], collapse = " and ")` crosses the bar of 2, with a standardised residual of `r r2(max(ex_plain_aug$.std.resid))`. The offices in the hills no longer crowd the list. But `BDO-027` is still only at number `r ex_plain_aug$rank[ex_plain_aug$office_id == "BDO-027"]`, because terrain was not what hid it. It serves very few beneficiaries, and this model does not know that either. @sec-reg-bdoflags shows how adding beneficiaries brings it out.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

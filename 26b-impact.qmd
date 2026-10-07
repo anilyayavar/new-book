@@ -604,6 +604,96 @@ Both need planning before the scheme starts. An audit can ask whether the depart
 
 Matching estimates the effect of a scheme. The size of that effect then feeds the value-for-money questions of performance audit, alongside the efficiency comparisons of @sec-dea. For the tests used on the naive comparisons, see @sec-tests. For regression as a check, see @sec-mregression, whose section on Simpson's paradox shows another way a hidden variable can mislead. To present the finding in a reproducible report, see @sec-reports.
 
+## Try it yourself {#sec-impact-exercises}
+
+These exercises use the school data `schools`, the matching result `match_out`, the matched schools `matched` and the matched youth `matched_youth` of this chapter. Try each one before you open the solution.
+
+1.  **A check before the scheme.** In @sec-impact-effect we took pair differences in the 2024-25 pass percentage. Take the same pair differences in the 2021-22 pass percentage, before the scheme, and test them with `t.test()`. What should we expect?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_before <- matched |>
+      arrange(subclass, smart) |>
+      summarise(difference = pass_2122[smart == 1] - pass_2122[smart == 0], .by = subclass)
+    ex_before_test <- t.test(ex_before$difference)
+    ex_before_test
+    ```
+    We should expect a difference close to zero, because the pairs were chosen to be alike before the scheme. The average difference is `r round(unname(ex_before_test$estimate), 2)` points, and the 95% confidence interval, from `r round(ex_before_test$conf.int[1], 2)` to `r round(ex_before_test$conf.int[2], 2)`, includes zero. A large gap here would mean the matching had failed, and any effect found later could not be trusted.
+    :::
+
+2.  **A tighter caliper.** Match the schools again with `caliper = 0.1`. How many smart-classroom schools are left without a partner now, and what is the average pair difference in 2024-25?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(1)
+    ex_match <- matchit(smart ~ urban + enrolment + vacancy_pct + pass_2122, data = schools,
+                        method = "nearest", distance = "glm", caliper = 0.1)
+    ex_matched <- match_data(ex_match)
+    ex_unmatched <- sum(schools$smart) - sum(ex_matched$smart)
+    ex_pairs <- ex_matched |>
+      arrange(subclass, smart) |>
+      summarise(difference = pass_2425[smart == 1] - pass_2425[smart == 0], .by = subclass)
+    ex_pair_test <- t.test(ex_pairs$difference)
+    c(unmatched = ex_unmatched, estimate = round(unname(ex_pair_test$estimate), 2),
+      lower_95 = round(ex_pair_test$conf.int[1], 2), upper_95 = round(ex_pair_test$conf.int[2], 2))
+    ```
+    With the tighter caliper, `r ex_unmatched` smart-classroom schools have no partner, against `r n_unmatched` with a caliper of 0.2. The pair difference is `r round(unname(ex_pair_test$estimate), 2)` points, from `r round(ex_pair_test$conf.int[1], 2)` to `r round(ex_pair_test$conf.int[2], 2)`, close to the `r round(pair_est, 2)` of the chapter. Closer matches cost us some schools, but the answer hardly moves, which makes the finding more solid.
+    :::
+
+3.  **Urban and village schools.** Does the smart classroom help urban and village schools alike? Use `effect_model` with `avg_comparisons()` as in the chapter, and add `by = "urban"`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_by_area <- avg_comparisons(effect_model, variables = "smart",
+                                  vcov = ~subclass,
+                                  newdata = subset(matched, smart == 1),
+                                  by = "urban")
+    ex_by_area
+    ```
+    The estimate is `r round(ex_by_area$estimate[ex_by_area$urban == 0], 2)` points for village schools and `r round(ex_by_area$estimate[ex_by_area$urban == 1], 2)` for urban ones. But the two intervals overlap, and both include the true 3. So the data does not show that the scheme works better in one kind of school. A difference between two estimates must be judged by their ranges, not by the estimates alone.
+    :::
+
+4.  **Two controls for each school.** The chapter suggested matching each smart-classroom school with two schools without one (`ratio = 2`). Do this, check the balance, and estimate the effect with a regression and `avg_comparisons()`, as in @sec-impact-effect.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(1)
+    ex_match2 <- matchit(smart ~ urban + enrolment + vacancy_pct + pass_2122, data = schools,
+                         method = "nearest", distance = "glm", caliper = 0.2, ratio = 2)
+    bal.tab(ex_match2, binary = "std", thresholds = c(m = 0.1))
+    ex_matched2 <- match_data(ex_match2)
+    ex_model2 <- lm(pass_2425 ~ smart * (urban + enrolment + vacancy_pct + pass_2122),
+                    data = ex_matched2, weights = weights)
+    ex_effect2 <- avg_comparisons(ex_model2, variables = "smart",
+                                  vcov = ~subclass,
+                                  newdata = subset(ex_matched2, smart == 1))
+    ex_effect2
+    ```
+    Every characteristic is still balanced. The effect is `r round(ex_effect2$estimate, 2)` points, with a 95% confidence interval from `r round(ex_effect2$conf.low, 2)` to `r round(ex_effect2$conf.high, 2)`. This is close to the one-to-one estimate of `r round(m_est, 2)`, and the interval is a little narrower, because more control schools are used. Two methods agreeing is exactly the robustness check the auditor wants.
+    :::
+
+5.  **The trainees, after matching.** For the skill training scheme, compare the employment rates of trained and untrained youth among the matched youth only, with `prop.test()`. How does the gap compare with the naive one?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rates <- matched_youth |>
+      summarise(youth = n(), n_employed = sum(employed),
+                employment_rate = round(mean(employed), 3), .by = trained)
+    ex_rates
+    ex_employed <- c(sum(matched_youth$employed[matched_youth$trained == 1]),
+                     sum(matched_youth$employed[matched_youth$trained == 0]))
+    ex_youth_n <- c(sum(matched_youth$trained == 1), sum(matched_youth$trained == 0))
+    ex_youth_test <- prop.test(ex_employed, ex_youth_n)
+    ex_youth_test
+    ```
+    Among the matched youth, `r round(100 * ex_youth_test$estimate[1], 1)`% of the trained and `r round(100 * ex_youth_test$estimate[2], 1)`% of the untrained found work. The gap of `r round(100 * (ex_youth_test$estimate[1] - ex_youth_test$estimate[2]), 1)` points is far from the naive `r round(100 * (nv[1] - nv[2]), 1)` points, and the p-value of `r round(ex_youth_test$p.value, 2)` shows it could easily be chance. The simple comparison of matched groups tells the same story as the model.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

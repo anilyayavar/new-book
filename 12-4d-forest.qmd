@@ -397,6 +397,80 @@ A forest is harder to explain to an auditee, or to a court, than a rule. Never p
 - A forest is not always better. Compare it with simpler models, and prefer them when they do as well.
 :::
 
+## Try it yourself {#sec-forest-exercises}
+
+These exercises use the refund claims `claims`, the sets `train` and `test`, the forest `forest`, its test scores `forest_score` and the function `partial_dependence()` of this chapter. Try each one before you open the solution.
+
+1.  **A smaller team.** Suppose the team can examine only one claim in ten. What percentage of all the irregular claims in the test set falls in the top 10% of the forest's scores?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_capture <- function(score, share) {
+      picked <- rank(-score) <= share * length(score)
+      round(100 * sum(test$irregular[picked]) / sum(test$irregular))
+    }
+    ex_cap10 <- ex_capture(forest_score, 0.1)
+    ex_cap10
+    ```
+    The top 10% of the scores hold `r ex_cap10`% of all the irregular claims, against `r ex_capture(forest_score, 0.2)`% for the top 20%. A random tenth would hold only about 10%. So even a small team, guided by the forest, finds about three times as many irregular claims as chance would give it.
+    :::
+
+2.  **The ten riskiest claims.** List the ten test claims with the highest forest scores, with their refund ratio, credit from non-filers and exporter type. How many of them were actually irregular?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_top10 <- test |>
+      mutate(score = round(forest_score, 3)) |>
+      slice_max(score, n = 10, with_ties = FALSE) |>
+      select(score, refund_ratio, nonfiler_pct, exporter_type, irregular)
+    ex_top10
+    sum(ex_top10$irregular)
+    ```
+    `r sum(ex_top10$irregular)` of the ten were irregular. Most have a high refund ratio, a large share of credit from non-filers, or both. The others were clean, which is a reminder that a score is a chance of irregularity, not a verdict. Each case must still be examined.
+    :::
+
+3.  **Newly registered exporters.** Draw the partial dependence of risk on `reg_months`, the months since GST registration, from 2 to 48 months. Where does the risk change?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-height: 3.5
+    ex_months <- seq(2, 48, by = 2)
+    ex_pd_reg <- tibble(reg_months = ex_months,
+                        avg_risk = partial_dependence(forest, test, "reg_months", ex_months))
+    ex_pd_reg |>
+      ggplot(aes(reg_months, avg_risk)) +
+      geom_line(linewidth = 1) +
+      geom_point() +
+      labs(x = "Months since GST registration", y = "Average predicted risk") +
+      theme_minimal()
+    ```
+    The average risk is about `r round(ex_pd_reg$avg_risk[1], 2)` for exporters registered two months earlier. It falls steeply until about 12 months, and is flat after that, at about `r round(ex_pd_reg$avg_risk[ex_pd_reg$reg_months == 24], 2)`. This is the planted rule, that registrations under a year old are riskier. Refund claims from newly registered exporters deserve a closer look.
+    :::
+
+4.  **Drop the folklore.** Grow the forest again without `sector`, `quarter_end` and `prior_claims`, the three features with no effect. Compare its out-of-bag error and test AUC with those of `forest`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(1)
+    ex_forest <- ranger(irregular ~ .,
+                        data = train |>
+                          select(-sector, -quarter_end, -prior_claims) |>
+                          mutate(irregular = factor(irregular)),
+                        num.trees = 500, probability = TRUE)
+    ex_score <- predict(ex_forest, data = test)$predictions[, "TRUE"]
+    ex_compare <- tibble(model     = c("All features", "Without the three"),
+                         oob_error = c(forest$prediction.error, ex_forest$prediction.error),
+                         test_auc  = c(auc(forest_score, test$irregular),
+                                       auc(ex_score, test$irregular)))
+    ex_compare |> mutate(across(where(is.numeric), \(x) round(x, 4)))
+    ```
+    The out-of-bag error is about `r round(ex_forest$prediction.error, 3)` with or without them, and the test AUC moves from `r round(auc(forest_score, test$irregular), 3)` to `r round(auc(ex_score, test$irregular), 3)`. Useless features do the forest little harm, because its trees rarely choose them. Dropping them still makes the model simpler to explain.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

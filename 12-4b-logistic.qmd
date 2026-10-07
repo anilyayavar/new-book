@@ -490,6 +490,82 @@ If the categories have a natural *order*, such as *nil*, *minor* and *major* irr
 - For three or more kinds of outcome, multinomial regression fits one comparison per outcome against a baseline, and shows how the drivers differ.
 :::
 
+## Try it yourself {#sec-logistic-exercises}
+
+These exercises use the refund claims of this chapter, with the training and test sets, the pending claims and the models already fitted. Try each one before you open the solution.
+
+1.  **Two more cut-offs.** Use `evaluate_cutoff()` to see what happens at cut-offs of 0.15 and 0.25. How many claims would be selected, and what share of the irregular ones would be caught?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_cuts <- map(c(0.15, 0.25), evaluate_cutoff) |> list_rbind()
+    ex_cuts
+    ```
+    At 0.25, `r ex_cuts$selected[2]` claims are selected and `r round(100 * ex_cuts$recall[2])`% of the irregular ones are caught. At 0.15 the selection grows to `r ex_cuts$selected[1]` claims, and recall rises to `r round(100 * ex_cuts$recall[1])`%. Precision falls from `r round(100 * ex_cuts$precision[2])`% to `r round(100 * ex_cuts$precision[1])`%, so more of the extra work goes into clean claims. The audit party chooses the cut-off from the number of claims it can examine.
+    :::
+
+2.  **Score two claims.** Use `final_model` to find the risk score of two claims of ₹10 lakh each. One is from a merchant exporter registered last month, with 25% of its credit from non-filers. The other is from a manufacturer registered five years ago, with 2% from non-filers. Convert each score into odds too.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_two_claims <- tibble(exporter_type  = c("Merchant", "Manufacturer"),
+                            new_registrant = c(TRUE, FALSE),
+                            amount_lakh    = 10,
+                            nonfiler_pct   = c(25, 2))
+    ex_two_claims <- ex_two_claims |>
+      mutate(score = predict(final_model, newdata = ex_two_claims, type = "response"),
+             odds  = score / (1 - score))
+    ex_two_claims
+    ```
+    The first claim scores `r sprintf("%.2f", ex_two_claims$score[1])`, odds of about `r sprintf("%.1f", ex_two_claims$odds[1])` to 1. The second scores only `r sprintf("%.3f", ex_two_claims$score[2])`. The model estimates that about `r round(10 * ex_two_claims$score[1])` in 10 past claims like the first were irregular, so it belongs near the top of the list. The score is a reason to examine the claim, not a finding against the claimant.
+    :::
+
+3.  **Does the amount help?** Fit `model2` again without `log(amount_lakh)`, on the training set. Compare its AUC on the test set with that of `model2`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_model3 <- glm(irregular ~ exporter_type + new_registrant + nonfiler_pct,
+                     family = binomial, data = train)
+    ex_auc3 <- auc(predict(ex_model3, newdata = test), test$irregular)
+    c(model2 = round(auc2, 3), without_amount = round(ex_auc3, 3))
+    ```
+    The AUC is `r round(ex_auc3, 3)` without the amount and `r round(auc2, 3)` with it. The amount adds very little to the ranking. A difference this small could be the luck of one split, so we would repeat the split, as we did for `new_registrant`, before deciding to drop it.
+    :::
+
+4.  **Describe the selection.** Compare the 120 highest-risk pending claims with the other pending claims. What share are merchant exporters and new registrants, and what is the median share of credit from non-filers in each group?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_profile <- pending |>
+      mutate(group = if_else(risk_rank <= 120, "Top 120", "Other claims")) |>
+      summarise(claims       = n(),
+                merchant_pct = round(100 * mean(exporter_type == "Merchant")),
+                new_reg_pct  = round(100 * mean(new_registrant)),
+                median_nonfiler_pct = median(nonfiler_pct),
+                .by = group)
+    ex_profile
+    ```
+    In the top 120, `r ex_profile$merchant_pct[ex_profile$group == "Top 120"]`% are merchant exporters and `r ex_profile$new_reg_pct[ex_profile$group == "Top 120"]`% are new registrants, against `r ex_profile$merchant_pct[ex_profile$group == "Other claims"]`% and `r ex_profile$new_reg_pct[ex_profile$group == "Other claims"]`% among the others. Their median credit from non-filers is about `r round(ex_profile$median_nonfiler_pct[ex_profile$group == "Top 120"])`%, against about `r round(ex_profile$median_nonfiler_pct[ex_profile$group == "Other claims"])`%. A table like this goes into the working papers. It explains in plain words why these claims were chosen.
+    :::
+
+5.  **Top fraud scores.** Using `multi_probs`, take the 50 claims with the highest probability of fraud. How many of them were actually fraudulent, clean or procedural lapses?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_fraud50 <- outcomes |>
+      mutate(p_fraud = multi_probs[, "Fraudulent"]) |>
+      slice_max(p_fraud, n = 50) |>
+      count(outcome)
+    ex_fraud50
+    ```
+    Of the 50 claims, `r ex_fraud50$n[ex_fraud50$outcome == "Fraudulent"]` were fraudulent, against about `r round(50 * mean(outcomes$outcome == "Fraudulent"))` we would expect in 50 claims picked at random. But the model learnt from these same claims, so this result flatters it. On new claims it would probably do worse. The investigation wing would still have to examine each claim, since `r sum(ex_fraud50$n[ex_fraud50$outcome != "Fraudulent"])` of the 50 were not fraudulent.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

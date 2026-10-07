@@ -448,6 +448,76 @@ All the off-diagonal correlations are zero. So using the first few components, i
 PCA is a way of *looking* at data. It turns many numbers into a picture that the human eye can read. It does not, by itself, prove anything. Its value in audit is in pointing to the units, and the indicators, that deserve a closer look.
 :::
 
+## Try it yourself {#sec-pca-exercises}
+
+These exercises use the objects of this chapter, the indicators table `indicators`, the indicator columns `X`, the PCA result `hosp_pca` and the `scores` table. Try each before opening the solution.
+
+1.  **Weekend admissions and readmissions.** Repeat the two-indicator PCA of @fig-pca2d with `pct_weekend` and `pct_readmit` in place of the two length-of-stay indicators. How much of the variation does the first component carry?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pca_wr <- prcomp(X[, c("pct_weekend", "pct_readmit")], scale. = TRUE)
+    summary(pca_wr)
+    ```
+    The first component carries `r round(100 * summary(pca_wr)$importance[2, 1])`% of the variation. So hospitals with many weekend admissions also tend to have many readmissions. For an auditor, this is one pattern seen twice. It is consistent with patients brought in through weekend camps and then admitted again.
+    :::
+
+2.  **Forgetting to scale.** Run `prcomp()` on `X` without `scale. = TRUE`. Which indicator has the largest loading on the first component? Compare it with the variance of each indicator.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    pca_raw <- prcomp(X)
+    round(pca_raw$rotation[, 1], 2)
+    round(sapply(X, var), 1)
+    ```
+    ```{r}
+    #| include: false
+    top_load <- names(which.max(abs(pca_raw$rotation[, 1])))
+    ```
+    Without scaling, `r top_load` has by far the largest loading on PC1. The second output shows that it also has by far the largest variance. So the first component now mostly repeats one indicator, simply because its numbers are spread widely. This is why we always scale.
+    :::
+
+3.  **Two components or three?** Rank the hospitals by their distance from the centre using only PC1 and PC2. Compare the top eight with the top eight by the three-component distance of @sec-pca-rank.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    scores_2 <- scores |>
+      mutate(distance_2 = sqrt(PC1^2 + PC2^2))
+
+    top_3pc <- scores_2 |> slice_max(distance, n = 8) |> pull(hospital_name)
+    top_2pc <- scores_2 |> slice_max(distance_2, n = 8) |> pull(hospital_name)
+
+    setdiff(top_3pc, top_2pc)
+    setdiff(top_2pc, top_3pc)
+    round(hosp_pca$rotation[, 3], 2)
+    ```
+    ```{r}
+    #| include: false
+    drops <- setdiff(top_3pc, top_2pc)
+    joins <- setdiff(top_2pc, top_3pc)
+    drop_icu <- indicators$pct_icu[indicators$hospital_name == drops[1]]
+    ```
+    Seven of the eight hospitals are the same. `r drops` drops out, and `r joins` comes in. The loadings of PC3 show that it is mainly about the share of women patients and the share of ICU stays. `r drops` bills an ICU stay in `r round(drop_icu)`% of its claims, against a median of `r round(median(indicators$pct_icu))`%. So a ranking on two components alone would have missed a hospital worth checking for ICU billing.
+    :::
+
+4.  **Public hospitals alone.** Run PCA on the public hospitals only. How much of the variation do the first two components carry now? What does this tell an auditor?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    X_public <- indicators |>
+      filter(type == "Public") |>
+      select(all_of(names(X)))
+
+    pca_public <- prcomp(X_public, scale. = TRUE)
+    summary(pca_public)
+    ```
+    Among the `r nrow(X_public)` public hospitals, the first two components carry only `r round(100 * summary(pca_public)$importance[3, 2])`% of the variation, against `r round(100 * summary(hosp_pca)$importance[3, 2])`% for all hospitals. The indicators of public hospitals hardly move together. So there is no strong common pattern among them, and no group that stands apart. This is step 2 of the workflow above. When indicators are not correlated, PCA cannot reduce much.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
