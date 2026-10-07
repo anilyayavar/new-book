@@ -499,6 +499,82 @@ Let us put everything together. For any payment, claim or beneficiary data, an a
 A duplicate found in data is a *lead*, not a *finding*. There may be a genuine reason, such as a part payment, a cancelled and re-issued cheque, or a credit note. Always examine the supporting records before reporting.
 :::
 
+## Try it yourself {#sec-dup-exercises}
+
+These exercises use the payment register and the vendor master of this chapter. Try each one before you open the solution.
+
+1.  **Excess paid on the cleaned key.** Earlier we valued the excess payment on the raw invoice numbers. Repeat the calculation with the cleaned column `invoice_clean`. What is the total excess payment now?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_excess <- payments |>
+      get_dupes(vendor_id, invoice_clean, amount) |>
+      summarise(times_paid = n(),
+                excess_paid = (n() - 1) * first(amount),
+                .by = c(vendor_id, invoice_clean))
+
+    ex_excess
+    sum(ex_excess$excess_paid)
+    ```
+    The cleaned key finds `r nrow(ex_excess)` invoices paid more than once. The excess payment rises to about ₹`r round(sum(ex_excess$excess_paid) / 1e5, 2)` lakh, against ₹`r round(sum((sss |> summarise(e = (n() - 1) * first(amount), .by = c(vendor_id, invoice_no)))$e) / 1e5, 2)` lakh on the raw key. Cleaning has added the two retyped invoices to the audit observation.
+    :::
+
+2.  **A wider date window.** In the Same-Same-Different test we kept groups where an invoice came within 15 days of the previous one. Change the window to 35 days. Which groups are kept now, and why?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ssd |>
+      filter(any(days_since_previous <= 35, na.rm = TRUE), .by = c(vendor_id, amount)) |>
+      count(vendor_name, amount)
+    ```
+    The rent of Ashok Estates comes back. Its invoices are about 30 days apart, so a 35 day window cannot tell them from a re-submitted bill. The window must be shorter than the natural gap of genuine repeat payments.
+    :::
+
+3.  **Invoice amount altered.** Look for the same vendor and the same cleaned invoice number, but with a **different amount**. Such a case may mean the amount of a bill was changed after it was first paid.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_altered <- payments |>
+      filter(n_distinct(amount) > 1, .by = c(vendor_id, invoice_clean))
+
+    nrow(ex_altered)
+    ```
+    The test returns `r nrow(ex_altered)` rows. No bill in this register was paid twice with an altered amount. An empty result is still a result. Record in the working papers that the test was run and found nothing.
+    :::
+
+4.  **Look-alike names by edit count.** Use the Levenshtein distance (`method = "lv"`) on the lower case vendor names in `vendor_pairs`. Which pairs are two edits or fewer apart?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    vendor_pairs |>
+      mutate(lv = stringdist(tolower(vendor_name_1), tolower(vendor_name_2), method = "lv")) |>
+      filter(lv <= 2) |>
+      select(vendor_name_1, vendor_name_2, lv)
+    ```
+    The same two look-alike pairs appear, each one edit apart. Here Levenshtein and Jaro-Winkler agree, which makes the lead stronger.
+    :::
+
+5.  **Money paid to the look-alike vendors.** Take the pairs with a Jaro-Winkler distance below 0.1. In each pair, the vendor with the higher code was added later. Find how many payments went to these later vendors, and how much was paid to them in all.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_lookalike <- vendor_pairs |>
+      filter(jw_distance < 0.1)
+
+    ex_paid <- payments |>
+      filter(vendor_id %in% ex_lookalike$vendor_id_2) |>
+      summarise(payments = n(), total_paid = sum(amount), .by = c(vendor_id, vendor_name))
+
+    ex_paid
+    ```
+    `r sum(ex_paid$payments)` payments, worth about ₹`r round(sum(ex_paid$total_paid) / 1e5, 2)` lakh, went to the look-alike vendors. The auditor would next ask for the registration papers, PAN and bank accounts of these vendors, and compare them with those of the genuine firms.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -446,6 +446,91 @@ Names, addresses and identity numbers are personal data. Do fuzzy matching only 
 Fuzzy matching finds names that *look* or *sound* alike. It cannot tell whether they belong to the same person. Two different people can have very similar names, and one person can be written in very different ways. Treat every match as a question to be answered from other evidence.
 :::
 
+## Try it yourself {#sec-strsim-exercises}
+
+These exercises use the functions and the employee and proprietor lists of this chapter. Try each one before you open the solution.
+
+1.  **A stricter cut-off.** In the conflict-of-interest check we kept pairs with a Jaro-Winkler similarity of 0.85 or more. Raise the cut-off to 0.92. Which pairs remain?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_strict <- candidates |>
+      filter(jw >= 0.92)
+
+    ex_strict |>
+      mutate(jw = round(jw, 2)) |>
+      select(emp_name, proprietor, jw, sound)
+    ```
+    Only `r nrow(ex_strict)` of the `r nrow(candidates)` pairs remain. The stricter cut-off sends fewer pairs for checking. Look at which pairs dropped out, and ask whether any of them was a likely match that we would now miss.
+    :::
+
+2.  **Expanding Kr to Kumar.** The phonetic code missed *Rakesh Kumar Verma* and *Rakesh Kr. Verma*. Write a new cleaning function that also turns the word *kr* into *kumar*, and compare the two names again with `dm_match()`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    clean_name_kr <- function(x) {
+      clean_name(x) |>
+        str_replace_all("\\bkr\\b", "kumar")
+    }
+
+    clean_name_kr(c("Rakesh Kumar Verma", "Rakesh Kr. Verma"))
+    dm_match(clean_name_kr("Rakesh Kumar Verma"), clean_name_kr("Rakesh Kr. Verma"))
+    ```
+    After the new rule, both names become *rakesh kumar verma*, and the match level is "`r dm_match(clean_name_kr("Rakesh Kumar Verma"), clean_name_kr("Rakesh Kr. Verma"))`". A small cleaning rule often does more than a cleverer method.
+    :::
+
+3.  **A mistyped PAN.** The PAN of a vendor in the vendor master is `AAFPS4321K`. The PANs on four bills are given below. Use the Hamming distance to find the bills whose PAN differs from the master in only one or two positions.
+
+    ```r
+    bill_pan <- c("AAFPS4321K", "AAFPS4312K", "AAFPS4321L", "BBKPM7788Q")
+    ```
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bill_pan <- c("AAFPS4321K", "AAFPS4312K", "AAFPS4321L", "BBKPM7788Q")
+    ex_ham <- stringdist("AAFPS4321K", bill_pan, method = "hamming")
+
+    tibble(bill_pan, ex_ham) |>
+      filter(ex_ham %in% 1:2)
+    ```
+    Two bills carry a PAN that is close to the master but not the same. One has two digits swapped, and the other has a different last letter. The last letter of a PAN is a check character, so either may be a typing error or a different firm. Ask the office which PAN is correct.
+    :::
+
+4.  **Laxmi and Lakshmi.** Metaphone gave *Lakshmi* and *Laxmi* different codes. Replace *ksh* with *x* in both names, and compare them again with `dm_match()`, before and after the rule.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_a <- c("lakshmi devi", "lakshman singh")
+    ex_b <- c("laxmi devi", "laxman singh")
+
+    tibble(ex_a, ex_b,
+           before = dm_match(ex_a, ex_b),
+           after  = dm_match(str_replace_all(ex_a, "ksh", "x"),
+                             str_replace_all(ex_b, "ksh", "x")))
+    ```
+    Before the rule, neither pair matches. After it, both pairs are a strong match. Apply such a rule to both lists in the same way, never to one list alone.
+    :::
+
+5.  **A stricter `amatch()`.** Run `amatch()` again on the cleaned names, with `maxDist = 0.08` instead of 0.15. Which employees still get a match? Has the stricter limit kept the right ones?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_pos <- amatch(clean_name(employees$emp_name), clean_name(proprietors$proprietor),
+                     method = "jw", p = 0.1, maxDist = 0.08)
+
+    employees |>
+      mutate(matched_proprietor = proprietors$proprietor[ex_pos],
+             matched_firm       = proprietors$firm[ex_pos]) |>
+      filter(!is.na(matched_proprietor))
+    ```
+    With the stricter limit, `r sum(!is.na(ex_pos))` of the `r nrow(employees)` employees get a match, against `r sum(!is.na(pos))` before. *Pradeep Singh* and *Pradip Singh*, which sound the same, are now lost. Yet *Kavita Sharma* and *Kavya Sharma*, probably two different people, are still matched. A tighter limit does not simply remove the weak leads. This is why we check a second method, and a second detail, rather than trust one cut-off.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

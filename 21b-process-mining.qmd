@@ -406,6 +406,89 @@ An event log shows what was *recorded* in the system, not necessarily what happe
 - A deviation in the log is a question, not yet a finding.
 :::
 
+## Try it yourself {#sec-process-exercises}
+
+These exercises use the purchase files of this chapter, both the table `log` and the event log `purchases`. Try each one before you open the solution.
+
+1.  **Files that do not end in payment.** Every purchase file should end with *Payment made*. Use `check_rules()` with the rule `ends()` to find the files that end with some other activity.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    end_check <- purchases |>
+      check_rules(ends_in_payment = ends("Payment made")) |>
+      as_tibble() |>
+      distinct(case_id, ends_in_payment) |>
+      filter(!ends_in_payment)
+    end_check
+    ```
+    There are `r nrow(end_check)` such files. They are the files where the goods were received and inspected only after the payment, so the payment was not the last step.
+    :::
+
+2.  **Indent raiser who also received the goods.** The person who raises an indent should not also receive the goods. Find the files where the same user did both.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    indent_receipt <- log |>
+      filter(activity %in% c("Indent raised", "Goods received")) |>
+      summarise(user = first(resource), .by = c(case_id, activity)) |>
+      pivot_wider(names_from = activity, values_from = user) |>
+      filter(`Indent raised` == `Goods received`)
+    indent_receipt
+    ```
+    The same user raised the indent and received the goods in `r nrow(indent_receipt)` files. In our made up data the store staff are picked at random, so this is common here. In real audit, such a rule would show whether the office actually separates these duties.
+    :::
+
+3.  **Payments month by month.** Count the payments made in each month. Which month has the most, and how many were made in March 2025?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    monthly_payments <- log |>
+      filter(activity == "Payment made") |>
+      count(month = format(timestamp, "%Y-%m"))
+    monthly_payments
+    busiest <- monthly_payments |> slice_max(n, n = 1, with_ties = FALSE)
+    ```
+    The busiest month is `r busiest$month`, with `r busiest$n` payments. March 2025 had `r monthly_payments$n[monthly_payments$month == "2025-03"]`, so this office shows no rush at the end of the year. Some payments fall after March 2025, because files started late in the year were paid in 2025-26. In real data, a sharp rise in March would suggest a rush to spend the budget before the year ends, and those files would deserve a closer look.
+    :::
+
+4.  **Slow payment of bills.** For each file, find the days from the first *Bill submitted* to *Payment made*. List the files that took more than 30 days.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    slow_bills <- log |>
+      summarise(submitted = min(timestamp[activity == "Bill submitted"]),
+                paid = max(timestamp[activity == "Payment made"]),
+                .by = case_id) |>
+      mutate(days = round(as.numeric(difftime(paid, submitted, units = "days")))) |>
+      filter(days > 30) |>
+      arrange(desc(days))
+    slow_bills
+    ```
+    In all, `r nrow(slow_bills)` files took more than 30 days from bill to payment. Many offices have a time limit for passing bills, so these files are worth a look for the cause of the delay.
+    :::
+
+5.  **A map of the files without sanction.** Find the files that have no *Sanction accorded* event. Then draw a small process map of only these files.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| out-width: "100%"
+    no_sanction_ids <- rule_results |>
+      filter(!has_sanction) |>
+      pull(case_id)
+
+    purchases |>
+      filter_case(cases = no_sanction_ids) |>
+      process_map(type = frequency("absolute-case"), rankdir = "TB") |>
+      set_height(450)
+    ```
+    The map covers `r length(no_sanction_ids)` files. In every one, the arrow goes from *Indent raised* straight to a later step, with no sanction box at all. A map of a small group like this is easy to show to the auditee.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

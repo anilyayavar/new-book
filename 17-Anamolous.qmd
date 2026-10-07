@@ -863,6 +863,66 @@ Benford's Law tells us what honest, natural data usually *looks like*. It cannot
 -   @sec-nigrini covers the other tests of Nigrini, such as the last-two digits test, the number duplication test and the relative size factor.
 -   @sec-dup shows how to find payments made twice, which often show up as repeated amounts.
 
+## Try it yourself {#sec-benford-exercises}
+
+These exercises use the payment vouchers `works` of the works division, created earlier in this chapter. Try each one in your console before you open the solution.
+
+1.  **The first digit test.** Run the first digit test, instead of the first-two digits test, on the amounts in `works`. What are the MAD and its conformity level? Which first digit deviates most?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_first <- benford(works$amount, number.of.digits = 1)
+    MAD(ex_first)
+    ex_first$MAD.conformity
+    suspectsTable(ex_first) |> head(3)
+    ```
+    The MAD is `r round(MAD(ex_first), 4)`, which is *`r tolower(ex_first$MAD.conformity)`*. The digit that deviates most is `r suspectsTable(ex_first)$digits[1]`. That is a hint, but a blunt one. The first digit test cannot tell ₹48,000 from ₹40,000 or ₹4 lakh. The first-two digits test narrows the problem to the groups 48 and 49, just below the limit of ₹50,000.
+    :::
+
+2.  **Set aside the rate contract.** The payments of exactly ₹18,500 to Rewa Tours and Travels have a genuine cause. Leave them out, run the first-two digits test again, and list the three digit groups that deviate most.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_no_hire <- works |> filter(vendor != "Rewa Tours and Travels")
+    ex_no_hire_bfd <- benford(ex_no_hire$amount, number.of.digits = 2)
+    suspectsTable(ex_no_hire_bfd) |> head(3)
+    ```
+    The spike at 18 is gone, and the groups `r paste(suspectsTable(ex_no_hire_bfd)$digits[1:2], collapse = " and ")` now lead the list. Once a spike is explained, removing its records lets the remaining ones show more clearly.
+    :::
+
+3.  **Which vendor stands out?** Compare the vendors of the works division as we compared the offices. Find the first digit MAD of each vendor, and sort from the highest.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_vendor_mad <- works |>
+      summarise(vouchers = n(),
+                mad = round(MAD(benford(amount, number.of.digits = 1)), 4),
+                .by = vendor) |>
+      arrange(desc(mad))
+    ex_vendor_mad
+    ```
+    `r ex_vendor_mad$vendor[1]` is at the top, since every one of its amounts starts with 1. Next come `r ex_vendor_mad$vendor[2]`, `r ex_vendor_mad$vendor[3]` and `r ex_vendor_mad$vendor[4]`, the three vendors with bills just below ₹50,000. Their extra amounts all start with 4, so their first digits are out of line.
+    :::
+
+4.  **Split bills on the same day.** For the three vendors with bills between ₹48,000 and ₹49,999, find the days on which one vendor was paid two or more such bills. How many such days are there, and how much was paid on them?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_same_day <- works |>
+      filter(amount >= 48000, amount < 50000,
+             vendor %in% c("Satpura Traders", "Omkar Hardware", "Sai Krupa Contractors")) |>
+      summarise(bills = n(), total = sum(amount), .by = c(vendor, voucher_date)) |>
+      filter(bills >= 2) |>
+      arrange(voucher_date)
+    ex_same_day
+    ```
+    There are `r nrow(ex_same_day)` such vendor days, with `r sum(ex_same_day$bills)` bills worth ₹`r lakh(sum(ex_same_day$total))` lakh. On each of these days, the bills together cross ₹50,000, so the sanction of the Superintending Engineer may have been avoided. These are the first vouchers to call for.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

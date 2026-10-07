@@ -385,6 +385,68 @@ Which package to use? **validate** suits audit work where the rule book itself i
 - A rule failure is a lead to be verified against documents, like every other analytic finding.
 :::
 
+## Try it yourself {#sec-validate-exercises}
+
+These exercises use the pay bill data of this chapter, mainly `pay_check`, `pay_rules`, `results` and `rule_book`. Try each one in your console before you open the solution.
+
+1.  **Pay outside the scale.** Use plain `filter()` to list the employees whose basic pay is above the maximum or below the minimum of their level. Show the level, the basic pay and both limits.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_scale <- pay_check |>
+      filter(basic_pay > max_pay | basic_pay < min_pay) |>
+      select(emp_id, level, basic_pay, min_pay, max_pay)
+    ex_scale
+    ```
+    There are `r nrow(ex_scale)` such employees, the same number that `pay_in_range` failed in the summary. Of these, `r sum(ex_scale$basic_pay > ex_scale$max_pay)` are paid above the maximum of the level. For each, ask for the pay fixation order.
+    :::
+
+2.  **A rule for transport allowance.** Write a small rule book with one rule. TA should be ₹7,200 for levels 9 and above, ₹3,600 for levels 3 to 8, and ₹1,800 below level 3. Confront `pay_check` with it.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_ta_rule <- validator(
+      ta_rate = (level >= 9 & ta == 7200) |
+                (level >= 3 & level < 9 & ta == 3600) |
+                (level < 3 & ta == 1800)
+    )
+    ex_ta_sum <- summary(confront(pay_check, ex_ta_rule))
+    ex_ta_sum[, c("name", "items", "passes", "fails", "nNA")]
+    ```
+    All `r format(ex_ta_sum$passes, big.mark = ",")` records pass the rule. As with the pension scheme rule, the conditions are joined with `&` and `|`, not `ifelse()`. A rule that passes is still worth keeping in the rule book. The working papers then show that TA was checked and found correct.
+    :::
+
+3.  **Paid after retirement.** Use `violating()` with the `not_retired` rule to list the employees paid after their retirement. Show the date of birth, the date of retirement and the net pay.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_retired <- violating(pay_check, results["not_retired"]) |>
+      select(emp_id, dob, retirement_date, net_pay)
+    ex_retired
+    ```
+    These `r nrow(ex_retired)` employees retired during 2024 but were still paid in March 2025, a net amount of ₹`r round(sum(ex_retired$net_pay) / 1e5, 1)` lakh this month alone. The employees missing from the master are not listed, because the rule was undecided for them, not broken. Next, check how many months each has been paid since retirement.
+    :::
+
+4.  **Grow the spreadsheet rule book.** Add the HRA rule to `rule_book` as a new row, with a label and a source. Then confront `pay_check` with the larger rule book and show the readable summary.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_book <- rule_book |>
+      add_row(name = "hra_rate", label = "HRA at the rate for the city class",
+              rule = "abs(hra - ifelse(city_class == 'X', 0.30, ifelse(city_class == 'Y', 0.20, 0.10)) * basic_pay) <= 1",
+              description = "HRA order. 30%, 20% and 10% for X, Y and Z cities")
+    ex_book_sum <- summary(confront(pay_check, validator(.data = ex_book))) |>
+      left_join(ex_book |> select(name, label, description), by = "name") |>
+      select(label, items, passes, fails, nNA, description)
+    ex_book_sum
+    ```
+    The new rule appears in the summary with its label and source, and fails for `r ex_book_sum$fails[ex_book_sum$label == "HRA at the rate for the city class"]` records, as in the full rule book. The team only had to add one row. Nothing else in the code changed.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

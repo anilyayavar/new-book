@@ -452,6 +452,74 @@ This short table is what an auditor carries forward. Each vendor in it has a cle
 These tests are *filters*. They reduce lakhs of records to a few dozen worth examining. A flag does not prove any wrongdoing. Genuine reasons, such as a fixed rate contract or a one-time bulk purchase, must be ruled out from records before any audit observation is made.
 :::
 
+## Try it yourself {#sec-nigrini-exercises}
+
+These exercises use the contingent bills `bills` of this chapter. Try each one in your console before you open the solution.
+
+1.  **Largest subsets by office.** Run the largest subsets test with the office as the subset. Which office paid the most, and what share of the total did it pay?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_office <- bills |>
+      summarise(bills = n(), total = sum(amount), .by = office) |>
+      mutate(pct_total = round(100 * total / sum(total), 1)) |>
+      arrange(desc(total))
+    ex_office
+    ```
+    `r ex_office$office[1]` paid the most, ₹`r round(ex_office$total[1] / 1e5, 1)` lakh, or `r ex_office$pct_total[1]`% of all bills. The shares are close, so size alone is no finding. But note that Varanasi is also the office that paid the seven bills of ₹49,500 to Om Sai Caterers.
+    :::
+
+2.  **How close together?** List the bills of Om Sai Caterers paid by the Varanasi office for ₹45,000 or more, in order of date. Add a column with the number of days since the previous such bill.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_omsai <- bills |>
+      filter(vendor == "Om Sai Caterers", office == "Varanasi", amount >= 45000) |>
+      arrange(bill_date) |>
+      mutate(days_since_last = as.numeric(bill_date - lag(bill_date)))
+    ex_omsai
+    ```
+    There are `r nrow(ex_omsai)` such bills, from `r format(min(ex_omsai$bill_date), "%B %Y")` to `r format(max(ex_omsai$bill_date), "%B %Y")`. Of these, `r sum(ex_omsai$days_since_last <= 15, na.rm = TRUE)` came within 15 days of the previous one. A caterer sending a bill just under ₹50,000 every few weeks looks like one large order split to stay within the powers of the office head.
+    :::
+
+3.  **Round to ₹500.** Change the round number test to count amounts that are exact multiples of ₹500. Keep vendors with at least five bills. Which vendors now lead?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_round500 <- bills |>
+      summarise(bills = n(),
+                pct_round_500 = round(100 * mean(amount %% 500 == 0), 1),
+                .by = vendor) |>
+      filter(bills >= 5) |>
+      arrange(desc(pct_round_500)) |>
+      head(4)
+    ex_round500
+    ```
+    `r ex_round500$vendor[1]` and `r ex_round500$vendor[2]` lead, at `r ex_round500$pct_round_500[1]`% and `r ex_round500$pct_round_500[2]`%. Om Sai Caterers now joins Verma & Sons, because ₹49,500 is a multiple of ₹500 but not of ₹1,000. The choice of the round unit decides what the test can see.
+    :::
+
+4.  **A robust z-score.** For vendors with at least five bills, measure how far the largest bill is from the median bill, in units of `mad()`. List the top five.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_robust <- bills |>
+      summarise(bills = n(),
+                largest = max(amount),
+                median_bill = median(amount),
+                robust_z = round((max(amount) - median(amount)) / mad(amount), 1),
+                .by = vendor) |>
+      filter(bills >= 5) |>
+      arrange(desc(robust_z)) |>
+      head(5)
+    ex_robust
+    ```
+    `r ex_robust$vendor[1]` and `r ex_robust$vendor[2]` are again at the top, with scores of `r ex_robust$robust_z[1]` and `r ex_robust$robust_z[2]`. The rest are well below. The same two bills that RSF found stand out on this measure too, which makes them stronger leads.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

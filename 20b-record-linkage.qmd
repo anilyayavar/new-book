@@ -656,6 +656,82 @@ Record linkage brings together personal data from different sources, which is ex
 - Every link is a lead to be verified, never a finding by itself.
 :::
 
+## Try it yourself {#sec-linkage-exercises}
+
+These exercises use the pension list, the death register and the scored pairs of this chapter. Try each one before you open the solution.
+
+1.  **Village with the largest loss.** Using the `overpaid` table, find the three villages where the most pension was paid after death.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_village <- overpaid |>
+      summarise(deceased = n(), amount = sum(amount), .by = village) |>
+      arrange(desc(amount))
+
+    head(ex_village, 3)
+    ```
+    `r ex_village$village[1]` tops the list, with about ₹`r round(ex_village$amount[1] / 1e5, 2)` lakh paid to `r ex_village$deceased[1]` deceased pensioners. Such a table helps the auditor choose which panchayat records to examine first.
+    :::
+
+2.  **Higher rate of pension.** How many of the linked deceased pensioners were drawing the higher pension of ₹1,500, and how much was paid to them after death?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_rate <- overpaid |>
+      summarise(persons = n(), amount = sum(amount), .by = pension)
+
+    ex_rate
+    ```
+    `r sum(ex_rate$persons[ex_rate$pension == 1500])` of the `r nrow(overpaid)` linked pensioners were on the higher rate of ₹1,500. About ₹`r round(ex_rate$amount[ex_rate$pension == 1500] / 1e5, 2)` lakh was paid to them after death. Older pensioners are more likely to die, so the higher rate deserves attention in any death check.
+    :::
+
+3.  **A lower link cut-off.** Suppose we linked automatically every pair scoring 15 or more, instead of 20. Using `decided` and `truth`, how many pairs would be linked, and how many of them are true pairs?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_cut <- decided |>
+      filter(score >= 15) |>
+      left_join(truth |> mutate(true_pair = TRUE), by = c("reg_no", "ben_id")) |>
+      mutate(true_pair = coalesce(true_pair, FALSE))
+
+    count(ex_cut, true_pair)
+    ```
+    At a cut-off of 15, `r nrow(ex_cut)` pairs would be linked, and `r sum(ex_cut$true_pair)` of them are true pairs. The other `r sum(!ex_cut$true_pair)` are wrong links. A lower cut-off saves review work, but a wrong link may stop the pension of a living person.
+    :::
+
+4.  **Which fields fail in the review cases?** For the pairs sent for review, count how often the father's or husband's name agrees, partly agrees, disagrees or is missing.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    decided |>
+      filter(decision == "Review") |>
+      count(rel_lvl)
+    ```
+    The table shows why these pairs could not be decided. Where the relation name is missing or does not agree, the reviewer should ask for the death certificate or the pension file, which usually carry the father's or husband's name.
+    :::
+
+5.  **What a name-only check would report.** Join the standardised lists on the cleaned name, the village and the gender, with no other test. How many pairs does this find, and how many of them are true pairs?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_naive <- pen |>
+      select(ben_id, name_cmp, village_cmp, gender) |>
+      inner_join(dth |> select(reg_no, name_cmp, village_cmp, gender),
+                 by = c("name_cmp", "village_cmp", "gender"),
+                 relationship = "many-to-many") |>
+      left_join(truth |> mutate(true_pair = TRUE), by = c("reg_no", "ben_id")) |>
+      mutate(true_pair = coalesce(true_pair, FALSE))
+
+    count(ex_naive, true_pair)
+    ```
+    The name-only check finds `r nrow(ex_naive)` pairs, of which only `r sum(ex_naive$true_pair)` are true. So `r 150 - sum(ex_naive$true_pair)` of the 150 deceased pensioners are missed, because their names were written differently. The other `r sum(!ex_naive$true_pair)` pairs join different persons who share a name and a village. Each such pair would wrongly mark a pensioner as dead. This is why we weigh several fields together.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

@@ -333,6 +333,72 @@ Get the list of holidays from the office itself, for the correct year and State.
 The analysis tells us *which* numbers are missing. Only the records can tell us *why*. Every unexplained gap must be put to the auditee. Until it is explained, a missing cheque or receipt is a possible loss.
 :::
 
+## Try it yourself {#sec-gaps-exercises}
+
+These exercises use the receipts, the cheque registers and the cash book dates of this chapter. Try each one before you open the solution.
+
+1.  **Receipts at the end of a book.** The receipt book `TR5` has leaves 000121 to 000130. Using the `receipts` of this chapter, find every leaf that does not appear in the data.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    receipt_no <- str_extract(receipts, "\\d+$") |> as.integer()
+    missing_receipts <- setdiff(121:130, receipt_no)
+    missing_receipts
+    ```
+    There are `r length(missing_receipts)` missing leaves. Leaves 129 and 130 come after the last receipt used, so they may simply be unused. As with Book-4, they must be seen in the receipt book before we accept that.
+    :::
+
+2.  **Cheques dated on a Sunday.** The office does not work on Sundays. Find the cheques in `register` that carry a Sunday date.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    sunday_cheques <- register |>
+      filter(wday(issue_date, week_start = 1) == 7) |>
+      select(book, cheque_no, issue_date, payee, amount)
+    sunday_cheques
+    ```
+    There are `r nrow(sunday_cheques)` such cheques. Our data was made up with random dates, so this is expected here. In real data, each Sunday cheque needs a reason, such as an emergency payment, or a wrong date entered in the register.
+    :::
+
+3.  **A six day week.** Suppose we wrongly believe that the office works Monday to Saturday. Find the "missing" cash book dates under this belief, and count them.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    six_day_working <- all_days[wday(all_days, week_start = 1) != 7 &
+                                !all_days %in% holidays]
+    six_day_missing <- setdiff(six_day_working, closing_dates) |> as.Date()
+
+    tibble(date = six_day_missing,
+           day = wday(six_day_missing, label = TRUE, abbr = FALSE)) |>
+      count(day)
+    ```
+    We now get `r length(six_day_missing)` missing dates instead of `r length(missing_days)`. All the extra ones are Saturdays, on which the office was closed. A wrong working calendar creates false gaps, so the calendar must come from the office itself.
+    :::
+
+4.  **One report for all gaps.** Make a single table of every gap in the cheque books, shown as ranges. Add a column `status` that says "Cancelled" for leaves found in the register of cancelled cheques and "Unexplained" for the rest.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    gap_report <- gaps |>
+      left_join(cancelled, by = join_by(missing == cheque_no)) |>
+      mutate(status = if_else(is.na(reason), "Unexplained", "Cancelled")) |>
+      arrange(book, missing) |>
+      mutate(new_run = missing - lag(missing, default = 0) != 1,
+             run = cumsum(new_run)) |>
+      summarise(from = min(missing),
+                to = max(missing),
+                leaves = n(),
+                .by = c(book, run, status)) |>
+      select(-run)
+    gap_report
+    ```
+    The table has `r nrow(gap_report)` rows. The `r sum(gap_report$status == "Cancelled")` cancelled leaves are accounted for, and the `r sum(gap_report$leaves[gap_report$status == "Unexplained"])` unexplained leaves go into the audit query. A single table like this lets the reader see that every gap has been looked at.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
