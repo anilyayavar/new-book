@@ -452,6 +452,78 @@ More advanced methods, based on machine learning and large language models, hand
 A sentiment score is a summary of many opinions, not a fact. Use it to decide *where to look*. The actual comments, read in full, are the evidence.
 :::
 
+## Try it yourself {#sec-sentiment-exercises}
+
+These exercises use the scored patient feedback `feedback_final`, the list `camp_hospitals`, the words `red_flags` and the ration shop tables `fps_scored` and `fps_dupes` of this chapter. Try each one before you open the solution.
+
+1.  **The unhappiest patients.** List the five comments in `feedback_final` with the lowest scores, with their hospital and star rating.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_worst <- feedback_final |>
+      slice_min(score, n = 5, with_ties = FALSE) |>
+      select(hospital_id, comment, score, rating)
+    ex_worst
+    sum(feedback_final$score == min(feedback_final$score))
+    ```
+    The lowest score is `r min(feedback_final$score)`, and `r sum(feedback_final$score == min(feedback_final$score))` comments share it. So the five shown are only some of them. Several of the worst comments are about having to pay for medicines, which should not happen in a free scheme.
+    :::
+
+2.  **Only hospitals with enough comments.** Rank the hospitals by the percentage of negative comments, but keep only those with at least 15 comments. How many of the top five are among the six flagged hospitals?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_ranked <- feedback_final |>
+      summarise(comments     = n(),
+                pct_negative = round(100 * mean(score < 0), 1),
+                .by = hospital_id) |>
+      filter(comments >= 15) |>
+      arrange(desc(pct_negative))
+    head(ex_ranked, 5)
+    sum(head(ex_ranked, 5)$hospital_id %in% camp_hospitals)
+    ```
+    Only `r nrow(ex_ranked)` hospitals have 15 comments or more. Of the top five among them, `r sum(head(ex_ranked, 5)$hospital_id %in% camp_hospitals)` are flagged hospitals. A minimum number of comments makes the ranking steadier, but it also drops many hospitals. That is why the chapter compared groups instead.
+    :::
+
+3.  **Red flags by hospital.** For each hospital, find the number of comments and the red-flag comments per 100 comments, using the words in `red_flags`. Show the eight hospitals with the highest rate, and mark which are flagged hospitals.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_flag_pattern <- paste0("\\b(", paste(red_flags, collapse = "|"), ")\\b")
+
+    ex_red_hosp <- feedback_final |>
+      mutate(has_red_flag = str_detect(str_to_lower(comment), ex_flag_pattern)) |>
+      summarise(comments = n(),
+                per_100  = round(100 * mean(has_red_flag), 1),
+                .by = hospital_id) |>
+      mutate(flagged = hospital_id %in% camp_hospitals) |>
+      arrange(desc(per_100)) |>
+      head(8)
+    ex_red_hosp
+    ```
+    `r sum(ex_red_hosp$flagged)` of the eight hospitals with the highest rate are flagged hospitals. Keep the `comments` column in view. A hospital with very few comments can reach a high rate with only one or two red-flag comments.
+    :::
+
+4.  **The copied sentences.** In shops `FPS-07` and `FPS-19`, which comments appear more than once, and how many times? Then write a rule that flags any shop where more than 25% of comments are copies and more than half the ratings are 5 stars.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    fps_scored |>
+      filter(shop %in% c("FPS-07", "FPS-19")) |>
+      count(shop, comment, sort = TRUE) |>
+      filter(n > 1)
+
+    ex_suspect_shops <- fps_dupes |>
+      filter(pct_duplicated > 25, pct_five_star > 50)
+    ex_suspect_shops
+    ```
+    In each shop, the same three sentences are repeated again and again. The rule picks out `r paste(ex_suspect_shops$shop, collapse = " and ")`, and no other shop. A rule like this can be run on every round of feedback, so that copied feedback is caught early. The next step is to contact a sample of the beneficiaries against those comments.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

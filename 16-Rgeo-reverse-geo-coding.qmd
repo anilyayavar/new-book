@@ -239,6 +239,98 @@ Run these checks first, on the whole data, before any mapping or reverse geocodi
 A geotag tells us where the *phone* was, not necessarily where the *work* is. And geotags can be faked. A correct geotag supports a claim, but does not prove it. A wrong one is a strong reason to look closer.
 :::
 
+## Try it yourself {#sec-revgeo-exercises}
+
+These exercises use the 1,000 geotags of the second use case. They work only on the numbers, so nothing is sent to any service. Try each one before you open the solution.
+
+1.  **A stricter shared spot.** Flag a shared spot when two or more works, not five, have exactly the same geotag. Does this find anything beyond the block office?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    spots_2 <- geotag_checks |>
+      filter(same_spot >= 2, !zero_point) |>
+      summarise(works = n(), villages = n_distinct(village), .by = c(lat, long))
+
+    spots_2
+    ```
+    With the lower limit, there `r if (nrow(spots_2) == 1) "is still only one spot" else paste("are", nrow(spots_2), "spots")`. `r if (nrow(spots_2) == 1) "Genuine geotags with six decimals almost never repeat, so even a pair at exactly the same spot would be worth a question." else "Look at each extra spot. Genuine geotags with six decimals almost never repeat, so even a pair at exactly the same spot is worth a question."`
+    :::
+
+2.  **Correct the swapped geotags.** Make a corrected copy of the geotags, in which the swapped latitude and longitude are put back in place. Check that every corrected point now lies within India's range.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    geotags_fixed <- geotag_checks |>
+      mutate(new_lat  = if_else(swapped, long, lat),
+             new_long = if_else(swapped, lat, long))
+
+    geotags_fixed |>
+      filter(swapped) |>
+      summarise(corrected = n(),
+                now_in_india = sum(between(new_lat, 6, 38) & between(new_long, 68, 98)))
+    ```
+    All `r sum(geotags_fixed$swapped)` swapped geotags now fall within India's range. We wrote the corrections into new columns, `new_lat` and `new_long`, and kept the original values. A working paper should always show both, so that anyone can see what was changed and why.
+    :::
+
+3.  **Villages with the most problems.** Count, for each village, the works with at least one problem of any kind. List the five villages with the most.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    village_problems <- geotag_checks |>
+      mutate(any_problem = zero_point | swapped | outside_india | low_precision | shared_spot) |>
+      summarise(works = n(), problems = sum(any_problem), .by = village) |>
+      mutate(pct = round(100 * problems / works, 1)) |>
+      arrange(desc(problems))
+
+    head(village_problems, 5)
+    ```
+    `r village_problems$village[1]` has the most, `r village_problems$problems[1]` of its `r village_problems$works[1]` works. With so few works in each village, four or five problems can arise by chance, and in our data the problems were planted at random. In real data, a village or a block with a much higher share would point to one field worker or one office.
+    :::
+
+4.  **Close to the office, but not at it.** One degree of latitude is about 111 km. In this area one degree of longitude is about 99 km. Using these figures, find the works, other than the 40 at the office spot, whose geotag lies within 2 km of the block office.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    office_lat  <- 26.912437
+    office_long <- 75.787271
+
+    near_office <- geotag_checks |>
+      filter(!shared_spot) |>
+      mutate(km_from_office = sqrt(((lat - office_lat) * 111)^2 +
+                                   ((long - office_long) * 99)^2)) |>
+      filter(km_from_office < 2) |>
+      arrange(km_from_office)
+
+    near_office |> select(work_id, village, lat, long, km_from_office, low_precision)
+    ```
+    `r nrow(near_office)` other work`r if (nrow(near_office) != 1) "s"` lie within 2 km of the office. Some works are genuinely near the block headquarters, so this is not a finding by itself. But if such works are claimed in villages far from the headquarters, the photos may have been taken at or near the office too. Check the claimed village against these geotags.
+    :::
+
+5.  **One exception list.** Make one exception list with a single column `problem`, naming the first problem found in each work, in the order zero, swapped, outside India, shared spot, typed. Count the works under each problem.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    exceptions <- geotag_checks |>
+      mutate(problem = case_when(
+        zero_point    ~ "Zero point",
+        swapped       ~ "Latitude and longitude swapped",
+        outside_india ~ "Outside India",
+        shared_spot   ~ "Shared spot",
+        low_precision ~ "Typed, two decimals or fewer"
+      )) |>
+      filter(!is.na(problem)) |>
+      select(work_id, village, lat, long, problem)
+
+    exceptions |> count(problem, sort = TRUE)
+    ```
+    The list has `r nrow(exceptions)` works, one row each, which matches the `r sum(geotag_checks$zero_point | geotag_checks$swapped | geotag_checks$outside_india | geotag_checks$shared_spot | geotag_checks$low_precision)` works with at least one problem. `case_when()` takes the first condition that is true, so a work with two problems is counted once. This is the form a field party needs, one row per work to verify.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

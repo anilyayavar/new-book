@@ -283,12 +283,13 @@ camp_grievances |>
 camp_by_hosp <- camp_grievances |> count(hospital_id)
 ```
 
-There are `r nrow(camp_grievances)` such grievances. They come from `r if (nrow(camp_by_hosp) == 6) "all six hospitals" else paste(nrow(camp_by_hosp), "of the six hospitals")`, so the pattern is not the work of one hospital alone. Let us read a few of them.
+There are `r nrow(camp_grievances)` such grievances. They come from `r if (nrow(camp_by_hosp) == 6) "all six hospitals" else paste(nrow(camp_by_hosp), "of the six hospitals")`, so the pattern is not the work of one hospital alone. Let us read a few of them. Grievances often carry mobile numbers, so we mask any ten-digit number before printing, as @sec-privacy-mask advises.
 
 ```{r}
 camp_grievances |>
   slice_head(n = 3) |>
-  pull(text)
+  pull(text) |>
+  str_replace_all("\\b\\d{10}\\b", "XXXXXXXXXX")
 ```
 
 The words in the pictures are now backed by the patients' own accounts.
@@ -405,6 +406,84 @@ Look at the pair *accepted → staff*. It comes from sentences like "card is not
 
 A picture of text is a summary, and every summary leaves things out. The most frequent words are not always the most important ones. A single grievance about a death in a hospital matters more than a hundred about dirty toilets. Use the pictures to see the broad picture, and the documents to see what really happened.
 :::
+
+## Try it yourself {#sec-textviz-exercises}
+
+These exercises use the grievances `grievances`, the cleaned words `griev_words`, the list `camp_hospitals` and the table `log_ratios` of this chapter. Try each one before you open the solution.
+
+1.  **The flagged hospitals alone.** Draw a bar chart of the 15 most common words in the grievances about the six flagged hospitals.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_flag_words <- griev_words |>
+      filter(hospital_id %in% camp_hospitals) |>
+      count(word, sort = TRUE)
+
+    ex_flag_words |>
+      slice_max(n, n = 15, with_ties = FALSE) |>
+      ggplot(aes(n, fct_reorder(word, n))) +
+      geom_col(fill = "firebrick") +
+      labs(x = "Number of times used", y = NULL) +
+      theme_bw()
+    ```
+    The longest bar is *`r ex_flag_words$word[1]`*, used `r ex_flag_words$n[1]` times. *Camp*, *pain*, *uterus* and *village* are also near the top. But common words like *card* and *staff* appear in grievances about every hospital. A chart of one group alone shows what is common in it, but not what is special to it. For that, we need the comparison of the log ratio.
+    :::
+
+2.  **A cloud of "Other".** Draw a word cloud of the 40 most common words in grievances filed under the category *Other*. Set a seed first, so that the cloud can be reproduced.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| warning: false
+    ex_other_words <- griev_words |>
+      filter(category == "Other") |>
+      count(word, sort = TRUE)
+
+    set.seed(321)
+    ex_other_words |>
+      with(wordcloud(words = word, freq = n,
+                     random.order = FALSE, max.words = 40,
+                     colors = RColorBrewer::brewer.pal(8, "Dark2"),
+                     scale = c(2.5, 0.5)))
+    ```
+    *`r str_to_title(ex_other_words$word[1])`* is the largest word, as it was in the faceted bar chart. The cloud gives a quick impression for a presentation slide. The exact counts are in `ex_other_words`, for the working papers.
+    :::
+
+3.  **At least eight times as common.** From `log_ratios`, list the words that are at least eight times as common, relatively, in grievances about the flagged hospitals. A log ratio of 3 means eight times, because 2 × 2 × 2 = 8.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_strong <- log_ratios |>
+      filter(log_ratio >= 3) |>
+      mutate(times = round(2^log_ratio, 1)) |>
+      arrange(desc(log_ratio))
+    ex_strong |> print(n = Inf)
+    ```
+    `r nrow(ex_strong)` words pass this test. Most describe camps, vehicles, villages and wounds. Note the small counts in the `other` column. A word used only once or twice about the other hospitals can still get a large ratio, so read the counts along with the ratio.
+    :::
+
+4.  **The grievances behind "uterus".** Count the grievances that mention a uterus, for the flagged hospitals and for all other hospitals. Then read two of those about the flagged hospitals. The raw `text` in this chapter still has mobile numbers, so mask them before printing.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_uterus <- grievances |>
+      filter(str_detect(str_to_lower(text), "uterus")) |>
+      mutate(group = if_else(hospital_id %in% camp_hospitals,
+                             "Six flagged hospitals", "Other hospitals"),
+             text = str_replace_all(text, "\\b[6-9][0-9]{9}\\b", "[PHONE]"))
+
+    ex_uterus |> count(group)
+
+    ex_uterus |>
+      filter(group == "Six flagged hospitals") |>
+      slice_head(n = 2) |>
+      pull(text)
+    ```
+    The flagged hospitals are only six of the `r n_distinct(grievances$hospital_id)` hospitals. Yet `r sum(ex_uterus$group == "Six flagged hospitals")` of the `r nrow(ex_uterus)` grievances about a uterus being removed are about them. Each one is a possible case of unnecessary surgery. The auditor should match these grievances with the claims of the same patients, and seek the medical records.
+    :::
 
 ## Summary of functions used
 

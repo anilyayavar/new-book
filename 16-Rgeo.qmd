@@ -488,6 +488,104 @@ ggplot() +
 A map is a powerful way to show a finding, but it is easy to mislead with it. Large areas catch the eye even when few people live there. Colours can exaggerate small differences. Make sure the map shows exactly the point you want to make, and that the numbers behind it are right.
 :::
 
+## Try it yourself {#sec-maps-exercises}
+
+These exercises use the map, hospitals, inspections and housing photos of this chapter. Try each one before you open the solution.
+
+1.  **A shorter travel limit.** Repeat the travel table, but count the share of patients who live more than 30 km from their hospital. How many hospitals now have more than half their patients from beyond 30 km?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    travel_30 <- homes |>
+      st_drop_geometry() |>
+      summarise(patients = n(),
+                pct_over_30km = 100 * mean(distance_km > 30),
+                .by = hospital_id) |>
+      filter(patients >= 15, pct_over_30km > 50) |>
+      arrange(desc(pct_over_30km))
+
+    travel_30 |> mutate(pct_over_30km = round(pct_over_30km, 1))
+    ```
+    `r nrow(travel_30)` hospitals have more than half their patients from beyond 30 km. `r if (all(travel_30$hospital_id %in% travel$hospital_id[travel$pct_over_50km > 50])) "They are the same hospitals that stood out at 50 km" else "The list is not exactly the same as at 50 km, so look at the extra names"`. A finding that holds at more than one limit is stronger, because it does not depend on where we drew the line.
+    :::
+
+2.  **Which inspector?** For each inspector, count the inspection photos and the photos taken more than 1 km from the hospital. Sort the inspectors by the number of such photos.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    by_inspector <- inspections |>
+      st_drop_geometry() |>
+      summarise(photos   = n(),
+                over_1km = sum(distance_km > 1),
+                .by = inspector) |>
+      arrange(desc(over_1km))
+
+    by_inspector
+    ```
+    `r by_inspector$inspector[1]` has `r by_inspector$over_1km[1]` photos taken more than 1 km away, out of `r by_inspector$photos[1]`. Counting the total photos too matters. An inspector with many inspections may have more doubtful photos simply by chance, so compare the doubtful photos with the total before drawing a conclusion.
+    :::
+
+3.  **Hospitals per lakh population.** Use the spatial join to count the hospitals that lie in each district, by type. Then work out the public hospitals per lakh population in each district. Which district has the fewest?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    public_per_lakh <- hosp_check |>
+      st_drop_geometry() |>
+      count(district = district_on_map, type) |>
+      pivot_wider(names_from = type, values_from = n, values_fill = 0) |>
+      left_join(districts |> st_drop_geometry(), by = "district") |>
+      mutate(public_per_lakh = round(Public / population_lakh, 2)) |>
+      arrange(public_per_lakh)
+
+    public_per_lakh
+    ```
+    `r public_per_lakh$district[1]` has the fewest public hospitals for its population, `r public_per_lakh$public_per_lakh[1]` per lakh. `r if (n_distinct(public_per_lakh$Public) == 1) paste("Every district has", public_per_lakh$Public[1], "public hospitals, so the rate depends only on the population.") else ""` We counted by `district_on_map`, the district where the hospital actually lies, not the one recorded. Here the two agree, but in real data the map is the safer basis.
+    :::
+
+4.  **Private hospitals far from public ones.** Find the private hospitals that lie outside the 25 km cover of public hospitals. Draw a small map of them.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    #| fig-height: 4
+    outside_cover <- hosp_sf |>
+      filter(type != "Public") |>
+      filter(!st_intersects(geometry, public_cover, sparse = FALSE)[, 1])
+
+    outside_cover |> st_drop_geometry() |> select(hospital_id, hospital_name, district)
+
+    ggplot() +
+      geom_sf(data = districts, fill = "grey95", colour = "grey60") +
+      geom_sf(data = public_cover, fill = "seagreen", alpha = 0.3, colour = NA) +
+      geom_sf(data = outside_cover, colour = "firebrick", size = 2) +
+      theme_void()
+    ```
+    `r nrow(outside_cover)` private hospitals lie more than 25 km from any public hospital. `st_intersects()` with `sparse = FALSE` gives a `TRUE` or `FALSE` for each hospital, and we keep those that do not touch the cover. Patients in these areas depend on private hospitals, which is a fair point for a performance audit. It is also where claims of private hospitals deserve a careful look.
+    :::
+
+5.  **Two checks, one answer.** In the housing data, flag every beneficiary whose completion photo was taken more than 100 metres from the sanctioned site. Compare this list with the same-spot group. Who is in the group but not flagged, and why?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    far_photo <- photos |>
+      st_drop_geometry() |>
+      mutate(site_to_photo_km = sqrt((photo_x - site_x)^2 + (photo_y - site_y)^2)) |>
+      filter(site_to_photo_km > 0.1) |>
+      pull(ben_id)
+
+    group_ids <- photos |> filter(group == big$group) |> pull(ben_id)
+
+    length(far_photo)
+    all(far_photo %in% group_ids)
+    setdiff(group_ids, far_photo)
+    ```
+    `r length(far_photo)` photos were taken more than 100 metres from their sites, and all of them belong to the same-spot group. The one member of the group who is not flagged, `r setdiff(group_ids, far_photo)`, is the beneficiary whose own house was photographed again and again. The distance check alone would miss that this house was used for others. The grouping check alone would not tell us whose house it is. Together they give the full picture.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

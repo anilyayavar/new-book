@@ -409,6 +409,106 @@ Generated reports are only as right as the code behind them. Before sending repo
 - Record the data files, their hashes and the date in every report, so that it can be reproduced and verified.
 :::
 
+## Try it yourself {#sec-reports-exercises}
+
+These exercises use the payment register, the beneficiary list and the check functions of this chapter. Any file they write goes into the temporary folder of the R session. Try each one before you open the solution.
+
+1.  **The Devgarh summary.** Run the four checks for Devgarh, and show the summary as a `gt` table with the title "Summary of exceptions" and the subtitle "Devgarh district, 2024-25".
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    devgarh <- run_checks(filter(payments_all, district == "Devgarh"),
+                          filter(benef_all, district == "Devgarh"))
+
+    summarise_checks(devgarh) |>
+      gt() |>
+      cols_label(check = "Check", cases = "Cases", amount = "Amount (₹)") |>
+      fmt_number(columns = amount, decimals = 0) |>
+      sub_missing(columns = amount, missing_text = "Not valued") |>
+      tab_header(title = "Summary of exceptions", subtitle = "Devgarh district, 2024-25")
+    ```
+    Only the district name changed. Devgarh shows `r n_distinct(devgarh$shared_accounts$account)` shared account, the planted one with six beneficiaries. This is the whole point of putting the checks in functions. The same code serves every district.
+    :::
+
+2.  **All districts in one table.** Run the checks for every district, and make one table with a row for each district and a column for the cases of each check. Which district has the most duplicate instalments?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    state_summary <- map(districts, \(d) {
+      res <- run_checks(filter(payments_all, district == d),
+                        filter(benef_all, district == d))
+      summarise_checks(res) |> mutate(district = d)
+    }) |>
+      list_rbind()
+
+    cases_wide <- state_summary |>
+      mutate(check = c("duplicates", "wrong_amount", "not_active", "shared_accounts")[match(check, unique(check))]) |>
+      select(district, check, cases) |>
+      pivot_wider(names_from = check, values_from = cases)
+
+    cases_wide |> arrange(desc(duplicates))
+    ```
+    `r top_dup <- cases_wide |> slice_max(duplicates, n = 1, with_ties = FALSE); top_dup$district` has the most duplicate instalments, `r top_dup$duplicates`. This agrees with what was planted, since duplicates were made more likely in Chandpur. A State-level table like this one tells the audit party where to send the field team first.
+    :::
+
+3.  **Irregular payments in lakh.** From the State table of the previous exercise, work out the total irregular amount in each district, in lakh of rupees, leaving out the shared accounts which are not valued. Show it as a `gt` table with one decimal place.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    irregular <- state_summary |>
+      summarise(amount_lakh = sum(amount, na.rm = TRUE) / 1e5, .by = district) |>
+      arrange(desc(amount_lakh))
+
+    irregular |>
+      gt() |>
+      cols_label(district = "District", amount_lakh = "Irregular amount (₹ lakh)") |>
+      fmt_number(columns = amount_lakh, decimals = 1) |>
+      tab_header(title = "Irregular payments by district", subtitle = "Kisan Sahayata, 2024-25")
+    ```
+    In all, ₹`r round(sum(irregular$amount_lakh), 1)` lakh was paid irregularly in the cases that could be valued, the most in `r irregular$district[1]`. We divided by `1e5` before formatting, so the table shows lakh directly. `na.rm = TRUE` leaves out the `NA` of the shared accounts.
+    :::
+
+4.  **A State workbook.** Save the table of cases by district as a one-sheet Excel workbook in the temporary folder, with a bold header row and a filter. Read it back to check it.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    wb_state <- createWorkbook()
+    addWorksheet(wb_state, "Cases by district")
+    writeData(wb_state, "Cases by district", cases_wide, withFilter = TRUE,
+              headerStyle = createStyle(textDecoration = "bold", fgFill = "#DDEBF7"))
+    setColWidths(wb_state, "Cases by district", cols = 1:5, widths = "auto")
+
+    state_file <- file.path(tempdir(), "cases_by_district.xlsx")
+    saveWorkbook(wb_state, state_file, overwrite = TRUE)
+
+    read.xlsx(state_file)
+    ```
+    The workbook read back has the same `r nrow(cases_wide)` districts and the same counts. Reading a workbook back is a quick check that what we handed over is what we meant to hand over.
+    :::
+
+5.  **Does the hash catch a change?** Make a copy of the payment register in the temporary folder, change the amount of one payment, and save it. Compare the MD5 hash of the copy with that of the original.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    original_file <- file.path(project_dir, "payments.csv")
+    edited_file   <- file.path(tempdir(), "payments_edited.csv")
+
+    edited <- read_csv(original_file, show_col_types = FALSE)
+    edited$amount[1] <- edited$amount[1] + 1
+    write_csv(edited, edited_file)
+
+    hashes <- unname(tools::md5sum(c(original_file, edited_file)))
+    hashes
+    hashes[1] == hashes[2]
+    ```
+    A change of just one rupee in one of `r format(nrow(edited), big.mark = ",")` rows gives a completely different hash. So if a report records the hash of its data file, anyone can later prove whether the report was made from that exact file. This is why the template records the hashes in its last section.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

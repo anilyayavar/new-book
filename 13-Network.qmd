@@ -1021,6 +1021,99 @@ A connection in a network is a lead, not a finding. Two firms may share an addre
 
 In @sec-netaudit, we apply these tools to more audit problems. We find one person behind many registrations of a scheme, a cartel of bidders, circular trading between firms, and vendors linked with employees.
 
+## Try it yourself {#sec-graph-exercises}
+
+These exercises use the contractor data of this chapter, the tables `firms`, `links`, `bids` and `tenders`, the graph `cg` and the communities `cg_comm`. Try each before opening the solution.
+
+1.  **Firms with three or more links.** Earlier we listed the firms linked with more than four others. Change the limit to three or more links, and show each firm with its name and class.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    busy_firms <- tibble(firm_id = V(cg)$name, links = degree(cg)) |>
+      filter(links >= 3) |>
+      left_join(firms, by = "firm_id") |>
+      arrange(desc(links))
+    busy_firms
+    ```
+    `r nrow(busy_firms)` firms have three or more links. `r sum(busy_firms$firm_id %in% c(group_a, group_b))` of them belong to the two hidden groups. A firm in normal business rarely shares details with so many others.
+    :::
+
+2.  **Pairs that share a bank account.** Two firms may share an office building for a genuine reason. A shared bank account is much harder to explain. List the pairs of firms whose `shared` column includes a bank account.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    bank_pairs <- links |>
+      filter(str_detect(shared, "bank account")) |>
+      mutate(planted = firm_a %in% c(group_a, group_b, bridge) &
+                       firm_b %in% c(group_a, group_b, bridge))
+    bank_pairs
+    count(bank_pairs, planted)
+    ```
+    `r nrow(bank_pairs)` pairs share a bank account. Of these, `r sum(bank_pairs$planted)` are pairs within the two hidden groups or with the bridge firm `C21`. The other `r sum(!bank_pairs$planted)` pairs are ordinary firms. They too need a look, since a shared account is a lead even outside a group. In the field, the auditor would ask the bank who operates each such account.
+    :::
+
+3.  **What C33 shares, and with whom.** Make a table of every firm directly linked with `C33`. Show the firm name and the details it shares with `C33`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    c33_links <- links |>
+      filter(firm_a == "C33" | firm_b == "C33") |>
+      mutate(other = if_else(firm_a == "C33", firm_b, firm_a)) |>
+      left_join(firms, by = c("other" = "firm_id")) |>
+      select(other, firm_name, shared, weight) |>
+      arrange(desc(weight))
+    c33_links
+    ```
+    `C33` is linked with `r nrow(c33_links)` firms, which is the same as its degree in `cg`. The table reads like a list of audit queries. Each row names a firm and the detail it shares, which the auditor can check against the registration papers. Notice the bridge firm `C21` among them, with a single shared detail.
+    :::
+
+4.  **The value of tenders bid by each hidden group.** For the tenders in `flagged`, find which group the bidders belong to (Group A around `C07`, or Group B around `C33`). Then give the number of tenders and their total estimated cost for each group, in lakh.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    group_value <- bids |>
+      filter(tender_no %in% flagged$tender_no) |>
+      mutate(group = case_when(firm_id %in% group_a ~ "Group A",
+                               firm_id %in% group_b ~ "Group B",
+                               TRUE ~ "Other")) |>
+      distinct(tender_no, group) |>
+      left_join(tenders, by = "tender_no") |>
+      group_by(group) |>
+      summarise(tenders = n(),
+                est_cost_lakh = round(sum(est_cost) / 1e5, 1))
+    group_value
+    ```
+    Group A bid alone in `r group_value$tenders[group_value$group == "Group A"]` tenders, worth ₹`r group_value$est_cost_lakh[group_value$group == "Group A"]` lakh. Group B bid alone in `r group_value$tenders[group_value$group == "Group B"]` tenders, worth ₹`r group_value$est_cost_lakh[group_value$group == "Group B"]` lakh. Each flagged tender has exactly one group, because all its bidders come from one community.
+    :::
+
+5.  **Does the seed change the flagged tenders?** The caution above says that a different seed may move a loosely linked firm. Run `cluster_louvain()` again with `set.seed(7)`. Repeat the tender check with the new communities, and compare the flagged tenders with `flagged`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    set.seed(7)
+    cg_comm7 <- cluster_louvain(cg, weights = NA)
+
+    firm_comm7 <- tibble(firm_id   = V(cg)$name,
+                         community = as.integer(membership(cg_comm7)))
+
+    flagged7 <- bids |>
+      left_join(firm_comm7, by = "firm_id") |>
+      group_by(tender_no) |>
+      summarise(communities = n_distinct(community)) |>
+      filter(communities == 1)
+
+    setdiff(flagged7$tender_no, flagged$tender_no)
+    setdiff(flagged$tender_no, flagged7$tender_no)
+    cg_comm7[[membership(cg_comm7)["C21"]]]
+    ```
+    With the new seed, `r nrow(flagged7)` tenders are flagged. Both `setdiff()` results are empty, so they are the same tenders as before. But the last output shows that `C21` has moved. It now sits in the community of `C33`, not of `C07`. The tenders do not change, because `C21` is not a bidder in any flagged tender. Checking a result with a second seed is a cheap test of how firm it is.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

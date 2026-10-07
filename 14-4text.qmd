@@ -522,6 +522,83 @@ A pattern like this across many tenders of one section is a lead. Find out who d
 Text analytics counts words. It does not understand them. A complaint saying "they did *not* demand any money" contains the word *demand*. Always read a sample of the documents behind every count, before treating the count as evidence.
 :::
 
+## Try it yourself {#sec-text-exercises}
+
+These exercises use the masked grievances `grievances`, the words `tokens_clean`, the theme tags `tagged` and the journal entries `journal` of this chapter. Try each one before you open the solution.
+
+1.  **What is in "Other"?** List the ten most common words in `tokens_clean` for the grievances filed under the category *Other* only.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_other <- tokens_clean |>
+      filter(category == "Other") |>
+      count(word, sort = TRUE) |>
+      head(10)
+    ex_other
+    ```
+    The top word is *`r ex_other$word[1]`*, used `r ex_other$n[1]` times. Words like *camp*, *free* and *told* are also near the top. A category called *Other* should hold odd complaints of every kind. Here it holds one clear theme, which the fixed categories miss.
+    :::
+
+2.  **Vague narrations by user.** For each user in `journal`, find the number of entries, the number with a red-flag narration (`f_narration`), and the red-flag entries per 100 entries.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_users <- journal |>
+      summarise(entries = n(),
+                red_flag = sum(f_narration),
+                per_100 = round(100 * mean(f_narration), 1),
+                .by = posted_by) |>
+      arrange(desc(per_100))
+    ex_users
+    ```
+    `r ex_users$posted_by[1]` posted only `r ex_users$entries[1]` entries, but `r ex_users$per_100[1]` of every 100 have a vague narration. That is the highest rate of any user. A rate, not a count, is the fair comparison, because the users post very different numbers of entries.
+    :::
+
+3.  **Where are the camps?** Count the grievances tagged with the theme *Camp or agent* in each district. The district is in `grievances`, so join it to `tagged` first.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_camp_district <- tagged |>
+      filter(theme == "Camp or agent") |>
+      left_join(grievances |> select(grievance_id, district), by = "grievance_id") |>
+      count(district, sort = TRUE)
+    ex_camp_district
+    ```
+    `r ex_camp_district$district[1]` has the most, with `r ex_camp_district$n[1]` of the `r sum(ex_camp_district$n)` camp grievances. Such a list helps to plan field visits and beneficiary surveys in the districts where the camps were held.
+    :::
+
+4.  **How much was demanded?** The chapter removed numbers from `clean_text`. Go back to the masked `text` of the grievances tagged *Money demanded*, and pull out the amount. People wrote it as "Rs 3000", "Rs. 3000", "2000/-", "(1000)" or "8000 rupees". What is the total, and which hospitals account for the most?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_money_ids <- tagged |>
+      filter(theme == "Money demanded") |>
+      pull(grievance_id)
+
+    ex_amount_pattern <- regex("rs\\.? ?\\d+|\\d+/-|\\(\\d+\\)|\\d+ rupees",
+                               ignore_case = TRUE)
+
+    ex_amounts <- grievances |>
+      filter(grievance_id %in% ex_money_ids) |>
+      mutate(amount = as.numeric(str_extract(str_extract(text, ex_amount_pattern), "\\d+")))
+
+    sum(!is.na(ex_amounts$amount))
+    sum(ex_amounts$amount, na.rm = TRUE)
+
+    ex_amounts |>
+      summarise(grievances = n(),
+                amount = sum(amount, na.rm = TRUE),
+                .by = hospital_id) |>
+      arrange(desc(amount)) |>
+      head(5)
+    ```
+    Of the `r nrow(ex_amounts)` grievances about money, `r sum(!is.na(ex_amounts$amount))` state an amount. Together they come to ₹`r round(sum(ex_amounts$amount, na.rm = TRUE) / 1e5, 2)` lakh. The pattern looks for a number next to "rs", "/-", brackets or "rupees", so that other numbers, like a patient's age, are not picked up. Read the grievances with no amount found, to make sure the pattern has not missed a way of writing it.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |

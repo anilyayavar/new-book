@@ -671,6 +671,94 @@ In a directed graph where we look for cycles, we drop sources and sinks repeated
 A link in a network shows that two records share something. It does not show *why*. Family members share mobiles, neighbours share addresses, and specialised firms meet in the same tenders. A network gives *leads*, not *findings*. Every lead must be verified with documents, and where needed, in the field.
 :::
 
+## Try it yourself {#sec-netaudit-exercises}
+
+These exercises use the data of this chapter, the beneficiary register `ben` with its long form `ben_long` and graphs `g_full` and `g_ben`, the `bids` of use case 2, and the `invoices` of use case 3. Try each before opening the solution.
+
+1.  **Which kind of ID is shared most?** Count the IDs shared by two or more beneficiaries, separately for mobile numbers, bank accounts and PANs. Use `ben_shared`, which already holds only the shared IDs.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    shared_by_type <- ben_shared |>
+      distinct(id_type, id_node) |>
+      count(id_type, name = "shared_ids")
+    shared_by_type
+    ```
+    `r shared_by_type$shared_ids[shared_by_type$id_type == "mobile"]` mobile numbers are shared, but only `r shared_by_type$shared_ids[shared_by_type$id_type == "bank_ac"]` bank accounts and `r shared_by_type$shared_ids[shared_by_type$id_type == "pan"]` PANs. Families often share a mobile, so many shared mobiles are normal. A shared bank account or PAN is rarer, and each one deserves a closer look, because the benefit is paid into the account. Here, every shared account and PAN belongs to the ring we planted.
+    :::
+
+2.  **The ring as a table.** List the seven registrations of the ring (`ring_nodes`) with their mobile number, bank account and PAN, from `ben`. If they are one person, how much is paid a year to the six extra registrations?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ring_table <- ben |>
+      filter(ben_id %in% ring_nodes)
+    ring_table
+
+    extra <- nrow(ring_table) - 1
+    extra * 6000
+    ```
+    Read the table from top to bottom. Each row keeps one ID of the row above and changes the others. If the `r nrow(ring_table)` registrations are one person, the `r extra` extra registrations draw ₹`r format(extra * 6000, big.mark = ",")` a year. This is the amount the auditor would put as recoverable, once the scheme office confirms the case.
+    :::
+
+3.  **How closely does the cartel bid together?** For each tender in `bids`, count the firms of the `cartel` and the outsiders. In how many tenders did three or more cartel firms bid, and how many of those had no outsider at all?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    cartel_tenders <- bids |>
+      group_by(tender) |>
+      summarise(cartel_firms = sum(firm %in% cartel),
+                outsiders    = sum(!firm %in% cartel)) |>
+      filter(cartel_firms >= 3)
+
+    nrow(cartel_tenders)
+    count(cartel_tenders, outsiders)
+    ```
+    In `r nrow(cartel_tenders)` of the 200 tenders, three or more cartel firms bid. In `r sum(cartel_tenders$outsiders == 0)` of them, there was no outsider at all. Such a tender had no real competition, and its file should be examined first.
+    :::
+
+4.  **Do the ring firms also trade genuinely?** For each firm in `ring_firms`, find its number of invoices as seller and its total sales in lakh. Then find how much of those sales went round the rings, using `ring_invoices`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    all_sales <- invoices |>
+      filter(seller %in% ring_firms) |>
+      group_by(seller) |>
+      summarise(invoices = n(), sales_lakh = sum(amount) / 1e5)
+
+    ring_sales <- ring_invoices |>
+      group_by(seller) |>
+      summarise(ring_lakh = sum(amount) / 1e5)
+
+    ring_share <- all_sales |>
+      left_join(ring_sales, by = "seller") |>
+      mutate(ring_pct = round(100 * ring_lakh / sales_lakh, 1),
+             across(c(sales_lakh, ring_lakh), \(x) round(x, 1))) |>
+      arrange(desc(ring_pct))
+    ring_share
+    ```
+    For `r sum(ring_share$ring_pct > 90)` of the `r nrow(ring_share)` ring firms, more than 90% of the sales went round a ring. A firm whose sales are almost all circular has little real business. The firms with a lower share also trade with outsiders, and their genuine sales help hide the circular ones.
+    :::
+
+5.  **Drop the leaves after building the graph.** Tip 1 shows a second way to drop leaf nodes, after the graph is built. Apply it to a copy of `g_full`. Check that the result has the same vertices as `g_ben`.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    g_trim <- g_full
+    g_trim <- delete_vertices(g_trim, V(g_trim)[degree(g_trim) == 1 & str_detect(name, ":")])
+    g_trim <- delete_vertices(g_trim, V(g_trim)[degree(g_trim) == 0])
+
+    c(full = vcount(g_full), trimmed = vcount(g_trim), shared_only = vcount(g_ben))
+    setequal(V(g_trim)$name, V(g_ben)$name)
+    ```
+    The trimmed graph has `r vcount(g_trim)` vertices, and `setequal()` returns `r setequal(V(g_trim)$name, V(g_ben)$name)`. So both ways give the same graph. Dropping leaves before building the graph is usually faster for big data, because the large graph is never made.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
