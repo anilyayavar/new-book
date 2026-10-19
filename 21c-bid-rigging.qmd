@@ -1,0 +1,1374 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Screens for Bid Rigging {#sec-bidrig}
+
+A Public Works Division of an imaginary State lets well over a hundred works tenders every year. Roads, culverts, school buildings and boundary walls are all built by contractors chosen through open tenders. The lowest bidder wins. The system assumes that the bidders compete. But what if they do not? The firms of a district may meet quietly and decide among themselves who will win each tender, and at what price. The others then bid high on purpose, only to make the tender look competitive. The division pays more than it should, year after year, and every file looks perfectly in order.
+
+This is **bid rigging**. It is hard to see in any single file. A tender with three bids, the lowest of which was accepted, looks normal. The pattern shows only when we look at many tenders together. Who bids with whom? Who wins, and in what order? How far above the winner do the losers bid, and does that gap stay the same tender after tender? Do the same firms bid differently when a stranger turns up?
+
+This chapter builds a set of **screens** for bid rigging, using only `tidyverse` and base R. A screen is a simple test run on the tender data. It flags tenders and firms that deserve a closer look. It does not prove collusion. Proof needs evidence of an agreement, which only records, enquiries and the competent authority can bring.
+
+One theme runs through the whole chapter. Most government tenders in India receive only two to five bids. Some well known screens study the *shape* of the bids within one tender, and these need several bids to work at all. With two or three bids they are weak. The strongest screens look at *patterns across many tenders*. Their unit of analysis is the firm or the group of firms, observed over dozens of tenders. These work even when each tender has only two or three bids. They form the backbone of this chapter, and we will say plainly when each screen applies.
+
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `tidyverse`. If it is missing, install it with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("tidyverse"))
+```
+:::
+
+**Prerequisites**
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+```
+
+## How bid rigging works {#sec-bidrig-forms}
+
+Bid rigging takes a few common forms. Real cases often mix two or more of them.
+
+- **Cover bidding.** Some firms put in bids that are meant to lose. They are too high, or carry a deliberate defect. The tender then appears to have several competitors when it really has one.
+- **Bid rotation.** The members of a group take turns to win. Each gets a fair share of the work over a year, and every winning price is comfortable.
+- **Bid suppression.** A firm that would normally bid stays away, or withdraws its bid, so that the chosen firm can win. It may be paid for staying away, or given a subcontract.
+- **Market sharing.** Firms divide the market among themselves, by district, by department or by type of work. Each keeps out of the others' area.
+- **Phantom bidders.** Two or more "competing" bids come from what is really one business, in the names of relatives, employees or shell firms.
+
+In India, the Competition Act, 2002 prohibits bid rigging. Under the Act, an agreement among bidders to rig bids is presumed to harm competition. The OECD has published guidelines for fighting bid rigging in public procurement, with a checklist of warning signs in tender documents and in bidding patterns. Most of the screens in this chapter put those warning signs into a few lines of R.
+
+## Few bids, many tenders {#sec-bidrig-small}
+
+Before we write any code, let us see why the number of bids matters so much.
+
+Suppose a tender gets three bids. One screen asks whether the bids are unusually close together. But three genuine bids can easily fall close together by chance. Three numbers are too few to tell a pattern from luck. With eight bids, a tight cluster of seven losers far above one winner would be striking. With three, it means very little.
+
+Now suppose the same three firms bid together in twenty tenders. In each of them, the losers sit two to five per cent above the winner. The winners take turns. And the same firms bid far lower whenever a stranger turns up. No single tender says much. Twenty tenders together say a great deal. This is why the screens that look *across* tenders are the auditor's main tools.
+
+| Screen | What it looks at | Works with 2 or 3 bids? | Section |
+|----------------------|------------------------------|------------------|----------------|
+| Who takes part | Tenders and firms over time | Yes | @sec-bidrig-participation |
+| Who bids with whom | Pairs and groups of firms, over many tenders | Yes | @sec-bidrig-cobid |
+| Who wins, in what order | A group's wins, over many tenders | Yes | @sec-bidrig-rotation |
+| The cover margin | Gap between winner and runner-up, over many tenders | Yes, even with 2 | @sec-bidrig-margin |
+| Inside and outside the group | A group's bids, with and without outsiders | Yes | @sec-bidrig-inout |
+| Bid to estimate ratio | Districts and groups over time | Yes, even with 1 | @sec-bidrig-ratio |
+| Shape of the bids | The bids within one tender | No, needs 4 or more | @sec-bidrig-shape |
+| Links in the firm register | Pairs of firms | Does not use bids | @sec-bidrig-links |
+| Identical rates in a bill of quantities | Two bids, item by item | Yes, even with 2 | @sec-bidrig-boq |
+
+: The screens of this chapter, and when each applies {#tbl-bidrig-screens}
+
+## Our data, three years of works tenders {#sec-bidrig-data}
+
+We have the tender history of the Public Works Division for 2022-23 to 2024-25. It covers 400 works tenders in five made-up districts, Amarpur, Bhimganj, Chandpur, Devnagar and Eklavyapur. Twenty-five made-up firms, `F01` to `F25`, took part.
+
+Most tenders are **percentage-rate tenders**. The division prepares an estimated cost from its Schedule of Rates. Each bidder quotes one percentage above or below this estimate. A bid of `-8` means 8 per cent below the estimate. Genuine bids usually cluster somewhat below the estimate. Some tenders in Amarpur and Chandpur are **item-rate tenders**. Here each bidder quotes a rate for every item in the bill of quantities, and the bid is the total.
+
+There are three tables.
+
+- `bids` has one row for each bid. It records the tender, the district, the date of opening of the bids, the financial year, the type of tender, the estimated cost in ₹ lakh, the number of bids in the tender, the firm, the percentage quoted, the bid amount in ₹ lakh, the rank of the bid (1 is the lowest) and whether the bid won.
+- `register` is the division's register of contractors. For each firm it has the address, a PAN-like code, the bank account and the names of the directors or partners.
+- `boq` has the item rates quoted by each bidder in the item-rate tenders, with the quantity and the rate in the Schedule of Rates.
+
+As always, the code is folded. Genuine firms bid with realistic noise, so some bids fall close together by chance. Five cases have been planted.
+
+1. A **ring** of three firms in one district. From 2023-24 they rotate the wins among themselves. When they bid together, the losers sit a steady 2 to 5 per cent above the winner, and the winning bid is close to or above the estimate. They seldom face outsiders, and they bid low whenever outsiders are present.
+2. **Bid suppression.** A capable firm that used to bid in the ring's district stops bidding there once the ring forms. It goes on bidding in its other district.
+3. A **newcomer** enters another district partway through the period. Winning prices there then drop clearly. This suggests that the earlier prices were held up by a quieter arrangement among the local firms.
+4. A pair of **phantom bidders**. Two "competing" firms share a bank account and a director.
+5. In three item-rate tenders, two firms quote **identical unusual rates** on several items.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to create the tender data"
+set.seed(2024)
+
+districts <- c("Amarpur", "Bhimganj", "Chandpur", "Devnagar", "Eklavyapur")
+
+# The tenders, with the estimated cost in Rs lakh
+tenders <- tibble(district = rep(districts, c(90, 80, 85, 75, 70))) |>
+  mutate(date = as.Date("2022-04-01") + sample(0:1094, n(), replace = TRUE),
+         estimate_lakh = round(rlnorm(n(), log(35), 0.6), 2)) |>
+  arrange(date) |>
+  mutate(tender_id = sprintf("TN-%03d", row_number()),
+         fy = if_else(month(date) >= 4,
+                      paste0(year(date), "-", year(date) %% 100 + 1),
+                      paste0(year(date) - 1, "-", year(date) %% 100)),
+         .before = 1)
+
+# 35 tenders of Amarpur and Chandpur are item-rate tenders
+item_ids <- tenders |>
+  filter(district %in% c("Amarpur", "Chandpur")) |>
+  slice_sample(n = 35) |>
+  pull(tender_id)
+tenders <- tenders |>
+  mutate(type = if_else(tender_id %in% item_ids, "Item rate", "Percentage rate"),
+         .after = date)
+
+# The firms that usually bid in each district, and how keen each one is
+pools <- list(
+  Amarpur    = c(F01 = 3, F02 = 3, F04 = 2, F05 = 2, F08 = 3, F12 = 2, F24 = 3,
+                 F03 = 0.5, F07 = 0.5, F11 = 0.5),
+  Bhimganj   = c(F03 = 3, F07 = 3, F11 = 3, F15 = 3, F06 = 1.5, F19 = 1.5, F20 = 1),
+  Chandpur   = c(F06 = 2, F09 = 3, F10 = 3, F13 = 2, F14 = 2, F15 = 3, F16 = 2),
+  Devnagar   = c(F13 = 1, F16 = 1.5, F21 = 3, F23 = 3, F25 = 3),
+  Eklavyapur = c(F02 = 1.5, F09 = 1, F12 = 2, F17 = 3, F18 = 3, F20 = 2)
+)
+firms <- sprintf("F%02d", 1:25)
+firm_habit <- setNames(round(rnorm(25, 0, 1.5), 2), firms)
+
+planted_ring  <- c("F03", "F07", "F11")       # Planted 1. The ring of Bhimganj
+ring_start    <- as.Date("2023-04-01")
+newcomer_date <- as.Date("2023-10-01")        # Planted 3. F22 enters Devnagar
+
+# A genuine bid. The market level, the firm's own habit, and noise.
+genuine <- function(f, level = -7) unname(round(level + firm_habit[f] + rnorm(length(f), 0, 3.5), 2))
+pick <- function(pool, k) sample(names(pool), min(k, length(pool)), prob = pool)
+draw_n <- function() sample(1:8, 1, prob = c(0.08, 0.27, 0.30, 0.18, 0.08, 0.05, 0.03, 0.01))
+
+ring_wins <- setNames(rep(0, 3), planted_ring)
+bid_list <- vector("list", nrow(tenders))
+
+for (i in seq_len(nrow(tenders))) {
+  tn <- tenders[i, ]
+  pool <- pools[[tn$district]]
+  if (tn$date >= as.Date("2024-04-01")) pool <- pool[names(pool) != "F14"]  # F14 closes down
+
+  if (tn$district == "Bhimganj" && tn$date >= ring_start) {
+    # Planted 2. F15 no longer bids in Bhimganj once the ring is active
+    pool <- pool[names(pool) != "F15"]
+    # The ring's turn. Usually the member with the fewest wins so far.
+    lowest <- names(ring_wins)[ring_wins == min(ring_wins)]
+    lead <- if (runif(1) < 0.8) lowest[sample.int(length(lowest), 1)] else sample(planted_ring, 1)
+    if (runif(1) < 0.7) {
+      # Only ring firms bid. Winner near or above the estimate, covers 2 to 5% above it.
+      covers <- sample(setdiff(planted_ring, lead), sample(1:2, 1))
+      w <- round(rnorm(1, 2.5, 2), 2)
+      b <- tibble(firm = c(lead, covers),
+                  quoted_pct = c(w, round(w + runif(length(covers), 2, 5), 2)))
+    } else {
+      # Outsiders present. The ring's chosen firm bids to win.
+      covers <- if (runif(1) < 0.5) sample(setdiff(planted_ring, lead), 1) else character(0)
+      outs <- pick(pool[!names(pool) %in% planted_ring], sample(1:2, 1))
+      w <- genuine(lead) - 1
+      b <- tibble(firm = c(lead, covers, outs),
+                  quoted_pct = c(w, round(w + runif(length(covers), 2, 5), 2), genuine(outs)))
+    }
+    top <- b$firm[which.min(b$quoted_pct)]
+    if (top %in% planted_ring) ring_wins[top] <- ring_wins[top] + 1
+  } else if (tn$district == "Devnagar" && tn$date < newcomer_date) {
+    # Planted 3. A quiet arrangement among the local firms before F22 arrives
+    f <- pick(pool, draw_n())
+    if (runif(1) < 0.7) {
+      w <- round(rnorm(1, -1, 1.5), 2)
+      b <- tibble(firm = f, quoted_pct = c(w, round(w + 2.5 + runif(length(f) - 1, 0, 2.5), 2)))
+    } else {
+      b <- tibble(firm = f, quoted_pct = genuine(f, level = -5))
+    }
+  } else if (tn$district == "Devnagar") {
+    f <- pick(c(pool, F22 = 4), draw_n())
+    b <- tibble(firm = f, quoted_pct = genuine(f, level = -8) - 2 * (f == "F22"))
+  } else if (tn$district == "Eklavyapur") {
+    # Planted 4. F17 and F18 are one business. Where one bids, the other usually follows.
+    f <- pick(pool, draw_n())
+    pair <- c("F17", "F18")
+    if (any(pair %in% f) && !all(pair %in% f) && runif(1) < 0.8) f <- union(f, pair)
+    b <- tibble(firm = f, quoted_pct = genuine(f))
+    if (all(pair %in% f)) {
+      first <- sample(pair, 1)
+      p1 <- if (length(f) == 2) round(rnorm(1, -1.5, 1.5), 2) else genuine(first)
+      b$quoted_pct[b$firm == first] <- p1
+      b$quoted_pct[b$firm == setdiff(pair, first)] <- round(p1 + runif(1, 1.5, 3.5), 2)
+    }
+  } else {
+    f <- pick(pool, draw_n())
+    b <- tibble(firm = f, quoted_pct = genuine(f))
+  }
+  bid_list[[i]] <- b |> mutate(tender_id = tn$tender_id, .before = 1)
+}
+bids <- bind_rows(bid_list)
+
+# Planted 5. F08 and F24 both bid in three item-rate tenders of Amarpur
+copy_ids <- tenders |>
+  filter(district == "Amarpur", type == "Item rate") |>
+  slice_sample(n = 3) |>
+  pull(tender_id)
+for (id in copy_ids) {
+  add <- setdiff(c("F08", "F24"), bids$firm[bids$tender_id == id])
+  if (length(add) > 0) {
+    bids <- bind_rows(bids, tibble(tender_id = id, firm = add, quoted_pct = genuine(add)))
+  }
+}
+
+# The bill of quantities of the item-rate tenders
+items <- tibble(item = 1:8,
+                description = c("Earthwork in excavation", "Cement concrete 1:4:8",
+                                "Reinforced cement concrete M25", "Brick masonry",
+                                "Cement plaster 12 mm", "Steel reinforcement",
+                                "Vitrified tile flooring", "Painting with acrylic emulsion"),
+                unit = c("cum", "cum", "cum", "cum", "sqm", "kg", "sqm", "sqm"),
+                sor_rate = c(245.60, 5830.00, 8950.00, 6420.00, 285.40, 92.50, 1120.00, 135.80),
+                base_qty = c(400, 30, 60, 80, 900, 7000, 300, 1200))
+
+boq_qty <- tenders |>
+  filter(type == "Item rate") |>
+  select(tender_id, estimate_lakh) |>
+  cross_join(items) |>
+  mutate(raw = base_qty * runif(n(), 0.5, 1.5)) |>
+  mutate(qty = round(raw * estimate_lakh * 1e5 / sum(raw * sor_rate)), .by = tender_id) |>
+  select(tender_id, item, description, unit, sor_rate, qty)
+
+# Genuine bidders quote their own rates. Some quote the SOR rate itself, some round off.
+boq <- bids |>
+  filter(tender_id %in% boq_qty$tender_id) |>
+  inner_join(boq_qty, by = "tender_id", relationship = "many-to-many") |>
+  mutate(rate = sor_rate * (1 + quoted_pct / 100) * exp(rnorm(n(), 0, 0.05)),
+         style = sample(c("sor", "round", "exact"), n(), replace = TRUE, prob = c(0.12, 0.2, 0.68)),
+         rate = case_when(style == "sor" ~ sor_rate,
+                          style == "round" & sor_rate > 1000 ~ round(rate, -1),
+                          style == "round" ~ round(rate),
+                          .default = round(rate, 2)))
+# Planted 5. F24 copies F08's unusual rates on four items
+for (id in copy_ids) {
+  for (it in c(2, 3, 5, 7)) {
+    r <- round(items$sor_rate[it] * (1 + runif(1, -4, 4) / 100), 2) + 0.03
+    boq$rate[boq$tender_id == id & boq$firm %in% c("F08", "F24") & boq$item == it] <- r
+  }
+}
+boq <- boq |> select(tender_id, firm, item, description, unit, qty, sor_rate, rate)
+
+# In item-rate tenders the estimate is the BOQ at SOR rates, and the bid is the BOQ at quoted rates
+item_totals <- boq |>
+  summarise(est = sum(qty * sor_rate) / 1e5, bid = sum(qty * rate) / 1e5, .by = c(tender_id, firm))
+
+bids <- bids |>
+  left_join(tenders, by = "tender_id") |>
+  left_join(item_totals, by = c("tender_id", "firm")) |>
+  mutate(estimate_lakh = if_else(type == "Item rate", round(est, 2), estimate_lakh),
+         quoted_pct = if_else(type == "Item rate", round((bid / est - 1) * 100, 2), quoted_pct),
+         bid_lakh = round(estimate_lakh * (1 + quoted_pct / 100), 2)) |>
+  mutate(n_bids = n(), rank = rank(bid_lakh, ties.method = "first"), winner = rank == 1,
+         .by = tender_id) |>
+  select(tender_id, district, date, fy, type, estimate_lakh, n_bids, firm,
+         quoted_pct, bid_lakh, rank, winner) |>
+  arrange(date, tender_id, rank)
+
+# The register of contractors
+first_names <- c("Ramesh", "Suresh", "Anita", "Vikram", "Meena", "Prakash", "Kavita", "Sanjay",
+                 "Rekha", "Arun", "Pooja", "Manoj", "Sunita", "Rajesh", "Neha", "Dinesh",
+                 "Asha", "Gopal", "Lata", "Mohan", "Seema", "Harish", "Nisha", "Vinod",
+                 "Usha", "Kiran", "Deepak", "Geeta", "Ajay", "Shobha")
+surnames <- c("Verma", "Yadav", "Mishra", "Patel", "Rao", "Nair", "Singh", "Gupta",
+              "Joshi", "Reddy", "Das", "Kulkarni", "Chauhan", "Iyer", "Saxena")
+people <- unique(paste(sample(first_names, 120, TRUE), sample(surnames, 120, TRUE)))[1:50]
+home <- c("Amarpur", "Amarpur", "Bhimganj", "Amarpur", "Amarpur", "Chandpur", "Bhimganj",
+          "Amarpur", "Chandpur", "Chandpur", "Bhimganj", "Eklavyapur", "Chandpur", "Chandpur",
+          "Chandpur", "Devnagar", "Eklavyapur", "Eklavyapur", "Bhimganj", "Eklavyapur",
+          "Devnagar", "Devnagar", "Devnagar", "Amarpur", "Devnagar")
+streets <- c("Station Road", "Civil Lines", "Gandhi Chowk", "Nehru Marg", "Mandi Road",
+             "College Road", "Ring Road", "Bazar Street", "Court Road", "Canal Road")
+register <- tibble(
+  firm = firms,
+  address = paste0(sample(1:200, 25), ", ", sample(streets, 25, TRUE), ", ", home),
+  pan = paste0(replicate(25, paste(sample(LETTERS, 3, TRUE), collapse = "")), "F",
+               sample(LETTERS, 25, TRUE), sample(1000:9999, 25), sample(LETTERS, 25, TRUE)),
+  bank_account = as.character(sample(30000000000:39999999999, 25)),
+  directors = map_chr(1:25, \(i) paste(people[c(2 * i - 1, 2 * i)], collapse = "; "))
+)
+# Planted 4. F17 and F18 share a bank account and a director
+register$bank_account[register$firm == "F18"] <- register$bank_account[register$firm == "F17"]
+register$directors[register$firm == "F18"] <-
+  paste(str_extract(register$directors[register$firm == "F17"], "^[^;]+"),
+        str_extract(register$directors[register$firm == "F18"], "[^;]+$"), sep = ";")
+# An innocent link. F05 and F09 give the same accountant's office as their address.
+register$address[register$firm == "F09"] <- register$address[register$firm == "F05"]
+
+# Keep only the three tables that the auditor receives
+rm(list = setdiff(ls(), c("bids", "register", "boq")))
+```
+
+Let us look at the three tables.
+
+```{r}
+bids
+register
+boq
+```
+
+```{r}
+#| include: false
+n_tenders <- n_distinct(bids$tender_id)
+n_firms <- n_distinct(bids$firm)
+n_item <- n_distinct(boq$tender_id)
+# helpers for numbers in the text
+f3 <- function(x) format(round(x, 3), nsmall = 3)
+f1 <- function(x) format(round(x, 1), nsmall = 1)
+pct_words <- function(p) {
+  if (p >= 0) paste(f1(p), "per cent above") else paste(f1(-p), "per cent below")
+}
+```
+
+There are `r nrow(bids)` bids in `r n_tenders` tenders, from `r n_firms` firms. `r n_item` tenders are item-rate tenders, and `boq` holds `r nrow(boq)` item rates for them.
+
+## Screen 1, who takes part {#sec-bidrig-participation}
+
+The simplest screens count bids. They need no statistics, and they work however few bids a tender gets.
+
+### Bids per tender
+
+Let us first make a table with one row per tender, and count the tenders by the number of bids they received.
+
+```{r}
+tender_list <- bids |>
+  distinct(tender_id, district, date, fy, type, estimate_lakh, n_bids)
+
+tender_list |>
+  count(n_bids)
+```
+
+```{r}
+#| include: false
+nb <- count(tender_list, n_bids)
+share_2to4 <- sum(nb$n[nb$n_bids %in% 2:4]) / n_tenders
+n_single <- sum(tender_list$n_bids == 1)
+n_5plus <- sum(tender_list$n_bids >= 5)
+```
+
+`r round(100 * share_2to4)`% of the tenders received two to four bids. `r n_single` received a single bid, and `r n_5plus` received five or more. This is a realistic picture for works tenders in a district. It also tells us at once that screens needing many bids per tender can be used on only a small part of the data.
+
+Next, the average number of bids per tender in each district and year.
+
+```{r}
+tender_list |>
+  summarise(mean_bids = round(mean(n_bids), 1), .by = c(district, fy)) |>
+  pivot_wider(names_from = fy, values_from = mean_bids)
+```
+
+```{r}
+#| include: false
+bh_bids <- tender_list |>
+  filter(district == "Bhimganj") |>
+  summarise(m = mean(n_bids), .by = fy)
+```
+
+Bhimganj stands out a little. Its tenders received `r f1(bh_bids$m[bh_bids$fy == "2022-23"])` bids on average in 2022-23, but only `r f1(bh_bids$m[bh_bids$fy == "2024-25"])` in 2024-25. Fewer bids is not proof of anything. Work may have shrunk, or the tenders may have become harder to qualify for. But it is a question to note.
+
+Single-bid tenders deserve a separate list. Many departments either retender such works or record why a single bid was accepted. The auditor should see the reasons on file.
+
+```{r}
+tender_list |>
+  filter(n_bids == 1) |>
+  count(district, fy)
+```
+
+### Firms that stop bidding
+
+A firm that bid often in a district, and then stops bidding there, may simply have moved on. It may have closed down, or found better work elsewhere. But it may also have been persuaded to stay away. That is bid suppression. Let us count each firm's bids in each district and year.
+
+```{r}
+firm_years <- bids |>
+  count(firm, district, fy) |>
+  pivot_wider(names_from = fy, values_from = n, values_fill = 0)
+
+stopped <- firm_years |>
+  filter(`2022-23` >= 5, `2024-25` == 0)
+stopped
+```
+
+Two firms bid at least five times in a district in 2022-23 and not at all there in 2024-25. Are they still in business? Let us count all their bids, in every district, in each year.
+
+```{r}
+bids |>
+  filter(firm %in% stopped$firm) |>
+  count(firm, fy, district) |>
+  pivot_wider(names_from = fy, values_from = n, values_fill = 0)
+```
+
+```{r}
+#| include: false
+f15 <- bids |> filter(firm == "F15")
+f15_bh_22 <- sum(f15$district == "Bhimganj" & f15$fy == "2022-23")
+f15_bh_won <- sum(f15$district == "Bhimganj" & f15$winner)
+f15_ch_25 <- sum(f15$district == "Chandpur" & f15$fy == "2024-25")
+f15_ch_won <- sum(f15$district == "Chandpur" & f15$winner)
+```
+
+The two firms tell different stories. `F14` stopped bidding everywhere after 2023-24. It looks like a firm that closed down or left the area. `F15` is different. It bid `r f15_bh_22` times in Bhimganj in 2022-23 and won `r f15_bh_won` of those tenders. From 2023-24 it never bid in Bhimganj again. Yet it went on bidding in Chandpur, with `r f15_ch_25` bids in 2024-25 alone, and won `r f15_ch_won` Chandpur tenders over the three years. A capable, active firm that suddenly leaves one district is a classic sign of bid suppression. We will come back to Bhimganj.
+
+## Screen 2, who bids with whom {#sec-bidrig-cobid}
+
+Members of a ring must bid together. Cover bids need a winner to cover. So the firms of a ring keep turning up in the same tenders. We looked at this idea with association rules in @sec-apriori-bidders and with networks in @sec-net-bidders. Here we do it with plain `dplyr`.
+
+### A tiny example
+
+Take three tenders.
+
+```{r}
+tiny <- tibble(tender_id = c("T1", "T1", "T1", "T2", "T2", "T3", "T3"),
+               firm      = c("A", "B", "C", "A", "B", "A", "C"))
+tiny
+```
+
+To find the pairs of firms that bid in the same tender, we join the table to itself by `tender_id`. Every firm in a tender is then paired with every firm in the same tender, including itself. We keep each pair once with `firm_a < firm_b`, which drops a firm paired with itself and keeps only one of the two orders.
+
+```{r}
+tiny |>
+  inner_join(tiny, by = "tender_id", suffix = c("_a", "_b"), relationship = "many-to-many") |>
+  filter(firm_a < firm_b) |>
+  count(firm_a, firm_b, name = "together")
+```
+
+A and B met in two tenders, A and C in two, and B and C in one.
+
+### Pairs in the division
+
+Now the same for all the bids.
+
+```{r}
+pairs <- bids |>
+  select(tender_id, firm) |>
+  inner_join(bids |> select(tender_id, firm), by = "tender_id",
+             suffix = c("_a", "_b"), relationship = "many-to-many") |>
+  filter(firm_a < firm_b) |>
+  count(firm_a, firm_b, name = "together", sort = TRUE)
+
+head(pairs, 10)
+```
+
+```{r}
+#| include: false
+top_pair <- pairs[1, ]
+ring_pairs <- pairs |> filter(firm_a %in% c("F03", "F07", "F11"), firm_b %in% c("F03", "F07", "F11"))
+rank_0711 <- which(pairs$firm_a == "F07" & pairs$firm_b == "F11")
+```
+
+The pair that meets most often is `r top_pair$firm_a` and `r top_pair$firm_b`, in `r top_pair$together` tenders. Others follow closely. But look carefully, and this list is not very helpful on its own. In a district where only five or six firms do this kind of work, every pair of local firms meets again and again. Meeting often is normal in a small market. What is not normal is a group that meets often *and seldom meets anyone else*.
+
+### Line-ups that repeat
+
+A sharper question is this. Which exact *line-up* of bidders appears again and again? A line-up is the full set of firms that bid in a tender. In a genuine market, line-ups vary, because firms decide for themselves which tenders to bid for. A ring that controls a district produces the same few line-ups over and over.
+
+```{r}
+lineups <- bids |>
+  filter(n_bids >= 2) |>
+  summarise(lineup = paste(sort(firm), collapse = " "), .by = c(tender_id, district, fy))
+
+lineups |>
+  count(district, lineup, sort = TRUE) |>
+  head(8)
+```
+
+```{r}
+#| include: false
+lu <- lineups |> count(district, lineup, sort = TRUE)
+lu_top <- lu[1, ]
+lu_ring <- lu |> filter(district == "Bhimganj", lineup %in% c("F03 F07 F11", "F03 F07", "F03 F11", "F07 F11"))
+```
+
+The top line-up is `r lu_top$lineup` in `r lu_top$district`, in `r lu_top$n` tenders. Two of its pairs, `F03 F11` and `F03 F07`, follow close behind. Between them, line-ups made only of these three firms account for `r sum(lu_ring$n)` Bhimganj tenders. The second line-up, `F12 F17 F18` in Eklavyapur, also deserves a note. We will meet `F17` and `F18` again.
+
+### Does the group face outsiders?
+
+Let us now study `F03`, `F07` and `F11` as a group. Take every tender in which at least two of them bid. In how many of these did no other firm bid? We count the members and the outsiders in each tender.
+
+```{r}
+ring_group <- c("F03", "F07", "F11")
+
+ring_tenders <- bids |>
+  summarise(members = sum(firm %in% ring_group),
+            outsiders = sum(!firm %in% ring_group),
+            .by = c(tender_id, district, fy)) |>
+  filter(members >= 2)
+
+ring_tenders |>
+  summarise(tenders = n(), only_group = sum(outsiders == 0),
+            share = round(only_group / tenders, 2), .by = c(district, fy))
+```
+
+```{r}
+#| include: false
+rt <- ring_tenders |>
+  filter(district == "Bhimganj") |>
+  summarise(tenders = n(), only = sum(outsiders == 0), .by = fy)
+rt22 <- rt |> filter(fy == "2022-23")
+rt_later <- rt |> filter(fy != "2022-23")
+```
+
+In 2022-23, the three firms met in `r rt22$tenders` Bhimganj tenders, and in `r rt22$only` of them nobody else bid. That is not unusual, because they are three of the most active firms in a small district. From 2023-24 the picture changes. They met in `r sum(rt_later$tenders)` tenders, and in `r sum(rt_later$only)` of them no other firm bid. The group now keeps to itself, and it started doing so in 2023-24. This is the same year in which `F15` left Bhimganj.
+
+For comparison, here is the same count for another busy trio, `F21`, `F23` and `F25` of Devnagar.
+
+```{r}
+bids |>
+  summarise(members = sum(firm %in% c("F21", "F23", "F25")),
+            outsiders = sum(!firm %in% c("F21", "F23", "F25")),
+            .by = tender_id) |>
+  filter(members >= 2) |>
+  summarise(tenders = n(), only_group = sum(outsiders == 0),
+            share = round(only_group / tenders, 2))
+```
+
+These three also meet often, but they usually face other firms as well.
+
+::: callout-warning
+## Caution
+
+Some works can be done by only a few firms in a district. Specialised works, works in remote blocks, or works needing a high class of registration may attract the same two or three firms every time. In such a small market, frequent meetings, repeated line-ups and even steady wins are natural. Before treating a group as suspicious, find out how many registered firms could have bid. Compare the group with other groups in markets of the same size, as we did above.
+:::
+
+## Screen 3, who wins and in what order {#sec-bidrig-rotation}
+
+A ring must share the work, or its members will fall out. So the wins are spread evenly, often in turn. Let us look at the wins of the three firms in Bhimganj from 2023-24.
+
+```{r}
+ring_wins <- bids |>
+  filter(winner, firm %in% ring_group, district == "Bhimganj", fy != "2022-23") |>
+  arrange(date)
+
+ring_wins |>
+  count(firm)
+```
+
+```{r}
+#| include: false
+bh_later <- tender_list |> filter(district == "Bhimganj", fy != "2022-23")
+n_rw <- nrow(ring_wins)
+```
+
+The three firms won `r n_rw` of the `r nrow(bh_later)` Bhimganj tenders in these two years, in almost equal shares. Now the order. Here are the winners, one after another.
+
+```{r}
+ring_wins$firm
+```
+
+Notice how rarely the same firm wins twice in a row. Let us count such repeats.
+
+```{r}
+w <- ring_wins$firm
+repeats <- sum(w[-1] == w[-length(w)])
+repeats
+```
+
+`w[-1]` is the list without its first winner, and `w[-length(w)]` is the list without its last. Comparing them element by element compares each winner with the one before it.
+
+### How likely is this by chance?
+
+Suppose each of the three firms had a one in three chance of winning any tender, whatever happened before. Then each new winner would be the same as the previous one with a chance of one in three. Over `r n_rw - 1` changes of winner, we would expect about `r round((n_rw - 1) / 3, 1)` repeats. We see only `r repeats`. The binomial distribution, which we met in @sec-tests-binom, gives the chance of so few repeats.
+
+```{r}
+pbinom(repeats, size = length(w) - 1, prob = 1 / 3)
+```
+
+The chance is tiny. But this calculation assumes that the three firms are equally strong. A cleaner test makes no such assumption. It is called a **reshuffling test**, or a permutation test. We keep the same winners, and so the same number of wins for each firm, but shuffle their order at random. If the order did not matter, the real sequence would look like a typical shuffle. We shuffle 10,000 times and count the repeats in each.
+
+```{r}
+set.seed(2025)
+shuffled <- replicate(10000, {
+  s <- sample(w)
+  sum(s[-1] == s[-length(s)])
+})
+
+summary(shuffled)
+mean(shuffled <= repeats)
+```
+
+```{r}
+#| include: false
+p_ring <- mean(shuffled <= repeats)
+```
+
+The shuffles gave `r round(mean(shuffled), 1)` repeats on average. Only `r round(100 * p_ring, 2)`% of them had as few repeats as the real sequence. So the wins of these three firms follow an order that chance rarely produces. They look like turns.
+
+Let us run the same test on a group where we expect nothing. In Chandpur, the three firms with the most wins are `F15`, `F13` and `F09`.
+
+```{r}
+cw <- bids |>
+  filter(winner, district == "Chandpur", firm %in% c("F15", "F13", "F09")) |>
+  arrange(date) |>
+  pull(firm)
+
+set.seed(2025)
+cw_repeats <- sum(cw[-1] == cw[-length(cw)])
+cw_shuffled <- replicate(10000, {
+  s <- sample(cw)
+  sum(s[-1] == s[-length(s)])
+})
+c(repeats = cw_repeats, mean_shuffled = round(mean(cw_shuffled), 1),
+  p = mean(cw_shuffled <= cw_repeats))
+```
+
+```{r}
+#| include: false
+p_cw <- mean(cw_shuffled <= cw_repeats)
+```
+
+Here the real sequence has `r cw_repeats` repeats, against `r round(mean(cw_shuffled), 1)` in a typical shuffle. A share of `r round(p_cw, 2)` of the shuffles had as few. Nothing unusual. Genuine competitors win in no particular order.
+
+::: callout-note
+## Why this works with two or three bids
+
+The rotation test never looks inside a tender. It uses only who won. A tender with two bids gives one winner, just as a tender with eight bids does. What the test needs is many *tenders*, not many bids.
+:::
+
+## Screen 4, the cover margin {#sec-bidrig-margin}
+
+A cover bid must lose, but it must not look silly. Ring members often settle on a habit, such as "the covers go 2 to 5 per cent above the winner". In genuine bidding, the gap between the lowest and the second lowest bid varies a lot from tender to tender. It may be a fraction of a per cent or more than ten. A gap that stays the same, tender after tender, between the same firms, is a sign of arrangement.
+
+### A tiny example
+
+In a percentage-rate tender, the margin is simply the difference between the runner-up's quoted percentage and the winner's.
+
+```{r}
+tibble(firm = c("P", "Q", "R"), quoted_pct = c(-6.2, -4.1, 1.3)) |>
+  arrange(quoted_pct) |>
+  mutate(margin = quoted_pct - quoted_pct[1])
+```
+
+Q, the runner-up, sits 2.1 percentage points above the winner. This works even when there are only two bids.
+
+### Margins in the division
+
+We compute the margin of the runner-up in every tender with two or more bids. Then we group the tenders by the *pair* of winner and runner-up, ignoring which of the two won, and look at how steady the margin is for pairs that met at the top at least five times. `pmin()` and `pmax()` put the two firms of a pair in a fixed order.
+
+```{r}
+margins <- bids |>
+  filter(n_bids >= 2) |>
+  arrange(tender_id, rank) |>
+  mutate(winner_firm = first(firm),
+         margin = quoted_pct - first(quoted_pct), .by = tender_id) |>
+  filter(rank == 2) |>
+  mutate(firm_a = pmin(winner_firm, firm), firm_b = pmax(winner_firm, firm))
+
+margin_pairs <- margins |>
+  summarise(tenders = n(),
+            mean_margin = round(mean(margin), 2),
+            sd_margin = round(sd(margin), 2),
+            .by = c(firm_a, firm_b)) |>
+  filter(tenders >= 5) |>
+  arrange(sd_margin)
+
+margin_pairs
+```
+
+```{r}
+#| include: false
+sd_all <- sd(margins$margin)
+mp <- margin_pairs |> mutate(pair = paste(firm_a, firm_b))
+steady <- mp |> filter(sd_margin <= 1.5)
+```
+
+`sd_margin` is the standard deviation of the margin. A small value means a steady margin. Across all tenders, the margin has a standard deviation of `r round(sd_all, 2)` points. The pairs at the top of the table are far steadier than that. The steadiest is `F17` and `F18` of Eklavyapur. The three pairs of the Bhimganj group are all among the top five. These are exactly the firms that the earlier screens pointed to. The remaining pair of the top five, `F21` and `F25`, are Devnagar firms. We will meet Devnagar again in @sec-bidrig-ratio.
+
+Look also at the pairs further down. Some genuine pairs have a fairly small standard deviation too, purely by chance, especially when they met only five or six times. With so few tenders, a standard deviation is itself uncertain. So a steady margin is a strong sign only when the pair met many times, and when other screens point the same way.
+
+@fig-bidrig-margin shows the margins of the Bhimganj group from 2023-24 beside those of all other tenders.
+
+```{r}
+#| label: fig-bidrig-margin
+#| fig-cap: "Margin of the runner-up over the winner. When two firms of the Bhimganj group took the first two places from 2023-24, the margin stayed between 2 and 5 points."
+#| fig-align: center
+#| out-width: "85%"
+margins |>
+  mutate(group = if_else(firm_a %in% ring_group & firm_b %in% ring_group &
+                           fy != "2022-23" & district == "Bhimganj",
+                         "Bhimganj group, 2023-24 onwards", "All other tenders")) |>
+  ggplot(aes(margin, fill = group)) +
+  geom_histogram(binwidth = 0.5, boundary = 0, colour = "white") +
+  facet_wrap(~group, ncol = 1, scales = "free_y") +
+  labs(x = "Margin of runner-up over winner (percentage points)", y = "Tenders") +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+## Screen 5, inside and outside the group {#sec-bidrig-inout}
+
+This screen is one of the most telling. A ring can set its prices only when no outsider is bidding. When an outsider turns up, the ring must bid low or lose the work. So the same firms bid high when they are alone, and low when an outsider is present. Genuine firms have no reason to behave like this. Their costs do not change with the company they keep.
+
+Let us take every bid of the three firms and note whether any outsider bid in the same tender. We also keep apart their bids in other districts.
+
+```{r}
+inside_outside <- bids |>
+  mutate(outsiders = sum(!firm %in% ring_group), .by = tender_id) |>
+  filter(firm %in% ring_group) |>
+  mutate(setting = case_when(district != "Bhimganj" ~ "Other district",
+                             outsiders == 0 ~ "Only group firms",
+                             .default = "Outsiders present"))
+
+inside_outside |>
+  summarise(bids = n(), mean_pct = round(mean(quoted_pct), 1), .by = c(fy, setting)) |>
+  arrange(fy, setting)
+```
+
+```{r}
+#| include: false
+io <- inside_outside |>
+  mutate(period = if_else(fy == "2022-23", "before", "after")) |>
+  summarise(m = mean(quoted_pct), .by = c(period, setting))
+io_in <- io$m[io$period == "after" & io$setting == "Only group firms"]
+io_out <- io$m[io$period == "after" & io$setting == "Outsiders present"]
+io_other <- io$m[io$period == "after" & io$setting == "Other district"]
+io_in_22 <- io$m[io$period == "before" & io$setting == "Only group firms"]
+```
+
+In 2022-23 the three firms bid at about the same level whatever the company, around `r pct_words(io_in_22)` the estimate. From 2023-24, when only group firms bid, they quoted on average `r pct_words(io_in)` the estimate. When an outsider was present, they quoted `r pct_words(io_out)` it. In Amarpur, where they face many outsiders, they quoted `r pct_words(io_other)` it. The same firms, in the same years, were `r f1(io_in - io_out)` percentage points apart depending on who else was bidding. Costs do not explain such a gap. Competition does.
+
+## Screen 6, prices against the estimate {#sec-bidrig-ratio}
+
+The **bid to estimate ratio** is the winning bid divided by the estimated cost. A ratio of 0.92 means the work was let at 8 per cent below the estimate. It works even for single-bid tenders. Let us find the median ratio of winning bids by district and year.
+
+```{r}
+winners <- bids |>
+  filter(winner) |>
+  mutate(ratio = bid_lakh / estimate_lakh)
+
+winners |>
+  summarise(median_ratio = round(median(ratio), 3), .by = c(district, fy)) |>
+  pivot_wider(names_from = fy, values_from = median_ratio)
+```
+
+```{r}
+#| include: false
+wr <- winners |> summarise(r = median(ratio), .by = c(district, fy))
+bh22 <- wr$r[wr$district == "Bhimganj" & wr$fy == "2022-23"]
+bh25 <- wr$r[wr$district == "Bhimganj" & wr$fy == "2024-25"]
+dv22 <- wr$r[wr$district == "Devnagar" & wr$fy == "2022-23"]
+dv25 <- wr$r[wr$district == "Devnagar" & wr$fy == "2024-25"]
+```
+
+Two districts break the pattern. In Bhimganj the ratio rose from `r f3(bh22)` in 2022-23 to `r f3(bh25)` in 2024-25. Works that used to be let below the estimate are now let at or above it. This fits everything we have seen of the group. Devnagar moves the other way. Its ratio was `r f3(dv22)` in 2022-23, well above the other districts, and fell to `r f3(dv25)` by 2024-25.
+
+::: callout-warning
+## Caution, percentage-rate tenders and the Schedule of Rates
+
+In a percentage-rate tender, every bidder starts from the same estimate, built from the same Schedule of Rates. So genuine bids naturally cluster within a few per cent of each other and of the estimate. A narrow spread of bids, or a ratio near 1, means little on its own. The Schedule of Rates may also be out of date. If market rates have risen above it, honest bids will be near or above the estimate everywhere. That is why we compare districts with each other, and each district with its own past, instead of judging a ratio against a fixed rule.
+:::
+
+### A newcomer in Devnagar
+
+What happened in Devnagar? Let us see which firms bid there, and when each first appeared.
+
+```{r}
+bids |>
+  filter(district == "Devnagar") |>
+  summarise(first_bid = min(date), bids = n(), wins = sum(winner), .by = firm) |>
+  arrange(first_bid)
+```
+
+```{r}
+#| include: false
+f22_first <- min(bids$date[bids$firm == "F22"])
+dv_after <- winners |> filter(district == "Devnagar", date >= f22_first)
+f22_wins <- sum(dv_after$firm == "F22")
+```
+
+`F22` is a newcomer. Its first bid in the division was on `r format(f22_first, "%d %B %Y")`. It then won `r f22_wins` of the `r nrow(dv_after)` Devnagar tenders. @fig-bidrig-newcomer plots the ratio of every winning bid in Devnagar over time, with the newcomer's arrival marked.
+
+```{r}
+#| label: fig-bidrig-newcomer
+#| fig-cap: "Winning bid as a share of the estimate in Devnagar. The dashed line marks the first bid of the newcomer F22."
+#| fig-align: center
+#| out-width: "85%"
+winners |>
+  filter(district == "Devnagar") |>
+  ggplot(aes(date, ratio)) +
+  geom_point(aes(colour = firm == "F22")) +
+  geom_vline(xintercept = f22_first, linetype = "dashed") +
+  geom_hline(yintercept = 1, colour = "grey50") +
+  scale_colour_manual(values = c("grey40", "firebrick"), labels = c("Other firms", "F22")) +
+  labs(x = NULL, y = "Winning bid / estimate", colour = "Winner") +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+A simple before and after comparison makes this precise. But prices might have fallen everywhere at that time, for example if material costs fell. So we also compare the other districts over the same two periods, leaving out Bhimganj, which has its own story.
+
+```{r}
+before_after <- winners |>
+  filter(district != "Bhimganj") |>
+  mutate(area = if_else(district == "Devnagar", "Devnagar", "Other districts"),
+         period = if_else(date < f22_first, "1 Before", "2 After"))
+
+before_after |>
+  summarise(tenders = n(), mean_ratio = round(mean(ratio), 3), .by = c(area, period)) |>
+  arrange(area, period)
+```
+
+```{r}
+#| include: false
+ba <- before_after |> summarise(m = mean(ratio), .by = c(area, period))
+dv_b <- ba$m[ba$area == "Devnagar" & ba$period == "1 Before"]
+dv_a <- ba$m[ba$area == "Devnagar" & ba$period == "2 After"]
+ot_b <- ba$m[ba$area == "Other districts" & ba$period == "1 Before"]
+ot_a <- ba$m[ba$area == "Other districts" & ba$period == "2 After"]
+dv_test <- t.test(ratio ~ period, data = before_after |> filter(area == "Devnagar"))
+dv_est <- tender_list |> filter(district == "Devnagar", date < f22_first)
+```
+
+In the other districts the mean ratio hardly moved, from `r f3(ot_b)` to `r f3(ot_a)`. In Devnagar it fell from `r f3(dv_b)` to `r f3(dv_a)`. A t-test, as in @sec-tests-t, puts the p-value of the Devnagar change at `r if (dv_test$p.value < 0.0001) "less than 0.0001" else round(dv_test$p.value, 4)`, far too small to be chance. Before the newcomer arrived, the division paid about `r f1(100 * (dv_b - ot_b))` per cent of the estimate more in Devnagar than elsewhere. On the `r nrow(dv_est)` Devnagar tenders of that period, worth ₹`r round(sum(dv_est$estimate_lakh) / 100, 2)` crore at estimate, that difference comes to about ₹`r round(sum(dv_est$estimate_lakh) * (dv_b - ot_b), 1)` lakh.
+
+What does this mean? When a new firm enters a market and prices drop sharply, the earlier prices may have been held up by an understanding among the local firms. The newcomer, not part of it, simply bid at normal market prices, and the others had to follow. But other explanations are possible. The newcomer may have brought cheaper methods or materials. The local firms may have been short of work and keen to win. The kind of works tendered may have changed. The figure suggests a question. It does not answer it.
+
+## Screen 7, the shape of bids in one tender {#sec-bidrig-shape}
+
+Researchers in competition economics have studied screens that look at the *distribution* of bids within one tender. When genuine firms bid, their bids spread out according to their different costs. When covers are arranged, the losing bids often bunch together, close to each other but well above the winner. Four measures are common.
+
+- **Coefficient of variation (CV).** The standard deviation of the bids divided by their mean. Arranged bids often have a lower CV.
+- **Relative distance (RD).** The gap between the two lowest bids, divided by the standard deviation of the losing bids. A big gap above the winner, with tightly bunched losers, gives a high RD.
+- **Skewness.** Whether the bids lean to one side. A lone low winner below a bunch of losers gives a strong negative skew.
+- **Kurtosis.** Whether the bids are bunched in the middle with a few far away. Bunched covers raise it.
+
+We compute all four by hand. For skewness and kurtosis we first turn each bid into a *standard score*, its distance from the mean in standard deviations. Skewness is the average of the cubes of these scores. Kurtosis is the average of their fourth powers, minus 3, so that a normal distribution gives zero. (We use the simple divisor `n` here. Statistical packages often use slightly adjusted formulas, which give a little different answers for small samples.)
+
+### A tiny example
+
+Here are two made-up tenders with five bids each, in ₹ lakh. In the first the firms compete. In the second, four covers sit bunched above the winner.
+
+```{r}
+example_bids <- tibble(
+  tender = rep(c("Competitive", "Arranged"), each = 5),
+  bid    = c(46.1, 47.9, 49.0, 50.8, 52.6,
+             46.5, 49.4, 49.7, 50.0, 50.2)
+)
+
+example_bids |>
+  arrange(tender, bid) |>
+  summarise(cv   = sd(bid) / mean(bid),
+            rd   = (bid[2] - bid[1]) / sd(bid[-1]),
+            skew = mean(((bid - mean(bid)) / sqrt(mean((bid - mean(bid))^2)))^3),
+            kurt = mean(((bid - mean(bid)) / sqrt(mean((bid - mean(bid))^2)))^4) - 3,
+            .by = tender)
+```
+
+The arranged tender has a lower CV, a much higher RD, a negative skew and a higher kurtosis. With five bids the difference is clear.
+
+### How many bids does each measure need?
+
+Each measure needs a minimum number of bids even to be calculated, and more to be useful. @tbl-bidrig-minbids gives working rules of thumb.
+
+| Measure | Can be calculated from | Useful from about | Why |
+|----------------|------------------|------------------|--------------------------------|
+| CV | 2 bids | 4 bids | With 2 or 3 bids, genuine spreads vary too much by chance |
+| RD | 3 bids | 4 or 5 bids | Needs a standard deviation of the losing bids, so at least 2 losers |
+| Skewness | 3 bids | 5 or more bids | Three numbers barely have a shape |
+| Kurtosis | 4 bids | 6 or more bids | Depends on the extreme bids, which are unstable in small samples |
+
+: Minimum number of bids for the shape screens, as working rules of thumb {#tbl-bidrig-minbids}
+
+### The shape screens on our tenders
+
+Let us compute the four measures for every tender with at least three bids. We sort the bids within each tender, so that `bid_lakh[1]` is the winner and `bid_lakh[2]` the runner-up.
+
+```{r}
+shape <- bids |>
+  filter(n_bids >= 3) |>
+  arrange(tender_id, bid_lakh) |>
+  summarise(n_bids = n(),
+            cv   = sd(bid_lakh) / mean(bid_lakh),
+            rd   = (bid_lakh[2] - bid_lakh[1]) / sd(bid_lakh[-1]),
+            skew = mean(((bid_lakh - mean(bid_lakh)) / sqrt(mean((bid_lakh - mean(bid_lakh))^2)))^3),
+            kurt = mean(((bid_lakh - mean(bid_lakh)) / sqrt(mean((bid_lakh - mean(bid_lakh))^2)))^4) - 3,
+            .by = c(tender_id, district, date, fy))
+
+shape |>
+  mutate(size = if_else(n_bids >= 4, "4 or more bids", "3 bids")) |>
+  summarise(tenders = n(),
+            flagged = sum(cv < 0.03 & rd > 2),
+            .by = size)
+```
+
+```{r}
+#| include: false
+sh <- shape |> mutate(size = if_else(n_bids >= 4, "big", "three"),
+                      flag = cv < 0.03 & rd > 2)
+n_three <- sum(sh$size == "three")
+n_big <- sum(sh$size == "big")
+fl_three <- sum(sh$flag & sh$size == "three")
+fl_big <- sum(sh$flag & sh$size == "big")
+```
+
+We flag a tender when its CV is below 0.03 *and* its RD is above 2. These cut-offs are a judgement, and other studies use others. Among the `r n_big` tenders with four or more bids, `r fl_big` are flagged. Among the `r n_three` tenders with exactly three bids, `r fl_three` are flagged. Where are the flags?
+
+```{r}
+shape |>
+  filter(n_bids >= 4, cv < 0.03, rd > 2) |>
+  count(district, fy)
+```
+
+```{r}
+#| include: false
+big_flags <- sh |> filter(size == "big", flag)
+dv_flags <- sum(big_flags$district == "Devnagar" & big_flags$date < f22_first)
+dv_big <- sum(sh$size == "big" & sh$district == "Devnagar" & sh$date < f22_first)
+```
+
+Among the larger tenders, `r dv_flags` of the `r fl_big` flags are Devnagar tenders from before the newcomer arrived. Only `r dv_big` Devnagar tenders of that period had four or more bids, so the screen caught most of them. The shape screen has found, inside individual tenders, the same quiet arrangement that the newcomer's arrival exposed. The other `r fl_big - dv_flags` flags are mostly ordinary tenders where the bids happened to fall in that shape. That is the price of any screen.
+
+Now the tenders with three bids.
+
+```{r}
+shape |>
+  filter(n_bids == 3) |>
+  mutate(flag = cv < 0.03 & rd > 2,
+         bhimganj_group = district == "Bhimganj" & fy != "2022-23") |>
+  count(bhimganj_group, flag)
+```
+
+```{r}
+#| include: false
+s3 <- sh |> filter(size == "three") |>
+  mutate(bg = district == "Bhimganj" & fy != "2022-23")
+s3_bg_fl <- sum(s3$flag & s3$bg)
+s3_other_fl <- sum(s3$flag & !s3$bg)
+s3_bg <- sum(s3$bg)
+bg_small <- sum(tender_list$district == "Bhimganj" & tender_list$fy != "2022-23" &
+                  tender_list$n_bids < 3)
+```
+
+With three bids, the screen flags `r s3_bg_fl` of the `r s3_bg` three-bid Bhimganj tenders of the group's period. But it also flags `r s3_other_fl` other tenders. So about `r round(100 * s3_other_fl / (s3_other_fl + s3_bg_fl))`% of the flags on three-bid tenders are false alarms. With only two losing bids, their standard deviation is little more than the gap between two numbers, so RD jumps about wildly. And `r bg_small` Bhimganj tenders of the group's period had fewer than three bids, so they cannot be screened at all. The group that the other screens found so clearly is only partly seen here, and buried among false alarms.
+
+This is the honest lesson of the shape screens. They are useful on larger tenders. On the small tenders that make up most of the data, they are unreliable, and a flag or a clean result means little.
+
+## Screen 8, links between bidders {#sec-bidrig-links}
+
+Phantom bidders are found not in the bids but in the registration papers. Two firms that share a bank account, an address, a PAN or a director are not independent competitors, whatever their names say. The register makes this a simple matching problem. We met the general idea in @sec-netaudit, and @sec-linkage shows how to match records when the details are spelt differently.
+
+First we put the register in long form, with one row for each firm and each detail. A firm with two directors gets two rows for directors. `separate_longer_delim()` splits the directors column at each `"; "`.
+
+```{r}
+register_long <- register |>
+  separate_longer_delim(directors, "; ") |>
+  mutate(directors = str_squish(directors)) |>
+  pivot_longer(-firm, names_to = "detail", values_to = "value") |>
+  distinct()
+
+register_long |>
+  filter(firm == "F17")
+```
+
+Now a self-join on the detail and its value finds every pair of firms that share something.
+
+```{r}
+links <- register_long |>
+  inner_join(register_long, by = c("detail", "value"),
+             suffix = c("_a", "_b"), relationship = "many-to-many") |>
+  filter(firm_a < firm_b) |>
+  select(firm_a, firm_b, detail, value)
+
+links
+```
+
+Three links appear. `F17` and `F18` share a bank account *and* a director. `F05` and `F09` share an address. A link is only a lead. Let us see whether the linked firms bid against each other.
+
+```{r}
+links |>
+  distinct(firm_a, firm_b) |>
+  left_join(pairs, by = c("firm_a", "firm_b"))
+```
+
+```{r}
+#| include: false
+lk <- links |> distinct(firm_a, firm_b) |> left_join(pairs, by = c("firm_a", "firm_b"))
+t1718 <- lk$together[lk$firm_a == "F17"]
+t0509 <- coalesce(lk$together[lk$firm_a == "F05"], 0L)
+```
+
+`F17` and `F18` bid in the same tender `r t1718` times. Two firms paid through one bank account, with a common director, submitted "competing" bids in `r t1718` tenders. `F05` and `F09` `r if (t0509 == 0) "never bid in the same tender" else paste("met only", t0509, "times")`. They work mostly in different districts. Their shared address may be an accountant's office or a shared building, which is common among small firms. Such a link needs a quick check, but it is a much weaker lead.
+
+::: callout-tip
+## Audit tip
+
+The division's own register is a start. The e-procurement portal holds more. Bidders upload their registration certificates, partnership deeds, GST registrations and earnest money details. Two bids paid for from the same bank account, or uploaded from the same computer within minutes of each other, are strong leads. Names of partners and directors may be spelt differently in different documents, so use the fuzzy matching of @sec-linkage. For a picture of how many firms are linked to each other, see the network methods of @sec-netaudit.
+:::
+
+## Screen 9, identical rates in a bill of quantities {#sec-bidrig-boq}
+
+In an item-rate tender, each bidder quotes a rate for each item. Two independent bidders will often quote the same *round* rate, or the rate in the Schedule of Rates itself. But they will very rarely quote the same unusual rate, like ₹6,071.23 for a cubic metre of concrete, on several items. When that happens, the two bids were probably prepared by the same hand. No statistics is needed.
+
+Let us leave out rates equal to the SOR rate, and join the BOQ to itself on tender, item and rate.
+
+```{r}
+same_rates <- boq |>
+  filter(rate != sor_rate) |>
+  inner_join(boq |> select(tender_id, firm, item, rate),
+             by = c("tender_id", "item", "rate"),
+             suffix = c("_a", "_b"), relationship = "many-to-many") |>
+  filter(firm_a < firm_b) |>
+  count(tender_id, firm_a, firm_b, name = "identical_items", sort = TRUE)
+
+same_rates
+```
+
+```{r}
+#| include: false
+sr_big <- same_rates |> filter(identical_items >= 3)
+sr_small <- same_rates |> filter(identical_items < 3)
+```
+
+In `r nrow(sr_big)` tenders, `F08` and `F24` quoted identical rates on `r paste(unique(sr_big$identical_items), collapse = " or ")` items. `r if (nrow(sr_small) > 0) paste0("There ", if (nrow(sr_small) == 1) "is also one tender" else paste("are also", nrow(sr_small), "tenders"), " where two firms share a single identical rate. That is easily chance, since many bidders round their rates.") else ""` Let us see the identical rates of the first tender.
+
+We show the rates with two decimals, using `sprintf()`, so that the paise can be seen.
+
+```{r}
+boq |>
+  filter(tender_id == sr_big$tender_id[1], firm %in% c("F08", "F24")) |>
+  select(firm, item, description, sor_rate, rate) |>
+  pivot_wider(names_from = firm, values_from = rate) |>
+  mutate(unusual_match = F08 == F24 & F08 != sor_rate,
+         across(c(sor_rate, F08, F24), \(x) sprintf("%.2f", x)))
+```
+
+The two bids differ on some items. Where both quote the SOR rate itself, the match means nothing, since many bidders do that. But on `r sr_big$identical_items[1]` items they agree, to the paisa, on rates that are neither the SOR rate nor a round figure. It is very hard to explain this without contact between the two bidders.
+
+## Putting the screens together {#sec-bidrig-scorecard}
+
+No single screen is enough. Each has its own false alarms, and each misses some cases. The auditor's job is to see where several screens point the same way. A simple, transparent way is a **scorecard**. We list candidate groups, apply each screen to each group, and add up the flags.
+
+The candidate groups come from the earlier screens. They are the Bhimganj trio from the line-ups, `F17` and `F18` from the register, `F08` and `F24` from the BOQ, and a few busy groups that we have no reason to suspect, for comparison.
+
+```{r}
+candidates <- list(c("F03", "F07", "F11"), c("F17", "F18"), c("F08", "F24"),
+                   c("F21", "F23", "F25"), c("F13", "F16"), c("F02", "F12"))
+```
+
+The function below applies six screens to one group, using the tenders in which at least two members bid. A function like this is written once and used for every group, as we learnt in @sec-func.
+
+```{r}
+group_screens <- function(group_firms) {
+  joint <- bids |>
+    mutate(members = sum(firm %in% group_firms), outsiders = sum(!firm %in% group_firms),
+           .by = tender_id) |>
+    filter(members >= 2)
+  per_tender <- joint |> distinct(tender_id, outsiders)
+  top_two <- joint |>
+    filter(rank <= 2) |>
+    summarise(both = all(firm %in% group_firms), margin = max(quoted_pct) - min(quoted_pct),
+              .by = tender_id) |>
+    filter(both)
+  own <- joint |> filter(firm %in% group_firms)
+
+  tibble(group           = paste(group_firms, collapse = " "),
+         joint_tenders   = nrow(per_tender),
+         closed_share    = round(mean(per_tender$outsiders == 0), 2),
+         margin_sd       = if (nrow(top_two) >= 5) round(sd(top_two$margin), 2) else NA,
+         inside_gap      = round(mean(own$quoted_pct[own$outsiders == 0]) -
+                                   mean(own$quoted_pct[own$outsiders > 0]), 1),
+         win_ratio       = round(median(own$bid_lakh[own$winner] / own$estimate_lakh[own$winner]), 3),
+         register_link   = any(links$firm_a %in% group_firms & links$firm_b %in% group_firms),
+         identical_rates = any(same_rates$identical_items >= 3 &
+                                 same_rates$firm_a %in% group_firms & same_rates$firm_b %in% group_firms))
+}
+```
+
+The six screens are these.
+
+- `closed_share` is the share of joint tenders with no outsider at all (Screen 2).
+- `margin_sd` is the standard deviation of the margin when two members took the first two places, if this happened at least five times (Screen 4).
+- `inside_gap` is how much higher the members quoted when alone than when outsiders were present (Screen 5).
+- `win_ratio` is the median ratio of a member's winning bid to the estimate in joint tenders (Screen 6).
+- `register_link` and `identical_rates` come from Screens 8 and 9.
+
+Now we apply it to every candidate, and turn each screen into a flag. `map()`, from @sec-fp, applies the function to each group, and `list_rbind()` stacks the results.
+
+```{r}
+scorecard <- map(candidates, group_screens) |>
+  list_rbind() |>
+  mutate(f_closed = closed_share >= 0.5,
+         f_margin = coalesce(margin_sd <= 1.5, FALSE),
+         f_gap    = coalesce(inside_gap >= 3, FALSE),
+         f_price  = win_ratio >= 0.97,
+         score    = f_closed + f_margin + f_gap + f_price + register_link + identical_rates) |>
+  arrange(desc(score))
+
+scorecard |>
+  select(group, joint_tenders, closed_share, margin_sd, inside_gap, win_ratio,
+         register_link, identical_rates, score) |>
+  print(width = Inf)
+```
+
+```{r}
+#| include: false
+sc <- scorecard |> mutate(r = row_number())
+sc_ring <- sc |> filter(group == "F03 F07 F11")
+sc_ph <- sc |> filter(group == "F17 F18")
+sc_boq <- sc |> filter(group == "F08 F24")
+sc_ctrl_max <- max(sc$score[!sc$group %in% c("F03 F07 F11", "F17 F18", "F08 F24")])
+```
+
+The Bhimganj group scores `r sc_ring$score` out of 6. `F17` and `F18` score `r sc_ph$score`, and `F08` and `F24` score `r sc_boq$score`. None of the comparison groups scores more than `r sc_ctrl_max`. Each planted group is caught, and by different screens. The Bhimganj group is caught by its behaviour in the bids, `F17` and `F18` by the register as well as their bids, and `F08` and `F24` by their BOQ alone. A scorecard that used only one kind of screen would have missed at least one of them.
+
+Here every flag has a weight of one. That is a choice, not a fact. An audit team may decide that a shared bank account weighs more than a steady margin, or that the inside and outside gap is the strongest sign of all. Any such weights must be decided and written down *before* the scores are seen, with the reasons, so that nobody can say the weights were chosen to reach a result.
+
+::: callout-note
+## Screens rank. They do not prove.
+
+A score tells the auditor where to look first. It is not evidence of an agreement. Genuine firms can trip several screens by chance, especially in small markets, and a skilled ring can avoid many of them. Treat a high score as a reason to examine records, never as a finding in itself.
+:::
+
+## Audit use case, a ring in one district {#sec-bidrig-ring}
+
+Let us pull together what the screens say about Bhimganj from 2023-24, and put a rough figure on it.
+
+```{r}
+bh <- winners |>
+  filter(district == "Bhimganj", fy != "2022-23") |>
+  mutate(by_group = firm %in% ring_group)
+
+others_ratio <- winners |>
+  filter(!district %in% c("Bhimganj", "Devnagar"), fy != "2022-23") |>
+  summarise(median(ratio)) |>
+  pull()
+
+bh |>
+  summarise(tenders = n(),
+            value_lakh = round(sum(bid_lakh), 1),
+            median_ratio = round(median(ratio), 3),
+            excess_lakh = round(sum(bid_lakh - estimate_lakh * others_ratio), 1),
+            .by = by_group)
+```
+
+```{r}
+#| include: false
+bh_g <- bh |> filter(by_group)
+bh_val <- sum(bh_g$bid_lakh)
+bh_excess <- sum(bh_g$bid_lakh - bh_g$estimate_lakh * others_ratio)
+```
+
+From 2023-24, the group won `r nrow(bh_g)` Bhimganj tenders worth ₹`r round(bh_val / 100, 2)` crore. Their median winning bid was `r f3(median(bh_g$ratio))` times the estimate. In Amarpur, Chandpur and Eklavyapur in the same two years, the median was `r f3(others_ratio)`. Had the group's works been let at that ratio, they would have cost about ₹`r round(bh_excess, 1)` lakh less. This is an indication of the possible loss, not a measure of it. Bhimganj may have harder sites or higher costs than the other districts.
+
+The evidence from the screens, in one place, is this.
+
+- **Participation.** Bids per tender fell, and `F15`, a capable firm, stopped bidding in Bhimganj from 2023-24 while it went on bidding and winning in Chandpur.
+- **Who bids with whom.** In `r sum(rt_later$only)` of the `r sum(rt_later$tenders)` tenders in which two or more of the three firms bid from 2023-24, nobody else bid.
+- **Rotation.** The three firms won `r n_rw` tenders in almost equal shares, and the same firm won twice in a row only `r repeats` times. Reshuffling shows such an order arises by chance in `r round(100 * p_ring, 2)`% of cases.
+- **Cover margin.** When two of them took the first two places, the margin stayed between 2 and 5 points.
+- **Inside and outside.** They quoted `r pct_words(io_in)` the estimate when alone, and `r pct_words(io_out)` it when an outsider bid.
+- **Price.** Bhimganj's median winning ratio rose from `r f3(bh22)` to `r f3(bh25)`.
+
+### What the auditor does next
+
+1. **Get the full tender records** of the group's tenders. These include the bid opening summaries, comparative statements, tender notices and the list of firms that downloaded or bought the tender documents. A firm that downloaded the tender and did not bid may have been told to stay away.
+2. **Trace the earnest money deposits.** Find which bank account each bid's earnest money came from. Covers paid for by the winner, or by a common account, are strong evidence of contact.
+3. **Read the e-procurement logs.** Look at the times at which bids were uploaded, and the IP addresses where the portal records them. Bids of "competitors" uploaded from one place within minutes of each other need an explanation.
+4. **Compare the bid documents.** Look for the same typing mistakes, the same layout, the same file properties or the same person signing as witness.
+5. **Ask `F15`, through the division, why it stopped bidding in Bhimganj**, if the audit's mandate and the department's procedures allow it. Check whether it received subcontracts from the group.
+6. **Refer the matter.** Collusion among bidders is for the competent authority to establish. The audit report should recommend that the department examine the matter and, where it sees fit, refer it to the competition authority.
+
+### Wording the observation
+
+The observation should state facts and patterns, and leave the conclusion of collusion to the authority that can establish it. It might read as follows.
+
+> During 2023-24 and 2024-25, `r nrow(bh_g)` of the `r nrow(bh)` works tenders of Bhimganj district, worth ₹`r round(bh_val / 100, 2)` crore, were awarded to three firms. In `r sum(rt_later$only)` of the `r sum(rt_later$tenders)` tenders in which two or more of these firms bid, no other firm participated. In these tenders, the losing bids were consistently 2 to 5 per cent above the winning bid, and the firms won in turn. The same firms quoted on average `r pct_words(io_in)` the estimated cost when no other firm bid, and `r pct_words(io_out)` it when another firm participated. A firm that had won `r f15_bh_won` tenders in the district in 2022-23 did not bid there after March 2023. The median accepted bid in the district moved from `r pct_words(100 * (bh22 - 1))` the estimated cost in 2022-23 to `r pct_words(100 * (bh25 - 1))` it in 2024-25. These patterns are consistent with an absence of effective competition in the district. The Division may examine the matter and consider referring it to the appropriate authority.
+
+Notice what the wording does. It does not say the firms colluded. It says what the data shows, and that the patterns are *consistent with* a lack of competition. It also names no firm in the text. The names go in an annexure, for the department's action.
+
+## Audit use case, phantom bidders {#sec-bidrig-phantom}
+
+`F17` and `F18` share a bank account and a director. Let us look at how they bid.
+
+```{r}
+phantom <- bids |>
+  filter(district == "Eklavyapur") |>
+  mutate(pair_bids = sum(firm %in% c("F17", "F18")),
+         others = sum(!firm %in% c("F17", "F18")), .by = tender_id) |>
+  filter(pair_bids == 2)
+
+phantom |>
+  mutate(setting = if_else(others == 0, "Only F17 and F18", "Other firms present")) |>
+  summarise(tenders = n_distinct(tender_id),
+            mean_pct_of_pair = round(mean(quoted_pct[firm %in% c("F17", "F18")]), 1),
+            pair_won = sum(winner & firm %in% c("F17", "F18")),
+            .by = setting)
+```
+
+```{r}
+#| include: false
+ph <- phantom |>
+  mutate(setting = if_else(others == 0, "alone", "open")) |>
+  summarise(t = n_distinct(tender_id),
+            m = mean(quoted_pct[firm %in% c("F17", "F18")]),
+            won = sum(winner & firm %in% c("F17", "F18")),
+            .by = setting)
+ph_alone <- ph |> filter(setting == "alone")
+ph_open <- ph |> filter(setting == "open")
+ph_alone_val <- phantom |> filter(others == 0, winner) |> pull(bid_lakh) |> sum()
+```
+
+The two firms bid together in `r ph_alone$t + ph_open$t` Eklavyapur tenders. In `r ph_alone$t` of these, nobody else bid. Those tenders looked competitive on paper, with two bids, but really had one bidder. There the pair quoted on average `r pct_words(ph_alone$m)` the estimate, against `r pct_words(ph_open$m)` it when other firms were present. The pair won all `r ph_alone$won` of the tenders where they were alone, worth ₹`r round(ph_alone_val / 100, 2)` crore.
+
+In the other `r ph_open$t` tenders, a second bid from the same business does not change the price much, but it is still a false picture of competition. It may also be used to meet a rule on the minimum number of bids, or to block a genuine bidder by bidding just above it as a back-up.
+
+### What the auditor does next
+
+1. **Verify the link.** Obtain the registration documents of both firms. Confirm the common bank account and director from the original papers, not only from the register.
+2. **Check the earnest money and performance security.** See whether both were paid from the same account.
+3. **Check the tender conditions and the declarations.** Many tender documents require bidders to declare that they are not related to other bidders. A false declaration is a matter for the department to act on under the tender conditions.
+4. **Count the competition that was lost.** For each tender where the pair bid alone, note that there was in effect a single bid. Ask whether such tenders would have been retendered had this been known.
+5. **Report carefully.** State that the two firms share a bank account and a director and bid against each other in so many tenders. Recommend that the department examine the declarations, and take action under the tender conditions where they were false.
+
+::: callout-tip
+## Audit tip, getting the data
+
+Most of the data in this chapter can be had from the e-procurement portal used by the department. Ask for these.
+
+- **Bid opening summaries** and comparative statements of every tender, with all bidders and their quoted amounts or percentages, not just the winner.
+- **The list of bidders** who downloaded or bought the tender documents, so that firms which looked and did not bid can be seen.
+- **BOQ rates** of every bidder in item-rate tenders, as quoted, not as summarised.
+- **Earnest money details**, with the bank and account from which each was paid.
+- **Upload times** and, where recorded, the IP addresses of each bid submission.
+- **The contractor register**, with addresses, PAN, bank accounts and partners or directors.
+
+Bid opening dates are also needed for the tests on how long tenders stayed open, in @sec-web-days.
+:::
+
+## A suggested workflow
+
+1. **Collect the full bid data**, with every bidder of every tender, the estimate, and the contractor register.
+2. **Count participation.** Bids per tender, single-bid tenders, and firms that stop bidding in a district while they stay active elsewhere.
+3. **Find who bids with whom.** Count pairs, then repeated line-ups, then the share of a group's tenders with no outsider.
+4. **Test the order of wins** of each suspect group, with a reshuffling test and a fixed seed.
+5. **Measure the cover margin** and its steadiness for pairs that often take the first two places.
+6. **Compare bids inside and outside the group.**
+7. **Track the bid to estimate ratio** by district and year, and look for sudden changes, such as after a newcomer arrives.
+8. **Run the shape screens only on tenders with four or more bids**, and do not read much into them on smaller tenders.
+9. **Match the register** for shared bank accounts, addresses, PAN and directors, and **compare BOQ rates** in item-rate tenders.
+10. **Combine the screens in a scorecard**, with weights decided in advance, and examine the records of the highest-scoring groups.
+
+::: callout-important
+## Remember
+
+- Most tenders get only two to five bids. Screens that look across many tenders work with such small numbers. Screens that study the shape of bids in one tender do not.
+- The unit of analysis that matters is the firm or the group of firms, over many tenders.
+- Meeting often is normal in a small market. Meeting often and seldom meeting anyone else is not.
+- A group that bids high when alone and low when outsiders appear is behaving like a ring.
+- Every screen has false alarms. Look for several screens pointing the same way.
+- Screens rank tenders and firms for examination. They never prove collusion. Word the observation as patterns and facts, and leave the conclusion to the competent authority.
+:::
+
+## Where next
+
+This chapter closes the part on forensic tests. The idea of firms that keep bidding together was first met in @sec-apriori-bidders, with association rules, and in @sec-net-bidders, as a network. Links between firms through common owners and addresses are taken further in @sec-netaudit and @sec-graph-tenders, and matching names that are spelt differently is the subject of @sec-linkage. Whether the tenders stayed open long enough is checked in @sec-web-days. The tests of significance used here are explained in @sec-tests, and other ways to find unusual records are in @sec-anomaly.
+
+## Try it yourself {#sec-bidrig-exercises}
+
+These exercises use the table `bids`, and the objects `tender_list`, `stopped`, `winners` and `group_screens()` of this chapter. Try each one before you open the solution.
+
+1.  **Firms that bid much less.** List the firms that bid at least three times in a district in 2022-23, and fewer than half as many times there in 2024-25. Then count the tenders of each such district in the two years.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_less <- bids |>
+      count(firm, district, fy) |>
+      pivot_wider(names_from = fy, values_from = n, values_fill = 0) |>
+      filter(`2022-23` >= 3, `2024-25` < `2022-23` / 2)
+    ex_less
+
+    ex_work <- tender_list |>
+      filter(district %in% ex_less$district, fy %in% c("2022-23", "2024-25")) |>
+      count(district, fy) |>
+      pivot_wider(names_from = fy, values_from = n)
+    ex_work
+    ```
+    `r nrow(ex_less)` firm and district combinations appear, against `r nrow(stopped)` in the chapter. Chandpur had `r ex_work[["2022-23"]][ex_work$district == "Chandpur"]` tenders in 2022-23 but only `r ex_work[["2024-25"]][ex_work$district == "Chandpur"]` in 2024-25. So part of the fall there is simply less work. Bhimganj had `r ex_work[["2022-23"]][ex_work$district == "Bhimganj"]` and `r ex_work[["2024-25"]][ex_work$district == "Bhimganj"]` tenders, almost the same. Yet `F20`, an outsider to the group, also bid far less there. This fits the picture of a district closed to outsiders. A fall in a firm's bids means something only when the work available did not fall too.
+    :::
+
+2.  **All the losing bids.** Screen 4 used only the runner-up. For the Bhimganj group's tenders from 2023-24 in which only group firms bid, find how far *every* losing bid sits above the winner. What share of these gaps lie between 2 and 5 points? Compare with all other tenders that have two or more bids.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_gaps <- bids |>
+      filter(n_bids >= 2) |>
+      mutate(gap = quoted_pct - min(quoted_pct),
+             closed_group = all(firm %in% c("F03", "F07", "F11")) & district == "Bhimganj" &
+               fy != "2022-23",
+             .by = tender_id) |>
+      filter(rank > 1) |>
+      summarise(losing_bids = n(), share_2_to_5 = round(mean(gap >= 2 & gap <= 5), 2),
+                .by = closed_group)
+    ex_gaps
+    ```
+    In the group's closed tenders, `r round(100 * ex_gaps$share_2_to_5[ex_gaps$closed_group])`% of all losing bids lie between 2 and 5 points above the winner. In other tenders the share is `r round(100 * ex_gaps$share_2_to_5[!ex_gaps$closed_group])`%. Genuine losing bids spread widely. The group's covers sit in a narrow band.
+    :::
+
+3.  **Did the old firms follow the newcomer?** In Devnagar, leave out the tenders won by `F22`. Compare the mean ratio of the other winning bids before and after `F22`'s first bid.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_f22_first <- min(bids$date[bids$firm == "F22"])
+    ex_dev <- winners |>
+      filter(district == "Devnagar", firm != "F22") |>
+      mutate(period = if_else(date < ex_f22_first, "1 Before", "2 After")) |>
+      summarise(tenders = n(), mean_ratio = round(mean(ratio), 3), .by = period)
+    ex_dev
+    ```
+    Even without the newcomer's own wins, the mean ratio fell from `r format(ex_dev$mean_ratio[ex_dev$period == "1 Before"], nsmall = 3)` to `r format(ex_dev$mean_ratio[ex_dev$period == "2 After"], nsmall = 3)`. The local firms themselves bid lower once the newcomer was in the market. This supports the reading that the earlier prices were held up, though it still does not prove it.
+    :::
+
+4.  **Is the pair from Eklavyapur rotating?** Run the reshuffling test of @sec-bidrig-rotation on the wins of `F17` and `F18` in the tenders where both of them bid. With two firms, a repeat has a chance of about one half.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_w <- bids |>
+      filter(sum(firm %in% c("F17", "F18")) == 2, .by = tender_id) |>
+      filter(winner, firm %in% c("F17", "F18")) |>
+      arrange(date) |>
+      pull(firm)
+    ex_rep <- sum(ex_w[-1] == ex_w[-length(ex_w)])
+    set.seed(2025)
+    ex_shuf <- replicate(10000, {
+      s <- sample(ex_w)
+      sum(s[-1] == s[-length(s)])
+    })
+    c(wins = length(ex_w), repeats = ex_rep, mean_shuffled = round(mean(ex_shuf), 1),
+      p = mean(ex_shuf <= ex_rep))
+    ```
+    The pair won `r length(ex_w)` of these tenders, with `r ex_rep` repeats against `r round(mean(ex_shuf), 1)` in a typical shuffle. The share of shuffles with as few repeats is `r round(mean(ex_shuf <= ex_rep), 2)`, so there is no sign of turns. That is not surprising. A phantom pair is one business, and has no need to share the work between its two names. Different schemes leave different traces, which is why we use many screens.
+    :::
+
+5.  **Different weights.** The audit team decides that a register link and identical BOQ rates should each count as 2, because they point directly to contact between bidders. Recompute the scores with these weights, and see whether the order of the groups changes.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_scores <- map(list(c("F03", "F07", "F11"), c("F17", "F18"), c("F08", "F24"),
+                          c("F21", "F23", "F25"), c("F13", "F16"), c("F02", "F12")),
+                     group_screens) |>
+      list_rbind() |>
+      mutate(score = (closed_share >= 0.5) + coalesce(margin_sd <= 1.5, FALSE) +
+               coalesce(inside_gap >= 3, FALSE) + (win_ratio >= 0.97) +
+               2 * register_link + 2 * identical_rates) |>
+      arrange(desc(score)) |>
+      select(group, score)
+    ex_scores
+    ```
+    With the new weights, the Bhimganj group scores `r ex_scores$score[ex_scores$group == "F03 F07 F11"]`, `F17` and `F18` score `r ex_scores$score[ex_scores$group == "F17 F18"]`, and `F08` and `F24` score `r ex_scores$score[ex_scores$group == "F08 F24"]`. No comparison group scores more than `r max(ex_scores$score[!ex_scores$group %in% c("F03 F07 F11", "F17 F18", "F08 F24")])`. The phantom pair has caught up with the ring. The weights changed how the suspects compare with each other, which is why they must be fixed and justified before the scores are seen.
+    :::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `count()`, `summarise(.by = )` | dplyr | Counts bids, wins and tenders by firm, district and year |
+| `pivot_wider()`, `pivot_longer()` | tidyr | Turns year counts into columns, and the register into one row per detail |
+| `inner_join(relationship = "many-to-many")` | dplyr | Joins a table to itself to find pairs of firms in the same tender, the same register detail or the same BOQ rate |
+| `separate_longer_delim()` | tidyr | Splits the list of directors into one row each |
+| `paste(sort(), collapse = )` | base R | Builds the line-up of bidders in a tender |
+| `pmin()`, `pmax()` | base R | Puts the two firms of a pair in a fixed order |
+| `sample()`, `replicate()` | base R | Shuffles the order of wins many times, for the reshuffling test |
+| `pbinom()` | stats | Chance of so few repeats under the binomial distribution |
+| `sd()`, `mean()`, `median()` | stats, base R | Margin steadiness, CV, RD, skewness and kurtosis by hand |
+| `t.test()` | stats | Compares the mean ratio before and after the newcomer |
+| `map()`, `list_rbind()` | purrr | Applies the screens to every candidate group and stacks the results |
+| `geom_histogram()`, `geom_point()`, `geom_vline()` | ggplot2 | Plots the cover margins and the Devnagar ratios over time |
+
+: Functions used in this chapter {#tbl-bidrigfunctions}
