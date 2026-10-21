@@ -64,6 +64,7 @@ Now suppose the same three firms bid together in twenty tenders. In each of them
 | Shape of the bids | The bids within one tender | No, needs 4 or more | The next chapter, @sec-bidshape |
 | Links in the firm register | Pairs of firms | Does not use bids | @sec-bidrig-links |
 | Identical rates in a bill of quantities | Two bids, item by item | Yes, even with 2 | @sec-bidrig-boq |
+| Firms that always lose | A firm's losses, over many tenders | Yes | @sec-bidrig-losers |
 
 : The screens for bid rigging, and when each applies {#tbl-bidrig-screens}
 
@@ -908,6 +909,139 @@ boq |>
 
 The two bids differ on some items. Where both quote the SOR rate itself, the match means nothing, since many bidders do that. But on `r sr_big$identical_items[1]` items they agree, to the paisa, on rates that are neither the SOR rate nor a round figure. It is very hard to explain this without contact between the two bidders.
 
+## Screen 9, firms that always lose {#sec-bidrig-losers}
+
+In cover bidding, someone has to submit the losing bids. So a ring often includes firms whose job is to lose. They bid, they lose, and they make the tender look competitive. The OECD checklist for detecting bid rigging lists a firm that bids but never wins as a warning sign.
+
+There is an Indian twist too. Many departments retender a work, or must record their reasons, when fewer than three bids arrive. A ring that supplies "losers" keeps each tender at the minimum, and the file then shows a competitive tender.
+
+But most firms that lose often are not covers. There are innocent reasons for losing.
+
+- The firm is genuinely high cost, or based far from the site.
+- It is a new or small firm, still learning to price its bids.
+- It bids now and then only to keep its enlistment alive.
+- It is bidding outside its usual area, where it has no local suppliers.
+
+So a low win count is only the start. The question is *how* the firm loses.
+
+### Firms with many bids and few wins
+
+```{r}
+#| include: false
+avg_win <- n_tenders / nrow(bids)
+```
+
+On average a tender here has about three bids, so a typical firm wins about one bid in `r round(1 / avg_win)` (`r round(100 * avg_win)`% of all bids won). We look for firms with at least 30 bids that won fewer than one in four. Why 30? With ten bids, two wins could easily be bad luck. With 30 bids, a typical firm would expect around `r round(30 * avg_win)` wins, so a much lower count is worth a look.
+
+```{r}
+firm_record <- bids |>
+  summarise(bids = n(), wins = sum(winner), .by = firm) |>
+  mutate(win_share = round(wins / bids, 2))
+
+always_lose <- firm_record |>
+  filter(bids >= 30, win_share < 0.25) |>
+  arrange(win_share)
+always_lose
+```
+
+`r nrow(always_lose)` firms pass. None of them *never* wins, which is normal for real data too. Now let us see how each one loses. We take every losing bid of these firms, and add the winner of that tender and how far above the winner the bid was.
+
+```{r}
+loser_bids <- bids |>
+  filter(firm %in% always_lose$firm, !winner) |>
+  left_join(bids |>
+              filter(winner) |>
+              select(tender_id, beaten_by = firm, win_pct = quoted_pct),
+            by = "tender_id") |>
+  mutate(margin = quoted_pct - win_pct)
+```
+
+We then build four measures for each firm.
+
+- **Who beats it.** The number of different firms that beat it, the firm that beat it most often (its main rival), and the share of its losses that went to that rival. `count(sort = TRUE)` puts the most frequent rival first, and `slice(1, .by = firm)` keeps that first row for each firm.
+- **By how much.** The median and the standard deviation of its margin above its main rival. `semi_join()` keeps only the losses to that rival.
+- **Who it bids with.** The firm it meets most often, and the share of its bids in which that firm also bid.
+- **Where it bids.** The share of its bids that were in tenders with exactly three bids, the usual minimum. Three is also the most common tender size here, with `r nb$n[nb$n_bids == 3]` of the `r n_tenders` tenders.
+
+```{r}
+main_rival <- loser_bids |>
+  count(firm, beaten_by, sort = TRUE) |>
+  mutate(rivals = n(), share_main = round(n / sum(n), 2), .by = firm) |>
+  slice(1, .by = firm) |>
+  select(firm, rivals, main_rival = beaten_by, share_main)
+
+rival_margin <- loser_bids |>
+  semi_join(main_rival, by = c("firm", "beaten_by" = "main_rival")) |>
+  summarise(med_margin = round(median(margin), 1), sd_margin = round(sd(margin), 2),
+            .by = firm)
+
+top_partner <- bids |>
+  select(tender_id, firm) |>
+  inner_join(bids |> select(tender_id, partner = firm), by = "tender_id",
+             relationship = "many-to-many") |>
+  filter(firm %in% always_lose$firm, firm != partner) |>
+  count(firm, partner, sort = TRUE) |>
+  slice(1, .by = firm)
+
+in_three <- bids |>
+  summarise(in_3_bid = round(mean(n_bids == 3), 2), .by = firm)
+
+loser_screen <- always_lose |>
+  left_join(main_rival, by = "firm") |>
+  left_join(rival_margin, by = "firm") |>
+  left_join(top_partner, by = "firm") |>
+  left_join(in_three, by = "firm") |>
+  mutate(with_partner = round(n / bids, 2)) |>
+  select(firm, bids, wins, rivals, main_rival, share_main, med_margin, sd_margin,
+         partner, with_partner, in_3_bid)
+
+loser_screen |>
+  print(width = Inf)
+```
+
+```{r}
+#| include: false
+ls18 <- loser_screen |> filter(firm == "F18")
+ls08 <- loser_screen |> filter(firm == "F08")
+ls23 <- loser_screen |> filter(firm == "F23")
+ls_rest <- loser_screen |> filter(firm != "F18")
+f18_lost <- loser_bids |> filter(firm == "F18")
+f18_main_n <- sum(f18_lost$beaten_by == ls18$main_rival)
+f18_other_sd <- sd(f18_lost$margin[f18_lost$beaten_by != ls18$main_rival])
+share3_all <- mean(bids$n_bids == 3)
+ring_share <- firm_record |> filter(firm %in% c("F03", "F07", "F11"))
+```
+
+One firm stands apart. `F18` lost `r f18_main_n` times to `F17`, and every time by a similar small margin. The median margin was `r ls18$med_margin` points, with a standard deviation of only `r ls18$sd_margin`. No other firm in the table has a standard deviation below `r min(ls_rest$sd_margin)` against its main rival. When `F18` lost to anyone else, its margin varied widely, with a standard deviation of `r f1(f18_other_sd)` points. It also bid alongside `F17` in `r round(100 * ls18$with_partner)`% of its bids, the highest such share in the table. A firm that loses to the same rival by the same small step, and almost always bids with it, looks like a cover. These are the phantom pair of @sec-bidrig-links, who share a bank account and a director. Screen 4 found the same pair from the other side, as the steadiest margin in @sec-bidrig-margin.
+
+Notice what did *not* stand out. The share of losses to the main rival, `r ls18$share_main` for `F18`, is no higher than for some innocent firms. `F18` also lost to other firms, in tenders where the pair faced outsiders. So the concentration column alone would have missed it. The margin against the main rival is what gave it away.
+
+`F08` is the contrast. It has the lowest win share, `r ls08$wins` wins in `r ls08$bids` bids. But it lost to `r ls08$rivals` different firms, and even against its main rival its margin had a standard deviation of `r ls08$sd_margin` points, around a median of `r ls08$med_margin`. Its losses are spread so evenly that three firms tie as its most frequent rival, so the main rival shown, `F02`, is simply the first of them in alphabetical order. That is the record of a genuinely expensive firm. It loses to whoever turns up, by margins that vary widely. `F08` is in fact the firm of Screen 8, whose rates `F24` copied in three tenders. This screen does not catch that scheme, which is why we need both.
+
+`F23` of Devnagar sits in between. It lost most often to `F16`, by a median of `r ls23$med_margin` points with a standard deviation of `r ls23$sd_margin`, and bid with `F25` in `r round(100 * ls23$with_partner)`% of its bids. That is steadier than an ordinary loser but far less steady than `F18`. Devnagar is the district where prices fell once a newcomer arrived (@sec-bidrig-ratio). So `F23` is worth a look as part of that story, not on its own.
+
+The last column shows nothing unusual. Across all bids, `r round(100 * share3_all)`% were in three-bid tenders, and the firms in the table range from `r round(100 * min(loser_screen$in_3_bid))`% to `r round(100 * max(loser_screen$in_3_bid))`%. In this division no loser seems to exist only to make up the minimum. In real data, a firm with most of its bids in exactly three-bid tenders, or two-bid tenders where the rule allows two, would deserve a closer look.
+
+Finally, the members of the Bhimganj ring are not in the table at all. Their win shares run from `r min(ring_share$win_share)` to `r max(ring_share$win_share)`. In a ring that rotates the wins, every member takes its turn at losing *and* winning. This screen finds firms that only lose. Screens 3 to 5 find rings that share.
+
+The table below sums up how the two kinds of loser differ.
+
+| Question | Cover bidder | Genuinely uncompetitive firm |
+|----------------------|------------------------------|------------------------------|
+| Who beats it? | Mostly the same firm or the same group | Many different firms |
+| By how much? | A small, steady margin | Large margins that vary from tender to tender |
+| Where does it bid? | Mostly with the same partners, often in tenders that just reach the minimum number of bids | Wherever it chooses, with whoever else turns up |
+| How many bids? | Many, often more than its size or capacity would suggest | Fewer, and roughly in line with its capacity |
+| When does it win? | Rarely, often only when its partner is away or when it is its "turn" | Now and then, when its price happens to be the best |
+
+: How a cover bidder differs from a firm that simply loses {#tbl-bidrig-losers}
+
+::: callout-warning
+## Caution
+
+Losing proves nothing. Most firms that seldom win are simply more expensive, smaller or further away than their rivals. A firm may also bid in a tender it does not expect to win, to keep its enlistment active or to learn the market. Only a pattern of losing to the same rival, by the same small margin, with the same partners, makes a firm worth a closer look. Even then it is a lead for the records, not a finding.
+:::
+
 ## Putting the screens together {#sec-bidrig-scorecard}
 
 No single screen is enough. Each has its own false alarms, and each misses some cases. The auditor's job is to see where several screens point the same way. A simple, transparent way is a **scorecard**. We list candidate groups, apply each screen to each group, and add up the flags.
@@ -986,6 +1120,8 @@ sc_ctrl_max <- max(sc$score[!sc$group %in% c("F03 F07 F11", "F17 F18", "F08 F24"
 The Bhimganj group scores `r sc_ring$score` out of 6. `F17` and `F18` score `r sc_ph$score`, and `F08` and `F24` score `r sc_boq$score`. None of the comparison groups scores more than `r sc_ctrl_max`. Each planted group is caught, and by different screens. The Bhimganj group is caught by its behaviour in the bids, `F17` and `F18` by the register as well as their bids, and `F08` and `F24` by their BOQ alone. A scorecard that used only one kind of screen would have missed at least one of them.
 
 Here every flag has a weight of one. That is a choice, not a fact. An audit team may decide that a shared bank account weighs more than a steady margin, or that the inside and outside gap is the strongest sign of all. Any such weights must be decided and written down *before* the scores are seen, with the reasons, so that nobody can say the weights were chosen to reach a result.
+
+Screen 9 is not in the scorecard. It looks at single firms, not at groups. Use it as a supporting check on the groups the scorecard ranks. Here it points to `F18`, a member of a pair that already scores high.
 
 ::: callout-note
 ## Screens rank. They do not prove.
@@ -1120,7 +1256,8 @@ Bid opening dates are also needed for the tests on how long tenders stayed open,
 7. **Track the bid to estimate ratio** by district and year, and look for sudden changes, such as after a newcomer arrives.
 8. **Run the shape screens of the next chapter, @sec-bidshape, only on tenders with four or more bids**, and do not read much into them on smaller tenders.
 9. **Match the register** for shared bank accounts, addresses, PAN and directors, and **compare BOQ rates** in item-rate tenders.
-10. **Combine the screens in a scorecard**, with weights decided in advance, and examine the records of the highest-scoring groups.
+10. **Look at firms that seldom win.** For each, see who beats it, by how much, and with whom it bids. Set aside firms that lose to many rivals by varied margins.
+11. **Combine the screens in a scorecard**, with weights decided in advance, and examine the records of the highest-scoring groups.
 
 ::: callout-important
 ## Remember
@@ -1129,6 +1266,7 @@ Bid opening dates are also needed for the tests on how long tenders stayed open,
 - The unit of analysis that matters is the firm or the group of firms, over many tenders.
 - Meeting often is normal in a small market. Meeting often and seldom meeting anyone else is not.
 - A group that bids high when alone and low when outsiders appear is behaving like a ring.
+- A firm that seldom wins is usually just expensive. A firm that loses to the same rival by the same small margin, tender after tender, is behaving like a cover.
 - Every screen has false alarms. Look for several screens pointing the same way.
 - Screens rank tenders and firms for examination. They never prove collusion. Word the observation as patterns and facts, and leave the conclusion to the competent authority.
 :::
@@ -1139,7 +1277,7 @@ The next chapter, @sec-bidshape, studies the shape of the bids within tenders th
 
 ## Try it yourself {#sec-bidrig-exercises}
 
-These exercises use the table `bids`, and the objects `tender_list`, `stopped`, `winners` and `group_screens()` of this chapter. Try each one before you open the solution.
+These exercises use the table `bids`, and the objects `tender_list`, `stopped`, `winners`, `firm_record` and `group_screens()` of this chapter. Try each one before you open the solution.
 
 1.  **Firms that bid much less.** List the firms that bid at least three times in a district in 2022-23, and fewer than half as many times there in 2024-25. Then count the tenders of each such district in the two years.
 
@@ -1236,6 +1374,36 @@ These exercises use the table `bids`, and the objects `tender_list`, `stopped`, 
     With the new weights, the Bhimganj group scores `r ex_scores$score[ex_scores$group == "F03 F07 F11"]`, `F17` and `F18` score `r ex_scores$score[ex_scores$group == "F17 F18"]`, and `F08` and `F24` score `r ex_scores$score[ex_scores$group == "F08 F24"]`. No comparison group scores more than `r max(ex_scores$score[!ex_scores$group %in% c("F03 F07 F11", "F17 F18", "F08 F24")])`. The phantom pair has caught up with the ring. The weights changed how the suspects compare with each other, which is why they must be fixed and justified before the scores are seen.
     :::
 
+6.  **A lower bar for losers.** Rerun Screen 9 on firms with at least 20 bids and a win share below 0.3, using `firm_record`. For each firm, find the standard deviation of its margin above the firm that beat it most often. Which firm has the steadiest margin?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_lose <- firm_record |>
+      filter(bids >= 20, win_share < 0.3)
+
+    ex_losses <- bids |>
+      filter(firm %in% ex_lose$firm, !winner) |>
+      left_join(bids |>
+                  filter(winner) |>
+                  select(tender_id, beaten_by = firm, win_pct = quoted_pct),
+                by = "tender_id") |>
+      mutate(margin = quoted_pct - win_pct)
+
+    ex_rival <- ex_losses |>
+      count(firm, beaten_by, sort = TRUE) |>
+      slice(1, .by = firm)
+
+    ex_steady <- ex_losses |>
+      semi_join(ex_rival, by = c("firm", "beaten_by")) |>
+      summarise(main_rival = first(beaten_by), losses = n(),
+                sd_margin = round(sd(margin), 2), .by = firm) |>
+      arrange(sd_margin)
+    ex_steady
+    ```
+    `r nrow(ex_lose)` firms now pass, against `r nrow(always_lose)` in the chapter. `F18` still has the steadiest margin, `r ex_steady$sd_margin[ex_steady$firm == "F18"]`, against `F17`. Next come `F25` and `F23`, both of Devnagar and both beaten most often by `F16`, at `r ex_steady$sd_margin[ex_steady$firm == "F25"]` and `r ex_steady$sd_margin[ex_steady$firm == "F23"]`. Two Devnagar firms losing to the same rival by fairly steady margins fits the reading of Screen 6, that a quiet arrangement held prices up before the newcomer came. It is a lead to check against the dates, not a finding.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
@@ -1250,6 +1418,7 @@ These exercises use the table `bids`, and the objects `tender_list`, `stopped`, 
 | `pbinom()` | stats | Chance of so few repeats under the binomial distribution |
 | `sd()`, `mean()`, `median()` | stats, base R | Margin steadiness, mean bids and median ratios |
 | `t.test()` | stats | Compares the mean ratio before and after the newcomer |
+| `slice(.by = )`, `semi_join()` | dplyr | Keeps each firm's most frequent rival, and only the losses to that rival |
 | `map()`, `list_rbind()` | purrr | Applies the screens to every candidate group and stacks the results |
 | `geom_histogram()`, `geom_point()`, `geom_vline()` | ggplot2 | Plots the cover margins and the Devnagar ratios over time |
 

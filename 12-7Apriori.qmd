@@ -281,7 +281,7 @@ inspect(sort(icu_rules, by = "lift"))
 
 These are the treatments after which an ICU stay is common, like angioplasty and diabetic ketoacidosis. An auditor can compare each hospital against these normal patterns. For example, ICU stays billed after a simple fever or gastroenteritis would stand out. This is how the two ICU "upcoders" of the earlier chapters could be examined claim by claim.
 
-## Example 2, collusion among bidders in tenders {#sec-apriori-bidders}
+## Audit use case, collusion among bidders in tenders {#sec-apriori-bidders}
 
 Bid rigging is one of the most damaging frauds in public procurement. A group of firms, called a **cartel**, agree among themselves who will win a tender. The others put in higher bids, just to make the tender look competitive. These are called **cover bids**. Next time, another member of the group wins. This is called **bid rotation**. The government ends up paying more than it would in a truly competitive tender.
 
@@ -375,6 +375,75 @@ DATAFRAME(firm_rules) |>
 ```
 
 The confidence is close to 1. Whenever three of these firms bid, the fourth almost always bids too. And the lift is far above 1. They bid together many times more often than they would if each decided independently. Also notice that no rule involving any other firm passed our limits. In an honest market, firms decide on their own whether to bid, and such tight groups do not form.
+
+### Counts or lift?
+
+In @sec-bidrig-cobid we found rings by simply counting how often each pair of firms bid in the same tender. Let us do the same count here, and set lift beside it. For a pair of firms, lift is the share of tenders in which both bid, divided by the product of each firm's own share. An easier way to see it is through an **expected** count. If two firms chose their tenders independently, they would meet in about (bids of the first firm × bids of the second firm ÷ number of tenders) tenders by chance alone. Lift is the actual count divided by this expected count.
+
+```{r}
+n_tenders  <- n_distinct(bids$tender_id)
+firm_count <- count(bids, firm, name = "bids_made")
+
+firm_pairs <- bids |>
+  select(tender_id, firm) |>
+  inner_join(bids |> select(tender_id, firm), by = "tender_id",
+             suffix = c("_a", "_b"), relationship = "many-to-many") |>
+  filter(firm_a < firm_b) |>
+  count(firm_a, firm_b, name = "together") |>
+  left_join(rename(firm_count, firm_a = firm, bids_a = bids_made), by = "firm_a") |>
+  left_join(rename(firm_count, firm_b = firm, bids_b = bids_made), by = "firm_b") |>
+  mutate(expected = round(bids_a * bids_b / n_tenders, 1),
+         lift = round((together / n_tenders) /
+                        ((bids_a / n_tenders) * (bids_b / n_tenders)), 2)) |>
+  arrange(desc(together))
+
+head(firm_pairs, 12)
+```
+
+```{r}
+#| include: false
+cartel_pairs <- firm_pairs |> filter(firm_a %in% cartel, firm_b %in% cartel)
+mixed_pairs  <- firm_pairs |> filter(xor(firm_a %in% cartel, firm_b %in% cartel))
+other_pairs  <- firm_pairs |> filter(!firm_a %in% cartel, !firm_b %in% cartel)
+busy_pair    <- mixed_pairs[1, ]
+busy_rank    <- which(firm_pairs$firm_a == busy_pair$firm_a &
+                        firm_pairs$firm_b == busy_pair$firm_b)
+busy_beaten  <- sum(other_pairs$together < busy_pair$together)
+top4_busy    <- firm_count |> slice_max(bids_made, n = 4)
+by_lift      <- firm_pairs |> arrange(desc(lift))
+odd_pair     <- by_lift |> filter(!(firm_a %in% cartel & firm_b %in% cartel)) |> slice(1)
+odd_rank     <- which(by_lift$firm_a == odd_pair$firm_a & by_lift$firm_b == odd_pair$firm_b)
+```
+
+There are `r format(nrow(firm_pairs), big.mark = ",")` pairs of firms that met at least once. By count, the six pairs of the cartel lead easily. Each met in `r min(cartel_pairs$together)` to `r max(cartel_pairs$together)` tenders. No other pair met in more than `r max(c(mixed_pairs$together, other_pairs$together))`.
+
+We must be honest about one thing. In this data, the four busiest firms are `r paste(sort(top4_busy$firm), collapse = ", ")`, the cartel itself, with `r min(top4_busy$bids_made)` to `r max(top4_busy$bids_made)` bids each. They bid in their own tenders and in open tenders too. So here the busy firms *are* the guilty ones, and a plain count does not hide them. But the count still flatters busy firms in a quieter way. Look at pair `r busy_pair$firm_a` and `r busy_pair$firm_b`, at number `r busy_rank` in the list. It met in `r busy_pair$together` tenders, more than `r format(busy_beaten, big.mark = ",")` of the `r format(nrow(other_pairs), big.mark = ",")` pairs of ordinary firms. Is it a second ring? No. Chance alone would bring these two together in about `r busy_pair$expected` tenders, because one of them is a very busy firm. Its lift is `r busy_pair$lift`, which means no link at all. Here are the top pairs made of one cartel firm and one outsider.
+
+```{r}
+firm_pairs |>
+  filter(xor(firm_a %in% cartel, firm_b %in% cartel)) |>
+  head(5)
+```
+
+All of them have a lift close to 1, from `r min(head(mixed_pairs, 5)$lift)` to `r max(head(mixed_pairs, 5)$lift)`. Their high counts come only from the busy cartel firm in each pair. The cartel pairs are different. They met in about `r round(mean(cartel_pairs$together))` tenders where chance would give about `r round(mean(cartel_pairs$expected))`. Their lift is `r min(cartel_pairs$lift)` to `r max(cartel_pairs$lift)`.
+
+Now let us sort the same pairs by lift.
+
+```{r}
+firm_pairs |>
+  arrange(desc(lift)) |>
+  head(8)
+```
+
+The cartel pairs are near the top again. But lift on its own has a weakness too. Pair `r odd_pair$firm_a` and `r odd_pair$firm_b` comes in at number `r odd_rank`, with a lift of `r odd_pair$lift`. Yet it met in only `r odd_pair$together` tenders, where chance would give about `r odd_pair$expected`. With so many pairs, a few small pairs will look unusual by luck. So we read count and lift together. A real ring meets often *and* far more often than chance. In this data, only the six pairs of the cartel do both. This is just what `apriori()` did for us above. The minimum support kept out the small, lucky pairs, and lift then showed that the four firms are truly linked. With two or three firms on the left side, the rules had a lift of up to about `r round(max(quality(firm_rules)$lift))`, much higher than any pair.
+
+Why does this matter? A firm that bids in many tenders will meet many other firms often, by chance alone. A plain count rewards such busy firms. Lift asks a fairer question. Do these firms meet more often than their own busyness would explain?
+
+::: callout-note
+## Other screens for bid rigging
+
+Part IX applies these ideas to tenders in full. The counting approach and the other screens for bid rigging, such as rotation of wins, cover margins, links between bidders and firms that always lose, are in @sec-bidrig. The red flags in the tender process are in @sec-tenderflags, and the shapes of bids in @sec-bidshape.
+:::
 
 ### Confirming the suspicion
 
