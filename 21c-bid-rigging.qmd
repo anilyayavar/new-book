@@ -3,7 +3,7 @@
 source("_common.R")
 ```
 
-# Screens for Bid Rigging {#sec-bidrig}
+# Bid Rigging, Patterns Across Tenders {#sec-bidrig}
 
 A Public Works Division of an imaginary State lets well over a hundred works tenders every year. Roads, culverts, school buildings and boundary walls are all built by contractors chosen through open tenders. The lowest bidder wins. The system assumes that the bidders compete. But what if they do not? The firms of a district may meet quietly and decide among themselves who will win each tender, and at what price. The others then bid high on purpose, only to make the tender look competitive. The division pays more than it should, year after year, and every file looks perfectly in order.
 
@@ -12,6 +12,8 @@ This is **bid rigging**. It is hard to see in any single file. A tender with thr
 This chapter builds a set of **screens** for bid rigging, using only `tidyverse` and base R. A screen is a simple test run on the tender data. It flags tenders and firms that deserve a closer look. It does not prove collusion. Proof needs evidence of an agreement, which only records, enquiries and the competent authority can bring.
 
 One theme runs through the whole chapter. Most government tenders in India receive only two to five bids. Some well known screens study the *shape* of the bids within one tender, and these need several bids to work at all. With two or three bids they are weak. The strongest screens look at *patterns across many tenders*. Their unit of analysis is the firm or the group of firms, observed over dozens of tenders. These work even when each tender has only two or three bids. They form the backbone of this chapter, and we will say plainly when each screen applies.
+
+This chapter is one of three on tenders. The previous chapter, @sec-tenderflags, checks the tendering process itself. This chapter looks at patterns in the bids across many tenders. The next chapter, @sec-bidshape, looks at the shape of the bids within larger tenders.
 
 ::: {.callout-note collapse="true"}
 ## Packages for this chapter
@@ -59,11 +61,11 @@ Now suppose the same three firms bid together in twenty tenders. In each of them
 | The cover margin | Gap between winner and runner-up, over many tenders | Yes, even with 2 | @sec-bidrig-margin |
 | Inside and outside the group | A group's bids, with and without outsiders | Yes | @sec-bidrig-inout |
 | Bid to estimate ratio | Districts and groups over time | Yes, even with 1 | @sec-bidrig-ratio |
-| Shape of the bids | The bids within one tender | No, needs 4 or more | @sec-bidrig-shape |
+| Shape of the bids | The bids within one tender | No, needs 4 or more | The next chapter, @sec-bidshape |
 | Links in the firm register | Pairs of firms | Does not use bids | @sec-bidrig-links |
 | Identical rates in a bill of quantities | Two bids, item by item | Yes, even with 2 | @sec-bidrig-boq |
 
-: The screens of this chapter, and when each applies {#tbl-bidrig-screens}
+: The screens for bid rigging, and when each applies {#tbl-bidrig-screens}
 
 ## Our data, three years of works tenders {#sec-bidrig-data}
 
@@ -815,127 +817,7 @@ In the other districts the mean ratio hardly moved, from `r f3(ot_b)` to `r f3(o
 
 What does this mean? When a new firm enters a market and prices drop sharply, the earlier prices may have been held up by an understanding among the local firms. The newcomer, not part of it, simply bid at normal market prices, and the others had to follow. But other explanations are possible. The newcomer may have brought cheaper methods or materials. The local firms may have been short of work and keen to win. The kind of works tendered may have changed. The figure suggests a question. It does not answer it.
 
-## Screen 7, the shape of bids in one tender {#sec-bidrig-shape}
-
-Researchers in competition economics have studied screens that look at the *distribution* of bids within one tender. When genuine firms bid, their bids spread out according to their different costs. When covers are arranged, the losing bids often bunch together, close to each other but well above the winner. Four measures are common.
-
-- **Coefficient of variation (CV).** The standard deviation of the bids divided by their mean. Arranged bids often have a lower CV.
-- **Relative distance (RD).** The gap between the two lowest bids, divided by the standard deviation of the losing bids. A big gap above the winner, with tightly bunched losers, gives a high RD.
-- **Skewness.** Whether the bids lean to one side. A lone low winner below a bunch of losers gives a strong negative skew.
-- **Kurtosis.** Whether the bids are bunched in the middle with a few far away. Bunched covers raise it.
-
-We compute all four by hand. For skewness and kurtosis we first turn each bid into a *standard score*, its distance from the mean in standard deviations. Skewness is the average of the cubes of these scores. Kurtosis is the average of their fourth powers, minus 3, so that a normal distribution gives zero. (We use the simple divisor `n` here. Statistical packages often use slightly adjusted formulas, which give a little different answers for small samples.)
-
-### A tiny example
-
-Here are two made-up tenders with five bids each, in ₹ lakh. In the first the firms compete. In the second, four covers sit bunched above the winner.
-
-```{r}
-example_bids <- tibble(
-  tender = rep(c("Competitive", "Arranged"), each = 5),
-  bid    = c(46.1, 47.9, 49.0, 50.8, 52.6,
-             46.5, 49.4, 49.7, 50.0, 50.2)
-)
-
-example_bids |>
-  arrange(tender, bid) |>
-  summarise(cv   = sd(bid) / mean(bid),
-            rd   = (bid[2] - bid[1]) / sd(bid[-1]),
-            skew = mean(((bid - mean(bid)) / sqrt(mean((bid - mean(bid))^2)))^3),
-            kurt = mean(((bid - mean(bid)) / sqrt(mean((bid - mean(bid))^2)))^4) - 3,
-            .by = tender)
-```
-
-The arranged tender has a lower CV, a much higher RD, a negative skew and a higher kurtosis. With five bids the difference is clear.
-
-### How many bids does each measure need?
-
-Each measure needs a minimum number of bids even to be calculated, and more to be useful. @tbl-bidrig-minbids gives working rules of thumb.
-
-| Measure | Can be calculated from | Useful from about | Why |
-|----------------|------------------|------------------|--------------------------------|
-| CV | 2 bids | 4 bids | With 2 or 3 bids, genuine spreads vary too much by chance |
-| RD | 3 bids | 4 or 5 bids | Needs a standard deviation of the losing bids, so at least 2 losers |
-| Skewness | 3 bids | 5 or more bids | Three numbers barely have a shape |
-| Kurtosis | 4 bids | 6 or more bids | Depends on the extreme bids, which are unstable in small samples |
-
-: Minimum number of bids for the shape screens, as working rules of thumb {#tbl-bidrig-minbids}
-
-### The shape screens on our tenders
-
-Let us compute the four measures for every tender with at least three bids. We sort the bids within each tender, so that `bid_lakh[1]` is the winner and `bid_lakh[2]` the runner-up.
-
-```{r}
-shape <- bids |>
-  filter(n_bids >= 3) |>
-  arrange(tender_id, bid_lakh) |>
-  summarise(n_bids = n(),
-            cv   = sd(bid_lakh) / mean(bid_lakh),
-            rd   = (bid_lakh[2] - bid_lakh[1]) / sd(bid_lakh[-1]),
-            skew = mean(((bid_lakh - mean(bid_lakh)) / sqrt(mean((bid_lakh - mean(bid_lakh))^2)))^3),
-            kurt = mean(((bid_lakh - mean(bid_lakh)) / sqrt(mean((bid_lakh - mean(bid_lakh))^2)))^4) - 3,
-            .by = c(tender_id, district, date, fy))
-
-shape |>
-  mutate(size = if_else(n_bids >= 4, "4 or more bids", "3 bids")) |>
-  summarise(tenders = n(),
-            flagged = sum(cv < 0.03 & rd > 2),
-            .by = size)
-```
-
-```{r}
-#| include: false
-sh <- shape |> mutate(size = if_else(n_bids >= 4, "big", "three"),
-                      flag = cv < 0.03 & rd > 2)
-n_three <- sum(sh$size == "three")
-n_big <- sum(sh$size == "big")
-fl_three <- sum(sh$flag & sh$size == "three")
-fl_big <- sum(sh$flag & sh$size == "big")
-```
-
-We flag a tender when its CV is below 0.03 *and* its RD is above 2. These cut-offs are a judgement, and other studies use others. Among the `r n_big` tenders with four or more bids, `r fl_big` are flagged. Among the `r n_three` tenders with exactly three bids, `r fl_three` are flagged. Where are the flags?
-
-```{r}
-shape |>
-  filter(n_bids >= 4, cv < 0.03, rd > 2) |>
-  count(district, fy)
-```
-
-```{r}
-#| include: false
-big_flags <- sh |> filter(size == "big", flag)
-dv_flags <- sum(big_flags$district == "Devnagar" & big_flags$date < f22_first)
-dv_big <- sum(sh$size == "big" & sh$district == "Devnagar" & sh$date < f22_first)
-```
-
-Among the larger tenders, `r dv_flags` of the `r fl_big` flags are Devnagar tenders from before the newcomer arrived. Only `r dv_big` Devnagar tenders of that period had four or more bids, so the screen caught most of them. The shape screen has found, inside individual tenders, the same quiet arrangement that the newcomer's arrival exposed. The other `r fl_big - dv_flags` flags are mostly ordinary tenders where the bids happened to fall in that shape. That is the price of any screen.
-
-Now the tenders with three bids.
-
-```{r}
-shape |>
-  filter(n_bids == 3) |>
-  mutate(flag = cv < 0.03 & rd > 2,
-         bhimganj_group = district == "Bhimganj" & fy != "2022-23") |>
-  count(bhimganj_group, flag)
-```
-
-```{r}
-#| include: false
-s3 <- sh |> filter(size == "three") |>
-  mutate(bg = district == "Bhimganj" & fy != "2022-23")
-s3_bg_fl <- sum(s3$flag & s3$bg)
-s3_other_fl <- sum(s3$flag & !s3$bg)
-s3_bg <- sum(s3$bg)
-bg_small <- sum(tender_list$district == "Bhimganj" & tender_list$fy != "2022-23" &
-                  tender_list$n_bids < 3)
-```
-
-With three bids, the screen flags `r s3_bg_fl` of the `r s3_bg` three-bid Bhimganj tenders of the group's period. But it also flags `r s3_other_fl` other tenders. So about `r round(100 * s3_other_fl / (s3_other_fl + s3_bg_fl))`% of the flags on three-bid tenders are false alarms. With only two losing bids, their standard deviation is little more than the gap between two numbers, so RD jumps about wildly. And `r bg_small` Bhimganj tenders of the group's period had fewer than three bids, so they cannot be screened at all. The group that the other screens found so clearly is only partly seen here, and buried among false alarms.
-
-This is the honest lesson of the shape screens. They are useful on larger tenders. On the small tenders that make up most of the data, they are unreliable, and a flag or a clean result means little.
-
-## Screen 8, links between bidders {#sec-bidrig-links}
+## Screen 7, links between bidders {#sec-bidrig-links}
 
 Phantom bidders are found not in the bids but in the registration papers. Two firms that share a bank account, an address, a PAN or a director are not independent competitors, whatever their names say. The register makes this a simple matching problem. We met the general idea in @sec-netaudit, and @sec-linkage shows how to match records when the details are spelt differently.
 
@@ -987,7 +869,7 @@ t0509 <- coalesce(lk$together[lk$firm_a == "F05"], 0L)
 The division's own register is a start. The e-procurement portal holds more. Bidders upload their registration certificates, partnership deeds, GST registrations and earnest money details. Two bids paid for from the same bank account, or uploaded from the same computer within minutes of each other, are strong leads. Names of partners and directors may be spelt differently in different documents, so use the fuzzy matching of @sec-linkage. For a picture of how many firms are linked to each other, see the network methods of @sec-netaudit.
 :::
 
-## Screen 9, identical rates in a bill of quantities {#sec-bidrig-boq}
+## Screen 8, identical rates in a bill of quantities {#sec-bidrig-boq}
 
 In an item-rate tender, each bidder quotes a rate for each item. Two independent bidders will often quote the same *round* rate, or the rate in the Schedule of Rates itself. But they will very rarely quote the same unusual rate, like ₹6,071.23 for a cubic metre of concrete, on several items. When that happens, the two bids were probably prepared by the same hand. No statistics is needed.
 
@@ -1072,7 +954,7 @@ The six screens are these.
 - `margin_sd` is the standard deviation of the margin when two members took the first two places, if this happened at least five times (Screen 4).
 - `inside_gap` is how much higher the members quoted when alone than when outsiders were present (Screen 5).
 - `win_ratio` is the median ratio of a member's winning bid to the estimate in joint tenders (Screen 6).
-- `register_link` and `identical_rates` come from Screens 8 and 9.
+- `register_link` and `identical_rates` come from Screens 7 and 8.
 
 Now we apply it to every candidate, and turn each screen into a flag. `map()`, from @sec-fp, applies the function to each group, and `list_rbind()` stacks the results.
 
@@ -1236,14 +1118,14 @@ Bid opening dates are also needed for the tests on how long tenders stayed open,
 5. **Measure the cover margin** and its steadiness for pairs that often take the first two places.
 6. **Compare bids inside and outside the group.**
 7. **Track the bid to estimate ratio** by district and year, and look for sudden changes, such as after a newcomer arrives.
-8. **Run the shape screens only on tenders with four or more bids**, and do not read much into them on smaller tenders.
+8. **Run the shape screens of the next chapter, @sec-bidshape, only on tenders with four or more bids**, and do not read much into them on smaller tenders.
 9. **Match the register** for shared bank accounts, addresses, PAN and directors, and **compare BOQ rates** in item-rate tenders.
 10. **Combine the screens in a scorecard**, with weights decided in advance, and examine the records of the highest-scoring groups.
 
 ::: callout-important
 ## Remember
 
-- Most tenders get only two to five bids. Screens that look across many tenders work with such small numbers. Screens that study the shape of bids in one tender do not.
+- Most tenders get only two to five bids. Screens that look across many tenders work with such small numbers. Screens that study the shape of bids in one tender do not. They belong to larger tenders, as the next chapter, @sec-bidshape, shows.
 - The unit of analysis that matters is the firm or the group of firms, over many tenders.
 - Meeting often is normal in a small market. Meeting often and seldom meeting anyone else is not.
 - A group that bids high when alone and low when outsiders appear is behaving like a ring.
@@ -1253,7 +1135,7 @@ Bid opening dates are also needed for the tests on how long tenders stayed open,
 
 ## Where next
 
-This chapter closes the part on forensic tests. The idea of firms that keep bidding together was first met in @sec-apriori-bidders, with association rules, and in @sec-net-bidders, as a network. Links between firms through common owners and addresses are taken further in @sec-netaudit and @sec-graph-tenders, and matching names that are spelt differently is the subject of @sec-linkage. Whether the tenders stayed open long enough is checked in @sec-web-days. The tests of significance used here are explained in @sec-tests, and other ways to find unusual records are in @sec-anomaly.
+The next chapter, @sec-bidshape, studies the shape of the bids within tenders that have four or more bids, and adds a machine learning model. The red flags in the tendering process itself are in @sec-tenderflags. The idea of firms that keep bidding together was first met in @sec-apriori-bidders, with association rules, and in @sec-net-bidders, as a network. Links between firms through common owners and addresses are taken further in @sec-netaudit and @sec-graph-tenders, and matching names that are spelt differently is the subject of @sec-linkage. Whether the tenders stayed open long enough is checked in @sec-web-days. The tests of significance used here are explained in @sec-tests, and other ways to find unusual records are in @sec-anomaly.
 
 ## Try it yourself {#sec-bidrig-exercises}
 
@@ -1366,7 +1248,7 @@ These exercises use the table `bids`, and the objects `tender_list`, `stopped`, 
 | `pmin()`, `pmax()` | base R | Puts the two firms of a pair in a fixed order |
 | `sample()`, `replicate()` | base R | Shuffles the order of wins many times, for the reshuffling test |
 | `pbinom()` | stats | Chance of so few repeats under the binomial distribution |
-| `sd()`, `mean()`, `median()` | stats, base R | Margin steadiness, CV, RD, skewness and kurtosis by hand |
+| `sd()`, `mean()`, `median()` | stats, base R | Margin steadiness, mean bids and median ratios |
 | `t.test()` | stats | Compares the mean ratio before and after the newcomer |
 | `map()`, `list_rbind()` | purrr | Applies the screens to every candidate group and stacks the results |
 | `geom_histogram()`, `geom_point()`, `geom_vline()` | ggplot2 | Plots the cover margins and the Devnagar ratios over time |
