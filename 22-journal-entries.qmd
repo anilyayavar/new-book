@@ -918,6 +918,129 @@ rd_prov <- sum(rd$narration == "Provision for repairs")
 
 `any()` is TRUE if any line of the entry touches the accounts named. `r nrow(rd)` entries are flagged. `r rd_accr` of them are month-end provisions for bills awaited. Provisions are estimates, and estimates are often rounded to a convenient figure, so these are expected. The provision for audit fee is round for the same reason. Two groups are different. The accountant `ACC05` moved `r rd_susp` round sums out of the bank into the suspense account, with the narration "Amount transferred to suspense, to be adjusted". Money leaving the bank to an account that explains nothing needs to be traced. `ACC05` also booked `r rd_prov` round provisions for repairs in March 2025, with no godown and no bill named. They may be genuine estimates, or a way to reduce the year's profit and release it later.
 
+### Digits of the manual entries, Benford's Law {#sec-jet-benford}
+
+The last two tests looked for one kind of amount, just below a limit or exactly round. A digit test looks at all the amounts at once. In many natural sets of amounts, the leading digits follow Benford's Law, which @sec-benford explains. Small leading digits are far more common than large ones. Made-up or manipulated amounts often break this pattern, so digit analysis is a common journal entry test in audit practice. @sec-nigrini adds related tests on the same idea.
+
+The law holds only under some conditions, and we must check them before reading any result.
+
+- There are many entries, at least several hundred and better a few thousand.
+- The amounts span several orders of magnitude, from hundreds to lakhs and crores.
+- The amounts are not assigned numbers, such as codes, and have no built-in minimum or maximum.
+- The amounts come from natural transactions, the result of quantities, rates and taxes.
+
+We apply the test to manual entries. Recurring system entries, such as depreciation and payroll, repeat the same amounts every month and would distort the digits. We use the **first two digits**, which point more sharply than the first digit alone. The trick is to divide each amount by a power of ten, so that two digits remain before the decimal point. Let us see it on four amounts.
+
+```{r}
+bf_x <- c(45551.85, 980000, 2500, 13)
+floor(bf_x / 10^(floor(log10(bf_x)) - 1))
+```
+
+`log10()` gives the number of digits less one, so `floor(log10(45551.85))` is 4. Dividing by 10 to the power 3 leaves 45.55, and `floor()` drops the fraction. An amount needs at least two digits, so we keep amounts of ₹10 or more. Now for the manual entries, with a check of the conditions.
+
+```{r}
+bf_amt <- je |>
+  filter(source == "Manual", amount >= 10) |>
+  mutate(first_two = floor(amount / 10^(floor(log10(amount)) - 1)))
+
+bf_amt |>
+  summarise(entries = n(), smallest = min(amount), median = median(amount),
+            largest = max(amount))
+```
+
+```{r}
+#| include: false
+bf_orders <- n_distinct(floor(log10(bf_amt$amount)))
+```
+
+There are `r big(nrow(bf_amt))` entries, from ₹`r inr(min(bf_amt$amount))` to ₹`r crore(max(bf_amt$amount))` crore. They span `r bf_orders` orders of magnitude, so the conditions are met. Some amounts are fixed by the company, such as the weekly cash drawn, and we will see their effect.
+
+Under the law, the expected proportion of entries starting with the digits d is `log10(1 + 1 / d)`, for d from 10 to 99. We join it to the observed counts, and compute the mean absolute deviation (MAD) of @sec-benford.
+
+```{r}
+bf_tbl <- tibble(first_two = 10:99, expected = log10(1 + 1 / first_two)) |>
+  left_join(count(bf_amt, first_two), by = "first_two") |>
+  mutate(n = coalesce(n, 0L), observed = n / sum(n),
+         excess = round(n - expected * sum(n)))
+
+bf_mad <- mean(abs(bf_tbl$observed - bf_tbl$expected))
+bf_mad
+```
+
+```{r}
+#| include: false
+bf_conf <- case_when(bf_mad <= 0.0012 ~ "close conformity",
+                     bf_mad <= 0.0018 ~ "acceptable conformity",
+                     bf_mad <= 0.0022 ~ "marginally acceptable conformity",
+                     .default = "nonconformity")
+```
+
+`excess` is the number of entries above what the law expects. The MAD is `r round(bf_mad, 4)`. In the ranges for the first-two digits test in @sec-benford, this is *`r bf_conf`*. @fig-jet-benford shows where the departures lie.
+
+```{r}
+#| label: fig-jet-benford
+#| fig-cap: "First two digits of manual entries of ₹10 or more. The bars are the observed proportions, and the red line is the proportion expected under Benford's Law. The spikes sit on round pairs such as 15, 20, 25 and 50."
+#| fig-align: center
+#| out-width: "85%"
+bf_tbl |>
+  ggplot(aes(first_two)) +
+  geom_col(aes(y = observed), fill = "steelblue") +
+  geom_line(aes(y = expected), colour = "firebrick", linewidth = 0.8) +
+  scale_x_continuous(breaks = seq(10, 90, 10)) +
+  labs(x = "First two digits", y = "Proportion of entries") +
+  theme_bw()
+```
+
+Let us list the largest spikes, and then follow the round amounts behind them back to the kind of entry.
+
+```{r}
+bf_top <- bf_tbl |>
+  arrange(desc(excess)) |>
+  head(6)
+bf_top
+
+bf_kind <- bf_amt |>
+  filter(first_two %in% bf_top$first_two, amount %% 500 == 0) |>
+  mutate(kind = case_when(
+    str_detect(narration, "^Petty cash") ~ "Petty cash",
+    str_detect(narration, "^Security deposit") ~ "Security deposit",
+    str_detect(narration, "^Cash drawn") ~ "Cash drawn from bank",
+    str_detect(narration, "^Advance to") ~ "Advance to staff",
+    .default = "Other")) |>
+  count(kind, sort = TRUE)
+bf_kind
+```
+
+`case_when()` gives each entry a kind from the start of its narration. The spikes are at `r paste(bf_top$first_two, collapse = ", ")`, all round pairs. They are innocent. Petty cash is paid in round sums from ₹500 to ₹5,000. Security deposits are taken in fixed slabs from ₹25,000 to ₹2 lakh. Cash is drawn from the bank every Monday in ₹20,000, ₹25,000 or ₹30,000. These are standard amounts, not made-up ones. Only `r bf_kind$n[bf_kind$kind == "Other"]` round entries fall outside these four kinds, mostly month-end provisions. Some of the round transfers to suspense of `ACC05` are among them, but the round amount test of @sec-jet-round found those far more directly.
+
+What about the bills just below ₹10 lakh? They begin with 95 to 99, yet in @fig-jet-benford those bars are close to the line. A couple of dozen bills hardly move thousands of entries. The pattern shows only when we count by user.
+
+```{r}
+bf_p95 <- sum(bf_tbl$expected[bf_tbl$first_two >= 95])
+
+bf_user <- bf_amt |>
+  summarise(entries = n(), d95_99 = sum(first_two >= 95),
+            expected = round(n() * bf_p95, 1), .by = user_id) |>
+  arrange(desc(d95_99 - expected))
+head(bf_user, 4)
+```
+
+```{r}
+#| include: false
+bf_acc04 <- bf_amt |> filter(user_id == "ACC04", first_two >= 95)
+bf_acc04_band <- sum(bf_acc04$amount >= 9.5e5 & bf_acc04$amount < 1e6)
+```
+
+`ACC04` has `r bf_user$d95_99[bf_user$user_id == "ACC04"]` entries starting with 95 to 99, against `r bf_user$expected[bf_user$user_id == "ACC04"]` expected. `r bf_acc04_band` of them lie between ₹9.5 lakh and ₹10 lakh. No other user comes near this excess. So on this ledger the digit test adds little that is new. It confirms the pattern of `ACC04`, and it shows that standard amounts dominate the digits of manual entries. That is a common result, and it is worth recording honestly.
+
+::: callout-warning
+## Caution, what digits can and cannot show
+
+- **Digits point to where to look, not which entry is wrong.** A spike is a group of amounts. The auditor still has to read the entries behind it.
+- **A spike can be innocent.** A standard rate, a fixed fee or a common invoice amount produces a spike with no wrongdoing at all.
+- **The test is weak on small data.** After filtering by user, account or month, few entries may remain, and chance alone then moves the digits. Compare groups with each other, as in @sec-benford, rather than with fixed ranges.
+:::
+
 ### Narrations that explain nothing {#sec-jet-narration}
 
 Every entry should say why it was made. An entry with no narration, or with a word such as "adj", cannot be understood without going back to the person who made it. @sec-text-je used a dictionary of red-flag words, combined with other flags, on the narrations of journal entries. Here we add a simpler test. It looks for narrations that are blank, too short to mean anything, or one of a few phrases known to explain nothing. Let us try it on five narrations first.
@@ -1151,6 +1274,8 @@ We now have eleven flags. An entry with one flag is common. An entry with severa
 | `f_rev_cash` | 1 | Mostly routine income, weak on its own |
 
 : Weights given to each test {#tbl-jet-weights}
+
+The digit test of @sec-jet-benford is not in the score. It points to groups of amounts, not to single entries, so we use it as a supporting test.
 
 The same weights in R, and the score for each entry.
 
@@ -1392,10 +1517,11 @@ A store keeper has no reason to hold rights to post journal entries. Either the 
 3. **Make one row per entry**, and add the department of each user and the accounts each entry touches.
 4. **Profile the ledger.** Who posts, when, from which source, and to which accounts. Note what is routine.
 5. **Run one test per characteristic.** Late entries, unusual users, odd times, self-approval, amounts below limits, round amounts, vague narrations, duplicates, reversals, and manual entries to revenue and cash. Look at the results of each test by user and by account.
-6. **Count account pairs** and look at the rare ones.
-7. **Combine the flags into a score**, with weights and a cut-off fixed in advance, and written down.
-8. **Select entries.** All high scores, every pattern found by a test, and a random sample of the rest.
-9. **Examine the selected entries** with documents, approvals, ERP logs and explanations from the people concerned, and report facts.
+6. **Look at the digits.** Check that the manual entries meet the conditions of Benford's Law, run the first-two digits test, and follow the largest spikes back to users and entries.
+7. **Count account pairs** and look at the rare ones.
+8. **Combine the flags into a score**, with weights and a cut-off fixed in advance, and written down.
+9. **Select entries.** All high scores, every pattern found by a test, and a random sample of the rest.
+10. **Examine the selected entries** with documents, approvals, ERP logs and explanations from the people concerned, and report facts.
 
 ::: callout-important
 ## Remember
@@ -1414,7 +1540,7 @@ The date and time functions used here are explained in @sec-lubridate, and check
 
 ## Try it yourself {#sec-jet-exercises}
 
-These exercises use the tables `gl`, `je`, `users`, `pair_counts` and `scores` of this chapter. Try each one before you open the solution.
+These exercises use the tables `gl`, `je`, `users`, `bf_amt`, `pair_counts` and `scores` of this chapter. Try each one before you open the solution.
 
 1.  **Users outside their period of service.** Join `je` with the joining and leaving dates in `users`. Are there any manual entries made before a user joined or after a user left?
 
@@ -1495,6 +1621,23 @@ These exercises use the tables `gl`, `je`, `users`, `pair_counts` and `scores` o
     `r nrow(ex_high)` entries now score 3 or more, against `r nrow(high_risk)` before. All `r sum(ex_high$user_id == "STR03")` entries of `STR03` are now selected, and so are the payroll corrections and the test entries. A change of weight changes the list. That is why the weights are fixed and recorded before the results are seen.
     :::
 
+6.  **Digits without the standard amounts.** Leave out the manual entries whose amount is an exact multiple of ₹500, and compute the MAD of the first two digits again with `bf_amt`. What is the conformity now?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_bf <- bf_amt |>
+      filter(amount %% 500 != 0)
+    ex_bf_tbl <- tibble(first_two = 10:99, expected = log10(1 + 1 / first_two)) |>
+      left_join(count(ex_bf, first_two), by = "first_two") |>
+      mutate(n = coalesce(n, 0L), observed = n / sum(n))
+    ex_bf_mad <- mean(abs(ex_bf_tbl$observed - ex_bf_tbl$expected))
+    nrow(ex_bf)
+    ex_bf_mad
+    ```
+    `r big(nrow(bf_amt) - nrow(ex_bf))` round entries are left out, and `r big(nrow(ex_bf))` remain. The MAD falls from `r round(bf_mad, 4)` to `r round(ex_bf_mad, 4)`, which is `r if (ex_bf_mad <= 0.0012) "close conformity" else if (ex_bf_mad <= 0.0018) "acceptable conformity" else "still outside close conformity"`. So nearly all of the departure came from the standard round amounts.
+    :::
+
 ## Summary of functions used
 
 | Function | Package | What it does |
@@ -1512,6 +1655,8 @@ These exercises use the tables `gl`, `je`, `users`, `pair_counts` and `scores` o
 | `str_squish()`, `str_to_lower()`, `str_detect()`, `str_extract()` | stringr | Cleans narrations, finds vague ones, and picks out vendor codes |
 | `pivot_longer()`, `pivot_wider()` | tidyr | Flags into rows for the score, and sources into columns for display |
 | `slice_sample()` | dplyr | Random sample of the remaining entries |
-| `geom_col()`, `geom_histogram()`, `geom_vline()` | ggplot2 | Entries by hour and month, and amounts near the approval limit |
+| `floor()`, `log10()` | base R | First two digits of an amount, and the proportions expected under Benford's Law |
+| `case_when()` | dplyr | Gives each entry a kind from its narration |
+| `geom_col()`, `geom_histogram()`, `geom_vline()`, `geom_line()` | ggplot2 | Entries by hour and month, amounts near the approval limit, and observed against expected digits |
 
 : Functions used in this chapter {#tbl-jetfunctions}
