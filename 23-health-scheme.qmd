@@ -1,0 +1,1058 @@
+```{r}
+#| include: false
+source("_common.R")
+```
+
+# Auditing a Health Insurance Scheme {#sec-ssyaudit}
+
+A State runs a health insurance scheme for poor families. Each family gets a card. With the card, a member can be treated free at any empanelled hospital, public or private. The hospital then raises a claim on the scheme, at a fixed rate for each treatment package. Thousands of claims are paid every month, mostly without anyone from the scheme seeing the patient. An audit team is asked a simple question. Is the money going to genuine treatment of the people the scheme was meant for?
+
+The book has followed one such imaginary scheme, the *Sarvajan Swasthya Yojana* (SSY), through many chapters. Principal components and clustering found hospitals with unusual claims. Association rules found packages billed together in odd ways. Text analytics read the grievances, sentiment analysis read the feedback, and maps measured how far patients travelled and where inspection photos were taken. Each chapter found a piece. In a real audit, the pieces come together in one report.
+
+This chapter carries out that audit from start to end, on the same data files. We first check the data received and draw a profile of the scheme. Then we gather seven lines of evidence, each in a few lines of code, with a link to the chapter that teaches the method. We put the evidence side by side, to see which hospitals are pointed at by several independent sources. We value the findings, write a draft audit observation, and end with what the analysis could not test.
+
+::: {.callout-note collapse="true"}
+## Packages for this chapter
+
+This chapter uses `arules`, `sf`, `tidytext` and `tidyverse`. If any of them is missing, install them with the command below. @sec-packages-install lists the packages of every part.
+
+```r
+install.packages(c("arules", "sf", "tidytext", "tidyverse"))
+```
+:::
+
+## The audit and its objectives {#sec-ssyaudit-objectives}
+
+The audit is a performance and compliance audit of the hospital claims paid under the scheme in 2024-25. It asks four questions.
+
+1.  **Are the claims genuine and correctly priced?** Each claim should be for a treatment that was given, billed at the package rate, without extra items that the package already includes.
+2.  **Are the patients really treated?** A claim should stand for a real patient who needed admission, not a person brought in only to raise a claim.
+3.  **Is the quality of care acceptable?** Patients should not be operated on without need, asked to pay, or sent home too early.
+4.  **Is the scheme monitored?** Hospitals should be inspected, and grievances should be looked into.
+
+No single test answers these questions. So we gather several lines of evidence from different sources, and see where they agree. @tbl-ssyaudit-lines shows the plan.
+
+| Line of evidence | Source | Method | Taught in |
+|------------------------|----------------|----------------------|-----------------|
+| Unusual hospital profiles | Claims | Indicators, principal components, clustering | @sec-pca-rank, @sec-kmeans-group |
+| Unbundled add-ons and intensive care | Claims | Association rules, shares by hospital | @sec-apriori-claims |
+| Hysterectomy in young women | Claims | Shares by hospital | This chapter |
+| Themes of grievances | Grievances | Keyword dictionary | @sec-text |
+| Patient feedback | Feedback | Sentiment scores | @sec-sentiment |
+| Distance patients travelled | Patient homes | Distances on a map | @sec-maps-travel |
+| Inspections not done at the site | Inspection photos | Geotags | @sec-maps-inspections |
+
+: The lines of evidence in this audit {#tbl-ssyaudit-lines}
+
+We load the packages first. `arules` has functions with the same names as some `dplyr` functions, as @sec-apriori explains. So we do not attach it, and call its three functions with the prefix `arules::`.
+
+```{r}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(tidytext)
+library(sf)
+```
+
+```{r}
+#| include: false
+lakh  <- function(x) format(round(x / 1e5, 1), nsmall = 1, big.mark = ",")
+crore <- function(x) format(round(x / 1e7, 2), nsmall = 2)
+num   <- function(x) format(x, big.mark = ",")
+pct   <- function(x) round(100 * x)
+inr   <- function(x) if (x >= 1e7) paste0("₹", crore(x), " crore") else paste0("₹", lakh(x), " lakh")
+words <- function(n, cap = FALSE) {
+  w <- c("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")[n]
+  if (cap) str_to_sentence(w) else w
+}
+```
+
+## Our data, the files received from the scheme {#sec-ssyaudit-data}
+
+The scheme's IT cell gave the audit team eight tables and one map file. They are the files used in the earlier chapters, described in @sec-ssydata. We do not create any new data in this chapter. Let us read them all.
+
+```{r}
+hospitals   <- read_csv("Data/ssy_hospitals.csv", show_col_types = FALSE)
+packages    <- read_csv("Data/ssy_packages.csv", show_col_types = FALSE)
+claims      <- read_csv("Data/ssy_claims.csv", show_col_types = FALSE)
+grievances  <- read_csv("Data/ssy_grievances.csv", show_col_types = FALSE)
+feedback    <- read_csv("Data/ssy_feedback.csv", show_col_types = FALSE)
+locations   <- read_csv("Data/ssy_hospital_locations.csv", show_col_types = FALSE)
+homes       <- read_csv("Data/ssy_patient_homes.csv", show_col_types = FALSE)
+inspections <- read_csv("Data/ssy_inspections.csv", show_col_types = FALSE)
+districts   <- st_read("Data/ssy_map.gpkg", layer = "districts", quiet = TRUE)
+
+received <- list(hospitals = hospitals, packages = packages, claims = claims,
+                 grievances = grievances, feedback = feedback, locations = locations,
+                 homes = homes, inspections = inspections)
+
+tibble(table   = names(received),
+       rows    = map_int(received, nrow),
+       columns = map_int(received, ncol))
+```
+
+`map_int()` applies `nrow()` and `ncol()` to each table in the list, and returns whole numbers. @tbl-ssyaudit-keys shows what each table holds and how the tables link.
+
+| Table | One row per | Links to other tables through |
+|-------------------|-----------------------|---------------------------------|
+| `hospitals` | Empanelled hospital | `hospital_id` |
+| `packages` | Treatment package, with its rate | `package_code`, which appears inside `packages` of each claim |
+| `claims` | Claim paid in 2024-25 | `claim_id`, `hospital_id`, `patient_id` |
+| `grievances` | Grievance against a hospital | `hospital_id` |
+| `feedback` | Comment and star rating of a patient | `hospital_id` |
+| `locations` | Location of a hospital, in km on a flat grid | `hospital_id` |
+| `homes` | Home of the patient, for a sample of claims | `claim_id`, `hospital_id` |
+| `inspections` | Inspection of a hospital, with the geotag of its photo | `hospital_id` |
+
+: The tables received and their keys {#tbl-ssyaudit-keys}
+
+So `hospital_id` is the thread that ties every source to a hospital. The claims are the only table with money in them. The other tables tell us what patients, inspectors and the map say about the same hospitals.
+
+::: callout-tip
+## Audit tip
+
+Plan the data request for a scheme audit early, and in writing. Ask for the claims with every field the system holds, not a summary. Ask for the masters of hospitals and packages, with the dates of any change in rates. Ask also for the pre-authorisation and rejection records, grievances with their disposal, inspection reports with photos and geotags, and the scheme's own fraud alerts. Ask for the record counts and the total amount paid, so that you can check what you receive. Name the period, the format and the keys. A precise request saves weeks of back and forth, as @sec-read discusses.
+:::
+
+### Is the data complete and consistent? {#sec-ssyaudit-reliability}
+
+Before any analysis, we test the data, as we tested a ledger in @sec-jet-complete and the files read in @sec-read-check. If the claims are incomplete or do not agree with the masters, every later finding is in doubt.
+
+```{r}
+rate <- setNames(packages$rate, packages$package_code)
+codes_billed <- str_split(claims$packages, ";")
+
+# For each claim, did the same patient have an open stay at the same hospital?
+claims <- claims |>
+  arrange(hospital_id, patient_id, admission_date) |>
+  mutate(overlap = !is.na(lag(discharge_date)) & admission_date < lag(discharge_date),
+         .by = c(hospital_id, patient_id)) |>
+  arrange(claim_id)
+
+checks <- tibble(
+  check = c("Claim numbers repeated",
+            "Claims of a hospital not in the hospital master",
+            "Package codes not in the package master",
+            "Claim amount differs from the sum of package rates",
+            "Discharge before admission",
+            "Blank cells in the claims",
+            "Male patients billed for a gynaecology or obstetrics package",
+            "Patient numbers with more than one gender",
+            "Same patient admitted again before the earlier discharge",
+            "Grievances, feedback or inspections of an unknown hospital",
+            "Patient homes for a claim not in the claims"),
+  problems = c(
+    sum(duplicated(claims$claim_id)),
+    sum(!claims$hospital_id %in% hospitals$hospital_id),
+    sum(!unlist(codes_billed) %in% packages$package_code),
+    sum(map_dbl(codes_billed, \(p) sum(rate[p])) != claims$claim_amount),
+    sum(claims$discharge_date < claims$admission_date),
+    sum(is.na(claims)),
+    sum(claims$gender == "M" & str_detect(claims$packages, "^G0")),
+    claims |> summarise(g = n_distinct(gender), .by = patient_id) |> filter(g > 1) |> nrow(),
+    sum(claims$overlap),
+    sum(!c(grievances$hospital_id, feedback$hospital_id, inspections$hospital_id) %in%
+          hospitals$hospital_id),
+    sum(!homes$claim_id %in% claims$claim_id)))
+
+checks
+```
+
+The codes all exist, and the claim amounts are exactly the sum of the package rates. So the scheme's pricing worked. But two checks fail. Let us look at them before going on.
+
+```{r}
+#| include: false
+male_g <- claims |> filter(gender == "M", str_detect(packages, "^G0"))
+repeat_ids <- claims$patient_id[duplicated(claims$patient_id)]
+ov_six <- claims |>
+  mutate(six = hospital_id %in% c("H063", "H066", "H070", "H071", "H098", "H116")) |>
+  summarise(rate = mean(overlap), .by = six)
+```
+
+-   **Men billed for women's packages.** `r nrow(male_g)` claims bill a male patient for a hysterectomy, a caesarean or a normal delivery. All `r sum(male_g$patient_id %in% repeat_ids)` of them are on a patient number that appears on another claim too. So either the sex was entered wrongly, or one person's card was used for another person.
+-   **Two stays at once.** `r num(sum(claims$overlap))` claims, `r round(100 * mean(claims$overlap), 1)`% of all, admit a patient to a hospital while the same patient's earlier stay at that hospital had not yet ended. A patient cannot lie in two beds of one hospital at the same time. These may be duplicate claims, or one card used for two people.
+
+Neither problem is large enough to stop the analysis. But both go into the list of queries for the scheme, with the claim numbers. They also matter later. The readmission indicator of @sec-pca counts a claim as a readmission if it starts within 30 days of the earlier discharge, and so it includes these overlapping stays. They happen in every kind of hospital, but more often in the six hospitals we will meet shortly, `r round(100 * ov_six$rate[ov_six$six], 1)`% of their claims against `r round(100 * ov_six$rate[!ov_six$six], 1)`% elsewhere.
+
+Let us also check that every month of the year is present, and that the dates fall in the year.
+
+```{r}
+claims |>
+  summarise(first_admission = min(admission_date),
+            last_admission  = max(admission_date),
+            last_discharge  = max(discharge_date),
+            months          = n_distinct(floor_date(admission_date, "month")))
+```
+
+```{r}
+#| include: false
+claims_total <- sum(claims$claim_amount)
+```
+
+All twelve months are present. Admissions run through 2024-25, and a few patients admitted in March were discharged in April, which is normal. The total paid is ₹`r crore(claims_total)` crore on `r num(nrow(claims))` claims. In a real audit, this total is reconciled with the payments in the scheme's accounts before going further, as in @sec-recon. A difference would mean claims missing from the extract.
+
+Two limits of the data should be noted at the start. The patient homes are given for a sample of `r num(nrow(homes))` claims, not all of them. And the feedback has no date, so it cannot be tied to a particular stay.
+
+::: callout-warning
+## Caution
+
+These files hold personal data of patients. Patient numbers, age, sex, diagnosis and home location are sensitive, and the grievances carry mobile numbers. Keep the data on the office's secure systems, mask mobile numbers before printing any text, and use patient numbers rather than names in working papers. Never upload such data to an online tool. @sec-privacy explains masking and keyed hashing, which let two lists be matched without exposing identities.
+:::
+
+## A profile of the scheme {#sec-ssyaudit-profile}
+
+Before looking for problems, we should know what normal looks like. Let us start with the hospitals and their claims.
+
+```{r}
+claims_h <- claims |>
+  left_join(hospitals, by = "hospital_id")
+
+claims_h |>
+  summarise(hospitals   = n_distinct(hospital_id),
+            beds        = sum(beds[!duplicated(hospital_id)]),
+            claims      = n(),
+            crore       = round(sum(claim_amount) / 1e7, 2),
+            average_claim = round(mean(claim_amount)),
+            .by = type)
+```
+
+```{r}
+#| include: false
+by_type <- claims_h |>
+  summarise(hospitals = n_distinct(hospital_id), claims = n(),
+            amount = sum(claim_amount), avg = mean(claim_amount), .by = type)
+pv <- by_type |> filter(type == "Private")
+pb <- by_type |> filter(type == "Public")
+```
+
+The scheme has `r nrow(hospitals)` empanelled hospitals. `r pb$hospitals` are public, a district hospital and five community health centres in each of the eight districts. `r pv$hospitals` are private. Private hospitals raised `r pct(pv$claims / nrow(claims))`% of the claims but took `r pct(pv$amount / claims_total)`% of the money, because their average claim, ₹`r num(round(pv$avg))`, is higher than that of public hospitals, ₹`r num(round(pb$avg))`. This is expected, since private hospitals do more surgery.
+
+How is the money spread across districts? @fig-ssyaudit-district shows it.
+
+```{r}
+#| label: fig-ssyaudit-district
+#| fig-cap: "Claims paid in 2024-25 by district of the hospital, ₹ crore"
+#| fig-height: 3.5
+claims_h |>
+  summarise(crore = sum(claim_amount) / 1e7, .by = c(district, type)) |>
+  ggplot(aes(crore, fct_reorder(district, crore, sum), fill = type)) +
+  geom_col() +
+  labs(x = "₹ crore", y = NULL, fill = "Hospital type") +
+  theme_bw()
+```
+
+```{r}
+#| include: false
+by_district <- claims_h |>
+  summarise(amount = sum(claim_amount), private = n_distinct(hospital_id[type == "Private"]),
+            .by = district) |>
+  arrange(desc(amount))
+```
+
+`r by_district$district[1]` has the largest share, ₹`r crore(by_district$amount[1])` crore. It also has `r by_district$private[1]` private hospitals, among the most of any district. So far nothing is odd. A district with more private hospitals will usually have more claims.
+
+Which packages take the money? The first code in `packages` is the main package.
+
+```{r}
+pkg_profile <- claims |>
+  mutate(package_code = str_extract(packages, "^[A-Z][0-9]+")) |>
+  summarise(claims = n(), crore = sum(claim_amount) / 1e7, .by = package_code) |>
+  left_join(packages |> select(package_code, package_name), by = "package_code") |>
+  mutate(share_of_amount = round(100 * crore / sum(crore), 1),
+         crore = round(crore, 2)) |>
+  arrange(desc(crore))
+
+head(pkg_profile, 6)
+```
+
+Knee replacement and angioplasty are few in number, but costly. Together the top six packages take `r round(sum(head(pkg_profile, 6)$share_of_amount))`% of the money. This tells us where an error per claim costs the most. With this picture of normal, we turn to the evidence.
+
+## Line of evidence 1, hospitals with unusual profiles {#sec-ssyaudit-profiles}
+
+In @sec-pca we built eleven indicators for each hospital from its claims. They include claims per bed, length of stay, share of surgery, share of ICU stays, weekend admissions and readmissions. We then ranked hospitals by their distance from the centre of the principal components. We repeat the same steps here. The code is the same as in @sec-pca, and is folded.
+
+```{r}
+#| code-fold: true
+#| code-summary: "Code to build the hospital indicators (same as in the PCA chapter)"
+claims_plus <- claims |>
+  mutate(main_package = str_extract(packages, "^[A-Z][0-9]+"),
+         los = as.numeric(discharge_date - admission_date),
+         n_addons = str_count(packages, ";")) |>
+  left_join(packages |> select(main_package = package_code, surgical, day_care),
+            by = "main_package") |>
+  arrange(hospital_id, patient_id, admission_date) |>
+  mutate(readmit = !is.na(lag(discharge_date)) &
+                   admission_date - lag(discharge_date) <= 30,
+         .by = c(hospital_id, patient_id))
+
+indicators <- claims_plus |>
+  summarise(n_claims         = n(),
+            amount           = sum(claim_amount),
+            avg_claim        = mean(claim_amount) / 1000,
+            avg_los          = mean(los),
+            pct_surgical     = 100 * mean(surgical),
+            pct_icu          = 100 * mean(str_detect(packages, "A01")),
+            pct_short_stay   = 100 * mean(los <= 1 & !day_care),
+            pct_weekend      = 100 * mean(wday(admission_date, week_start = 1) >= 6),
+            pct_readmit      = 100 * mean(readmit),
+            pct_female       = 100 * mean(gender == "F"),
+            pct_senior       = 100 * mean(age >= 60),
+            addons_per_claim = mean(n_addons),
+            .by = hospital_id) |>
+  left_join(hospitals, by = "hospital_id") |>
+  mutate(claims_per_bed = n_claims / beds)
+
+X <- indicators |>
+  select(claims_per_bed, avg_claim, avg_los, pct_surgical, pct_icu,
+         pct_short_stay, pct_weekend, pct_readmit, pct_female,
+         pct_senior, addons_per_claim)
+```
+
+Now the principal components, and the distance of each hospital from the centre, using the first three components as in @sec-pca-rank.
+
+```{r}
+hosp_pca <- prcomp(X, scale. = TRUE)
+
+pca_scores <- indicators |>
+  select(hospital_id, hospital_name, district) |>
+  bind_cols(as_tibble(hosp_pca$x[, 1:3])) |>
+  mutate(distance = sqrt(PC1^2 + PC2^2 + PC3^2)) |>
+  arrange(desc(distance))
+
+head(pca_scores, 10) |>
+  mutate(across(where(is.double), \(x) round(x, 1)))
+```
+
+The PCA chapter took the top eight as its leads. Let us do the same, and also run the k-means clustering of @sec-kmeans-group with the same settings, to see the small cluster it found.
+
+```{r}
+flag_profile <- pca_scores |> slice_max(distance, n = 8) |> pull(hospital_id)
+
+set.seed(123)
+km <- kmeans(scale(X), centers = 3, nstart = 25)
+six <- indicators$hospital_id[km$cluster == which.min(km$size)]
+
+six
+```
+
+```{r}
+#| include: false
+hname <- function(id) hospitals$hospital_name[match(id, hospitals$hospital_id)]
+icu_two <- setdiff(flag_profile, six)
+priv_ind <- indicators |> filter(type == "Private", !hospital_id %in% c(six, icu_two))
+six_ind  <- indicators |> filter(hospital_id %in% six)
+two_ind  <- indicators |> filter(hospital_id %in% icu_two)
+```
+
+The results agree with the earlier chapters. The smallest cluster holds the same `r words(length(six))` private hospitals, `r paste(sort(six), collapse = ", ")`. These are the "camp" hospitals. They raise `r round(min(six_ind$claims_per_bed), 1)` to `r round(max(six_ind$claims_per_bed), 1)` claims per bed in the year, against a median of `r round(median(priv_ind$claims_per_bed), 1)` for other private hospitals. Between `r round(min(six_ind$pct_weekend))`% and `r round(max(six_ind$pct_weekend))`% of their admissions are on a Saturday or Sunday, against a median of `r round(median(priv_ind$pct_weekend))`%. And `r round(min(six_ind$pct_readmit))`% to `r round(max(six_ind$pct_readmit))`% of their claims are readmissions within 30 days, against `r round(median(priv_ind$pct_readmit), 1)`%.
+
+The other two of the top eight are `r hname(icu_two[1])` (`r icu_two[1]`) and `r hname(icu_two[2])` (`r icu_two[2]`). They are not unusual on volume. They bill an ICU stay in `r round(two_ind$pct_icu[1])`% and `r round(two_ind$pct_icu[2])`% of their claims, against a median of `r round(median(priv_ind$pct_icu))`% for other private hospitals. @sec-kmeans-odd found the same two as the odd ones out among their peers.
+
+So the first line of evidence gives eight leads, `r paste(sort(flag_profile), collapse = ", ")`. We keep them in `flag_profile`, and the six camp hospitals in `six`, for use later.
+
+## Line of evidence 2, packages billed together {#sec-ssyaudit-rules}
+
+### Add-ons that the package already includes
+
+@sec-apriori-claims treated each claim as a basket of packages and used association rules to find packages billed together. Let us repeat it in three lines, and keep only the rules with an add-on on the left.
+
+```{r}
+trans <- arules::transactions(str_split(claims$packages, ";"))
+
+claim_rules <- arules::apriori(trans,
+                               parameter = list(supp = 0.002, conf = 0.2, minlen = 2),
+                               control = list(verbose = FALSE))
+
+arules::DATAFRAME(claim_rules) |>
+  as_tibble() |>
+  filter(LHS %in% c("{A05}", "{A06}")) |>
+  mutate(across(where(is.numeric), \(x) round(x, 3)))
+```
+
+The two rules with a confidence of 1 are the ones the auditor reads closely. The add-on `A06`, an intraocular lens, is never billed without `O01`, *Cataract surgery with lens*. The lens is already in the name, and so in the rate, of the cataract package. Billing it again is **unbundling**. The add-on `A05`, a diagnostic laparoscopy, is never billed without `S01`, an appendectomy, where it is seldom needed. Which hospitals bill them?
+
+```{r}
+unbundled <- claims |>
+  filter(str_detect(packages, "A05|A06")) |>
+  summarise(lens_A06        = sum(str_detect(packages, "A06")),
+            laparoscopy_A05 = sum(str_detect(packages, "A05")),
+            .by = hospital_id) |>
+  arrange(desc(lens_A06))
+
+unbundled
+
+flag_unbundle <- unbundled$hospital_id
+```
+
+`r if (setequal(flag_unbundle, six)) "Only the six camp hospitals bill either add-on." else "The add-ons are billed by these hospitals."` No other hospital ever does. This matches @sec-apriori-claims.
+
+### Intensive care after simple medical treatment
+
+An ICU stay is normal after an angioplasty, and common after diabetic ketoacidosis. It is rare after a fever or a stomach infection. @sec-apriori asked, in its exercises, which hospitals bill an ICU stay after simple illnesses. Let us take all five medical packages, `M01` to `M05`, and find each hospital's share of such claims with an ICU stay.
+
+```{r}
+medical <- claims_plus |>
+  filter(str_detect(main_package, "^M"))
+
+overall_icu <- mean(str_detect(medical$packages, "A01"))
+
+icu_medical <- medical |>
+  summarise(claims   = n(),
+            with_icu = sum(str_detect(packages, "A01")),
+            .by = hospital_id) |>
+  mutate(share = with_icu / claims) |>
+  arrange(desc(share))
+
+head(icu_medical, 6) |>
+  mutate(share = round(share, 2))
+```
+
+Across all hospitals, `r round(100 * overall_icu, 1)`% of medical claims carry an ICU stay. We set our rule in advance. A hospital is flagged if its share is more than twice this, on at least 20 medical claims.
+
+```{r}
+flag_icu <- icu_medical |>
+  filter(claims >= 20, share > 2 * overall_icu) |>
+  pull(hospital_id)
+
+flag_icu
+```
+
+```{r}
+#| include: false
+icu_two_tab <- icu_medical |> filter(hospital_id %in% icu_two)
+icu_extra <- setdiff(flag_icu, icu_two)
+icu_extra_tab <- icu_medical |> filter(hospital_id %in% icu_extra)
+```
+
+`r icu_two[1]` and `r icu_two[2]` stand far above the rest, with `r pct(icu_two_tab$share[1])`% and `r pct(icu_two_tab$share[2])`%. `r if (length(icu_extra) > 0) paste0("The rule also flags ", paste(icu_extra, collapse = " and "), ", with ", paste0(pct(icu_extra_tab$share), "%", collapse = " and "), " on about ", round(mean(icu_extra_tab$claims)), " claims each. These are only just over the line, and a handful of claims more or less would move them below it. We keep them, because the rule was fixed in advance, and see later whether any other source supports them.") else ""`
+
+## Line of evidence 3, hysterectomy in young women {#sec-ssyaudit-hyst}
+
+The grievances in @sec-text included complaints from young women whose uterus had been removed for a small stomach pain. No earlier chapter tested this in the claims. Removal of the uterus in a young woman is a major decision. It is usually done for clear medical reasons, mostly in older women. Under insurance schemes it is a known area of misuse, so many schemes require extra checks before approving it in younger women. Let us look at the age of the women billed for hysterectomy, package `G01`.
+
+```{r}
+hysterectomy <- claims |>
+  filter(str_detect(packages, "^G01")) |>
+  summarise(claims   = n(),
+            under_40 = sum(age < 40),
+            median_age = median(age),
+            .by = hospital_id) |>
+  mutate(share_under_40 = round(under_40 / claims, 2)) |>
+  arrange(desc(share_under_40))
+
+head(hysterectomy, 8)
+```
+
+```{r}
+#| include: false
+hyst_six   <- hysterectomy |> filter(hospital_id %in% six)
+hyst_other <- hysterectomy |> filter(!hospital_id %in% six)
+```
+
+The pattern is sharp. In the six camp hospitals, `r pct(min(hyst_six$share_under_40))`% to `r pct(max(hyst_six$share_under_40))`% of hysterectomies are on women under 40, and the median age is `r min(hyst_six$median_age)` to `r max(hyst_six$median_age)`. In the other `r nrow(hyst_other)` hospitals that bill this package, the median age is `r median(hyst_other$median_age)`, and `r sum(hyst_other$under_40)` of `r num(sum(hyst_other$claims))` hysterectomies are on women under 40. We flag a hospital if more than half of at least ten hysterectomies are on women under 40.
+
+```{r}
+flag_hyst <- hysterectomy |>
+  filter(claims >= 10, share_under_40 > 0.5) |>
+  pull(hospital_id)
+
+flag_hyst
+```
+
+This is a new line of evidence, not tested in the earlier chapters. It came from reading the grievances and then asking the claims the same question. Text pointed to a theme, and the numbers measured it.
+
+## Line of evidence 4, what the grievances say {#sec-ssyaudit-grievances}
+
+@sec-text built a keyword dictionary of themes and found that the category *Other* hid complaints about camps, agents and surgery. We reuse two of its patterns. First we mask mobile numbers, as that chapter did.
+
+```{r}
+grievances <- grievances |>
+  mutate(text = str_replace_all(text, "\\b[6-9][0-9]{9}\\b", "[PHONE]"),
+         clean_text = str_squish(str_to_lower(text)))
+
+serious <- grievances |>
+  mutate(camp_or_agent = str_detect(clean_text, "camp|vehicle|van |agent|village"),
+         surgery = str_detect(clean_text,
+                              "uterus|without any test|second operation|wound|in a hurry|operation kar")) |>
+  summarise(grievances = n(),
+            serious    = sum(camp_or_agent | surgery),
+            .by = hospital_id) |>
+  arrange(desc(serious))
+
+head(serious, 8)
+```
+
+```{r}
+#| include: false
+ser_six <- serious |> filter(hospital_id %in% six)
+ser_other <- serious |> filter(!hospital_id %in% six)
+```
+
+The six camp hospitals have `r sum(ser_six$grievances)` of the `r nrow(grievances)` grievances, and `r sum(ser_six$serious)` of the `r sum(serious$serious)` about camps, agents or surgery. No other hospital has more than `r max(ser_other$serious)` such grievances. We flag a hospital with five or more.
+
+```{r}
+flag_griev <- serious |> filter(serious >= 5) |> pull(hospital_id)
+flag_griev
+```
+
+This agrees with @sec-text and with the comparison cloud of @sec-textviz-hospitals. Let us read three of the grievances behind the numbers, because an auditor must always read the text.
+
+```{r}
+grievances |>
+  filter(hospital_id %in% six, str_detect(clean_text, "camp|uterus")) |>
+  slice(1:3) |>
+  pull(text)
+```
+
+## Line of evidence 5, what patients say in feedback {#sec-ssyaudit-feedback}
+
+@sec-sentiment scored each comment with the Bing dictionary. It turned the sign of a word after *not* or *no*, and added a few words of the health sector, such as *pay* and *forced*. We repeat its scoring compactly.
+
+```{r}
+negations <- c("not", "no", "never", "without")
+
+my_dictionary <- bind_rows(
+  get_sentiments("bing"),
+  tibble(word = c("caring", "recovered", "experienced", "explained",
+                  "forced", "pay", "wait", "nobody"),
+         sentiment = rep(c("positive", "negative"), each = 4)))
+
+comment_scores <- feedback |>
+  unnest_tokens(word, comment) |>
+  mutate(previous = lag(word), .by = feedback_id) |>
+  inner_join(my_dictionary, by = "word") |>
+  mutate(value = if_else(sentiment == "positive", 1, -1),
+         value = if_else(previous %in% negations, -value, value)) |>
+  summarise(score = sum(value), .by = feedback_id)
+
+feedback_scored <- feedback |>
+  left_join(comment_scores, by = "feedback_id") |>
+  mutate(score = replace_na(score, 0))
+
+cor(feedback_scored$score, feedback_scored$rating)
+```
+
+The score agrees with the star ratings, with a correlation of `r round(cor(feedback_scored$score, feedback_scored$rating), 2)`, the same as in @sec-sentiment. Now the hospitals.
+
+```{r}
+hospital_mood <- feedback_scored |>
+  summarise(comments     = n(),
+            avg_score    = round(mean(score), 2),
+            pct_negative = round(100 * mean(score < 0)),
+            avg_rating   = round(mean(rating), 1),
+            .by = hospital_id) |>
+  arrange(avg_score)
+
+head(hospital_mood, 8)
+```
+
+Each hospital has only `r min(hospital_mood$comments)` to `r max(hospital_mood$comments)` comments, so one or two unhappy patients can move its average. @sec-sentiment warned about this. We flag a hospital whose average score is below -0.4, if it has at least eight comments.
+
+```{r}
+flag_feedback <- hospital_mood |>
+  filter(comments >= 8, avg_score < -0.4) |>
+  pull(hospital_id)
+
+flag_feedback
+```
+
+```{r}
+#| include: false
+fb_six_in  <- intersect(flag_feedback, six)
+fb_six_out <- setdiff(six, flag_feedback)
+fb_others  <- setdiff(flag_feedback, six)
+mood_out <- hospital_mood |> filter(hospital_id %in% fb_six_out)
+```
+
+Of the six camp hospitals, `r words(length(fb_six_in))` are flagged. `r if (length(fb_six_out) > 0) paste0(paste(fb_six_out, collapse = " and "), " is not, with an average score of ", paste(mood_out$avg_score, collapse = " and "), " on ", paste(mood_out$comments, collapse = " and "), " comments.") else ""` The rule also flags `r paste(fb_others, collapse = " and ")`, which are not flagged by any claims test. Feedback is the noisiest of our sources.
+
+### Is any feedback too good to be true?
+
+@sec-sent-fake found two ration shops whose feedback was written by the shop staff. It was copied, sentence for sentence, and nearly always five stars. A hospital could do the same to hide its problems. Let us check.
+
+```{r}
+too_good <- feedback |>
+  summarise(comments      = n(),
+            pct_five_star = round(100 * mean(rating == 5)),
+            pct_copied    = round(100 * mean(duplicated(comment))),
+            .by = hospital_id) |>
+  filter(comments >= 8) |>
+  arrange(desc(pct_five_star))
+
+head(too_good, 5)
+
+too_good |> filter(pct_copied > 25, pct_five_star > 50)
+```
+
+The highest share of five-star ratings is `r too_good$pct_five_star[1]`%. Copied comments are common everywhere, up to `r max(too_good$pct_copied)`% in some hospitals, because patients write short and similar sentences. So copies alone mean little. The exercises of @sec-sentiment suggested a rule that needs both, more than 25% copies and more than half the ratings at five stars. `r if (nrow(filter(too_good, pct_copied > 25, pct_five_star > 50)) == 0) "No hospital meets it." else "A few hospitals meet it, and their comments should be read."` Nothing here looks like the shops of @sec-sent-fake. This is worth saying in the working papers. A test that finds nothing is still evidence, as long as it was done properly.
+
+## Line of evidence 6, how far patients travelled {#sec-ssyaudit-travel}
+
+Most patients go to a hospital near home. @sec-maps-travel measured, for a sample of claims, the distance from the patient's home to the hospital. We do the same with `sf`. The coordinates are in kilometres on the map's own grid, so we use the map's coordinate system.
+
+```{r}
+hosp_sf <- locations |>
+  st_as_sf(coords = c("x_km", "y_km"), crs = st_crs(districts))
+
+homes_sf <- homes |>
+  st_as_sf(coords = c("home_x_km", "home_y_km"), crs = st_crs(districts))
+
+homes_sf <- homes_sf |>
+  mutate(distance_km = as.numeric(st_distance(
+    homes_sf, hosp_sf[match(homes_sf$hospital_id, hosp_sf$hospital_id), ],
+    by_element = TRUE)))
+
+travel <- homes_sf |>
+  st_drop_geometry() |>
+  summarise(patients      = n(),
+            median_km     = round(median(distance_km), 1),
+            pct_over_50km = round(100 * mean(distance_km > 50)),
+            .by = hospital_id) |>
+  filter(patients >= 15) |>
+  arrange(desc(pct_over_50km))
+
+head(travel, 8)
+```
+
+```{r}
+#| include: false
+tr_six <- travel |> filter(hospital_id %in% six)
+tr_other <- travel |> filter(!hospital_id %in% six)
+```
+
+Half of all sampled patients live within `r round(median(homes_sf$distance_km))` km of their hospital. But in the six camp hospitals, `r min(tr_six$pct_over_50km)`% to `r max(tr_six$pct_over_50km)`% of patients came from more than 50 km away. In every other hospital with at least 15 sampled patients, at most `r max(tr_other$pct_over_50km)`% did. As in @sec-maps-travel, we flag a hospital where more than half the patients came from beyond 50 km.
+
+```{r}
+flag_travel <- travel |> filter(pct_over_50km > 50) |> pull(hospital_id)
+flag_travel
+```
+
+Patients brought from far away, mostly at weekends, matches the grievances about vans and village camps. The two sources are independent. One is what patients wrote, the other is where they live.
+
+## Line of evidence 7, inspections not done at the site {#sec-ssyaudit-inspections}
+
+Every hospital is to be inspected twice a year, with a geotagged photo. @sec-maps-inspections measured how far each photo was taken from the hospital. Let us repeat it.
+
+```{r}
+inspections_sf <- inspections |>
+  st_as_sf(coords = c("photo_x_km", "photo_y_km"), crs = st_crs(districts))
+
+inspections_sf <- inspections_sf |>
+  mutate(distance_km = as.numeric(st_distance(
+    inspections_sf, hosp_sf[match(inspections_sf$hospital_id, hosp_sf$hospital_id), ],
+    by_element = TRUE)))
+
+far_photos <- inspections_sf |>
+  st_drop_geometry() |>
+  filter(distance_km > 1) |>
+  arrange(desc(distance_km)) |>
+  mutate(distance_km = round(distance_km, 1))
+
+far_photos
+
+flag_insp <- unique(far_photos$hospital_id)
+```
+
+```{r}
+#| include: false
+by_insp <- far_photos |> count(inspector, sort = TRUE)
+```
+
+Half of all photos were taken within `r round(1000 * median(inspections_sf$distance_km))` metres of the hospital. But `r words(nrow(far_photos))` photos were taken `r round(min(far_photos$distance_km))` to `r round(max(far_photos$distance_km))` km away. These inspections were very likely reported without a visit. `r by_insp$inspector[1]` accounts for `r words(by_insp$n[1])` of them, as @sec-maps-inspections also found. Only one of the `r words(length(flag_insp))` hospitals, `r intersect(flag_insp, six)`, is a camp hospital. The others have no other flag of any kind.
+
+This line of evidence answers a different audit question. It is about the scheme's monitoring, not about the hospitals' claims. A desk inspection is a failure of the inspector, not a sign that the hospital did wrong.
+
+## Putting the evidence together {#sec-ssyaudit-triangulate}
+
+We now have eight lists of flagged hospitals, from five sources. Four lists come from the claims. The others come from grievances, feedback, patient homes and inspection photos. Let us put them in one table, with one row per hospital and one column per line of evidence.
+
+The key idea is to count **independent sources**, not tests. Tests on the same claims are not independent. A hospital with many ICU stays will also have a high average claim, and so will stand out both in PCA and in the ICU test. That is one fact seen twice. A grievance, a patient's home address and an inspector's photo come from different people and different systems. When they agree, the agreement means much more.
+
+```{r}
+signals <- hospitals |>
+  select(hospital_id, hospital_name, district) |>
+  mutate(profile      = hospital_id %in% flag_profile,
+         unbundling   = hospital_id %in% flag_unbundle,
+         icu          = hospital_id %in% flag_icu,
+         hysterectomy = hospital_id %in% flag_hyst,
+         grievances   = hospital_id %in% flag_griev,
+         feedback     = hospital_id %in% flag_feedback,
+         travel       = hospital_id %in% flag_travel,
+         inspection   = hospital_id %in% flag_insp,
+         claims_data  = profile | unbundling | icu | hysterectomy,
+         signals = profile + unbundling + icu + hysterectomy +
+                   grievances + feedback + travel + inspection,
+         sources = claims_data + grievances + feedback + travel + inspection) |>
+  filter(signals > 0) |>
+  arrange(desc(sources), desc(signals))
+
+signals |>
+  mutate(across(profile:inspection, \(x) if_else(x, "Yes", ""))) |>
+  select(-claims_data, -hospital_name, -district) |>
+  knitr::kable()
+```
+
+@fig-ssyaudit-signals draws the same table as a grid.
+
+```{r}
+#| label: fig-ssyaudit-signals
+#| fig-cap: "Lines of evidence that flag each hospital. Hospitals are ordered by the number of independent sources."
+#| fig-height: 5.5
+signals |>
+  mutate(hospital = fct_rev(fct_inorder(paste0(hospital_id, " (", sources, ")")))) |>
+  pivot_longer(profile:inspection, names_to = "evidence", values_to = "flagged") |>
+  mutate(evidence = fct_inorder(evidence)) |>
+  ggplot(aes(evidence, hospital, fill = flagged)) +
+  geom_tile(colour = "white") +
+  scale_fill_manual(values = c(`TRUE` = "firebrick", `FALSE` = "grey92"),
+                    labels = c(`TRUE` = "Flagged", `FALSE` = "Not flagged")) +
+  labs(x = NULL, y = "Hospital (number of sources)", fill = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+#| include: false
+strong <- signals |> filter(sources >= 3)
+top_h <- signals$hospital_id[1]
+one_source <- signals |> filter(sources == 1)
+claims_only <- one_source |> filter(claims_data)
+insp_only <- one_source |> filter(inspection)
+fb_only <- one_source |> filter(feedback)
+```
+
+The table sorts itself into four groups.
+
+-   **Strong cases.** `r words(nrow(strong), cap = TRUE)` hospitals are flagged by three or more independent sources, and they are exactly the six camp hospitals. `r top_h`, `r hname(top_h)`, is flagged by `r words(signals$sources[1])` sources, the most of any hospital. Its claims, its grievances, its patients' feedback, its patients' homes and its inspection photo all point the same way.
+-   **A case resting on one source.** `r icu_two[1]` and `r icu_two[2]` are flagged by two tests each, but both tests read the same claims. No grievance, feedback or map supports them. This does not make them innocent. Overbilling of ICU stays is done on paper, so patients may never notice it, and would not complain. But the case rests on the claims alone, and needs the medical records to stand.
+-   **False alarms, most likely.** `r paste(setdiff(claims_only$hospital_id, icu_two), collapse = " and ")` are just over the line of the ICU rule, and `r paste(fb_only$hospital_id, collapse = " and ")` are flagged on about ten comments each. Nothing else supports them. With `r nrow(hospitals)` hospitals and eight tests, a few such flags are bound to appear by chance.
+-   **A monitoring failure.** `r paste(setdiff(insp_only$hospital_id, six), collapse = ", ")` are flagged only for a desk inspection. This says nothing about these hospitals. It says the inspection system cannot be relied on.
+
+Note one more point. The six camp hospitals and the two ICU hospitals were planted in the data by different processes, and the evidence tells them apart. That is what triangulation is for. One signal is a lead. Several independent signals make a strong case.
+
+::: callout-warning
+## Caution
+
+Triangulation makes a lead stronger. It does not make it proven. Every signal in the table is a pattern in data that the hospital has not yet been asked to explain. A hospital in a remote area may genuinely draw patients from far away. A surgeon with a good name may attract patients from other districts. Grievances can be filed by rivals. The audit observation must rest on records seen, patients met and explanations received, not on the table alone.
+:::
+
+## Valuing the findings {#sec-ssyaudit-value}
+
+An observation needs a money value. But we must be careful to say what kind of value it is. Some amounts are wrong on the face of the claim. Others are only at risk until the records are seen. Let us work out four amounts, one for each specific pattern.
+
+For the ICU stays, we cannot say that every ICU stay at `r icu_two[1]` and `r icu_two[2]` was unneeded. Instead we work out the **expected** number. For each medical package, we take the share of claims with an ICU stay at all other hospitals. Applied to the two hospitals' own claims, this gives the number of ICU stays they would bill if they behaved like the rest. The excess is the number above this.
+
+```{r}
+icu_rate <- medical |>
+  filter(!hospital_id %in% icu_two) |>
+  summarise(expected_rate = mean(str_detect(packages, "A01")), .by = main_package)
+
+icu_excess <- medical |>
+  filter(hospital_id %in% icu_two) |>
+  left_join(icu_rate, by = "main_package") |>
+  summarise(claims   = n(),
+            actual   = sum(str_detect(packages, "A01")),
+            expected = round(sum(expected_rate), 1),
+            .by = hospital_id) |>
+  mutate(excess = round(actual - expected))
+
+icu_excess
+```
+
+Now the four amounts together.
+
+```{r}
+lens  <- claims |> filter(hospital_id %in% six, str_detect(packages, "A06"))
+lapar <- claims |> filter(hospital_id %in% six, str_detect(packages, "A05"))
+young <- claims |> filter(hospital_id %in% six, str_detect(packages, "^G01"), age < 40)
+
+value <- tibble(
+  item = c("Lens billed again with cataract surgery (A06)",
+           "Diagnostic laparoscopy with appendectomy (A05)",
+           "Hysterectomy in women under 40, whole claim",
+           "ICU stays after medical packages, above the expected number"),
+  hospitals = c("Six camp hospitals", "Six camp hospitals", "Six camp hospitals",
+                paste(icu_two, collapse = " and ")),
+  claims = c(nrow(lens), nrow(lapar), nrow(young), sum(icu_excess$excess)),
+  amount = c(nrow(lens) * rate[["A06"]], nrow(lapar) * rate[["A05"]],
+             sum(young$claim_amount), sum(icu_excess$excess) * rate[["A01"]]),
+  status = c("Inadmissible on the face of the claim", "At risk, needs case records",
+             "At risk, needs medical records", "At risk, needs medical records"))
+
+value |>
+  mutate(lakh = round(amount / 1e5, 1)) |>
+  select(-amount) |>
+  knitr::kable()
+```
+
+```{r}
+#| include: false
+v <- value$amount
+six_total <- sum(six_ind$amount)
+two_total <- sum(two_ind$amount)
+```
+
+The four items come to `r inr(sum(v))`. They do not overlap, because each item is a different set of claims. But they are of different strength.
+
+-   The separate lens, ₹`r lakh(v[1])` lakh on `r num(nrow(lens))` claims, is inadmissible as soon as we read the package master. No medical judgement is needed. It can be recovered once the scheme confirms the package definition.
+-   The laparoscopies, ₹`r lakh(v[2])` lakh, and the hysterectomies in young women, `r inr(v[3])`, are **amounts at risk**. Some of these operations may have been needed. Only the case records, and a doctor's opinion on them, can decide.
+-   The excess ICU stays, ₹`r lakh(v[4])` lakh, rest on a comparison with other hospitals. They are an estimate, and should be reported as one.
+
+Beyond these items, the whole of the claims of the flagged hospitals is exposed. The six camp hospitals were paid ₹`r crore(six_total)` crore in the year, `r round(100 * six_total / claims_total, 1)`% of the scheme's claims. The two ICU hospitals were paid `r inr(two_total)`. If field visits find that patients were not treated at all, much more than the four items above may be wrong. But we should not report the whole ₹`r crore(six_total)` crore as a loss. Most of those patients were probably treated. The audit report should give it as the value of claims under examination, not as an irregular payment.
+
+::: callout-note
+## Amounts at risk, not losses
+
+Keep three kinds of figure apart in the report. An **inadmissible** amount breaks a clear rule and can be recovered. An **amount at risk** is open to question until the records are seen. **Exposure** is the total value of the transactions in which the problem lies. Mixing them up overstates the finding, and the auditee will rightly dispute it.
+:::
+
+## Audit use case, from signals to an audit observation {#sec-ssyaudit-observation}
+
+Let us take the strongest case, `r top_h`, and write a draft observation. First we pull its facts into one place.
+
+```{r}
+h <- top_h
+
+h_facts <- list(
+  indicators = indicators |> filter(hospital_id == h) |>
+    select(hospital_name, district, beds, n_claims, amount, claims_per_bed,
+           pct_weekend, pct_readmit),
+  unbundled  = unbundled |> filter(hospital_id == h),
+  hysterectomy = hysterectomy |> filter(hospital_id == h),
+  grievances = serious |> filter(hospital_id == h),
+  feedback   = hospital_mood |> filter(hospital_id == h),
+  travel     = travel |> filter(hospital_id == h),
+  inspection = far_photos |> filter(hospital_id == h)
+)
+
+h_facts
+```
+
+```{r}
+#| include: false
+hi <- h_facts$indicators
+hu <- h_facts$unbundled
+hh <- h_facts$hysterectomy
+hg <- h_facts$grievances
+hf <- h_facts$feedback
+ht <- h_facts$travel
+hp <- h_facts$inspection
+h_lens_amt <- hu$lens_A06 * rate[["A06"]]
+h_lap_amt  <- hu$laparoscopy_A05 * rate[["A05"]]
+h_young_amt <- sum(young$claim_amount[young$hospital_id == h])
+h_overlap <- sum(claims$overlap[claims$hospital_id == h])
+h_lens_months <- n_distinct(floor_date(lens$admission_date[lens$hospital_id == h], "month"))
+```
+
+A draft observation follows the usual order of facts, criteria, cause, effect and recommendation. Its wording must be careful. At this stage the audit has patterns in data, not proof of fraud. So the draft states what the data shows, and asks for the records. It does not say "fraud", "fake" or "bogus".
+
+> **Unusual claims of `r hi$hospital_name`, `r hi$district`**
+>
+> **Facts.** `r hi$hospital_name` (`r h`), a private hospital with `r hi$beds` beds in `r hi$district` district, was paid `r inr(hi$amount)` on `r hi$n_claims` claims in 2024-25. This is `r round(hi$claims_per_bed, 1)` claims per bed, against a median of `r round(median(priv_ind$claims_per_bed), 1)` for other private hospitals. Of its admissions, `r round(hi$pct_weekend)`% were on Saturdays or Sundays, and `r round(hi$pct_readmit, 1)`% of its claims were for a patient it had admitted in the previous 30 days. In `r h_overlap` claims, the patient was admitted again before the earlier stay had ended. In `r hu$lens_A06` claims for cataract surgery with lens, a lens was billed again as a separate add-on, for ₹`r lakh(h_lens_amt)` lakh. In `r hu$laparoscopy_A05` claims for appendectomy, a diagnostic laparoscopy was billed in addition, for ₹`r lakh(h_lap_amt)` lakh. Of `r hh$claims` hysterectomies, `r hh$under_40` were on women under 40 years, for ₹`r lakh(h_young_amt)` lakh. Of a sample of `r ht$patients` patients, `r ht$pct_over_50km`% lived more than 50 km from the hospital. The scheme received `r hg$grievances` grievances against the hospital, of which `r hg$serious` described village camps, agents or surgery done without explanation. The photo of the inspection of `r format(hp$inspection_date, "%d %B %Y")` was taken `r round(hp$distance_km)` km from the hospital.
+>
+> **Criteria.** The package for cataract surgery includes the lens. Add-on packages are to be billed only when clinically needed and recorded. Hysterectomy is to be done only on documented medical grounds. Empanelled hospitals are to be inspected at the site twice a year.
+>
+> **Cause.** Claims of this hospital with a separate lens were paid in `r h_lens_months` of the 12 months of the year. This suggests that the claim system had no check against an add-on that a package already includes. No check on the age of women for hysterectomy, or on claims per bed, was evident. The inspection report was accepted without checking the geotag of the photo.
+>
+> **Effect.** ₹`r lakh(h_lens_amt)` lakh was paid for lenses already covered by the package. ₹`r lakh(h_lap_amt + h_young_amt)` lakh on laparoscopies and hysterectomies is at risk until the case records are examined. The pattern of camps, distant patients and complaints raises doubt whether all patients needed admission.
+>
+> **Recommendation.** The scheme may recover the separate lens charges, and have its medical auditors examine the case records of the flagged claims. It may verify a sample of patients at their homes, and refer the hospital to its anti-fraud unit for investigation. It may also add system checks on add-ons, hysterectomy in young women and claims per bed, and require geotag checks on every inspection.
+
+`format(x, "%d %B %Y")` prints a date as day, month name and year. Notice what the draft does. It counts, compares with peers, and quotes rates. It names the rule broken only where a rule clearly exists. It separates the amount already inadmissible from the amount at risk. And it leaves the question of intent to the investigation that follows.
+
+### What the auditor does next
+
+1.  **Ask the scheme for the records.** For a sample of the flagged claims, ask for the pre-authorisation, the case sheet and the operation notes. Ask also for the discharge summary and any photos uploaded by the hospital. Select the sample with @sec-sampling, all claims with the separate lens and a random sample of the rest.
+2.  **Get a medical opinion.** The audit team cannot judge whether a hysterectomy or an ICU stay was needed. A doctor from outside the hospital, through the scheme's medical audit or a government hospital, must review the case records.
+3.  **Meet the patients.** Visit a sample of patients at home, with the scheme's district staff. Confirm that they were admitted, for how long, for what, whether they paid anything, and how they came to the hospital. Patient confirmation is the strongest evidence of all.
+4.  **Visit the hospital.** Check the beds, the operation theatre register, the ICU register and the staff on duty against the claims of the same days. A joint physical verification with the scheme's officers is best.
+5.  **Look for links.** Check whether the six camp hospitals share owners, doctors, agents or vehicles, with the methods of @sec-netaudit.
+6.  **Refer, do not conclude.** If the records and visits confirm the pattern, the scheme's anti-fraud unit or the competent authority must investigate. The audit report states the facts found and the action taken.
+
+## Audit use case, a lead from one source {#sec-ssyaudit-onesource}
+
+`r hname(icu_two[1])` and `r hname(icu_two[2])` are flagged only by their claims. Nobody complained about them. Their patients did not travel far, and their inspections were done at the site. Should the auditor drop them?
+
+No. Some irregularities leave traces in only one place. Billing an ICU stay that was never given happens on paper. The patient, who paid nothing, may never know. So a lack of complaints is not evidence of good practice. But a case on one source needs a different next step. Let us see when these ICU stays were billed.
+
+```{r}
+medical |>
+  filter(hospital_id %in% icu_two) |>
+  left_join(packages |> select(main_package = package_code, package_name),
+            by = "main_package") |>
+  summarise(claims   = n(),
+            with_icu = sum(str_detect(packages, "A01")),
+            avg_los  = round(mean(los), 1),
+            .by = c(hospital_id, package_name)) |>
+  mutate(share_icu = round(with_icu / claims, 2)) |>
+  arrange(hospital_id, desc(claims))
+```
+
+```{r}
+#| include: false
+simple <- medical |>
+  filter(main_package %in% c("M01", "M02")) |>
+  mutate(two = hospital_id %in% icu_two) |>
+  summarise(share = mean(str_detect(packages, "A01")), .by = two)
+```
+
+The ICU stays are spread over every medical package, including fever and stomach infection, where an ICU stay is rarely needed. For fever and gastroenteritis together, the two hospitals bill an ICU stay in `r pct(simple$share[simple$two])`% of claims, against `r round(100 * simple$share[!simple$two], 1)`% elsewhere. The excess over the expected number is ₹`r lakh(v[4])` lakh.
+
+### What the auditor does next
+
+1.  **Ask for the ICU records.** Take a random sample of medical claims with an ICU stay. Ask for the ICU admission register, the nursing charts, and the bills for oxygen and monitoring. An ICU stay leaves many traces in a hospital. A stay on paper leaves few.
+2.  **Check capacity.** Count ICU beds at each hospital, and the number of patients the claims place in the ICU on each day. If the claims need more ICU beds than exist, the claims cannot all be right.
+3.  **Get a medical opinion** on whether each sampled ICU stay was justified.
+4.  **Report honestly.** If the records support the stays, record that the lead was examined and cleared. If not, report the excess as at risk, with the method of estimation stated.
+
+## What this audit did not test {#sec-ssyaudit-limits}
+
+Analytics covered a great deal, but not everything. An honest report says what was not tested.
+
+-   **Claims rejected or never raised.** We had only paid claims. Patients refused treatment, and claims wrongly rejected, need the pre-authorisation and rejection data. Many grievances were about denial of treatment.
+-   **Who got a card.** We did not test whether the beneficiaries were eligible. That needs the enrolment database, matched with other lists as in @sec-linkage.
+-   **Treatment that the data cannot see.** Whether an operation was done well, or at all, cannot be judged from a claim. Only records, doctors and patients can tell.
+-   **Package rates themselves.** We tested whether claims followed the rates, not whether the rates were reasonable.
+-   **Payment to hospitals.** We assumed that claims were paid as approved. A reconciliation of approved claims with bank payments, as in @sec-recon, would test it.
+-   **Digits of claim amounts.** Benford's Law does not apply to amounts made of fixed package rates, as @sec-benford-wrong showed for these very claims.
+
+Analytics also has limits of its own. Every test above used a threshold that we chose, such as twice the usual ICU share or 50 km. A different threshold gives a slightly different list. The patient homes are a sample, so the travel test can miss a hospital with few sampled patients. Feedback and grievances come from people who chose to write. And the data was what the scheme gave us. If claims were changed before they reached the database, no test on the database will show it.
+
+## A suggested workflow
+
+1.  **Fix the objectives first.** Write down the audit questions, and the evidence that would answer each.
+2.  **Ask for the data in writing.** Claims, masters, grievances, feedback, inspections and locations, with record counts and totals.
+3.  **Test the data.** Keys, codes, amounts against rates, dates, blanks, and the total against the accounts.
+4.  **Profile the scheme.** Hospitals, districts, packages and money, so that you know what is normal.
+5.  **Gather each line of evidence separately.** Fix each rule and threshold in advance, and keep each list of flagged hospitals.
+6.  **Put the evidence side by side.** Count independent sources, not tests. Sort the hospitals into strong cases, one-source cases, likely false alarms and system failures.
+7.  **Value the findings carefully.** Separate inadmissible amounts, amounts at risk and exposure.
+8.  **Draft the observation in neutral words.** Facts, criteria, cause, effect and recommendation, with no allegation of fraud.
+9.  **Verify.** Records, medical opinion, patient visits and hospital visits, and refer confirmed cases to the scheme's anti-fraud unit.
+10. **Say what was not tested.**
+
+::: callout-important
+## Remember
+
+-   One audit, many techniques. Each technique gives a lead. The audit comes from putting them together.
+-   Check the data before analysing it. A finding on incomplete data is not a finding.
+-   Count independent sources, not tests. Two tests on the same claims are one source.
+-   Some real problems show in only one source. Do not drop them, but verify them differently.
+-   Expect false alarms. Many tests on many hospitals will flag a few by chance.
+-   Keep inadmissible amounts, amounts at risk and exposure apart.
+-   Patterns are leads. Records, doctors and patients turn them into findings.
+:::
+
+## Where next
+
+Each line of evidence is taught in full in its own chapter. The hospital indicators and their map are in @sec-pca and @sec-kmeans, and other ways to find outliers are in @sec-anomaly. Packages billed together are in @sec-apriori. Grievances and feedback are in @sec-text, @sec-sentiment and @sec-textviz. Distances and geotags are in @sec-maps. Many of the checks of this chapter, such as an add-on never billed with its package, can be written as a permanent rule book, as in @sec-validate. Links among the flagged hospitals can be traced with @sec-netaudit. To choose the claims for examination, see @sec-sampling. To turn this chapter's analysis into a report that can be run again next year, see @sec-reports.
+
+## Try it yourself {#sec-ssyaudit-exercises}
+
+These exercises use the tables `claims`, `claims_plus`, `hospitals`, `grievances`, `homes_sf`, `districts`, `icu_medical` and `overall_icu`, and the lists `six` and `icu_two`, of this chapter. Try each one before you open the solution.
+
+1.  **Readmissions and overlapping stays.** The column `readmit` in `claims_plus` marks a claim that starts within 30 days of the same patient's earlier discharge from the same hospital. The column `overlap` marks a claim that starts before that discharge. For the six camp hospitals together, and for all others together, find the share of claims that are readmissions after a discharge, and the share that overlap.
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_readmit <- claims_plus |>
+      mutate(group = if_else(hospital_id %in% six, "Six camp hospitals", "All others")) |>
+      summarise(claims          = n(),
+                pct_after_stay  = round(100 * mean(readmit & !overlap), 1),
+                pct_overlap     = round(100 * mean(overlap), 1),
+                amount_readmit  = sum(claim_amount[readmit]),
+                .by = group)
+    ex_readmit
+    ```
+    ```{r}
+    #| include: false
+    ex_r6 <- ex_readmit |> filter(group == "Six camp hospitals")
+    ex_ro <- ex_readmit |> filter(group == "All others")
+    ```
+    In the six hospitals, `r ex_r6$pct_after_stay`% of claims are readmissions after a discharge and `r ex_r6$pct_overlap`% overlap an open stay. Elsewhere the shares are `r ex_ro$pct_after_stay`% and `r ex_ro$pct_overlap`%. Both are higher in the six. All the claims marked `readmit` in the six cost `r inr(ex_r6$amount_readmit)`. Some readmissions are genuine, so this is exposure, not loss, until the case records show why each patient came back. The overlapping stays need an explanation in every case.
+    :::
+
+2.  **Patients from other districts.** Use `st_join()` to find the district in which each sampled patient of the six camp hospitals lives. What share of them live outside the district of their hospital?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_home_district <- homes_sf |>
+      filter(hospital_id %in% six) |>
+      st_join(districts |> select(home_district = district)) |>
+      st_drop_geometry() |>
+      left_join(hospitals |> select(hospital_id, district), by = "hospital_id") |>
+      summarise(patients = n(),
+                pct_other_district = round(100 * mean(home_district != district, na.rm = TRUE)),
+                .by = hospital_id)
+    ex_home_district
+    ```
+    Between `r min(ex_home_district$pct_other_district)`% and `r max(ex_home_district$pct_other_district)`% of the sampled patients of each hospital live in another district. A spatial join, from @sec-maps, turns a distance into a fact that the district staff can check on the ground.
+    :::
+
+3.  **Money demanded.** Count the grievances in each hospital that mention money being demanded, with the pattern `"demand|paid|pay |took money|took rs|cash|extra|receipt"` of @sec-text. Divide by the number of claims to get a rate per 1,000 claims. Which hospitals have the highest rate?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_money <- grievances |>
+      filter(str_detect(clean_text, "demand|paid|pay |took money|took rs|cash|extra|receipt")) |>
+      count(hospital_id, name = "money_grievances") |>
+      left_join(count(claims, hospital_id, name = "claims"), by = "hospital_id") |>
+      mutate(per_1000_claims = round(1000 * money_grievances / claims, 1)) |>
+      arrange(desc(per_1000_claims))
+    head(ex_money, 8)
+    ```
+    ```{r}
+    #| include: false
+    ex_money_six <- sum(head(ex_money, 6)$hospital_id %in% six)
+    ```
+    `r words(ex_money_six, cap = TRUE)` of the top six by rate are camp hospitals. Patients should pay nothing under the scheme, so each such grievance is worth following up with the patient. A rate per 1,000 claims is fairer than a count, because large hospitals get more grievances simply by being large.
+    :::
+
+4.  **A stricter rule for ICU stays.** Flag hospitals whose share of medical claims with an ICU stay is more than three times the overall share, on at least 20 claims. Which hospitals drop out compared with the rule of the chapter?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_icu3 <- icu_medical |>
+      filter(claims >= 20, share > 3 * overall_icu) |>
+      pull(hospital_id)
+    ex_icu3
+    setdiff(flag_icu, ex_icu3)
+    ```
+    With the stricter rule, only `r paste(ex_icu3, collapse = " and ")` remain. `r paste(setdiff(flag_icu, ex_icu3), collapse = " and ")` drop out. A stricter rule gives fewer false alarms, but may also miss a real case that is less extreme. Fix the rule before looking at the results, and record why it was chosen.
+    :::
+
+5.  **Was the lens billed all year?** Count the claims with the separate lens (`A06`) in each month of 2024-25. Was it a habit throughout the year, or a short episode?
+
+    ::: {.callout-tip collapse="true"}
+    ## Solution
+    ```{r}
+    ex_lens_month <- claims |>
+      filter(str_detect(packages, "A06")) |>
+      count(month = floor_date(admission_date, "month"))
+    ex_lens_month
+    ```
+    The separate lens was billed in all `r nrow(ex_lens_month)` months, between `r min(ex_lens_month$n)` and `r max(ex_lens_month$n)` times a month. This is a steady practice, not a one-off error. It also shows that the claim system never stopped it in a whole year, which is a point for the recommendation on system checks.
+    :::
+
+## Summary of functions used
+
+| Function | Package | What it does |
+|-----------------------|----------------|--------------------------------|
+| `read_csv()` | readr | Reads the data files |
+| `st_read()` | sf | Reads the district map |
+| `map_int()`, `map_dbl()` | purrr | Counts rows of each table, sums the package rates of each claim |
+| `str_split()`, `str_extract()`, `str_detect()` | stringr | Splits package codes, takes out the main package, finds add-ons and keywords |
+| `floor_date()`, `wday()` | lubridate | Month of a date, day of the week |
+| `prcomp()` | stats | Principal components of the hospital indicators |
+| `kmeans()` | stats | Clusters of hospitals |
+| `arules::transactions()`, `arules::apriori()`, `arules::DATAFRAME()` | arules | Claims as baskets, association rules, rules as a data frame |
+| `unnest_tokens()`, `get_sentiments()` | tidytext | Words of each comment, the Bing dictionary |
+| `st_as_sf()`, `st_distance()`, `st_drop_geometry()` | sf | Points from coordinates, distances, back to a plain table |
+| `st_join()` | sf | District in which each patient lives |
+| `knitr::kable()` | knitr | Prints a table |
+
+: Functions used in this chapter {#tbl-ssyauditfunctions}
