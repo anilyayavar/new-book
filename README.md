@@ -22,7 +22,7 @@ The book follows the course of an audit, in nine parts.
 8. **Beyond Tables**. Text analytics, networks and maps.
 9. **Reporting**. Reproducible audit reports and working papers.
 
-A companion book, [*Applied Audit Analytics with R*](https://anilyayavar.github.io/applied-audit-analytics/), applies the toolkit to whole audit areas. These are journal entry testing, reconciliation, tenders and bid rigging, payables and vendors, payroll and pensions, revenue and tax, and a health insurance scheme audited from start to end.
+A companion book, [*Applied Audit Analytics with R*](https://anilyayavar.github.io/book2/), applies the toolkit to whole audit areas. These are journal entry testing, reconciliation, tenders and bid rigging, payables and vendors, payroll and pensions, revenue and tax, and a health insurance scheme audited from start to end.
 
 An **Audit Question Finder** in the appendices lists common audit questions and the section that answers each one.
 
