@@ -10,7 +10,7 @@
 
 A practical guide to data analytics for auditors, in government and elsewhere, using the free and open-source R language. No knowledge of programming is assumed. Every technique is explained in plain language and shown at work on an audit problem, with Indian examples and realistic simulated data in which irregularities are planted for the analysis to find.
 
-The book follows the course of an audit, in ten parts:
+The book follows the course of an audit, in nine parts.
 
 1. **R Foundations**. The R language from the beginning.
 2. **Getting Data Ready**. Reading files, including PDFs and messy Excel. Cleaning, joining and reshaping. Dates, and data too large for Excel.
@@ -20,8 +20,9 @@ The book follows the course of an audit, in ten parts:
 6. **Modelling and Risk Scoring**. Regression, logistic regression, decision trees, random forests and DEA.
 7. **Finding Hidden Patterns**. PCA, clustering, association rules, time series and anomaly detection.
 8. **Beyond Tables**. Text analytics, networks and maps.
-9. **Applying the Toolkit**. Whole audit areas. Journal entry testing, reconciliation and cross-verification, red flags in tendering, screens and models for bid rigging, payables and vendors, payroll and pensions, revenue and tax, and a health insurance scheme audited from start to end.
-10. **Reporting**. Reproducible audit reports and working papers.
+9. **Reporting**. Reproducible audit reports and working papers.
+
+A companion book, [*Applied Audit Analytics with R*](https://anilyayavar.github.io/applied-audit-analytics/), applies the toolkit to whole audit areas. These are journal entry testing, reconciliation, tenders and bid rigging, payables and vendors, payroll and pensions, revenue and tax, and a health insurance scheme audited from start to end.
 
 An **Audit Question Finder** in the appendices lists common audit questions and the section that answers each one.
 
