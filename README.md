@@ -20,7 +20,7 @@ The book follows the course of an audit, in ten parts:
 6. **Modelling and Risk Scoring**. Regression, logistic regression, decision trees, random forests and DEA.
 7. **Finding Hidden Patterns**. PCA, clustering, association rules, time series and anomaly detection.
 8. **Beyond Tables**. Text analytics, networks and maps.
-9. **Applying the Toolkit**. Whole audit areas. Journal entry testing, reconciliation and cross-verification, red flags in tendering, screens and models for bid rigging, payables and vendors, and a health insurance scheme audited from start to end.
+9. **Applying the Toolkit**. Whole audit areas. Journal entry testing, reconciliation and cross-verification, red flags in tendering, screens and models for bid rigging, payables and vendors, payroll and pensions, and a health insurance scheme audited from start to end.
 10. **Reporting**. Reproducible audit reports and working papers.
 
 An **Audit Question Finder** in the appendices lists common audit questions and the section that answers each one.
